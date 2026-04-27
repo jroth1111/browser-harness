@@ -22,6 +22,7 @@ PY
 
 Available interaction skills:
 - interaction-skills/connection.md — startup sequence, tab visibility, omnibox popup fix
+- interaction-skills/backend-capability.md — diagnose loaded-but-empty pages and backend capability
 
 Available domain skills:
 - realestate-com-au/scraping.md
@@ -43,6 +44,7 @@ run.py calls ensure_daemon() before exec — you never start/stop manually unles
 Search domain-skills/ first for the domain you are working on before inventing a new approach.
 
 Only if you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. The available interaction skills are:
+- backend-capability.md
 - cookies.md
 - cross-origin-iframes.md
 - dialogs.md
@@ -104,7 +106,7 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 - Bulk HTTP: http_get(url) + ThreadPoolExecutor. No browser for static pages (249 Netflix pages in 2.8s).
 - After goto: wait_for_load().
 - Loaded-but-empty pages: use wait_for_content() when a site may serve a bot/WAF challenge shell. It returns `ok`, `reason`, `text`, `html`, and `block` so you can distinguish real blank content from `kasada_kpsdk` / access-denied pages.
-- Browser-session HTTP: after a real browser profile has passed a site challenge, `http_get_browser_session(url)` fetches same-domain pages with that browser's user agent and matching cookies; pair it with `extract_argonaut_exchange(html)` on Argonaut/REA pages.
+- Browser-session HTTP: after a real browser profile has passed a site challenge, `http_get_browser_session(url)` fetches same-domain pages with that browser's user agent and matching cookies; pair it with the domain's parser or embedded-data extractor.
 - Robust solved sessions: `seed_browser_session(url)` verifies a headful/profile session; `fetch_with_browser_session(url, seed_url=...)` retries stale-cookie HTTP fetches by re-seeding in the browser.
 - Headless/backend triage: `diagnose_url_capability(url)` reports backend kind, challenge block state, and recommendation. Use it before spending time on selectors when Lightpanda/headless returns blank content.
 - Wrong/stale tab: ensure_real_tab(). Use it when the current tab is stale or internal; the daemon also auto-recovers from stale sessions on the next call.

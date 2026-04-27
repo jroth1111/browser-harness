@@ -28,10 +28,11 @@ Do not try to repair this with selector changes, longer sleeps, user-agent overr
 
 ## Robust headful session workflow
 
-Once a headful Chrome profile has passed the REA challenge, the browser's same-domain cookies can be reused for direct HTTP fetches. This is the fastest robust path for bulk property/profile pages because it avoids rendering every page while still using the solved browser session.
+Use the general solved-session helpers from `interaction-skills/cookies.md`.
+For REA, seed with a URL known to render content in the user's persistent
+headful Chrome profile, then bulk-fetch REA pages with the same browser session.
 
 ```python
-# Seed/refresh a real headful Chrome session, then HTTP-fetch with those cookies.
 result = fetch_with_browser_session(
     "https://www.realestate.com.au/property-house-vic-tarneit-143160680",
     seed_url="https://www.realestate.com.au/property/l30-unit-3003-500-elizabeth-st-melbourne-vic-3000/",
@@ -45,17 +46,14 @@ exchange = extract_argonaut_exchange(html)
 print(exchange.keys())
 ```
 
-Notes:
-
-- `fetch_with_browser_session()` records compact `attempts` evidence: fetch result, seed result, retry result.
-- `http_get_browser_session()` and `fetch_with_browser_session()` filter cookies to the target domain. They do not send `realestate.com.au` cookies to `property.com.au`.
-- This workflow does not make fresh Lightpanda or fresh headless Chrome pass the initial challenge. It reuses an already-valid browser session.
-- If you need Lightpanda/headless for the rest of a workflow, use headful Chrome to seed/fetch REA HTML first, then pass the extracted data to the lightweight backend.
-- On property-profile pages, `extract_argonaut_exchange(html)` commonly contains `resi-property_property-profile -> property_detail_data` with the parsed profile payload.
+REA-specific payload note: property-profile pages commonly expose
+`resi-property_property-profile -> property_detail_data` in `window.ArgonautExchange`.
+The general cookie/retry rules stay in `interaction-skills/cookies.md`.
 
 ## Robust headless/Lightpanda workflow
 
-For headless or Lightpanda backends, diagnose before extracting:
+Use the general backend diagnostic from `interaction-skills/backend-capability.md`
+before extracting from REA on headless or Lightpanda:
 
 ```python
 diag = diagnose_url_capability(
@@ -72,7 +70,9 @@ Expected blocked result for weak backends:
 headless_chrome blocked {'blocked': True, 'kind': 'kasada_kpsdk', ...}
 ```
 
-When this happens, do not continue with DOM selectors in that backend. Seed/fetch with a persistent headful Chrome profile, extract the Argonaut/text data, then hand the extracted data to the headless workflow if needed.
+For REA specifically, this means the listing/profile HTML was not served. Switch
+to a persistent headful Chrome profile, extract the Argonaut/text data there, and
+hand the extracted data to the headless workflow if needed.
 
 ## Listing URL patterns
 

@@ -11,13 +11,13 @@ the site successfully. It reads the browser user agent and matching cookies, the
 does a direct HTTP GET.
 
 ```python
-new_tab("https://www.realestate.com.au/")
+new_tab("https://example.com/")
 wait_for_load()
 status = wait_for_content(min_text=500, timeout=20)
 if not status["ok"]:
     raise RuntimeError(status["block"])
 
-html = http_get_browser_session("https://www.realestate.com.au/buy/in-melbourne,+vic+3000/list-1")
+html = http_get_browser_session("https://example.com/protected/page")
 print(len(html), detect_block_page(html=html))
 ```
 
@@ -26,8 +26,8 @@ prefer `fetch_with_browser_session()`:
 
 ```python
 result = fetch_with_browser_session(
-    "https://www.realestate.com.au/buy/in-melbourne,+vic+3000/list-1",
-    seed_url="https://www.realestate.com.au/",
+    "https://example.com/protected/page",
+    seed_url="https://example.com/",
     retries=1,
 )
 if not result["ok"]:
@@ -46,9 +46,25 @@ Rules:
 ## Cookie inspection
 
 ```python
-cookies = browser_cookies(["https://www.realestate.com.au/"])
+cookies = browser_cookies(["https://example.com/"])
 print([{"name": c["name"], "domain": c.get("domain"), "path": c.get("path")} for c in cookies])
 ```
 
 Log names/domains/paths only unless the user explicitly asks for raw cookie
 values for a local debugging task.
+
+## Example with a known protected domain
+
+REA pages are a concrete case where the same-domain solved-session pattern is
+useful. The reusable part is the seed/fetch retry; the REA-specific URLs and
+payload parsing belong in `domain-skills/realestate-com-au/scraping.md`.
+
+```python
+result = fetch_with_browser_session(
+    "https://www.realestate.com.au/property-house-vic-tarneit-143160680",
+    seed_url="https://www.realestate.com.au/",
+    retries=1,
+)
+if result["ok"]:
+    print(len(result["text"]))
+```
