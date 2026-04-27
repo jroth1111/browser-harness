@@ -213,6 +213,62 @@ For comp listing snapshots, add:
    platform fees, management, cleaning, utilities, consumables, linen,
    insurance, vacancy, and wear.
 
+## Executable competitor collection
+
+Use `scripts/collect_competitors.py` for repeatable logged-out competitor
+collection from the current live-listing inventory.
+
+Default behavior:
+
+- reads the latest `airbnb-live-listings-*.json` private artifact
+- uses only `status == ACTIVE` listings as targets
+- searches Airbnb logged out by target address/building, check-in date,
+  3-night stay, adult count, and minimum bedroom count
+- records date-specific public search runs, search-card result rows, price
+  matrix rows, target-to-comp links, and deduplicated public comp listing
+  snapshots
+- writes raw search/listing JSONL checkpoints plus JSON/CSV outputs under
+  ignored `.private-data/public-market-collections/`
+- stores a receipt under ignored `.session-store/capability/`
+
+Useful controls:
+
+```text
+AIRBNB_COMP_CHECKIN_DATES=2026-05-15,2026-06-12
+AIRBNB_COMP_CHECKIN_OFFSETS=14,30,60,90
+AIRBNB_COMP_NIGHTS=3,7
+AIRBNB_COMP_TOP_RESULTS=12
+AIRBNB_COMP_TOP_COMPS_PER_CONTEXT=8
+AIRBNB_COMP_MAX_LISTING_SNAPSHOTS=120
+AIRBNB_COMP_NAV_DELAY_SEC=4
+AIRBNB_COMP_LIMIT_LISTINGS=1
+```
+
+Run against a fresh logged-out agent Chrome profile:
+
+```bash
+python3 run.py --launch-profile domain-skills/airbnb/.session-store/profiles/public-comps \
+  --port 52870 --url about:blank --json
+
+BH_NAME=airbnb-public-comps BH_CDP_WS=http://127.0.0.1:52870 \
+  python3 run.py < domain-skills/airbnb/scripts/collect_competitors.py
+```
+
+Empirical run on 2026-04-27:
+
+- 27 active target listings
+- 4 forward check-in dates: 2026-05-11, 2026-05-27, 2026-06-26, 2026-07-26
+- 108 search contexts
+- 1,296 search-card price rows
+- 864 target-to-comp links
+- 120 deduplicated public listing snapshots
+- 0 failures
+
+Validation from that run: every target had four search contexts, every search
+context had cards, every target had comp links, all card rows had titles and
+total prices, all listing snapshots had rating and capacity fields, and 110 of
+120 listing snapshots exposed visible review star distribution.
+
 ## Host-facing outputs
 
 Public Airbnb.com.au extraction should feed these host decisions:

@@ -119,6 +119,23 @@ Fields:
 - `cancellation_policy_visible`
 - `price_observation_confidence`
 
+## `airbnb_public_target_competitor_snapshot`
+
+Links each live host listing to the closest public competitors observed for a
+specific search context.
+
+Fields:
+
+- `target_listing_id`
+- `comp_listing_id`
+- `search_run_id`
+- `check_in_date`
+- `nights`
+- `comp_rank_for_target`
+- `search_result_position`
+- `competitor_score`
+- `reason_codes`
+
 ## Public data quality rules
 
 - A price observation is invalid without dates, nights, guests, currency, and
@@ -132,3 +149,6 @@ Fields:
   Logged-in public observations are valid only for an explicit personalization
   comparison and must be stored as a separate run/segment, not mixed with normal
   logged-out comp data.
+- Closest-competitor links are date-specific. Do not treat a competitor observed
+  for one check-in date, stay length, or guest count as generally available or
+  directly price-comparable for another context without a matching matrix row.

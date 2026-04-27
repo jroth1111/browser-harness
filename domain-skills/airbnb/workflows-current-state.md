@@ -242,9 +242,19 @@ Outputs:
 - `airbnb_public_search_run`
 - `airbnb_public_search_result_snapshot`
 - `airbnb_public_price_availability_matrix`
+- `airbnb_public_target_competitor_snapshot`
 - competitor supply count and availability share
 - median and percentile guest-total prices
 - comp price index inputs
+
+Executable workflow:
+
+- Use `scripts/collect_competitors.py` for closest-competitor collection from
+  the latest live-listing inventory.
+- Run logged out in a fresh browser profile.
+- Capture multiple future check-in dates as separate search contexts so the
+  comp set and price matrix form a time series over repeated runs.
+- Store raw search/listing checkpoints and receipts under ignored private paths.
 
 ## Workflow 3 - Competitor Listing State
 
