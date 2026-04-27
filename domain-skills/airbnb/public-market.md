@@ -136,6 +136,7 @@ For comp listing snapshots, add:
   workspace/Wi-Fi, family amenities, and accessible features.
 - cancellation policy where visible.
 - photo count and hero-photo subject.
+- top-home, Guest Favourite, and top-percent highlight visibility.
 - positive and negative review themes.
 
 ## Traps
@@ -175,3 +176,11 @@ Public Airbnb.com.au extraction should feed these host decisions:
 - amenity or trust-signal gap
 - high-demand unbooked date
 - comp quality premium or discount
+
+## Similar-listing validation
+
+When Airbnb exposes similar listings or comparable price context in a logged-in
+host flow, record Airbnb's comparison separately from your manually curated comp
+set. Airbnb's similar-listing logic can consider location, size, features,
+amenities, ratings, reviews, and other listings guests browse. Treat that as a
+platform-relative pricing signal, not as a complete market definition.

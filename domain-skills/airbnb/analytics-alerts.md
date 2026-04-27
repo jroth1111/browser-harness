@@ -20,6 +20,9 @@ Use this file after collecting host/account data and public market data.
 | Host-fee take rate | Host service fee / booking subtotal |
 | Cleaning-fee recovery | Cleaning fee collected / actual cleaning cost |
 | Long-stay discount impact | Discounted revenue vs standard nightly revenue |
+| Contribution margin per stay | Net payout - actual stay costs |
+| Owner net RevPAN | Owner net amount / available nights |
+| Promotion margin safety | Discounted expected payout - variable stay cost |
 
 ## Conversion metrics
 
@@ -33,6 +36,8 @@ Use this file after collecting host/account data and public market data.
 | Comp price index | Your total guest price / median comp-set total guest price |
 | Comp quality index | Rating/review/badge profile vs comp set |
 | Minimum-stay choke score | Failed or weakened bookability from LOS rules |
+| Demand-adjusted price index | Your total guest price / comp median for the same demand-context class |
+| Promotion eligibility gap | Valuable dates ineligible for promotion because of block or median-price rules |
 
 ## Quality and operations metrics
 
@@ -47,6 +52,17 @@ Use this file after collecting host/account data and public market data.
 | Low-rating early warning | Category rating decline vs prior period |
 | Turnover load | Check-ins + checkouts by date |
 | Pet-stay margin | Pet fees - pet-related cleaning/repair cost |
+| Recommendation win rate | Successful recommendations / reviewed recommendations |
+| Evidence freshness score | Fresh source observations / required source observations |
+
+## Demand context metrics
+
+| Metric | Formula or source |
+|---|---|
+| Event premium capture | Event-period ADR / non-event comparable ADR |
+| Holiday pace variance | Holiday booking pace - non-holiday baseline pace |
+| Weather sensitivity | Booking or cancellation variance by weather suitability score |
+| Market-shock flag | Regulation, transport, weather, or supply signal active for date |
 
 ## Analysis playbooks
 
@@ -63,6 +79,9 @@ Required data:
 - Insights occupancy/rates
 - public comp price matrix
 - rule-sets and discounts
+- demand calendar
+- internal cost model
+- recommendation/action history
 
 Checks:
 
@@ -72,6 +91,8 @@ Checks:
 - overpriced conversion risk above 125-130% of comp median with weak conversion
 - long-stay discount leakage into high-demand periods
 - Smart Pricing min/max or override conflicts
+- margin safety before discounting or lowering minimum stays
+- prior recommendation outcomes for the same listing/date class
 
 ### Calendar control
 
@@ -84,6 +105,8 @@ Required data:
 - host calendar status reason
 - reservations
 - rules and pricing settings
+- demand context
+- internal cost model
 
 Checks:
 
@@ -92,6 +115,7 @@ Checks:
 - minimum-stay choke for common guest searches
 - restricted check-in/check-out preventing otherwise sellable stays
 - prep/advance notice rules blocking short lead-time demand
+- orphan-night discount still profitable after cleaning and linen cost
 
 ### Conversion diagnosis
 
@@ -105,6 +129,7 @@ Required data:
 - public listing content audit
 - comp price matrix
 - quality ratings/reviews
+- recent content/action changes
 
 Interpretation:
 
@@ -115,6 +140,7 @@ Interpretation:
 | High views, low booking conversion | Listing-page friction | Review total price, fees, rules, cancellation, photos, reviews |
 | High wishlists, low bookings | Interest without commitment | Test price, flexibility, minimum stay, offer/promotion |
 | Falling lead time | Demand window shift | Adjust pacing and last-minute strategy |
+| Conversion changes after action | Intervention effect or confounder | Check action log, demand context, and control window |
 
 ### Guest operations
 
@@ -149,6 +175,7 @@ Required data:
 - Insights quality
 - reviews
 - comp listing snapshots
+- photo tour and room-level amenity coverage
 
 Checks:
 
@@ -190,6 +217,8 @@ Required data:
 - reservation economics
 - payout/tax/levy table
 - internal costs and owner mapping
+- owner contracts
+- capex/maintenance plans
 
 Checks:
 
@@ -198,6 +227,50 @@ Checks:
 - cleaning-fee recovery
 - owner statement completeness
 - market and stay-length profitability
+- recommendation ROI by listing and owner
+
+### Demand-context diagnosis
+
+Question: Is performance explained by a demand driver outside Airbnb-native
+data?
+
+Required data:
+
+- calendar snapshots
+- public comp price matrix
+- demand calendar
+- market events
+- holiday calendar
+- weather and transport signals
+
+Checks:
+
+- high-demand dates without price or rule-set changes
+- comp prices rising around events while own price stays flat
+- holiday periods blocked by minimum stay or check-in rules
+- weather/disruption periods causing cancellation or booking softness
+- regulation or supply-change events affecting availability assumptions
+
+### Recommendation review
+
+Question: Which recommendations are useful enough to keep suggesting?
+
+Required data:
+
+- recommendations
+- action logs
+- experiments
+- outcome attribution
+- demand context
+- relevant source observations and field quality
+
+Checks:
+
+- accepted vs rejected recommendation rate
+- measured wins, losses, and inconclusive outcomes
+- stale recommendations with expired evidence
+- recommendation types repeatedly rolled back
+- lift claims with too many confounders
 
 ## `airbnb_alerts`
 
@@ -236,6 +309,12 @@ Fields:
 | Message skipped | Scheduled check-in/checkout message skipped |
 | Turnover overload | Same-day checkouts/check-ins exceed cleaner capacity |
 | Levy/tax field mismatch | Airbnb-visible levy/tax field inconsistent with listing jurisdiction |
+| Data freshness breach | Required source is older than its freshness SLA |
+| Low-confidence recommendation | Recommendation relies on low-confidence or conflicting fields |
+| Negative contribution stay | Expected or actual stay margin below zero |
+| Discount margin breach | Promotion or discount pushes expected stay below target margin |
+| Demand event missed | Strong demand-context signal with no price/rule review |
+| Stale action review | Implemented action has passed its review window without outcome attribution |
 
 ## Highest-ROI dashboard
 
@@ -253,3 +332,7 @@ Fields:
 | Turnover workload | Reservations + operations tasks |
 | Message workflow status | Message workflow + reservations |
 | High-demand unbooked dates | Calendar + comp availability + price matrix |
+| Contribution margin by stay type | Reservation economics + internal costs |
+| Demand-context calendar | Market events + holidays + weather + calendar |
+| Recommendation outcomes | Recommendations + actions + outcome attribution |
+| Data freshness and confidence | Capture runs + source observations + field quality |

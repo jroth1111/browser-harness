@@ -26,13 +26,18 @@ Available interaction skills:
 
 Available domain skills:
 - airbnb/overview.md
+- airbnb/enhancement-roadmap.md
 - airbnb/host-sources.md
 - airbnb/public-market.md
 - airbnb/schema-core.md
 - airbnb/schema-performance.md
 - airbnb/schema-operations.md
 - airbnb/schema-public-market.md
+- airbnb/schema-finance.md
+- airbnb/schema-demand-context.md
 - airbnb/analytics-alerts.md
+- airbnb/decisioning.md
+- airbnb/data-quality.md
 - realestate-com-au/scraping.md
 - tiktok/upload.md
 - polymarket/scraping.md

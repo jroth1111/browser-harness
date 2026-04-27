@@ -29,6 +29,10 @@ storage.
 | Smart Pricing settings | On/off, min, max, overrides, discount interactions | Weekly and after edits | Rate governance |
 | Messages / quick replies | Templates, triggers, placeholders, sent/skipped timeline | Monthly and per reservation | Communication consistency |
 | Reviews | Review date, text, ratings, host response, themes | After review posts | Guest-experience intelligence |
+| Similar listings / price comparison | Airbnb-selected comparable listings, available/booked comparison context, typical nightly prices where shown | Weekly and before pricing changes | Pricing reasonableness and comp-set validation |
+| Promotions and discounts | Weekly/monthly/early-bird/last-minute discounts, custom promotion eligibility, median-price constraints | Weekly and after pricing edits | Promotion governance and discount leakage control |
+| Photo tour / listing editor | Room-level photo coverage, photo order, room amenities, accessibility features, sleeping arrangements | Monthly and after content edits | Listing quality and conversion |
+| Top-home / Guest Favourite highlights | Search/listing badge visibility and top-percent labels where visible | Weekly/monthly | Trust-signal tracking |
 | Help Centre pages | Feature definitions and responsible-hosting guidance | Monthly/quarterly | Feature and compliance awareness |
 
 ## Earnings and payout reporting
@@ -111,6 +115,9 @@ Capture monthly and after edits:
 - checkout time
 - instant book state
 - registration or permit fields where visible
+- photo tour room coverage and photo order
+- room-level amenities, sleeping arrangements, and accessibility features
+- badge/highlight visibility on public listing and search pages
 
 Use public listing pages to verify how the listing appears to guests. Use the
 host editor to check settings that are hidden from guests.
@@ -169,10 +176,17 @@ Capture weekly and after edits:
 - early-bird and last-minute discounts
 - custom promotions
 - cleaning, pet, extra guest, and additional fees
+- promotion eligibility and median-price basis where Airbnb shows it
+- similar-listing comparison context where Airbnb shows it
 
 Airbnb-specific rule: Smart Pricing can override rule-set intent. If the host
 expects a custom rule-set to control a period, check whether Smart Pricing is
 active for that listing and date range.
+
+Airbnb-specific promotion rule: custom promotion eligibility can depend on the
+date being unblocked, recently unblocked enough to establish a median price, and
+inside Airbnb's eligible promotion window. Record the reason when Airbnb marks a
+date ineligible.
 
 ## Rule-sets
 

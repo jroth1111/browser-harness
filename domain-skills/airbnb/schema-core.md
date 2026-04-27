@@ -63,6 +63,12 @@ Fields:
 - `amenity_accuracy_flags`
 - `guest_favourite_visible`
 - `top_percent_badge_visible`
+- `photo_tour_rooms_present`
+- `photo_tour_missing_room_flags`
+- `room_level_amenity_flags`
+- `photo_caption_coverage_pct`
+- `accessibility_feature_photo_flags`
+- `content_confidence`
 - `content_change_date`
 - `observed_at`
 

@@ -43,6 +43,8 @@ Fields:
 - `visible_rating`
 - `visible_review_count`
 - `visible_badge`
+- `top_home_highlight_visible`
+- `top_percent_label`
 - `visible_price_total`
 - `visible_price_per_night`
 - `fees_included_flag`
@@ -70,6 +72,8 @@ Fields:
 - `rating`
 - `review_count`
 - `public_badges`
+- `top_home_highlight_visible`
+- `bottom_percent_warning_visible`
 - `visible_amenities_core`
 - `parking_flag`
 - `pool_spa_flag`

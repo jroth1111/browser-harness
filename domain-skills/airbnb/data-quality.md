@@ -1,0 +1,125 @@
+# Airbnb.com.au - Data Quality and Provenance
+
+Use this file to keep host intelligence auditable. A recommendation should be
+traceable back to source observations, timestamps, confidence, and evidence.
+
+## Quality principles
+
+- Every capture has a run ID.
+- Every derived field can be traced to source fields.
+- Every alert has enough evidence to review or suppress it.
+- Missing data is explicit; never silently treat missing as zero.
+- Sensitive guest data is minimized, purpose-limited, and not copied into public
+  skill files, logs, or screenshots.
+
+## `airbnb_data_capture_run`
+
+One collection job.
+
+Fields:
+
+- `capture_run_id`
+- `run_type`
+- `started_at`
+- `finished_at`
+- `actor`
+- `browser_backend`
+- `logged_in_flag`
+- `account_or_profile_label`
+- `target_listing_ids`
+- `target_date_start`
+- `target_date_end`
+- `source_files_downloaded`
+- `screenshot_refs`
+- `status`
+- `error_summary`
+- `parser_version`
+
+## `airbnb_source_observation`
+
+Evidence record for a source page, export, screenshot, or API-like response.
+
+Fields:
+
+- `source_observation_id`
+- `capture_run_id`
+- `source_type`
+- `source_name`
+- `source_url_or_file_ref`
+- `listing_id`
+- `reservation_id`
+- `period_start`
+- `period_end`
+- `observed_at`
+- `http_status_or_ui_status`
+- `content_hash`
+- `screenshot_ref`
+- `download_ref`
+- `extraction_method`
+- `confidence`
+
+## `airbnb_field_quality`
+
+Field-level confidence and freshness.
+
+Fields:
+
+- `field_quality_id`
+- `source_observation_id`
+- `table_name`
+- `record_key`
+- `field_name`
+- `field_value_hash`
+- `field_value_redacted`
+- `extraction_confidence`
+- `freshness_status`
+- `validation_status`
+- `validation_rule`
+- `conflict_group_id`
+- `notes`
+
+## Freshness SLAs
+
+| Data family | Freshness target |
+|---|---:|
+| Calendar forward availability | Daily |
+| Reservation changes | On booking/change |
+| Pricing settings and rule-sets | Weekly and after edits |
+| Insights conversion/occupancy | Weekly |
+| Earnings and payouts | Monthly and after payout changes |
+| Reviews | After review posts |
+| Public comp prices | Weekly and before major pricing decisions |
+| Demand context next 90 days | Daily/weekly depending on source |
+| Internal costs | Monthly and after supplier changes |
+
+## Confidence scale
+
+| Confidence | Meaning |
+|---|---|
+| `high` | Exported or structured source with matching keys and date scope |
+| `medium` | Visible UI text or public listing text with clear labels |
+| `low` | Inferred from partial text, screenshots, or ambiguous card ordering |
+| `blocked` | Source unavailable, login required, challenge page, or incomplete load |
+
+## Validation rules
+
+- Guest-facing total price must have dates, nights, guest count, currency, and
+  source context.
+- Host payout must reconcile to an earnings report or reservation payout view.
+- Calendar date statuses must be one of available, booked, blocked, unavailable,
+  or unknown.
+- `net_payout` cannot be treated as owner profit without finance cost joins.
+- Alerts based on public comps need at least three valid comp observations unless
+  the user explicitly accepts a thinner comp set.
+- Insights comparisons must preserve Airbnb's selected time window and listing
+  scope.
+
+## Privacy and retention
+
+- Do not store full guest names when first name or reservation ID is enough.
+- Redact emails, phone numbers, message bodies, and access instructions unless
+  the user specifically asks to analyze them.
+- Store hashes or short excerpts for evidence where possible.
+- Keep screenshots only when they are needed for QA or user-requested evidence.
+- Do not commit guest data, cookies, exports, screenshots, or downloaded reports
+  into this skill repository.

@@ -12,20 +12,27 @@ Read the smallest file that matches the job:
 | File | Purpose |
 |---|---|
 | `overview.md` | Routing, objectives, principles, source ladder, build order |
+| `enhancement-roadmap.md` | Enhancement backlog and priority sequence |
 | `host-sources.md` | Authenticated host collection workflows and refresh cadence |
 | `public-market.md` | Public search/listing extraction and comp-set observations |
 | `schema-core.md` | Listing, content, calendar, reservation, economics, payout/tax tables |
 | `schema-performance.md` | Pricing, rule-set, conversion, occupancy, and quality tables |
 | `schema-operations.md` | Reviews, guest context, message workflows, operations task tables |
 | `schema-public-market.md` | Public search run, search result, comp listing, price matrix tables |
+| `schema-finance.md` | Internal costs, owner statements, margin, cash-flow, and capex tables |
+| `schema-demand-context.md` | Events, holidays, weather, regulation, and demand-context enrichments |
 | `analytics-alerts.md` | Derived metrics, playbooks, alerts, and dashboard tiles |
+| `decisioning.md` | Recommendation, experiment, action, and outcome tracking |
+| `data-quality.md` | Provenance, freshness, confidence, privacy, and QA rules |
 
 This split follows the data lifecycle:
 
 1. Collect host-account data.
 2. Collect public market data.
-3. Store observations in data-family schemas.
-4. Derive metrics, alerts, and host actions.
+3. Enrich with demand context and internal finance data.
+4. Store observations in data-family schemas.
+5. Derive metrics, alerts, and host actions.
+6. Track recommendations, experiments, and outcomes.
 
 ## Host outcomes
 
@@ -82,6 +89,7 @@ Keep reusable browser/session mechanics in `interaction-skills/`:
 | 2 | Authenticated host UI: Insights, pricing, rule-sets, listing settings, messages, tasks | Funnel, rules, settings, operations |
 | 3 | Public search results and public listing pages | Competitor visibility, total guest price, badges, amenity positioning |
 | 4 | Internal/manual enrichments | Cleaning cost, owner mapping, maintenance tags, photo coverage, property reality |
+| 5 | External demand context | Events, school/public holidays, weather, transport, regulation, market shocks |
 
 ## Host intake
 
@@ -98,6 +106,7 @@ Capture this before scraping:
 | Currency/account country | Price comparability |
 | Logged-in permission | Determines whether host-only sources are available |
 | Manual costs | Cleaning, linen, consumables, management, utilities, owner splits |
+| Action history | Prior price/content/rule/ops changes and the dates they happened |
 
 If the user is not logged in or cannot grant a browser session, limit the task to
 public comp intelligence and ask for exported files when host economics are
@@ -118,7 +127,18 @@ Phase 1 - core business intelligence:
 
 Outcome: revenue, occupancy, booking pace, conversion, and quality visibility.
 
-Phase 2 - revenue optimization:
+Phase 2 - decision-grade data foundation:
+
+1. `airbnb_data_capture_run`
+2. `airbnb_source_observation`
+3. `airbnb_field_quality`
+4. `airbnb_internal_cost_model`
+5. `airbnb_market_event`
+6. `airbnb_demand_calendar`
+
+Outcome: auditable freshness, field confidence, true costs, and demand context.
+
+Phase 3 - revenue optimization:
 
 1. `airbnb_rule_set`
 2. `airbnb_public_search_run`
@@ -129,7 +149,7 @@ Phase 2 - revenue optimization:
 
 Outcome: comp-set price intelligence and restriction optimization.
 
-Phase 3 - operational scale:
+Phase 4 - operational scale:
 
 1. `airbnb_message_workflow`
 2. `airbnb_operations_task`
@@ -138,6 +158,17 @@ Phase 3 - operational scale:
 5. Turnover load alerts
 
 Outcome: repeatable guest operations and property quality control.
+
+Phase 5 - learning system:
+
+1. `airbnb_recommendation`
+2. `airbnb_action_log`
+3. `airbnb_experiment`
+4. `airbnb_outcome_attribution`
+5. Decision review dashboard
+
+Outcome: the system learns which price, content, rule, and operations changes
+actually improve host results.
 
 ## Source anchors
 
@@ -152,3 +183,9 @@ Useful Airbnb help pages for validating UI semantics:
 - `https://www.airbnb.com.au/help/article/459` - payout calculation.
 - `https://www.airbnb.com.au/help/article/2897` - scheduled quick replies.
 - `https://www.airbnb.com.au/help/article/3305` - short-term rental regulations.
+- `https://www.airbnb.com.au/help/article/2652` - similar listings.
+- `https://www.airbnb.com.au/resources/hosting-homes/a/using-airbnb-pricing-tools-707` - pricing tools, discounts, promotions, fees.
+- `https://www.airbnb.com.au/resources/hosting-homes/a/help-your-listing-stand-out-658` - photos and amenities.
+- `https://www.airbnb.com.au/resources/hosting-homes/a/how-to-organize-listing-photos-into-a-home-tour-456` - photo tour.
+- `https://www.airbnb.com.au/help/article/2719` - custom promotion eligibility and median price.
+- `https://www.airbnb.com.au/resources/hosting-homes/a/new-highlight-helps-top-homes-stand-out-666` - top-home highlights and top-percent labels.

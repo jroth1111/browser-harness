@@ -20,6 +20,12 @@ Fields:
 - `early_bird_discount_rules`
 - `last_minute_discount_rules`
 - `custom_promotion_active`
+- `custom_promotion_discount_pct`
+- `custom_promotion_eligibility_status`
+- `custom_promotion_ineligible_reason`
+- `median_price_basis`
+- `price_tip_visible`
+- `similar_listing_price_context`
 - `cleaning_fee`
 - `pet_fee`
 - `extra_guest_fee`
@@ -122,3 +128,5 @@ Refresh: weekly/monthly.
   period.
 - Use public comp tables from `schema-public-market.md` to calculate guest-facing
   price competitiveness.
+- Join promotion eligibility to calendar snapshots so hosts can see when blocked
+  dates or recent price history prevent promotion use.
