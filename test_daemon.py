@@ -215,6 +215,45 @@ def test_set_session_does_not_enable_domains_or_evaluate_js():
     assert d.cdp.calls == []
 
 
+def test_dns_hostname_rejects_without_remote_allow():
+    with patch.dict(os.environ, {"BH_CDP_WS": "ws://my-browser.local:9222/devtools/browser/abc"}, clear=True):
+        try:
+            daemon.resolve_cdp_endpoint()
+        except RuntimeError as e:
+            assert "refusing non-loopback" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_dns_hostname_passes_with_remote_allow():
+    url = "ws://my-browser.local:9222/devtools/browser/abc"
+    with patch.dict(os.environ, {"BH_CDP_WS": url, "BH_CDP_ALLOW_REMOTE": "1"}, clear=True):
+        resolved, info = daemon.resolve_cdp_endpoint()
+    assert resolved == url
+    assert not info["is_loopback"]
+    assert info["remote_allowed"]
+
+
+def test_endpoint_info_meta_returns_stored_metadata():
+    d = daemon.Daemon()
+    d.endpoint_info = {"source": "env", "host": "127.0.0.1", "is_loopback": True}
+    result = asyncio.run(d.handle({"meta": "endpoint_info"}))
+    assert result == {"endpoint_info": {"source": "env", "host": "127.0.0.1", "is_loopback": True}}
+
+
+def test_is_loopback_host_edge_cases():
+    assert daemon._is_loopback_host("127.0.0.1")
+    assert daemon._is_loopback_host("127.255.255.255")
+    assert daemon._is_loopback_host("::1")
+    assert daemon._is_loopback_host("[::1]")
+    assert daemon._is_loopback_host("localhost")
+    assert daemon._is_loopback_host("localhost.")
+    assert not daemon._is_loopback_host("192.168.1.1")
+    assert not daemon._is_loopback_host("example.com")
+    assert not daemon._is_loopback_host("")
+    assert not daemon._is_loopback_host(None)
+
+
 def test_already_running_closes_socket_on_permission_error():
     class TrackingSocket:
         closed = False
