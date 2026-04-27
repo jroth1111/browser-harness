@@ -42,6 +42,7 @@ def test_profile_use_missing_message_is_local_only():
 def test_doctor_default_does_not_check_latest_release():
     stdout = StringIO()
     with patch("admin._latest_release_tag", side_effect=AssertionError("network release check")), \
+         patch("urllib.request.urlopen", side_effect=AssertionError("unexpected network")), \
          patch("admin._chrome_running", return_value=False), \
          patch("admin.daemon_alive", return_value=False), \
          patch("sys.stdout", stdout):
@@ -84,3 +85,71 @@ def test_doctor_reports_endpoint_metadata():
     assert "endpoint.present" in output
     assert "ws://127.0.0.1:9222/devtools/browser/abc" in output
     assert "endpoint.version - Chrome/123 1.3" in output
+
+
+def test_doctor_network_check_only_appears_when_requested():
+    stdout = StringIO()
+    with patch("admin._chrome_running", return_value=False), \
+         patch("admin.daemon_alive", return_value=False), \
+         patch("sys.stdout", stdout):
+        admin.run_doctor(json_output=True)
+    assert "network.external" not in stdout.getvalue()
+
+    stdout = StringIO()
+    with patch("admin._chrome_running", return_value=False), \
+         patch("admin.daemon_alive", return_value=False), \
+         patch("sys.stdout", stdout):
+        admin.run_doctor(json_output=True, network=True)
+    assert "network.external" in stdout.getvalue()
+
+
+def test_doctor_remote_endpoint_with_allowance_warns_not_fails():
+    class Stat:
+        st_mode = 0o100600
+
+    endpoint = {
+        "source": "env",
+        "resolved_url": "ws://10.0.0.10:9222/devtools/browser/abc",
+        "host": "10.0.0.10",
+        "is_loopback": False,
+        "remote_allowed": True,
+        "browser": "Chrome/123",
+        "protocol_version": "1.3",
+    }
+
+    stdout = StringIO()
+    with patch("admin._chrome_running", return_value=True), \
+         patch("admin.daemon_alive", return_value=True), \
+         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+         patch("pathlib.Path.stat", return_value=Stat()), \
+         patch("sys.stdout", stdout):
+        assert admin.run_doctor(json_output=True) == 0
+    output = stdout.getvalue()
+    assert '"status": "warn"' in output
+    assert '"id": "endpoint.remote_allowed"' in output
+
+
+def test_doctor_remote_endpoint_without_allowance_fails():
+    class Stat:
+        st_mode = 0o100600
+
+    endpoint = {
+        "source": "env",
+        "resolved_url": "ws://10.0.0.10:9222/devtools/browser/abc",
+        "host": "10.0.0.10",
+        "is_loopback": False,
+        "remote_allowed": False,
+        "browser": "Chrome/123",
+        "protocol_version": "1.3",
+    }
+
+    stdout = StringIO()
+    with patch("admin._chrome_running", return_value=True), \
+         patch("admin.daemon_alive", return_value=True), \
+         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+         patch("pathlib.Path.stat", return_value=Stat()), \
+         patch("sys.stdout", stdout):
+        assert admin.run_doctor(json_output=True) == 1
+    output = stdout.getvalue()
+    assert '"status": "fail"' in output
+    assert '"id": "endpoint.loopback"' in output
