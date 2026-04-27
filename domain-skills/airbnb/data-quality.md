@@ -116,6 +116,9 @@ Fields:
   authenticated-session cookies are present, rank and visibility fields are
   invalid for market analysis because owner-account state can personalize
   ordering.
+- Public rank observations must preserve the bounded result window: requested
+  result limit, scroll depth/page, search context, and whether the row was from
+  the initial viewport or lazy-loaded search results.
 - Public comp price matrices with zero valid cards or zero valid prices are
   evidence gaps, not market signals.
 - Backend parity must be sampled for new Airbnb public URL families. If

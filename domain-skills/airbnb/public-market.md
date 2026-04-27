@@ -128,6 +128,7 @@ The search card fields to preserve are:
 | Field | Why |
 |---|---|
 | `result_position` | Visibility |
+| `page_number_or_scroll_depth` | Distinguishes initial viewport from lazy-loaded/scrolled results |
 | `listing_url` | Stable comp reference |
 | `visible_title_short` | Search-card message |
 | `visible_location_label` | Market placement |
@@ -235,6 +236,9 @@ Default behavior:
 - records date-specific public search runs, search-card result rows, price
   matrix rows, target-to-comp links, and deduplicated public comp listing
   snapshots
+- scrolls the lazy-loaded search result window up to
+  `AIRBNB_COMP_MAX_SEARCH_SCROLLS` while preserving first-seen card order as
+  the bounded rank window
 - writes raw search/listing JSONL checkpoints plus JSON/CSV outputs under
   ignored `.private-data/public-market-collections/`
 - stores a receipt under ignored `.session-store/capability/`
@@ -250,6 +254,7 @@ AIRBNB_COMP_NIGHTS=3,7
 AIRBNB_COMP_TOP_RESULTS=12
 AIRBNB_COMP_TOP_COMPS_PER_CONTEXT=8
 AIRBNB_COMP_MAX_LISTING_SNAPSHOTS=120
+AIRBNB_COMP_MAX_SEARCH_SCROLLS=6
 AIRBNB_COMP_NAV_DELAY_SEC=4
 AIRBNB_COMP_LIMIT_LISTINGS=1
 AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
@@ -258,7 +263,7 @@ AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<exp
 Run against a fresh logged-out agent Chrome profile:
 
 ```bash
-python3 run.py --launch-profile domain-skills/airbnb/.session-store/profiles/public-comps \
+browser-harness --launch-profile domain-skills/airbnb/.session-store/profiles/public-comps \
   --port 52870 --url about:blank --json
 
 BH_NAME=airbnb-public-comps BH_CDP_WS=http://127.0.0.1:52870 \
@@ -278,7 +283,10 @@ Empirical run on 2026-04-27:
 Validation from that run: every target had four search contexts, every search
 context had cards, every target had comp links, all card rows had titles and
 total prices, all listing snapshots had rating and capacity fields, and 110 of
-120 listing snapshots exposed visible review star distribution.
+120 listing snapshots exposed visible review star distribution. A targeted
+scroll smoke on 2026-04-27 verified `AIRBNB_COMP_MAX_SEARCH_SCROLLS`, rank
+window metadata, logged-out guard, and competitor snapshot output on a
+one-listing run with 0 failures.
 
 ## Executable own public collection
 
@@ -299,6 +307,9 @@ Default behavior:
   because own-listing rank must not be observed from the owner's account
 - records whether the host listing appears in the top result window, its rank,
   visible title/location, total guest price, rating, review count, and badge
+- scrolls the lazy-loaded search result window up to
+  `AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS` and records scroll depth for the
+  first-seen own-listing card
 - writes JSON/CSV outputs under ignored `.private-data/own-public-collections/`
 - stores a capability receipt under ignored `.session-store/capability/`
 - refuses partial listing inventories by default. Use `AIRBNB_LISTINGS_FILE`
@@ -311,6 +322,7 @@ AIRBNB_OWN_PUBLIC_CHECKIN_DATES=2026-05-15,2026-06-12
 AIRBNB_OWN_PUBLIC_CHECKIN_OFFSETS=14,30,60,90
 AIRBNB_OWN_PUBLIC_NIGHTS=3,7
 AIRBNB_OWN_PUBLIC_TOP_RESULTS=30
+AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS=6
 AIRBNB_OWN_PUBLIC_NAV_DELAY_SEC=2
 AIRBNB_OWN_PUBLIC_LIMIT_LISTINGS=1
 AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
@@ -353,7 +365,9 @@ without star distribution or categories were missing because Airbnb did not
 expose those widgets in the logged-out listing text. The executable receipt
 records the logged-out guard and zero authenticated-session cookie names before
 collecting rank fields; a post-run cookie check also found zero authenticated
-session cookie names.
+session cookie names. A targeted scroll smoke on 2026-04-27 verified
+`AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS`, rank window metadata, review display
+state counters, and logged-out guard on a one-listing run with 0 failures.
 
 ## Host-facing outputs
 

@@ -25,6 +25,10 @@ Fields:
 - `guest_count_pets`
 - `filters_applied`
 - `results_count_visible`
+- `results_limit_requested`
+- `max_search_scrolls_requested`
+- `search_scrolls_attempted`
+- `rank_collection_scope`
 - `audit_screenshot_ref`
 
 ## `airbnb_public_search_result_snapshot`
@@ -81,6 +85,9 @@ Fields:
 - `two_star_count_estimate`
 - `one_star_pct`
 - `one_star_count_estimate`
+- `star_distribution_source`
+- `rating_display_state`
+- `review_scope_confidence`
 - `public_badges`
 - `top_home_highlight_visible`
 - `bottom_percent_warning_visible`
@@ -133,6 +140,7 @@ Fields:
 - `nights`
 - `comp_rank_for_target`
 - `search_result_position`
+- `page_number_or_scroll_depth`
 - `competitor_score`
 - `reason_codes`
 
@@ -183,6 +191,8 @@ Fields:
 - `source_url`
 - `overall_rating`
 - `review_count`
+- `rating_display_state`
+- `review_scope_confidence`
 - `accuracy_rating`
 - `checkin_rating`
 - `cleanliness_rating`
@@ -199,6 +209,7 @@ Fields:
 - `two_star_count_estimate`
 - `one_star_pct`
 - `one_star_count_estimate`
+- `star_distribution_source`
 - `review_theme_tags`
 
 ## `airbnb_own_public_search_appearance`
@@ -224,8 +235,13 @@ Fields:
 - `guest_count_pets`
 - `filters_applied`
 - `source_url`
+- `results_limit_requested`
+- `max_search_scrolls_requested`
+- `search_scrolls_attempted`
+- `rank_collection_scope`
 - `search_appears_flag`
 - `search_result_position`
+- `page_number_or_scroll_depth`
 - `listing_url`
 - `visible_title_short`
 - `visible_location_label`

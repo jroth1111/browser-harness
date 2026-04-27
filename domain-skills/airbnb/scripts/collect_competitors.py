@@ -36,6 +36,7 @@ DEFAULT_NIGHTS = "3"
 DEFAULT_TOP_RESULTS = "12"
 DEFAULT_TOP_COMPS_PER_CONTEXT = "8"
 DEFAULT_MAX_LISTING_SNAPSHOTS = "120"
+DEFAULT_MAX_SEARCH_SCROLLS = "6"
 _NAVIGATED = False
 AUTH_COOKIE_NAMES = {
     "_aaj",
@@ -244,7 +245,11 @@ def parse_review_star_distribution(scope, review_count):
         count = round((review_count or 0) * percent / 100) if review_count is not None else None
         star_distribution[f"{stars}_star_pct"] = percent
         star_distribution[f"{stars}_star_count_estimate"] = count
-    if star_distribution or not review_count:
+    if star_distribution:
+        star_distribution["star_distribution_source"] = "percentage_widget"
+        return star_distribution
+    if not review_count:
+        star_distribution["star_distribution_source"] = "not_visible"
         return star_distribution
 
     counts = {
@@ -253,12 +258,24 @@ def parse_review_star_distribution(scope, review_count):
     }
     total_visible = sum(counts.values())
     if total_visible != review_count:
+        star_distribution["star_distribution_source"] = "not_visible"
         return star_distribution
     for stars, count in counts.items():
         if count:
             star_distribution[f"{stars}_star_pct"] = round(count * 100 / review_count)
             star_distribution[f"{stars}_star_count_estimate"] = count
+    star_distribution["star_distribution_source"] = "visible_individual_review_stars"
     return star_distribution
+
+
+def rating_display_state(scope, rating, review_count):
+    if review_count == 0:
+        return "no_reviews_yet"
+    if rating is not None:
+        return "average_visible"
+    if review_count and re.search(r"Average rating will appear after 3 reviews", scope or "", re.I):
+        return "hidden_until_minimum_reviews"
+    return "not_visible"
 
 
 def parse_listing_text(text):
@@ -290,6 +307,8 @@ def parse_listing_text(text):
         "bathrooms": first_match(r"([0-9]+(?:\.[0-9]+)?)\s+baths?", capacity_line or text, float),
         "rating": rating,
         "review_count": review_count,
+        "rating_display_state": rating_display_state(review_scope, rating, review_count),
+        "review_scope_confidence": "listing_section_before_host",
         "parking_flag": bool(re.search(r"\bparking\b|car ?park|garage", amenities_text)),
         "pool_spa_flag": bool(re.search(r"\bpool\b|\bspa\b|hot tub|sauna", amenities_text)),
         "pet_friendly_flag": bool(re.search(r"pets? allowed|pet friendly", amenities_text)),
@@ -385,6 +404,65 @@ def extract_search_cards_from_page():
     ) or []
 
 
+def search_card_key(card):
+    room_url = clean_room_url(card.get("href"))
+    return card.get("room_id") or room_id_from_url(room_url) or room_url or card.get("href")
+
+
+def merge_search_cards(seen, cards, scroll_depth):
+    added = 0
+    for card in cards:
+        key = search_card_key(card)
+        if not key or key in seen:
+            continue
+        seen[key] = {**card, "page_number_or_scroll_depth": scroll_depth}
+        added += 1
+    return added
+
+
+def collect_search_cards_from_page(max_cards, max_scrolls, pause):
+    """Collect cards across Airbnb's lazy search result list.
+
+    Rank is the first-seen DOM order in a bounded, logged-out, scrolled result
+    window. This is not a claim of global Airbnb rank beyond the collected
+    window.
+    """
+    seen = {}
+    scrolls_attempted = 0
+    stable_rounds = 0
+    for scroll_depth in range(max_scrolls + 1):
+        added = merge_search_cards(seen, extract_search_cards_from_page(), scroll_depth)
+        scrolls_attempted = scroll_depth
+        if len(seen) >= max_cards:
+            break
+        metrics = js(
+            """
+(() => ({
+  y: window.scrollY,
+  h: window.innerHeight,
+  page: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)
+}))()
+"""
+        ) or {}
+        if metrics.get("y", 0) + metrics.get("h", 0) >= metrics.get("page", 0) - 10:
+            break
+        js("window.scrollBy(0, Math.floor(window.innerHeight * 0.85))")
+        wait(pause)
+        next_metrics = js("(() => ({ y: window.scrollY }))()") or {}
+        if added == 0 and next_metrics.get("y") == metrics.get("y"):
+            stable_rounds += 1
+            if stable_rounds >= 2:
+                break
+        else:
+            stable_rounds = 0
+    return list(seen.values()), {
+        "results_limit_requested": max_cards,
+        "max_search_scrolls_requested": max_scrolls,
+        "search_scrolls_attempted": scrolls_attempted,
+        "rank_collection_scope": "scrolled_result_window" if scrolls_attempted else "initial_viewport",
+    }
+
+
 def search_run_id(target_listing_id, checkin, nights):
     return f"airbnb-public-search-{target_listing_id}-{checkin}-{nights}n"
 
@@ -434,6 +512,7 @@ def main():
     top_results = int(os.environ.get("AIRBNB_COMP_TOP_RESULTS", DEFAULT_TOP_RESULTS))
     top_comps_per_context = int(os.environ.get("AIRBNB_COMP_TOP_COMPS_PER_CONTEXT", DEFAULT_TOP_COMPS_PER_CONTEXT))
     max_listing_snapshots = int(os.environ.get("AIRBNB_COMP_MAX_LISTING_SNAPSHOTS", DEFAULT_MAX_LISTING_SNAPSHOTS))
+    max_search_scrolls = int(os.environ.get("AIRBNB_COMP_MAX_SEARCH_SCROLLS", DEFAULT_MAX_SEARCH_SCROLLS))
     pause = float(os.environ.get("AIRBNB_COMP_NAV_DELAY_SEC", "2.0"))
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     SESSION_PATH.mkdir(parents=True, exist_ok=True)
@@ -479,6 +558,8 @@ def main():
                     "guest_count_pets": 0,
                     "filters_applied": [f"query={target_query(listing)}", f"min_bedrooms={listing.get('bedrooms')}"],
                     "source_url": url,
+                    "results_limit_requested": top_results,
+                    "max_search_scrolls_requested": max_search_scrolls,
                 }
                 print(json.dumps({"phase": "search", "search_run_id": run_key, "url": url}), flush=True)
                 navigate(url)
@@ -492,9 +573,9 @@ def main():
                     if failure_kind in {"http_429_or_too_many_requests", "http_503_or_airbnb_error"}:
                         stop_collection = True
                     continue
-                cards = extract_search_cards_from_page()
+                cards, card_collection = collect_search_cards_from_page(top_results, max_search_scrolls, pause)
                 with raw_search_path.open("a") as handle:
-                    handle.write(json.dumps({**context, "cards": cards}, ensure_ascii=False) + "\n")
+                    handle.write(json.dumps({**context, **card_collection, "cards": cards}, ensure_ascii=False) + "\n")
                 parsed_cards = []
                 for card in cards:
                     room_url = clean_room_url(card.get("href"))
@@ -504,19 +585,24 @@ def main():
                     parsed = parse_card_text(card.get("text") or "")
                     if not parsed.get("visible_price_total") and not parsed.get("visible_title_short"):
                         continue
-                    parsed_cards.append({**parsed, "listing_url": room_url, "listing_id_if_extractable": room_id})
+                    parsed_cards.append({
+                        **parsed,
+                        "listing_url": room_url,
+                        "listing_id_if_extractable": room_id,
+                        "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
+                    })
                 ranked = []
                 for index, card in enumerate(parsed_cards[:top_results], start=1):
                     score = score_comp(listing, card, index)
                     ranked.append((score, index, card))
                 ranked.sort(key=lambda item: item[0], reverse=True)
-                search_runs.append({**context, "results_count_visible": len(parsed_cards), "status": "ok"})
+                search_runs.append({**context, **card_collection, "results_count_visible": len(parsed_cards), "status": "ok"})
                 for score, index, card in ranked[:top_results]:
                     result_row = {
                         "search_run_id": run_key,
                         "target_listing_id": target_listing_id,
                         "result_position": index,
-                        "page_number_or_scroll_depth": "initial",
+                        "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
                         "listing_url": card["listing_url"],
                         "listing_id_if_extractable": card["listing_id_if_extractable"],
                         "visible_title_short": card.get("visible_title_short"),
@@ -563,6 +649,7 @@ def main():
                         "nights": nights,
                         "comp_rank_for_target": comp_rank,
                         "search_result_position": index,
+                        "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
                         "competitor_score": score,
                         "reason_codes": ["same_search_context", "similar_capacity_filter", "logged_out_guest_visible"],
                     })
@@ -614,6 +701,9 @@ def main():
             "two_star_count_estimate": parsed.get("2_star_count_estimate"),
             "one_star_pct": parsed.get("1_star_pct"),
             "one_star_count_estimate": parsed.get("1_star_count_estimate"),
+            "star_distribution_source": parsed.get("star_distribution_source"),
+            "rating_display_state": parsed.get("rating_display_state"),
+            "review_scope_confidence": parsed.get("review_scope_confidence"),
             "public_badges": [],
             "top_home_highlight_visible": None,
             "bottom_percent_warning_visible": None,
@@ -643,12 +733,15 @@ def main():
             "collection_strategy": "Airbnb public search cards by target listing/date/stay length, then deduplicated public listing snapshots",
             "granularity_strategy": "date-specific search contexts; rerun over time to build time series",
             "logged_out_guard": logged_out_guard,
+            "max_search_scrolls": max_search_scrolls,
             "raw_search_path": str(raw_search_path),
             "raw_listing_path": str(raw_listing_path),
         },
         "target_listing_count": len(listings),
         "checkin_dates": dates,
         "nights_values": nights_values,
+        "top_results": top_results,
+        "max_search_scrolls": max_search_scrolls,
         "search_run_count": len(search_runs),
         "search_result_count": len(search_results),
         "price_matrix_count": len(price_matrix),
@@ -683,6 +776,10 @@ def main():
         "observed_at": observed_at,
         "logged_out_guard": logged_out_guard,
         "target_listing_count": len(listings),
+        "checkin_dates": dates,
+        "nights_values": nights_values,
+        "top_results": top_results,
+        "max_search_scrolls": max_search_scrolls,
         "expected_search_runs": expected_search_runs,
         "search_run_count": len(search_runs),
         "search_result_count": len(search_results),

@@ -186,6 +186,10 @@ currency
 logged_in_flag
 device_type
 results_count_visible
+results_limit_requested
+max_search_scrolls_requested
+search_scrolls_attempted
+rank_collection_scope
 ```
 
 Capture from each result card:
@@ -371,6 +375,7 @@ listing_id
 public_listing_url
 search_appears_flag
 search_result_position
+page_number_or_scroll_depth
 visible_title_short
 visible_location_label
 visible_price_total
@@ -394,6 +399,10 @@ availability_by_search_context
 minimum_stay_message
 observed_at
 logged_in_flag
+results_limit_requested
+max_search_scrolls_requested
+search_scrolls_attempted
+rank_collection_scope
 ```
 
 Compare against competitors:
@@ -427,8 +436,8 @@ Executable workflow:
   guest-visible content fields when all active listing pages load and pass
   field-level checks.
 - Treat search appearance/rank as context-specific: date, nights, guests,
-  destination/query, bedroom filter, currency, device, and logged-in state are
-  all part of the key.
+  destination/query, bedroom filter, currency, device, logged-in state, result
+  limit, and scroll depth are all part of the key.
 - Store raw text checkpoints and receipts only in ignored private paths.
 - If a target listing is not seen in the top result window, record
   `search_appears_flag=false` with `rank_observation_confidence` set to

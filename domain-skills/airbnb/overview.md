@@ -16,6 +16,7 @@ Read the smallest file that matches the job:
 | `exploration-protocol.md` | Discovery-first process for public, private, Lightpanda, and headful sources |
 | `workflows-current-state.md` | Sensing workflows for market, competitor, and own-listing current state |
 | `data-inventory.md` | Public/private data primitive catalog and source matrix |
+| `pipeline-fulfilment.md` | Current evidence ledger for host intelligence pipeline coverage |
 | `session-continuity.md` | Auth/session continuity, cookie safety, local ignored session store |
 | `host-sources.md` | Authenticated host collection workflows and refresh cadence |
 | `public-market.md` | Public search/listing extraction and comp-set observations |

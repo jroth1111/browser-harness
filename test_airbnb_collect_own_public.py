@@ -87,6 +87,8 @@ def test_parse_listing_text_does_not_confuse_host_reviews_for_listing_reviews():
 
     assert parsed["review_count"] == 0
     assert parsed["overall_rating"] is None
+    assert parsed["rating_display_state"] == "no_reviews_yet"
+    assert parsed["star_distribution_source"] == "not_visible"
     assert parsed.get("5_star_pct") is None
 
 
@@ -113,8 +115,10 @@ def test_parse_listing_text_uses_visible_individual_review_distribution_for_low_
 
     assert parsed["review_count"] == 1
     assert parsed["overall_rating"] is None
+    assert parsed["rating_display_state"] == "hidden_until_minimum_reviews"
     assert parsed["5_star_pct"] == 100
     assert parsed["5_star_count_estimate"] == 1
+    assert parsed["star_distribution_source"] == "visible_individual_review_stars"
 
 
 def test_parse_card_text_extracts_target_search_card_fields():
@@ -188,7 +192,75 @@ def test_competitor_listing_parser_does_not_confuse_host_reviews():
 
     assert parsed["review_count"] == 1
     assert parsed["rating"] is None
+    assert parsed["rating_display_state"] == "hidden_until_minimum_reviews"
     assert parsed["5_star_pct"] == 100
+
+
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_merge_search_cards_preserves_first_seen_rank_window(loader):
+    module = loader()
+    seen = {}
+
+    assert module.merge_search_cards(
+        seen,
+        [
+            {"href": "https://www.airbnb.com.au/rooms/100", "room_id": "100", "text": "first"},
+            {"href": "https://www.airbnb.com.au/rooms/200", "room_id": "200", "text": "second"},
+        ],
+        scroll_depth=0,
+    ) == 2
+    assert module.merge_search_cards(
+        seen,
+        [
+            {"href": "https://www.airbnb.com.au/rooms/100", "room_id": "100", "text": "duplicate"},
+            {"href": "https://www.airbnb.com.au/rooms/300", "room_id": "300", "text": "third"},
+        ],
+        scroll_depth=2,
+    ) == 1
+
+    assert list(seen) == ["100", "200", "300"]
+    assert seen["100"]["text"] == "first"
+    assert seen["300"]["page_number_or_scroll_depth"] == 2
+
+
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_collect_search_cards_marks_scrolled_scope_only_after_scroll(loader):
+    module = loader()
+    batches = iter([
+        [{"href": "https://www.airbnb.com.au/rooms/100", "room_id": "100", "text": "first"}],
+        [{"href": "https://www.airbnb.com.au/rooms/200", "room_id": "200", "text": "second"}],
+    ])
+    module.extract_search_cards_from_page = lambda: next(batches)
+    module.wait = lambda seconds: None
+
+    def fake_js(expression):
+        if "window.scrollBy" in expression:
+            return None
+        if "Math.max(document.body.scrollHeight" in expression:
+            return {"y": 0, "h": 100, "page": 1000}
+        return {"y": 100}
+
+    module.js = fake_js
+    cards, meta = module.collect_search_cards_from_page(max_cards=2, max_scrolls=1, pause=0)
+
+    assert [card["room_id"] for card in cards] == ["100", "200"]
+    assert [card["page_number_or_scroll_depth"] for card in cards] == [0, 1]
+    assert meta["search_scrolls_attempted"] == 1
+    assert meta["rank_collection_scope"] == "scrolled_result_window"
+
+
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_collect_search_cards_marks_initial_scope_when_limit_met(loader):
+    module = loader()
+    module.extract_search_cards_from_page = lambda: [
+        {"href": "https://www.airbnb.com.au/rooms/100", "room_id": "100", "text": "first"}
+    ]
+
+    cards, meta = module.collect_search_cards_from_page(max_cards=1, max_scrolls=3, pause=0)
+
+    assert [card["room_id"] for card in cards] == ["100"]
+    assert meta["search_scrolls_attempted"] == 0
+    assert meta["rank_collection_scope"] == "initial_viewport"
 
 
 @pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
