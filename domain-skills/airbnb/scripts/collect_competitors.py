@@ -224,8 +224,46 @@ def parse_card_text(text):
     }
 
 
+def listing_review_scope(text):
+    return re.split(r"\nMeet your host\n|Meet your host", text or "", maxsplit=1, flags=re.I)[0]
+
+
+def parse_listing_review_count(scope):
+    if re.search(r"\bNo reviews(?:\s*\(yet\)| yet)\b|\bNew listing\b", scope or "", re.I):
+        return 0
+    matches = re.findall(r"\b([0-9][0-9,]*)\s+reviews?\b", scope or "", re.I)
+    if matches:
+        return int(matches[0].replace(",", ""))
+    return None
+
+
+def parse_review_star_distribution(scope, review_count):
+    star_distribution = {}
+    for stars, pct in re.findall(r"([1-5])\s+stars?,\s*([0-9]+)%\s+of reviews", scope or "", re.I):
+        percent = int(pct)
+        count = round((review_count or 0) * percent / 100) if review_count is not None else None
+        star_distribution[f"{stars}_star_pct"] = percent
+        star_distribution[f"{stars}_star_count_estimate"] = count
+    if star_distribution or not review_count:
+        return star_distribution
+
+    counts = {
+        str(stars): len(re.findall(rf"\bRating,\s*{stars}\s+stars?\b", scope or "", re.I))
+        for stars in range(1, 6)
+    }
+    total_visible = sum(counts.values())
+    if total_visible != review_count:
+        return star_distribution
+    for stars, count in counts.items():
+        if count:
+            star_distribution[f"{stars}_star_pct"] = round(count * 100 / review_count)
+            star_distribution[f"{stars}_star_count_estimate"] = count
+    return star_distribution
+
+
 def parse_listing_text(text):
     text = re.sub(r"\n{2,}", "\n", (text or "").strip())
+    review_scope = listing_review_scope(text)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     title = None
     for line in lines[:40]:
@@ -235,18 +273,13 @@ def parse_listing_text(text):
             title = line
             break
     capacity_line = next((line for line in lines if re.search(r"\d+\s+guests?", line, re.I) and re.search(r"bedrooms?|beds?|baths?", line, re.I)), "")
-    rating = first_match(r"Rated\s+([0-5](?:\.\d+)?)\s+out of 5 stars", text, float)
+    rating = first_match(r"Rated\s+([0-5](?:\.\d+)?)\s+out of 5 stars", review_scope, float)
     if rating is None:
-        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 stars from", text, float)
+        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 stars from", review_scope, float)
     if rating is None:
-        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 average rating", text, float)
-    review_count = first_match(r"([0-9,]+)\s+reviews?", text, lambda v: int(v.replace(",", "")))
-    star_distribution = {}
-    for stars, pct in re.findall(r"([1-5])\s+stars?,\s*([0-9]+)%\s+of reviews", text, re.I):
-        percent = int(pct)
-        count = round((review_count or 0) * percent / 100) if review_count is not None else None
-        star_distribution[f"{stars}_star_pct"] = percent
-        star_distribution[f"{stars}_star_count_estimate"] = count
+        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 average rating", review_scope, float)
+    review_count = parse_listing_review_count(review_scope)
+    star_distribution = parse_review_star_distribution(review_scope, review_count)
     amenities_text = text.lower()
     return {
         "title": title,

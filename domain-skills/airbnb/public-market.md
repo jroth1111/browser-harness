@@ -339,18 +339,21 @@ Empirical own-public run on 2026-04-27:
 - 27 logged-out public review summaries
 - 27 logged-out search/rank contexts for 2026-05-27 to 2026-05-30
 - 3 own listings appeared in the top 30 result window for their target context
-- 27 of 27 review rows had overall rating and review count
-- 20 of 27 review rows exposed star distribution and rating categories
+- 27 of 27 review rows had listing-level review count
+- 16 of 27 review rows exposed listing-level overall rating
+- 18 of 27 review rows exposed star distribution; 15 exposed rating categories
 - 0 failures
 
 Validation from that run: every public listing page loaded, every target search
 context had cards, every content row had title/capacity fields, every review row
-had an overall rating, and no own search-appearance row had a date string parsed
-as the title. The seven missing star-distribution rows were missing because
-Airbnb did not expose that widget in the logged-out listing text for those
-listings. A separate one-listing guard smoke run confirmed the executable
-receipt records the logged-out guard and zero authenticated-session cookie names
-before collecting rank fields.
+had a listing-level review count, and no own search-appearance row had a date
+string parsed as the title. The rows without overall rating were no-review or
+low-review listings where Airbnb did not expose a listing average. The rows
+without star distribution or categories were missing because Airbnb did not
+expose those widgets in the logged-out listing text. The executable receipt
+records the logged-out guard and zero authenticated-session cookie names before
+collecting rank fields; a post-run cookie check also found zero authenticated
+session cookie names.
 
 ## Host-facing outputs
 

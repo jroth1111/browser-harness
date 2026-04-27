@@ -65,6 +65,58 @@ def test_parse_listing_text_extracts_review_distribution_and_categories():
     assert "wifi" in parsed["visible_amenities_core"]
 
 
+def test_parse_listing_text_does_not_confuse_host_reviews_for_listing_reviews():
+    module = load_own_public_module()
+    parsed = module.parse_listing_text(
+        """
+        New listing in Southbank
+        New listing
+        Entire rental unit in Southbank, Australia
+        5 guests \u00b7 2 bedrooms \u00b7 2 beds \u00b7 2 baths
+        No reviews (yet)
+        This host has 1,039 reviews for other places to stay.
+        Hosted by Jacob
+        Meet your host
+        Jacob
+        Host
+        1 review
+        5.0 out of 5 average rating
+        5 years of hosting
+        """
+    )
+
+    assert parsed["review_count"] == 0
+    assert parsed["overall_rating"] is None
+    assert parsed.get("5_star_pct") is None
+
+
+def test_parse_listing_text_uses_visible_individual_review_distribution_for_low_review_count():
+    module = load_own_public_module()
+    parsed = module.parse_listing_text(
+        """
+        Melbourne CBD Stay
+        1 review
+        Entire rental unit in Melbourne, Australia
+        7 guests \u00b7 3 bedrooms \u00b7 4 beds \u00b7 2 baths
+        Average rating will appear after 3 reviews
+        Julia
+        Rating, 5 stars
+        March 2026
+        We had a great stay.
+        Meet your host
+        Msa
+        Host
+        1,039 reviews
+        4.44 out of 5 average rating
+        """
+    )
+
+    assert parsed["review_count"] == 1
+    assert parsed["overall_rating"] is None
+    assert parsed["5_star_pct"] == 100
+    assert parsed["5_star_count_estimate"] == 1
+
+
 def test_parse_card_text_extracts_target_search_card_fields():
     module = load_own_public_module()
     parsed = module.parse_card_text(
@@ -111,6 +163,32 @@ def test_competitor_card_parser_skips_airbnb_date_lines():
     assert parsed["visible_price_total"] == 1147
     assert parsed["visible_rating"] == 4.93
     assert parsed["visible_review_count"] == 337
+
+
+def test_competitor_listing_parser_does_not_confuse_host_reviews():
+    module = load_competitors_module()
+    parsed = module.parse_listing_text(
+        """
+        Riverside Retreat
+        1 review
+        Entire rental unit in Richmond, Australia
+        4 guests \u00b7 2 bedrooms \u00b7 2 beds \u00b7 2 baths
+        Average rating will appear after 3 reviews
+        Ron
+        Rating, 5 stars
+        January 2024
+        Amazing place.
+        Meet your host
+        Msa
+        Host
+        1,039 reviews
+        4.44 out of 5 average rating
+        """
+    )
+
+    assert parsed["review_count"] == 1
+    assert parsed["rating"] is None
+    assert parsed["5_star_pct"] == 100
 
 
 @pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
