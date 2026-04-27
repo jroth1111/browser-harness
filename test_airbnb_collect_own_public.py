@@ -357,6 +357,13 @@ def test_collect_search_cards_marks_initial_scope_when_limit_met(loader):
     assert meta["rank_collection_scope"] == "initial_viewport"
 
 
+def test_own_public_rank_observation_confidence_uses_bounded_window_terms():
+    module = load_own_public_module()
+
+    assert module.rank_observation_confidence({"listing_url": "https://www.airbnb.com.au/rooms/100"}) == "matched_in_bounded_result_window"
+    assert module.rank_observation_confidence(None) == "not_seen_in_bounded_result_window"
+
+
 @pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
 def test_public_ranking_collectors_refuse_logged_in_airbnb_cookie_names(loader):
     module = loader()

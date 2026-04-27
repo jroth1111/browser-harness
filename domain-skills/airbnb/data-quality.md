@@ -119,6 +119,9 @@ Fields:
 - Public rank observations must preserve the bounded result window: requested
   result limit, scroll depth/page, search context, and whether the row was from
   the initial viewport or lazy-loaded search results.
+- Own-listing rank confidence must use bounded-window labels such as
+  `matched_in_bounded_result_window` or `not_seen_in_bounded_result_window`;
+  avoid older top-window labels after lazy scrolling is enabled.
 - Public review/category fields must carry source/status fields such as
   `rating_display_state`, `star_distribution_source`, and
   `rating_category_source`; do not backfill listing-level nulls from host

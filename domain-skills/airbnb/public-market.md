@@ -312,8 +312,9 @@ Default behavior:
   or location, dates, stay length, adult count, and bedroom filter
 - refuses to run if known Airbnb authenticated-session cookies are present,
   because own-listing rank must not be observed from the owner's account
-- records whether the host listing appears in the top result window, its rank,
-  visible title/location, total guest price, rating, review count, and badge
+- records whether the host listing appears in the bounded collected result
+  window, its rank, visible title/location, total guest price, rating, review
+  count, badge, and rank observation confidence
 - scrolls the lazy-loaded search result window up to
   `AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS` and records scroll depth for the
   first-seen own-listing card

@@ -594,6 +594,12 @@ def collect_search_cards_from_page(max_cards, max_scrolls, pause):
     }
 
 
+def rank_observation_confidence(own_card):
+    if own_card:
+        return "matched_in_bounded_result_window"
+    return "not_seen_in_bounded_result_window"
+
+
 def scroll_public_listing():
     for y in (900, 1800, 3600, 7200, 100000):
         js(f"window.scrollTo(0, {y})")
@@ -810,7 +816,7 @@ def main():
                     "visible_badge": own_card.get("visible_badge") if own_card else None,
                     "top_home_highlight_visible": own_card.get("top_home_highlight_visible") if own_card else None,
                     "available_flag": bool(own_card and own_card.get("visible_price_total")),
-                    "rank_observation_confidence": "top_results_card_match" if own_card else "not_seen_in_top_results",
+                    "rank_observation_confidence": rank_observation_confidence(own_card),
                 })
 
     json_path = OUTPUT_PATH / f"{run_id}.json"

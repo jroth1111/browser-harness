@@ -445,10 +445,10 @@ Executable workflow:
   destination/query, bedroom filter, currency, device, logged-in state, result
   limit, and scroll depth are all part of the key.
 - Store raw text checkpoints and receipts only in ignored private paths.
-- If a target listing is not seen in the top result window, record
+- If a target listing is not seen in the bounded collected result window, record
   `search_appears_flag=false` with `rank_observation_confidence` set to
-  `not_seen_in_top_results`; do not infer that the listing is unavailable or
-  invisible globally.
+  `not_seen_in_bounded_result_window`; do not infer that the listing is
+  unavailable or invisible globally.
 
 ## Workflow 5 - Own Listing Private Host State
 

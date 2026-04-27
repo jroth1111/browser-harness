@@ -281,6 +281,11 @@ Fields:
 - `available_flag`
 - `rank_observation_confidence`
 
+Allowed `rank_observation_confidence` values:
+
+- `matched_in_bounded_result_window`
+- `not_seen_in_bounded_result_window`
+
 ## Public data quality rules
 
 - A price observation is invalid without dates, nights, guests, currency, and
