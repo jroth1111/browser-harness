@@ -428,6 +428,10 @@ def _doctor_checks(network=False):
         checks.append(_check("pass" if endpoint.get("is_loopback") else ("warn" if endpoint.get("remote_allowed") else "fail"), "endpoint.loopback", endpoint.get("host") or "", "use a 127.0.0.1/localhost endpoint or set BH_CDP_ALLOW_REMOTE=1 only for user-owned self-hosted CDP"))
         if endpoint.get("remote_allowed"):
             checks.append(_check("warn", "endpoint.remote_allowed", "BH_CDP_ALLOW_REMOTE=1", "bind CDP to loopback when possible"))
+        for warning in endpoint.get("warnings") or []:
+            if "BH_CDP_ALLOW_REMOTE" in warning and endpoint.get("remote_allowed"):
+                continue
+            checks.append(_check("warn", "endpoint.warning", warning, "review BH_CDP_WS and prefer a loopback ws/http endpoint when possible"))
         checks.append(_check("pass", "endpoint.scheme", endpoint.get("resolved_url", "").split(":", 1)[0]))
         version_detail = " ".join(x for x in (endpoint.get("browser"), endpoint.get("protocol_version")) if x)
         checks.append(_check("pass" if version_detail else "warn", "endpoint.version", version_detail, "use a DevTools HTTP base URL in BH_CDP_WS when product/version detail is needed" if not version_detail else None))

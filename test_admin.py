@@ -129,6 +129,61 @@ def test_doctor_remote_endpoint_with_allowance_warns_not_fails():
     assert '"id": "endpoint.remote_allowed"' in output
 
 
+def test_doctor_reports_endpoint_metadata_warnings():
+    class Stat:
+        st_mode = 0o100600
+
+    endpoint = {
+        "source": "env",
+        "resolved_url": "wss://127.0.0.1:9222/devtools/browser/abc",
+        "host": "127.0.0.1",
+        "is_loopback": True,
+        "remote_allowed": False,
+        "warnings": ["wss on loopback is unusual; ws/http to 127.0.0.1 is the normal local shape"],
+        "browser": "Chrome/123",
+        "protocol_version": "1.3",
+    }
+
+    stdout = StringIO()
+    with patch("admin._chrome_running", return_value=True), \
+         patch("admin.daemon_alive", return_value=True), \
+         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+         patch("pathlib.Path.stat", return_value=Stat()), \
+         patch("sys.stdout", stdout):
+        assert admin.run_doctor(json_output=True) == 0
+    output = stdout.getvalue()
+    assert '"status": "warn"' in output
+    assert '"id": "endpoint.warning"' in output
+    assert "wss on loopback is unusual" in output
+
+
+def test_doctor_does_not_duplicate_remote_allowed_warning():
+    class Stat:
+        st_mode = 0o100600
+
+    endpoint = {
+        "source": "env",
+        "resolved_url": "ws://10.0.0.10:9222/devtools/browser/abc",
+        "host": "10.0.0.10",
+        "is_loopback": False,
+        "remote_allowed": True,
+        "warnings": ["remote CDP endpoint allowed by BH_CDP_ALLOW_REMOTE=1"],
+        "browser": "Chrome/123",
+        "protocol_version": "1.3",
+    }
+
+    stdout = StringIO()
+    with patch("admin._chrome_running", return_value=True), \
+         patch("admin.daemon_alive", return_value=True), \
+         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+         patch("pathlib.Path.stat", return_value=Stat()), \
+         patch("sys.stdout", stdout):
+        assert admin.run_doctor(json_output=True) == 0
+    output = stdout.getvalue()
+    assert output.count("endpoint.remote_allowed") == 1
+    assert "endpoint.warning" not in output
+
+
 def test_doctor_remote_endpoint_without_allowance_fails():
     class Stat:
         st_mode = 0o100600

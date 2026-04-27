@@ -94,7 +94,7 @@ Notes:
 
 - Browserless owns browser process management.
 - Browser-harness consumes the local websocket endpoint only.
-- Do not publish the Browserless port on `0.0.0.0` unless it is protected by your own network controls.
+- Keep the host binding on `127.0.0.1`; browser-harness rejects user-facing `0.0.0.0` CDP endpoints.
 
 ## Steel Local Docker
 
