@@ -1,4 +1,6 @@
 from unittest.mock import patch
+import base64
+import gzip
 import json
 
 import helpers
@@ -70,6 +72,59 @@ def test_switch_tab_does_not_mutate_title():
         ("Target.attachToTarget", {"targetId": "target-2", "flatten": True}),
     ]
     assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2"}
+
+
+def test_send_closes_socket_on_transport_error():
+    class TrackingSocket:
+        closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.closed = True
+            return False
+
+        def connect(self, path):
+            pass
+
+        def sendall(self, data):
+            raise BrokenPipeError("closed")
+
+    sock = TrackingSocket()
+    with patch("socket.socket", return_value=sock):
+        try:
+            helpers._send({"meta": "session"})
+        except BrokenPipeError:
+            pass
+        else:
+            raise AssertionError("expected BrokenPipeError")
+    assert sock.closed
+
+
+def test_switch_tab_reports_missing_session_id():
+    def fake_cdp(method, **params):
+        return {} if method == "Target.attachToTarget" else {}
+
+    with patch("helpers.cdp", side_effect=fake_cdp):
+        try:
+            helpers.switch_tab("target-2")
+        except RuntimeError as e:
+            assert "sessionId" in str(e)
+            assert "Target.attachToTarget" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_new_tab_reports_missing_target_id():
+    with patch("helpers.cdp", return_value={}):
+        try:
+            helpers.new_tab()
+        except RuntimeError as e:
+            assert "targetId" in str(e)
+            assert "Target.createTarget" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
 
 
 def test_wait_for_load_uses_page_events_not_runtime():
@@ -151,6 +206,26 @@ def test_screenshot_trace_is_opt_in(tmp_path):
     assert capture.call_count == 2
 
 
+def test_capture_screenshot_writes_with_context_manager(tmp_path):
+    path = tmp_path / "shot.png"
+    encoded = base64.b64encode(b"png-data").decode()
+    with patch("helpers.cdp", return_value={"data": encoded}):
+        assert helpers.capture_screenshot(str(path)) == str(path)
+    assert path.read_bytes() == b"png-data"
+
+
+def test_capture_screenshot_decodes_before_opening_file(tmp_path):
+    path = tmp_path / "shot.png"
+    with patch("helpers.cdp", return_value={"data": "not-base64!!"}):
+        try:
+            helpers.capture_screenshot(str(path))
+        except Exception:
+            pass
+        else:
+            raise AssertionError("expected decode failure")
+    assert not path.exists()
+
+
 def test_discover_local_cdp_endpoints_requires_loopback():
     try:
         helpers.discover_local_cdp_endpoints(host="example.com")
@@ -213,3 +288,77 @@ def test_discover_local_cdp_endpoints_brackets_ipv6_loopback():
             "protocol_version": "1.3",
         }]
     assert opened == ["http://[::1]:9222/json/version"]
+
+
+def test_page_info_js_reports_missing_runtime_value():
+    with patch("helpers.cdp", return_value={"result": {}}):
+        try:
+            helpers.page_info_js()
+        except RuntimeError as e:
+            assert "value" in str(e)
+            assert "Runtime.evaluate" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_js_reports_missing_iframe_session_id():
+    with patch("helpers.cdp", return_value={}):
+        try:
+            helpers.js("document.title", target_id="frame-1")
+        except RuntimeError as e:
+            assert "sessionId" in str(e)
+            assert "Target.attachToTarget" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_upload_file_reports_missing_node_id():
+    def fake_cdp(method, **params):
+        if method == "DOM.getDocument":
+            return {"root": {"nodeId": 1}}
+        if method == "DOM.querySelector":
+            return {}
+        raise AssertionError(method)
+
+    with patch("helpers.cdp", side_effect=fake_cdp):
+        try:
+            helpers.upload_file("input[type=file]", "/tmp/file.txt")
+        except RuntimeError as e:
+            assert "nodeId" in str(e)
+            assert "DOM.querySelector" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_http_get_decodes_valid_gzip():
+    class Response:
+        headers = {"Content-Encoding": "gzip"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return gzip.compress(b"hello")
+
+    with patch("urllib.request.urlopen", return_value=Response()):
+        assert helpers.http_get("https://example.com") == "hello"
+
+
+def test_http_get_falls_back_when_gzip_header_lies():
+    class Response:
+        headers = {"Content-Encoding": "gzip"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b"plain text"
+
+    with patch("urllib.request.urlopen", return_value=Response()):
+        assert helpers.http_get("https://example.com") == "plain text"

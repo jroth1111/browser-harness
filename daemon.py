@@ -1,5 +1,7 @@
 """CDP WS holder + Unix socket relay. One daemon per BH_NAME."""
 import asyncio
+import errno
+import fcntl
 import ipaddress
 import json
 import os
@@ -60,7 +62,8 @@ INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension
 
 
 def log(msg):
-    open(LOG, "a").write(f"{msg}\n")
+    with open(LOG, "a") as f:
+        f.write(f"{msg}\n")
 
 
 def _is_loopback_host(host):
@@ -337,18 +340,39 @@ async def main():
 
 def already_running():
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(1)
-        s.connect(SOCK); s.close(); return True
-    except (FileNotFoundError, ConnectionRefusedError, socket.timeout):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            s.connect(SOCK)
+            return True
+    except OSError:
         return False
+
+
+def acquire_daemon_lock():
+    lock_file = open(PID, "w")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as e:
+        lock_file.close()
+        if e.errno in {errno.EACCES, errno.EAGAIN}:
+            raise RuntimeError(f"daemon already running according to {PID}") from e
+        raise
+    lock_file.write(str(os.getpid()))
+    lock_file.flush()
+    return lock_file
 
 
 if __name__ == "__main__":
     if already_running():
         print(f"daemon already running on {SOCK}", file=sys.stderr)
-        sys.exit(0)
-    open(LOG, "w").close()
-    open(PID, "w").write(str(os.getpid()))
+        sys.exit(1)
+    with open(LOG, "w"):
+        pass
+    try:
+        pid_lock = acquire_daemon_lock()
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
@@ -357,5 +381,6 @@ if __name__ == "__main__":
         log(f"fatal: {e}")
         sys.exit(1)
     finally:
+        pid_lock.close()
         try: os.unlink(PID)
         except FileNotFoundError: pass

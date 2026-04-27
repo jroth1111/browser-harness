@@ -34,6 +34,15 @@ See [domain-skills/](domain-skills/) for example tasks.
 
 For self-hosted browser endpoints such as CloakBrowser, Browserless, Steel, Kernel Chromium images, and Kameleo, see [docs/local-cdp-providers.md](docs/local-cdp-providers.md).
 
+## Development
+
+Run the test suite from a clean checkout with:
+
+```bash
+uv sync --group dev
+uv run --group dev pytest -q
+```
+
 ## How simple is it? (~592 lines of Python)
 
 - `install.md` — first-time install and browser bootstrap

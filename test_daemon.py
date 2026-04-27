@@ -1,4 +1,5 @@
 import asyncio
+import fcntl
 import json
 import os
 from unittest.mock import patch
@@ -212,3 +213,41 @@ def test_set_session_does_not_enable_domains_or_evaluate_js():
     result = asyncio.run(d.handle({"meta": "set_session", "session_id": "session-2"}))
     assert result == {"session_id": "session-2"}
     assert d.cdp.calls == []
+
+
+def test_already_running_closes_socket_on_permission_error():
+    class TrackingSocket:
+        closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.closed = True
+            return False
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, path):
+            raise PermissionError("no access")
+
+    sock = TrackingSocket()
+    with patch("socket.socket", return_value=sock):
+        assert daemon.already_running() is False
+    assert sock.closed
+
+
+def test_acquire_daemon_lock_excludes_second_process(tmp_path, monkeypatch):
+    monkeypatch.setattr(daemon, "PID", str(tmp_path / "bh.pid"))
+    first = daemon.acquire_daemon_lock()
+    try:
+        try:
+            daemon.acquire_daemon_lock()
+        except RuntimeError as e:
+            assert "already running" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+    finally:
+        fcntl.flock(first, fcntl.LOCK_UN)
+        first.close()

@@ -24,18 +24,23 @@ INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension
 
 
 def _send(req):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(SOCK)
-    s.sendall((json.dumps(req) + "\n").encode())
-    data = b""
-    while not data.endswith(b"\n"):
-        chunk = s.recv(1 << 20)
-        if not chunk: break
-        data += chunk
-    s.close()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.connect(SOCK)
+        s.sendall((json.dumps(req) + "\n").encode())
+        data = b""
+        while not data.endswith(b"\n"):
+            chunk = s.recv(1 << 20)
+            if not chunk: break
+            data += chunk
     r = json.loads(data)
     if "error" in r: raise RuntimeError(r["error"])
     return r
+
+
+def _require_key(mapping, key, context):
+    if not isinstance(mapping, dict) or key not in mapping:
+        raise RuntimeError(f"{context} missing {key!r}: {mapping!r}")
+    return mapping[key]
 
 
 def cdp(method, session_id=None, **params):
@@ -83,7 +88,9 @@ def page_info_js():
     r = cdp("Runtime.evaluate",
             expression="JSON.stringify({url:location.href,title:document.title,w:innerWidth,h:innerHeight,sx:scrollX,sy:scrollY,pw:document.documentElement.scrollWidth,ph:document.documentElement.scrollHeight})",
             returnByValue=True)
-    return json.loads(r["result"]["value"])
+    result = _require_key(r, "result", "Runtime.evaluate response")
+    value = _require_key(result, "value", "Runtime.evaluate result")
+    return json.loads(value)
 
 # --- input ---
 _debug_click_counter = 0
@@ -162,7 +169,9 @@ def scroll(x, y, dy=-300, dx=0):
 # --- visual ---
 def capture_screenshot(path="/tmp/shot.png", full=False):
     r = cdp("Page.captureScreenshot", format="png", captureBeyondViewport=full)
-    open(path, "wb").write(base64.b64decode(r["data"]))
+    data = base64.b64decode(_require_key(r, "data", "Page.captureScreenshot response"))
+    with open(path, "wb") as f:
+        f.write(data)
     return path
 
 
@@ -185,7 +194,7 @@ def switch_tab(target):
     # so `switch_tab(current_tab())` works without a manual ["targetId"] dance.
     target_id = target.get("targetId") if isinstance(target, dict) else target
     cdp("Target.activateTarget", targetId=target_id)
-    sid = cdp("Target.attachToTarget", targetId=target_id, flatten=True)["sessionId"]
+    sid = _require_key(cdp("Target.attachToTarget", targetId=target_id, flatten=True), "sessionId", "Target.attachToTarget response")
     _send({"meta": "set_session", "session_id": sid})
     return sid
 
@@ -193,7 +202,7 @@ def new_tab(url="about:blank"):
     # Always create blank, then goto: passing url to createTarget races with
     # attach, so the brief about:blank is "complete" by the time the caller
     # polls and wait_for_load() returns before navigation actually starts.
-    tid = cdp("Target.createTarget", url="about:blank")["targetId"]
+    tid = _require_key(cdp("Target.createTarget", url="about:blank"), "targetId", "Target.createTarget response")
     switch_tab(tid)
     if url != "about:blank":
         goto_url(url)
@@ -250,7 +259,7 @@ def js(expression, target_id=None):
     Expressions with top-level `return` are automatically wrapped in an IIFE, so both
     `document.title` and `const x = 1; return x` are valid inputs.
     """
-    sid = cdp("Target.attachToTarget", targetId=target_id, flatten=True)["sessionId"] if target_id else None
+    sid = _require_key(cdp("Target.attachToTarget", targetId=target_id, flatten=True), "sessionId", "Target.attachToTarget response") if target_id else None
     if "return " in expression and not expression.strip().startswith("("):
         expression = f"(function(){{{expression}}})()"
     r = cdp("Runtime.evaluate", session_id=sid, expression=expression, returnByValue=True, awaitPromise=True)
@@ -274,7 +283,7 @@ def dispatch_key(selector, key="Enter", event="keypress"):
 def upload_file(selector, path):
     """Set files on a file input via CDP DOM.setFileInputFiles. `path` is an absolute filepath (use tempfile.mkstemp if needed)."""
     doc = cdp("DOM.getDocument", depth=-1)
-    nid = cdp("DOM.querySelector", nodeId=doc["root"]["nodeId"], selector=selector)["nodeId"]
+    nid = _require_key(cdp("DOM.querySelector", nodeId=doc["root"]["nodeId"], selector=selector), "nodeId", "DOM.querySelector response")
     if not nid: raise RuntimeError(f"no element for {selector}")
     cdp("DOM.setFileInputFiles", files=[path] if isinstance(path, str) else list(path), nodeId=nid)
 
@@ -341,5 +350,9 @@ def http_get(url, headers=None, timeout=20.0):
     if headers: h.update(headers)
     with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
         data = r.read()
-        if r.headers.get("Content-Encoding") == "gzip": data = gzip.decompress(data)
+        if r.headers.get("Content-Encoding") == "gzip":
+            try:
+                data = gzip.decompress(data)
+            except (OSError, EOFError):
+                pass
         return data.decode()
