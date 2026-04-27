@@ -33,6 +33,64 @@ Site-specific details belong in `domain-skills/<site>/`:
 7. Register primitives with source, scope, confidence, freshness, privacy class,
    and target schema.
 
+## Source classification
+
+Classify each target field before extraction. A page-level load is not enough;
+the question is which source returns the field with the best completeness and
+provenance.
+
+### Export/download candidate
+
+Use when the site offers CSV, iCal, JSON, PDF, report download, account export,
+or another user-facing data file. Prefer exports when they contain the required
+fields because they are usually more stable and complete than rendered UI.
+
+### Network/API candidate
+
+Use when the browser page is mainly a transport/auth shell for structured data.
+Signals include:
+
+- JSON bootstrap script tags
+- GraphQL operation names
+- persisted-query hashes
+- `__typename` fields
+- XHR/fetch responses containing target fields
+- explicit pagination, cursors, totals, or stable IDs
+
+If the API returns every required field with stable IDs and counts matching the
+UI/export source, treat it as canonical for those fields. Use the authenticated
+browser context only to supply the legitimate session, headers, and same-origin
+environment; do not copy secrets into docs or committed code.
+
+### Browser-rendered candidate
+
+Use when the data is genuinely produced by client rendering or interaction:
+
+- fields appear only after route transitions, clicks, lazy panels, modals, or
+  virtualized scrolling
+- the value depends on label text, visible ordering, screenshots, maps, photo
+  position, or visual state
+- structured payloads omit the field or disagree with the user-visible UI
+
+Browser extraction should fill gaps left by exports/APIs, not duplicate all
+fields by default.
+
+## Field-level decision rule
+
+For each target field:
+
+1. Check exports/downloads.
+2. Inspect bootstrap JSON and network calls.
+3. If an API gives the field with stable IDs and reconciled counts, use the API.
+4. If API/export coverage is missing or low confidence, extract only the missing
+   fields from the browser UI.
+5. Compare counts and required fields against the best available UI/export
+   truth source.
+6. Store a capability receipt with source, backend, fields found, fields missing,
+   pagination/count evidence, and fallback reason.
+
+Field-level parity decides the canonical source. Page-level success does not.
+
 ## Backend strategy
 
 | Source type | Preferred backend | Reason |
