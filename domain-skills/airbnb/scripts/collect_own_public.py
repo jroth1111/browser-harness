@@ -17,6 +17,7 @@ listings appear to a guest in public search and on public listing pages.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 import re
@@ -237,6 +238,83 @@ def review_themes(text):
     return [name for name, pattern in theme_patterns.items() if re.search(pattern, lowered)]
 
 
+MONTH_PATTERN = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}"
+
+
+def review_noise_line(line):
+    return bool(re.fullmatch(
+        r"Show more|Show less|Translate(?: to English)?|Helpful|Report|Response from .+|Host response",
+        line or "",
+        re.I,
+    ))
+
+
+def visible_review_id(listing_id, row):
+    material = "|".join(str(row.get(key) or "") for key in (
+        "reviewer_name_visible", "review_rating", "review_date_label", "review_text",
+    ))
+    digest = hashlib.sha256(f"{listing_id}|{material}".encode("utf-8")).hexdigest()[:16]
+    return f"public-review-{listing_id}-{digest}"
+
+
+def parse_visible_public_reviews(scope):
+    """Extract review rows that Airbnb rendered in public listing text.
+
+    This captures visible public rows only. It is not a complete historical
+    review export unless every public review row is visible in the source text.
+    """
+    lines = [line.strip() for line in (scope or "").splitlines() if line.strip()]
+    reviews = []
+    rating_pattern = re.compile(r"\bRating,\s*([1-5])\s+stars?\b", re.I)
+    stop_labels = {
+        "cleanliness", "accuracy", "check-in", "communication", "location", "value",
+        "where you'll sleep", "what this place offers", "meet your host",
+    }
+    for index, line in enumerate(lines):
+        rating_match = rating_pattern.search(line)
+        if not rating_match:
+            continue
+        reviewer = None
+        if index > 0:
+            previous = lines[index - 1]
+            if not review_noise_line(previous) and not re.fullmatch(MONTH_PATTERN, previous, re.I):
+                reviewer = previous[:120]
+        review_date = None
+        text_lines = []
+        cursor = index + 1
+        while cursor < len(lines):
+            current = lines[cursor]
+            lowered = current.lower()
+            if rating_pattern.search(current) or lowered in stop_labels:
+                break
+            if cursor + 1 < len(lines) and rating_pattern.search(lines[cursor + 1]):
+                break
+            if review_noise_line(current):
+                cursor += 1
+                continue
+            if review_date is None and re.fullmatch(MONTH_PATTERN, current, re.I):
+                review_date = current
+                cursor += 1
+                continue
+            if current == reviewer:
+                cursor += 1
+                continue
+            text_lines.append(current)
+            cursor += 1
+        review_text = " ".join(text_lines).strip()
+        reviews.append({
+            "review_position_visible": len(reviews) + 1,
+            "reviewer_name_visible": reviewer,
+            "review_rating": int(rating_match.group(1)),
+            "review_date_label": review_date,
+            "review_text": review_text[:4000],
+            "review_theme_tags": review_themes(review_text),
+            "review_row_source": "public_listing_visible_review_row",
+            "review_row_confidence": "visible_review_row_with_text" if review_text else "visible_review_star_only",
+        })
+    return reviews
+
+
 def listing_review_scope(text):
     return re.split(r"\nMeet your host\n|Meet your host", text or "", maxsplit=1, flags=re.I)[0]
 
@@ -371,6 +449,7 @@ def parse_listing_text(text):
         "house_rules_summary_flags": [value for value in [checkin, checkout] if value],
         "cancellation_policy_visible": cancellation,
         "review_theme_tags": review_themes(review_scope),
+        "visible_review_rows": parse_visible_public_reviews(review_scope),
         "raw_text": text[:15000],
         **star_distribution,
     }
@@ -559,6 +638,7 @@ def main():
 
     content_audits = []
     review_summaries = []
+    visible_review_snapshots = []
     search_runs = []
     search_appearance = []
     failures = []
@@ -641,6 +721,15 @@ def main():
             "review_scope_confidence": parsed.get("review_scope_confidence"),
             "review_theme_tags": parsed.get("review_theme_tags"),
         })
+        for review_row in parsed.get("visible_review_rows") or []:
+            visible_review_snapshots.append({
+                "public_review_row_id": visible_review_id(listing_id, review_row),
+                "listing_id": listing_id,
+                "observed_at": utc_now(),
+                "logged_in_flag": False,
+                "source_url": url,
+                **review_row,
+            })
 
     stop_collection = False
     for listing in listings:
@@ -727,6 +816,7 @@ def main():
     json_path = OUTPUT_PATH / f"{run_id}.json"
     content_csv = OUTPUT_PATH / f"{run_id}-content-audits.csv"
     reviews_csv = OUTPUT_PATH / f"{run_id}-review-summaries.csv"
+    visible_reviews_csv = OUTPUT_PATH / f"{run_id}-visible-review-snapshots.csv"
     search_runs_csv = OUTPUT_PATH / f"{run_id}-search-runs.csv"
     search_appearance_csv = OUTPUT_PATH / f"{run_id}-search-appearance.csv"
     receipt_path = SESSION_PATH / f"{run_id}-receipt.json"
@@ -748,11 +838,13 @@ def main():
         "max_search_scrolls": max_search_scrolls,
         "content_audit_count": len(content_audits),
         "review_summary_count": len(review_summaries),
+        "visible_review_snapshot_count": len(visible_review_snapshots),
         "search_run_count": len(search_runs),
         "search_appearance_count": len(search_appearance),
         "failures_count": len(failures),
         "content_audits": content_audits,
         "review_summaries": review_summaries,
+        "visible_review_snapshots": visible_review_snapshots,
         "search_runs": search_runs,
         "search_appearance": search_appearance,
         "failures": failures[:100],
@@ -760,6 +852,7 @@ def main():
     json_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
     write_csv(content_csv, content_audits)
     write_csv(reviews_csv, review_summaries)
+    write_csv(visible_reviews_csv, visible_review_snapshots)
     write_csv(search_runs_csv, search_runs)
     write_csv(search_appearance_csv, search_appearance)
     expected_search_runs = len(listings) * len(dates) * len(nights_values)
@@ -775,6 +868,8 @@ def main():
         "max_search_scrolls": max_search_scrolls,
         "content_audit_count": len(content_audits),
         "review_summary_count": len(review_summaries),
+        "visible_review_snapshot_count": len(visible_review_snapshots),
+        "visible_review_snapshot_listing_count": len({row.get("listing_id") for row in visible_review_snapshots}),
         "search_run_count": len(search_runs),
         "expected_search_runs": expected_search_runs,
         "search_appearance_count": len(search_appearance),
@@ -800,6 +895,7 @@ def main():
         "json_path": str(json_path),
         "content_csv": str(content_csv),
         "reviews_csv": str(reviews_csv),
+        "visible_reviews_csv": str(visible_reviews_csv),
         "search_runs_csv": str(search_runs_csv),
         "search_appearance_csv": str(search_appearance_csv),
         "failure_sample": failures[:10],

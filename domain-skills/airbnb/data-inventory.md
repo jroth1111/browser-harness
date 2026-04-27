@@ -56,8 +56,8 @@ out against a fresh browser profile. It consumes the complete live-listing
 inventory, opens each own public listing page, records content/review/rating
 fields, and runs own-listing public search appearances for date-specific rank
 and price context. Public data from this workflow belongs in
-`airbnb_own_public_listing_audit`, `airbnb_own_public_review_summary`, and
-`airbnb_own_public_search_appearance`.
+`airbnb_own_public_listing_audit`, `airbnb_own_public_review_summary`,
+`airbnb_own_public_review_snapshot`, and `airbnb_own_public_search_appearance`.
 
 ## Authenticated Airbnb primitives
 

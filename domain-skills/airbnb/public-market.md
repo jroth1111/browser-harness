@@ -305,6 +305,9 @@ Default behavior:
   `star_distribution_confidence`, and
   `visible_individual_review_star_count` so absent or partial review widgets are
   treated as Airbnb visibility states, not silently as parser failures
+- emits `airbnb_own_public_review_snapshot` rows for individual visible public
+  reviews, including rendered star label, date label, review text, and theme
+  tags
 - runs logged-out public searches for each target listing using target address
   or location, dates, stay length, adult count, and bedroom filter
 - refuses to run if known Airbnb authenticated-session cookies are present,

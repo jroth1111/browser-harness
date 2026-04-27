@@ -424,6 +424,7 @@ Outputs:
 - `airbnb_listing_content_audit`
 - `airbnb_own_public_listing_audit`
 - `airbnb_own_public_review_summary`
+- `airbnb_own_public_review_snapshot`
 - `airbnb_own_public_search_appearance`
 - own listing rows in public search/result snapshots
 - own listing public price/availability matrix

@@ -217,6 +217,28 @@ Fields:
 - `visible_individual_review_star_count`
 - `review_theme_tags`
 
+## `airbnb_own_public_review_snapshot`
+
+Visible individual public review rows from the host's own public listing page.
+These are rendered guest-visible rows, not a complete review export unless
+Airbnb exposes every review row in the source text.
+
+Fields:
+
+- `public_review_row_id`
+- `listing_id`
+- `observed_at`
+- `logged_in_flag`
+- `source_url`
+- `review_position_visible`
+- `reviewer_name_visible`
+- `review_rating`
+- `review_date_label`
+- `review_text`
+- `review_theme_tags`
+- `review_row_source`
+- `review_row_confidence`
+
 ## `airbnb_own_public_search_appearance`
 
 Own-listing guest-visible search/rank appearance for the same search contexts

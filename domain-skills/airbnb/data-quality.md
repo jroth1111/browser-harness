@@ -127,6 +127,10 @@ Fields:
   review count, record the visible row count and mark the star distribution as
   partial. Do not derive a full 1-5 star distribution from a sampled review
   page.
+- Visible public review snapshots are row-level evidence only for the reviews
+  rendered in the collected page text. Treat them as theme/provenance samples
+  unless row count equals listing review count or an explicit complete-review
+  source is available.
 - Public comp price matrices with zero valid cards or zero valid prices are
   evidence gaps, not market signals.
 - Backend parity must be sampled for new Airbnb public URL families. If

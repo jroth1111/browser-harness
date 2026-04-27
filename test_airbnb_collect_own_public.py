@@ -129,6 +129,12 @@ def test_parse_listing_text_uses_visible_individual_review_distribution_for_low_
     assert parsed["star_distribution_source"] == "visible_individual_review_stars"
     assert parsed["star_distribution_confidence"] == "complete_visible_review_rows"
     assert parsed["visible_individual_review_star_count"] == 1
+    assert len(parsed["visible_review_rows"]) == 1
+    assert parsed["visible_review_rows"][0]["reviewer_name_visible"] == "Julia"
+    assert parsed["visible_review_rows"][0]["review_rating"] == 5
+    assert parsed["visible_review_rows"][0]["review_date_label"] == "March 2026"
+    assert parsed["visible_review_rows"][0]["review_text"] == "We had a great stay."
+    assert parsed["visible_review_rows"][0]["review_row_confidence"] == "visible_review_row_with_text"
 
 
 @pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
@@ -161,6 +167,52 @@ def test_parse_listing_text_tracks_partial_visible_individual_review_stars(loade
     assert parsed["star_distribution_confidence"] == "insufficient_visible_review_rows"
     assert parsed["visible_individual_review_star_count"] == 2
     assert parsed.get("5_star_pct") is None
+
+
+def test_own_public_parse_listing_text_extracts_visible_review_rows():
+    module = load_own_public_module()
+    parsed = module.parse_listing_text(
+        """
+        Melbourne CBD Stay
+        12 reviews
+        Entire rental unit in Melbourne, Australia
+        7 guests \u00b7 3 bedrooms \u00b7 4 beds \u00b7 2 baths
+        Julia
+        Rating, 5 stars
+        March 2026
+        Great stay.
+        Tom
+        Rating, 4 stars
+        February 2026
+        Good location.
+        Meet your host
+        Msa
+        Host
+        1,039 reviews
+        4.44 out of 5 average rating
+        """
+    )
+
+    assert len(parsed["visible_review_rows"]) == 2
+    assert [row["reviewer_name_visible"] for row in parsed["visible_review_rows"]] == ["Julia", "Tom"]
+    assert [row["review_rating"] for row in parsed["visible_review_rows"]] == [5, 4]
+    assert [row["review_date_label"] for row in parsed["visible_review_rows"]] == ["March 2026", "February 2026"]
+    assert parsed["visible_review_rows"][0]["review_text"] == "Great stay."
+    assert parsed["visible_review_rows"][1]["review_text"] == "Good location."
+    assert "location" in parsed["visible_review_rows"][1]["review_theme_tags"]
+
+
+def test_visible_review_id_is_stable_and_listing_scoped():
+    module = load_own_public_module()
+    row = {
+        "reviewer_name_visible": "Julia",
+        "review_rating": 5,
+        "review_date_label": "March 2026",
+        "review_text": "We had a great stay.",
+    }
+
+    assert module.visible_review_id("100", row) == module.visible_review_id("100", row)
+    assert module.visible_review_id("100", row) != module.visible_review_id("200", row)
 
 
 def test_parse_card_text_extracts_target_search_card_fields():
