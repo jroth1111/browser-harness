@@ -128,6 +128,11 @@ Outputs:
 - event/holiday flags for booking-pace and comp-price interpretation
 - manual review flags for high-intensity dates
 
+Empirical note from 2026-04-27: Victoria public-holiday and school-term source
+URLs were reachable with normal HTTP fetches and contained the expected 2026
+holiday/term markers. Keep these as demand-context sources, but still store the
+source URL, observed timestamp, and confidence for each extracted flag.
+
 ## Workflow 2 - Public Competitor Market State
 
 Goal: find what guest-visible substitutes are available, bookable, and priced at
@@ -295,6 +300,12 @@ Field-level acceptance:
 - Listing-page price widgets are not enough for comp pricing unless they render
   a total guest price for the exact dates and guests. Prefer Workflow 2 search
   totals for the price matrix.
+
+Empirical note from 2026-04-27: a logged-out headful Chrome room page opened
+from a hydrated public search result produced a usable comp listing snapshot:
+title, capacity text, rating text, review signal, and amenity hits were visible.
+Use this path when Lightpanda search cannot provide room links or when
+Lightpanda listing pages expose only skeletal/no-JavaScript content.
 
 Review and content tags:
 
@@ -580,6 +591,12 @@ Partial-state rule:
 - A listing-date state row may exist as a diagnostic shell, but it is not a
   pricing recommendation input until the required public, private, and demand
   evidence for that decision has passed field-level validation.
+
+Empirical note from 2026-04-27: with headful public comp search available, a
+diagnostic listing-date row could include competitor card count, total-price
+count, and a sample comp median. It remained recommendation-ineligible because
+own public listing state and host calendar/iCal state were missing. Preserve
+that distinction: comp evidence alone is not enough for host pricing action.
 
 ## Workflow 7 - Cadence
 

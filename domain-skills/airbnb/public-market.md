@@ -183,6 +183,10 @@ For comp listing snapshots, add:
 - Direct listing pages in Lightpanda may expose a title and room links but still
   miss capacity, reviews, amenities, and date-specific price evidence. Require
   listing-snapshot field evidence before using Lightpanda for Workflow 3.
+- A logged-out headful Chrome room page opened from a hydrated public search
+  result produced usable listing-snapshot fields on 2026-04-27: title, capacity,
+  rating/review signal, and amenity text. Prefer this path for comp listing
+  snapshots when Lightpanda lacks parity.
 - If headless or Lightpanda produces a loaded-but-empty page, run
   `diagnose_url_capability(url)` before debugging selectors.
 - Authenticated host pages should not be scraped with public assumptions. Use a
