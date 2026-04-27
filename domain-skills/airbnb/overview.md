@@ -13,6 +13,9 @@ Read the smallest file that matches the job:
 |---|---|
 | `overview.md` | Routing, objectives, principles, source ladder, build order |
 | `enhancement-roadmap.md` | Enhancement backlog and priority sequence |
+| `exploration-protocol.md` | Discovery-first process for public, private, Lightpanda, and headful sources |
+| `data-inventory.md` | Public/private data primitive catalog and source matrix |
+| `session-continuity.md` | Auth/session continuity, cookie safety, local ignored session store |
 | `host-sources.md` | Authenticated host collection workflows and refresh cadence |
 | `public-market.md` | Public search/listing extraction and comp-set observations |
 | `schema-core.md` | Listing, content, calendar, reservation, economics, payout/tax tables |
@@ -33,6 +36,15 @@ This split follows the data lifecycle:
 4. Store observations in data-family schemas.
 5. Derive metrics, alerts, and host actions.
 6. Track recommendations, experiments, and outcomes.
+
+When starting a new Airbnb host engagement, read `exploration-protocol.md`
+before assuming the available sources are known. Treat every Airbnb source as a
+primitive that can be composed later for pricing, operations, quality, or
+portfolio decisions.
+
+For generalizable mechanics, read `interaction-skills/data-source-exploration.md`
+and `interaction-skills/session-continuity.md`. Airbnb files should contain
+Airbnb-specific source names, fields, URLs, and examples.
 
 ## Host outcomes
 
@@ -87,9 +99,10 @@ Keep reusable browser/session mechanics in `interaction-skills/`:
 |---|---|---|
 | 1 | Earnings reports, CSV exports, iCal/calendar export, reservation print/details | Money, booked/blocked dates, reservation facts |
 | 2 | Authenticated host UI: Insights, pricing, rule-sets, listing settings, messages, tasks | Funnel, rules, settings, operations |
-| 3 | Public search results and public listing pages | Competitor visibility, total guest price, badges, amenity positioning |
-| 4 | Internal/manual enrichments | Cleaning cost, owner mapping, maintenance tags, photo coverage, property reality |
-| 5 | External demand context | Events, school/public holidays, weather, transport, regulation, market shocks |
+| 3 | Airbnb personal data export | Historical account, host, reservation, payout, message, and listing primitives where included |
+| 4 | Public search results and public listing pages | Competitor visibility, total guest price, badges, amenity positioning |
+| 5 | Internal/manual enrichments | Cleaning cost, owner mapping, maintenance tags, photo coverage, property reality |
+| 6 | External demand context | Events, school/public holidays, weather, transport, regulation, market shocks |
 
 ## Host intake
 
@@ -116,14 +129,16 @@ needed.
 
 Phase 1 - core business intelligence:
 
-1. `airbnb_listing_master`
-2. `airbnb_calendar_snapshot`
-3. `airbnb_reservation`
-4. `airbnb_reservation_economics`
-5. `airbnb_pricing_settings`
-6. `airbnb_insights_conversion`
-7. `airbnb_insights_occupancy_rates`
-8. `airbnb_insights_quality`
+0. Run the public/private exploration protocol.
+1. Create session-continuity metadata for private authenticated work.
+2. `airbnb_listing_master`
+3. `airbnb_calendar_snapshot`
+4. `airbnb_reservation`
+5. `airbnb_reservation_economics`
+6. `airbnb_pricing_settings`
+7. `airbnb_insights_conversion`
+8. `airbnb_insights_occupancy_rates`
+9. `airbnb_insights_quality`
 
 Outcome: revenue, occupancy, booking pace, conversion, and quality visibility.
 
@@ -176,6 +191,8 @@ Useful Airbnb help pages for validating UI semantics:
 
 - `https://www.airbnb.com.au/help/article/2500` - performance dashboard and Insights areas.
 - `https://www.airbnb.com.au/help/article/3632` - earnings reports and CSV export.
+- `https://www.airbnb.com.au/help/article/3255` - personal data export formats and categories.
+- `https://www.airbnb.com.au/help/article/2499` - professional hosting tools.
 - `https://www.airbnb.com.au/help/article/99` - calendar sync and iCal behavior.
 - `https://www.airbnb.com.au/help/article/3612` - why calendar nights may be blocked.
 - `https://www.airbnb.com.au/help/article/2061` - rule-sets.

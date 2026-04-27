@@ -1,0 +1,92 @@
+# Airbnb.com.au - Data Inventory and Primitives
+
+Use this as the registry of Airbnb data primitives. A primitive is a small,
+source-grounded fact that can be recombined later for pricing, conversion,
+operations, quality, or portfolio decisions.
+
+General primitive discovery rules live in
+`interaction-skills/data-source-exploration.md`. This file is Airbnb-specific:
+source names, Airbnb surfaces, and Airbnb examples belong here.
+
+## Primitive design
+
+Each primitive should carry:
+
+- source name
+- public/private scope
+- source URL, file, or navigation path
+- capture method
+- backend suitability
+- account/listing/date scope
+- `observed_at`
+- confidence
+- privacy class
+- target schema
+
+## Public Airbnb primitives
+
+| Primitive family | Examples | Capture method | Backend |
+|---|---|---|---|
+| Search context | destination, map bounds, dates, guests, filters, currency, device, login state | Public search URL + screenshot/text | Lightpanda if cards render; otherwise headful |
+| Search-card visibility | rank, page/scroll depth, title, location label, badge, rating, review count, price | Public search text/DOM/screenshot | Lightpanda if stable |
+| Public listing facts | room ID, property type, capacity, bedrooms, beds, bathrooms, location text | Listing page text/DOM | Lightpanda usually sufficient |
+| Public price/availability | total guest price, nightly component, minimum-stay message, unavailable message | Search results first; listing page second | Lightpanda or headful |
+| Public trust signals | Guest Favourite, top-home highlight, top-percent label, review count, rating | Search/listing page | Lightpanda if visible |
+| Public content quality | hero subject, photo count, photo tour signals, amenities, rules | Listing page text/visual audit | Headful for visual QA; Lightpanda for text |
+| Public review themes | review text, host response, stay metadata where visible | Listing review section | Lightpanda if reviews render |
+| Public Help/Resource docs | feature definitions, pricing tools, policy semantics | Static pages | Lightpanda or HTTP |
+
+## Authenticated Airbnb primitives
+
+| Primitive family | Examples | Capture method | Backend |
+|---|---|---|---|
+| Earnings exports | gross earnings, adjustments, host fee, taxes withheld, net pay, nights, payout method | CSV/PDF download | Headful profile |
+| Earnings dashboard | recent/projected/listing earnings | Auth UI text/screenshot | Headful profile |
+| Reservations | confirmation code, guest count, dates, status, price breakdown | Auth UI/print/download | Headful profile |
+| Calendar and iCal | booked/blocked dates, availability, imported blocks | iCal export + calendar UI | Headful for export; parser after download |
+| Block reasons | prep, advance notice, min stay, restricted check-in/out, pending/cancelled blocks | Calendar UI date inspection | Headful profile |
+| Listing editor | title, descriptions, photos, rooms, amenities, rules, policies, registration fields | Auth UI | Headful profile |
+| Pricing settings | base/weekend price, Smart Pricing min/max, fees, discounts, promotions | Auth UI | Headful profile |
+| Rule-sets | date ranges, price adjustments, LOS discounts, check-in/out rules | Auth UI | Headful profile |
+| Insights conversion | impressions, search-to-listing, listing-to-booking, views, wishlists, lead time | Auth UI | Headful profile |
+| Insights occupancy/rates | occupancy, booked/blocked/unbooked nights, check-ins, cancellations, ADR | Auth UI | Headful profile |
+| Insights quality | overall/category 5-star performance and similar-listing comparison | Auth UI | Headful profile |
+| Messages/quick replies | templates, triggers, placeholders, sent/skipped timeline | Auth UI | Headful profile |
+| Tasks/teams | task type, due date, assignment, checklist, completion | Auth UI | Headful profile |
+| Regulations/tax | registration/permit fields, declaration status, tax/levy fields | Auth UI/help docs | Headful profile |
+| Personal data export | profile, messages, search history, reservations, host payout/listing categories where included | Account privacy data export | Headful request + local parser |
+
+Airbnb's personal data file can be requested in HTML, Excel, or JSON format and
+may include host-relevant categories such as listings, reservations, payouts, and
+messages when present in the account.
+
+## Internal host primitives
+
+| Primitive family | Examples | Target file |
+|---|---|---|
+| Costs | cleaning, linen, utilities, consumables, insurance, management, maintenance | `schema-finance.md` |
+| Owner contracts | owner split, guarantees, pass-through costs, statement cadence | `schema-finance.md` |
+| Property reality | actual amenities, maintenance issues, photo truth, accessibility | `schema-core.md` |
+| Operations capacity | cleaner availability, turnover limits, maintenance SLAs | `schema-operations.md` |
+| Action history | price/content/rule/message changes and dates | `decisioning.md` |
+
+## External demand primitives
+
+| Primitive family | Examples | Target file |
+|---|---|---|
+| Events | concerts, sport, conferences, festivals, local venue events | `schema-demand-context.md` |
+| Holidays | public holidays, school holidays, long weekends | `schema-demand-context.md` |
+| Weather | severe weather, rain, heat, outdoor suitability | `schema-demand-context.md` |
+| Transport/access | airport disruption, rail shutdown, major road closure, cruise arrivals | `schema-demand-context.md` |
+| Regulation/supply | night caps, registration changes, local restrictions, market supply shocks | `schema-demand-context.md` |
+
+## Primitive composition examples
+
+| Host decision | Primitive blocks |
+|---|---|
+| Raise price for a weekend | calendar availability + booking pace + comp total price + event signal + quality/trust premium |
+| Discount an orphan night | gap length + minimum stay rules + cleaning cost + comp availability + margin floor |
+| Change hero photo | search-card conversion + hero subject + comp hero subjects + content action history |
+| Fix check-in process | check-in rating trend + review themes + message timeline + task completion |
+| Owner statement | earnings export + reservation economics + actual costs + owner contract |
+| Compliance review | listing jurisdiction + Airbnb regulation fields + official source signal + calendar block reason |

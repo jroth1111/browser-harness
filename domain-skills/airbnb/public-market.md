@@ -5,11 +5,14 @@ Field-tested against Melbourne CBD apartment listings on 2026-04-27 using the br
 Use this file for public Airbnb.com.au search/listing extraction and comp-set
 observations. For host account collection, read `host-sources.md`. For storage,
 read `schema-public-market.md`. For decisions and alerts, read
-`analytics-alerts.md`.
+`analytics-alerts.md`. For discovery order and backend choice, read
+`exploration-protocol.md`.
 
 ## Quick summary
 
 - Use browser navigation, not `http_get()`, for Airbnb pages.
+- Use Lightpanda first for public pages only after `diagnose_url_capability()`
+  proves the expected text and fields are present.
 - Search result pages expose the most reliable price data. Listing pages often show `loading` in the booking widget even when dates and guests are provided.
 - `document.body.innerText` is enough to extract listing title, property type, capacity, bedrooms, beds, baths, rating, reviews, host, amenities, house rules, and visible location text.
 - For revenue comps, scrape search result totals for a fixed stay length and guest count, then normalize to nightly guest-facing gross.

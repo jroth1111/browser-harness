@@ -23,10 +23,15 @@ PY
 Available interaction skills:
 - interaction-skills/connection.md — startup sequence, tab visibility, omnibox popup fix
 - interaction-skills/backend-capability.md — diagnose loaded-but-empty pages and backend capability
+- interaction-skills/data-source-exploration.md — discover public/private data primitives before designing extraction
+- interaction-skills/session-continuity.md — persist auth/session continuity metadata safely
 
 Available domain skills:
 - airbnb/overview.md
 - airbnb/enhancement-roadmap.md
+- airbnb/exploration-protocol.md
+- airbnb/data-inventory.md
+- airbnb/session-continuity.md
 - airbnb/host-sources.md
 - airbnb/public-market.md
 - airbnb/schema-core.md
@@ -59,6 +64,7 @@ Search domain-skills/ first for the domain you are working on before inventing a
 Only if you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. The available interaction skills are:
 - backend-capability.md
 - cookies.md
+- data-source-exploration.md
 - cross-origin-iframes.md
 - dialogs.md
 - downloads.md
@@ -69,6 +75,7 @@ Only if you start struggling with a specific mechanic while navigating, look in 
 - print-as-pdf.md
 - screenshots.md
 - scrolling.md
+- session-continuity.md
 - shadow-dom.md
 - tabs.md
 - uploads.md

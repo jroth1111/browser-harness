@@ -4,6 +4,10 @@ Use this file for logged-in Airbnb host account collection. Use
 `public-market.md` for public competitor extraction and the schema files for
 storage.
 
+Before collecting private data across sessions, read `session-continuity.md`.
+Before assuming available fields, run `exploration-protocol.md` and update
+`data-inventory.md` with account-specific source availability.
+
 ## Collection posture
 
 - Stop at the login wall if the user has not granted access.
@@ -11,6 +15,8 @@ storage.
 - Use authenticated UI text only when exports are unavailable.
 - Record `observed_at`, listing scope, date filters, account currency, and the
   visible UI/source used for each capture.
+- Store session continuity receipts in the ignored `.session-store/`; do not
+  store raw cookies in tracked files.
 - Do not type credentials from screenshots.
 
 ## Source map
@@ -29,6 +35,7 @@ storage.
 | Smart Pricing settings | On/off, min, max, overrides, discount interactions | Weekly and after edits | Rate governance |
 | Messages / quick replies | Templates, triggers, placeholders, sent/skipped timeline | Monthly and per reservation | Communication consistency |
 | Reviews | Review date, text, ratings, host response, themes | After review posts | Guest-experience intelligence |
+| Personal data export | Account data file in HTML, Excel, or JSON where requested and available | On request/quarterly audit | Historical primitive discovery and backfill |
 | Similar listings / price comparison | Airbnb-selected comparable listings, available/booked comparison context, typical nightly prices where shown | Weekly and before pricing changes | Pricing reasonableness and comp-set validation |
 | Promotions and discounts | Weekly/monthly/early-bird/last-minute discounts, custom promotion eligibility, median-price constraints | Weekly and after pricing edits | Promotion governance and discount leakage control |
 | Photo tour / listing editor | Room-level photo coverage, photo order, room amenities, accessibility features, sleeping arrangements | Monthly and after content edits | Listing quality and conversion |

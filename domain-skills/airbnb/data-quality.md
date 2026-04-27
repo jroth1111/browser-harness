@@ -34,6 +34,7 @@ Fields:
 - `status`
 - `error_summary`
 - `parser_version`
+- `session_manifest_id`
 
 ## `airbnb_source_observation`
 
@@ -123,3 +124,6 @@ Fields:
 - Keep screenshots only when they are needed for QA or user-requested evidence.
 - Do not commit guest data, cookies, exports, screenshots, or downloaded reports
   into this skill repository.
+- For private Airbnb continuity, use `session-continuity.md` and the ignored
+  `.session-store/` path. Store raw cookies only when explicitly requested and
+  only outside tracked files.

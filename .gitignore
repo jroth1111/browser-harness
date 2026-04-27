@@ -8,3 +8,5 @@ uv.lock
 .pytest_cache/
 .beads/
 .claude/
+domain-skills/*/.session-store/
+domain-skills/*/.private-data/
