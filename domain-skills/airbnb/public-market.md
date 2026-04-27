@@ -165,6 +165,9 @@ For comp listing snapshots, add:
 - cancellation policy where visible.
 - photo count and hero-photo subject.
 - top-home, Guest Favourite, and top-percent highlight visibility.
+- public review star distribution where visible. Airbnb exposes percentages on
+  some listing pages; store the percentage and an estimated count derived from
+  `review_count`, rather than pretending Airbnb gave an exact count.
 - positive and negative review themes.
 
 ## Traps

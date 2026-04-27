@@ -71,6 +71,16 @@ Fields:
 - `bathrooms`
 - `rating`
 - `review_count`
+- `five_star_pct`
+- `five_star_count_estimate`
+- `four_star_pct`
+- `four_star_count_estimate`
+- `three_star_pct`
+- `three_star_count_estimate`
+- `two_star_pct`
+- `two_star_count_estimate`
+- `one_star_pct`
+- `one_star_count_estimate`
 - `public_badges`
 - `top_home_highlight_visible`
 - `bottom_percent_warning_visible`
