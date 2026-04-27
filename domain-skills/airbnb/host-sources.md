@@ -1,0 +1,267 @@
+# Airbnb.com.au - Authenticated Host Sources
+
+Use this file for logged-in Airbnb host account collection. Use
+`public-market.md` for public competitor extraction and the schema files for
+storage.
+
+## Collection posture
+
+- Stop at the login wall if the user has not granted access.
+- Prefer downloads and exports when Airbnb provides them.
+- Use authenticated UI text only when exports are unavailable.
+- Record `observed_at`, listing scope, date filters, account currency, and the
+  visible UI/source used for each capture.
+- Do not type credentials from screenshots.
+
+## Source map
+
+| Source | Data obtainable | Refresh | Primary use |
+|---|---|---:|---|
+| Earnings dashboard | Recent earnings, projected earnings, listing-level earnings | Weekly/monthly | Revenue tracking |
+| Earnings reports / CSV | Gross earnings, adjustments, host service fee, taxes withheld, net pay, nights booked, average length of stay, listing and payout method, cleaning fee | Monthly and after payout changes | Financial reporting, owner statements, tax preparation |
+| Reservation details | Guest name, reservation dates, guest count, confirmation code, guest-paid price, status | On booking/change | Operations, check-in, cleaning, stay economics |
+| Calendar / iCal export | Booked nights, blocked nights, availability state | Daily | Occupancy, gaps, accidental blocks, booking pace |
+| Listing settings | Title, description, photos, capacity, amenities, fees, rules, cancellation, check-in/out, registration fields | Monthly and after edits | Listing accuracy, conversion, compliance tracking |
+| Insights > Conversion | Impressions, search-to-listing, listing-to-booking, lead time, returning guests, views, wishlists | Daily/weekly | Funnel diagnosis |
+| Insights > Occupancy & rates | Occupancy, blocked/booked/unbooked nights, check-ins, cancellation rate, length of stay, nightly rate | Weekly | Yield and calendar performance |
+| Insights > Quality | 5-star category performance, overall rating, comparison to similar listings | Weekly/monthly | Operational quality control |
+| Rule-sets | Price rules, LOS discounts, last-minute, early-bird, min/max stay, check-in/out requirements | Weekly and after edits | Yield rules and restriction control |
+| Smart Pricing settings | On/off, min, max, overrides, discount interactions | Weekly and after edits | Rate governance |
+| Messages / quick replies | Templates, triggers, placeholders, sent/skipped timeline | Monthly and per reservation | Communication consistency |
+| Reviews | Review date, text, ratings, host response, themes | After review posts | Guest-experience intelligence |
+| Help Centre pages | Feature definitions and responsible-hosting guidance | Monthly/quarterly | Feature and compliance awareness |
+
+## Earnings and payout reporting
+
+Primary fields:
+
+- booking subtotal
+- gross earnings
+- adjustments
+- Airbnb host service fee
+- taxes withheld or remitted where visible
+- net payout
+- cleaning fee and other host fees
+- nights booked
+- average length of stay
+- listing and payout method
+
+Extraction order:
+
+1. Download earnings report or CSV from the Airbnb earnings UI.
+2. Parse the downloaded file with a structured CSV/PDF parser.
+3. Use authenticated UI text only when exports are unavailable.
+
+Use for net ADR, net RevPAN, owner statements, fee leakage, refunds,
+adjustments, payout timing, and cleaning-fee recovery.
+
+## Reservation details
+
+Capture every booking or change event:
+
+- confirmation code
+- listing ID/name
+- reservation status
+- booking creation time if visible
+- check-in/check-out dates
+- nights
+- guest count breakdown
+- guest country/language if visible
+- price breakdown and what the guest paid if visible
+- special requests from messages
+
+Use reservation details to connect money, calendar dates, operations, messages,
+reviews, and cleaning load.
+
+## Calendar and iCal
+
+Use iCal/exported calendar for the daily availability base:
+
+- booked nights
+- blocked nights
+- imported external blocks
+- reservation-linked dates when visible
+
+Use the host calendar UI when you need reasons that iCal cannot express:
+
+- owner block
+- prep time
+- minimum stay
+- advance notice
+- restricted check-in/check-out day
+- pending request
+- cancelled reservation block
+- account/listing compliance block
+
+Calendar snapshots should be daily for forward-looking dates. Never overwrite a
+previous snapshot; booking pace depends on history.
+
+## Listing settings and content audit
+
+Capture monthly and after edits:
+
+- title
+- description sections
+- photos and hero-photo subject
+- capacity, beds, bedrooms, bathrooms
+- amenities
+- house rules
+- cancellation policy
+- check-in method/window
+- checkout time
+- instant book state
+- registration or permit fields where visible
+
+Use public listing pages to verify how the listing appears to guests. Use the
+host editor to check settings that are hidden from guests.
+
+## Insights
+
+Use Insights when available through professional hosting tools.
+
+Conversion:
+
+- first-page search impressions
+- search-to-listing conversion
+- listing-to-booking conversion
+- views
+- wishlist additions
+- booking lead time
+- returning guests
+- comparison to similar listings where shown
+
+Occupancy and rates:
+
+- occupancy rate
+- nights blocked
+- nights booked
+- unbooked nights
+- check-ins
+- cancellation rate
+- average length of stay
+- average nightly rate
+- future-period flag
+
+Quality:
+
+- overall rating
+- 5-star percentage
+- accuracy
+- check-in
+- cleanliness
+- communication
+- location
+- value
+- comparison to similar listings where shown
+
+Insights are the funnel truth source. Public scraping can show what a guest
+sees, but it cannot replace authenticated conversion metrics.
+
+## Pricing settings and Smart Pricing
+
+Capture weekly and after edits:
+
+- base price
+- weekend price
+- Smart Pricing enabled
+- Smart Pricing min/max
+- weekly and monthly discounts
+- early-bird and last-minute discounts
+- custom promotions
+- cleaning, pet, extra guest, and additional fees
+
+Airbnb-specific rule: Smart Pricing can override rule-set intent. If the host
+expects a custom rule-set to control a period, check whether Smart Pricing is
+active for that listing and date range.
+
+## Rule-sets
+
+Capture each rule-set and the dates/listings it affects:
+
+- rule-set name/ID
+- date range
+- listing IDs applied
+- nightly price adjustment
+- length-of-stay discounts
+- last-minute discounts
+- early-bird discounts
+- minimum and maximum nights
+- check-in and checkout day rules
+- Smart Pricing interaction
+
+Rule-sets are high leverage and high risk. They can raise peak yield, fill gaps,
+or accidentally make profitable searches unbookable.
+
+## Messages and quick replies
+
+Capture monthly and per reservation:
+
+- template name
+- listing applicability
+- trigger type
+- trigger offset
+- placeholders/details used
+- last-minute booking behavior
+- sent/skipped/upcoming timeline
+- guest response needed flag
+
+Check for placeholder failures where Airbnb cannot populate a detail because the
+listing lacks the underlying field.
+
+## Reviews and quality themes
+
+Capture after review publication:
+
+- review date
+- stay month if visible
+- review text
+- category ratings if visible to host
+- host response
+- recurring themes
+
+Recommended theme tags:
+
+- cleanliness
+- accuracy
+- check-in
+- noise
+- beds/sleep
+- Wi-Fi/work
+- value
+- maintenance
+- parking
+- family suitability
+- pet suitability
+
+Use themes as evidence for operational fixes, not as isolated anecdotes.
+
+## Tasks and team operations
+
+If the host uses Airbnb teams/tasks, capture:
+
+- task type
+- reservation/listing link
+- due time
+- assigned role
+- completion time
+- issue found flag
+- photo evidence flag
+
+If Airbnb tasks are not used, create an internal operations task table from
+reservations and messages.
+
+## Australian compliance awareness
+
+Track Airbnb-visible fields and guidance links:
+
+- registration or permit number fields
+- listing regulation tab status where visible
+- taxes withheld or remitted in earnings reports
+- levy/tax collection flags where visible
+- jurisdiction/state/territory
+- declaration status where visible
+- report download timestamp
+
+Do not infer legal compliance from absence of a visible warning. Record what
+Airbnb exposes and tell the user to verify local obligations with a qualified
+advisor or official government source.

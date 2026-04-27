@@ -25,9 +25,14 @@ Available interaction skills:
 - interaction-skills/backend-capability.md — diagnose loaded-but-empty pages and backend capability
 
 Available domain skills:
-- airbnb/scraping.md
-- airbnb/host-intelligence.md
-- airbnb/data-model.md
+- airbnb/overview.md
+- airbnb/host-sources.md
+- airbnb/public-market.md
+- airbnb/schema-core.md
+- airbnb/schema-performance.md
+- airbnb/schema-operations.md
+- airbnb/schema-public-market.md
+- airbnb/analytics-alerts.md
 - realestate-com-au/scraping.md
 - tiktok/upload.md
 - polymarket/scraping.md

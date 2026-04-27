@@ -1,11 +1,11 @@
-# Airbnb.com.au - Public Search and Listing Extraction
+# Airbnb.com.au - Public Market Collection
 
 Field-tested against Melbourne CBD apartment listings on 2026-04-27 using the browser harness.
 
 Use this file for public Airbnb.com.au search/listing extraction and comp-set
-observations. For host account intelligence, read
-`domain-skills/airbnb/host-intelligence.md`. For canonical tables, metrics, and
-alerts, read `domain-skills/airbnb/data-model.md`.
+observations. For host account collection, read `host-sources.md`. For storage,
+read `schema-public-market.md`. For decisions and alerts, read
+`analytics-alerts.md`.
 
 ## Quick summary
 
