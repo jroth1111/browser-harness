@@ -1,6 +1,11 @@
-# Airbnb - Search and Listing Extraction
+# Airbnb.com.au - Public Search and Listing Extraction
 
 Field-tested against Melbourne CBD apartment listings on 2026-04-27 using the browser harness.
+
+Use this file for public Airbnb.com.au search/listing extraction and comp-set
+observations. For host account intelligence, read
+`domain-skills/airbnb/host-intelligence.md`. For canonical tables, metrics, and
+alerts, read `domain-skills/airbnb/data-model.md`.
 
 ## Quick summary
 
@@ -9,6 +14,9 @@ Field-tested against Melbourne CBD apartment listings on 2026-04-27 using the br
 - `document.body.innerText` is enough to extract listing title, property type, capacity, bedrooms, beds, baths, rating, reviews, host, amenities, house rules, and visible location text.
 - For revenue comps, scrape search result totals for a fixed stay length and guest count, then normalize to nightly guest-facing gross.
 - Search result totals are shown excluding taxes and rounded to the nearest integer. Do not treat them as owner net revenue.
+- For host intelligence, public comp data must be normalized with the exact
+  search context: dates, nights, guests, filters, map area, device, logged-in
+  state, currency, and observation time.
 
 ## Useful URL patterns
 
@@ -61,6 +69,42 @@ $992 AUD total
 
 Use the `total` price for stay-level comparison. The crossed or earlier price may be a discount anchor and should not be used as realized gross.
 
+For host intelligence, record the search context before extracting cards:
+
+```python
+from datetime import datetime, timezone
+
+observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+search_run = {
+    "observed_at": observed_at,
+    "observer_location_country": "AU",
+    "device_type": "desktop",
+    "logged_in_flag": False,
+    "currency": "AUD",
+    "destination": "Melbourne, Victoria, Australia",
+    "check_in_date": "2026-05-15",
+    "check_out_date": "2026-05-18",
+    "nights": 3,
+    "guest_count_adults": 4,
+    "filters_applied": ["min_bedrooms=3"],
+}
+```
+
+The search card fields to preserve are:
+
+| Field | Why |
+|---|---|
+| `result_position` | Visibility |
+| `listing_url` | Stable comp reference |
+| `visible_title_short` | Search-card message |
+| `visible_location_label` | Market placement |
+| `visible_rating` / `visible_review_count` | Trust signal |
+| `visible_badge` | Guest Favourite/top-percent signal |
+| `visible_price_total` | Guest-facing comp price |
+| `visible_price_per_night` | ADR proxy where shown |
+| `hero_photo_subject_tag` | Click appeal |
+| `available_flag` | Supply signal |
+
 ## Listing-page extraction
 
 ```python
@@ -85,6 +129,15 @@ Listing text commonly includes:
 | House rules | Check-in, checkout, guest maximum |
 | Fees/rules notes | Cleaning, lost keys, party restrictions when host discloses them |
 
+For comp listing snapshots, add:
+
+- `comp_listing_id` from the room URL.
+- core amenity flags such as parking, pool/spa, pet-friendly,
+  workspace/Wi-Fi, family amenities, and accessible features.
+- cancellation policy where visible.
+- photo count and hero-photo subject.
+- positive and negative review themes.
+
 ## Traps
 
 - Price widgets on individual listing pages can stay at `loading`; use search result totals for pricing evidence.
@@ -93,11 +146,32 @@ Listing text commonly includes:
 - Search result totals exclude taxes. They are guest-facing gross before tax, not platform-adjusted host payout and not net income.
 - A minimum-bedroom search can still include non-target locations. Filter by title, suburb, property type, bedroom/bath count, and whether the listing text mentions the building/address.
 - Lightpanda nightly `1.0.0-nightly.5816+a578f4d6` can extract Airbnb listing and search-result text as of 2026-04-27. Pages include a visible no-JavaScript warning in `innerText`, but the useful static content still appears.
+- If headless or Lightpanda produces a loaded-but-empty page, run
+  `diagnose_url_capability(url)` before debugging selectors.
+- Authenticated host pages should not be scraped with public assumptions. Use a
+  logged-in browser session, prefer exports/downloads, and stop at the login
+  wall if the user has not granted access.
 
-## Short-stay feasibility workflow
+## Public comp workflow
 
 1. Search exact building/address terms in Airbnb and Google to identify in-building listings.
 2. Open listing pages and extract capacity, bedrooms, baths, floor level, amenities, rating, reviews, and host maturity.
 3. Search the broader suburb/CBD with the same dates, guests, and bedroom count to collect price totals.
 4. Normalize stay totals by nights to produce guest-facing nightly gross.
-5. Compare against long-term rent only after accounting for levy/tax friction, platform fees, management, cleaning, utilities, consumables, linen, insurance, vacancy, and wear.
+5. Build a comp price index: target total guest price / median comp total guest
+   price for the same dates, guests, filters, and stay length.
+6. Compare against host economics only after accounting for taxes/levies,
+   platform fees, management, cleaning, utilities, consumables, linen,
+   insurance, vacancy, and wear.
+
+## Host-facing outputs
+
+Public Airbnb.com.au extraction should feed these host decisions:
+
+- underpriced peak date
+- overpriced conversion risk
+- minimum-stay choke
+- weak search-card positioning
+- amenity or trust-signal gap
+- high-demand unbooked date
+- comp quality premium or discount
