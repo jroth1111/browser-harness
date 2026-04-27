@@ -65,6 +65,10 @@ Fields:
 - `listing_id`
 - `period_start`
 - `period_end`
+- `relative_ds_start`
+- `relative_ds_end`
+- `source_query`
+- `source_route`
 - `first_page_search_impressions`
 - `search_to_listing_conversion`
 - `listing_to_booking_conversion`
@@ -85,6 +89,10 @@ Fields:
 - `listing_id`
 - `period_start`
 - `period_end`
+- `relative_ds_start`
+- `relative_ds_end`
+- `source_query`
+- `source_route`
 - `occupancy_rate`
 - `nights_blocked`
 - `nights_booked`
@@ -106,6 +114,10 @@ Fields:
 - `listing_id`
 - `period_start`
 - `period_end`
+- `relative_ds_start`
+- `relative_ds_end`
+- `source_query`
+- `source_route`
 - `overall_rating`
 - `five_star_pct_total`
 - `accuracy_5star_pct`
@@ -119,6 +131,66 @@ Fields:
 - `observed_at`
 
 Refresh: weekly/monthly.
+
+## `airbnb_insights_metric_snapshot`
+
+Generic per-listing Performance metric row from Airbnb's authenticated
+Performance API.
+
+Fields:
+
+- `listing_id`
+- `listing_name`
+- `metric_family`
+- `metric_subroute`
+- `metric_name`
+- `metric_label`
+- `period_label`
+- `relative_ds_start`
+- `relative_ds_end`
+- `value`
+- `value_type`
+- `value_string`
+- `value_change`
+- `value_change_type`
+- `value_change_string`
+- `currency`
+- `source_query`
+- `source_url`
+- `observed_at`
+
+Refresh: daily for tactical metrics; weekly/monthly for broader reporting.
+
+## `airbnb_insights_daily_point`
+
+Atomic daily chart primitive from Airbnb `ChartQuery`.
+
+Fields:
+
+- `listing_id`
+- `listing_name`
+- `metric_family`
+- `metric_subroute`
+- `primary_metric_name`
+- `primary_metric_label`
+- `ds`
+- `series_index`
+- `series_label`
+- `series_granularity`
+- `is_comparison_series`
+- `value`
+- `value_type`
+- `value_string`
+- `relative_ds_start`
+- `relative_ds_end`
+- `source_query`
+- `source_url`
+- `observed_at`
+
+Design rule: store the daily primitive first, then compose 7-day, 30-day,
+monthly, quarterly, and yearly views from it where the metric is additive or
+otherwise composable. Preserve Airbnb summary rows separately for metrics whose
+aggregation semantics are ratios or averages.
 
 ## Performance joins
 

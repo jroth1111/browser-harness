@@ -64,9 +64,9 @@ belongs to a market, competitor, or own-listing state run from
 | Listing editor | full address, guest count, property type, photo count, room/photo tour lines, title, descriptions, photos, rooms, amenities, rules, policies, registration fields | Auth UI/editor text after opening `/hosting/listings/<listing_id>` | Headful profile |
 | Pricing settings | base/weekend price, Smart Pricing min/max, fees, discounts, promotions | Auth UI | Headful profile |
 | Rule-sets | date ranges, price adjustments, LOS discounts, check-in/out rules | Auth UI | Headful profile |
-| Insights conversion | impressions, search-to-listing, listing-to-booking, views, wishlists, lead time | Auth UI | Headful profile |
-| Insights occupancy/rates | occupancy, booked/blocked/unbooked nights, check-ins, cancellations, ADR | Auth UI | Headful profile |
-| Insights quality | overall/category 5-star performance and similar-listing comparison | Auth UI | Headful profile |
+| Insights conversion | impressions, search-to-listing, listing-to-booking, views, wishlists, lead time | Authenticated `ListOfMetricsQuery` and `ChartQuery` with `filters.listingIds` | Headful bootstrap plus browser-context API fetch |
+| Insights occupancy/rates | occupancy, booked/blocked/unbooked nights, check-ins, cancellations, ADR | Authenticated `ListOfMetricsQuery` and `ChartQuery` with `filters.listingIds` | Headful bootstrap plus browser-context API fetch |
+| Insights quality | overall/category 5-star performance and similar-listing comparison | Authenticated Performance API plus UI review sections where needed | Headful bootstrap plus browser-context API fetch |
 | Messages/quick replies | templates, triggers, placeholders, sent/skipped timeline | Auth UI | Headful profile |
 | Tasks/teams | task type, due date, assignment, checklist, completion | Auth UI | Headful profile |
 | Regulations/tax | registration/permit fields, declaration status, tax/levy fields | Auth UI/help docs | Headful profile |
@@ -81,6 +81,12 @@ for listing enumeration and status filtering, then use the listing editor only
 for fields the API does not expose or that need private UI verification. Store
 full addresses and raw private outputs only in ignored `.private-data/`
 artifacts.
+
+For Insights collection, the canonical scope is listing-specific. The
+Performance app's "All listings" route is useful for discovery, but stored rows
+must include `filters.listingIds` evidence or an equivalent listing-specific
+route. Daily history comes from rolling 7-day `ChartQuery` windows because
+Airbnb coarsens longer chart ranges to weekly/monthly points.
 
 ## Internal host primitives
 

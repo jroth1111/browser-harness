@@ -502,6 +502,12 @@ currency
 Capture conversion and quality:
 
 ```text
+listing_id
+metric_family
+metric_subroute
+period_label
+relative_ds_start
+relative_ds_end
 first_page_search_impressions
 search_to_listing_conversion
 listing_to_booking_conversion
@@ -522,7 +528,23 @@ communication_5star_pct
 location_5star_pct
 value_5star_pct
 comparison_to_similar_listings
+source_query
+source_url
+observed_at
 ```
+
+Insights collection rule:
+
+- Capture Insights per listing, not as "All listings" averages.
+- Prefer Airbnb's authenticated Performance APIs once discovered:
+  `ListOfMetricsQuery` for summary windows and `ChartQuery` for chart/history
+  points.
+- Use rolling 7-day `ChartQuery` windows for daily primitives. Longer Airbnb
+  chart windows may return weekly or monthly granularity.
+- Compose higher-period views from daily primitives when the metric is additive;
+  keep Airbnb's own period summary rows for rates, ratios, and averages.
+- Stop and store a partial receipt on sustained HTTP `429`; resume after
+  cooldown instead of continuing to send requests.
 
 Capture private settings:
 

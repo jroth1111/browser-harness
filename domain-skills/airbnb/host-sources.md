@@ -184,6 +184,10 @@ Field-level acceptance:
 
 Use Insights when available through professional hosting tools.
 
+Airbnb Performance/Insights data must be collected per listing. Use account-level
+or "All listings" pages only for source discovery, navigation, and filter
+inventory. Do not store portfolio averages as listing facts.
+
 Conversion:
 
 - first-page search impressions
@@ -221,6 +225,63 @@ Quality:
 
 Insights are the funnel truth source. Public scraping can show what a guest
 sees, but it cannot replace authenticated conversion metrics.
+
+### Authenticated per-listing Performance API workflow
+
+Use this workflow for listing-level views, conversion, occupancy, rates, and
+quality metrics.
+
+1. Start from a verified live-listing inventory so the listing scope is
+   `status == ACTIVE`.
+2. Restore the Airbnb host auth bundle into a separate fresh Chrome
+   profile/process.
+3. Open one authenticated Performance route to establish Airbnb bootstrap state,
+   for example
+   `/performance/conversion/p3_impressions/listing/<listing_id>?ds-start=-1&ds-end=0`.
+4. Use Network events or loaded scripts to discover the persisted query hashes.
+   Empirical hashes observed on 2026-04-27:
+   - `ListOfMetricsQuery`:
+     `d72f771d4dd59e594aeefbd90d5a5510d72c4c732f596f6d663af00bb27fac3c`
+   - `ChartQuery`:
+     `3e1e441e3bac1937e60c1b0409b53286e338804dd94c68575c556289a3b07580`
+   - page bootstrap queries such as `QualityPageQuery`, `OccupancyPageQuery`,
+     and `ConversionPageQuery` are useful for discovery, but
+     `ListOfMetricsQuery` and `ChartQuery` are the efficient collection APIs.
+5. Send same-origin authenticated `GET /api/v3/<Query>/<hash>` requests from the
+   browser context with `operationName`, `variables`, and persisted-query
+   `extensions`.
+6. Required request arguments:
+   - `metricType`: `QUALITY`, `OCCUPANCY`, or `CONVERSION`
+   - `groupBys`: `["RATING_CATEGORY"]`
+   - `groupByValues`: the metric subroute, such as `overall`,
+     `occupancy_rate`, `conversion_rate`, `p3_impressions`, or `wishlist`
+   - `filters.listingIds`: exactly one listing ID for listing-level capture
+   - `relativeDsStart` and `relativeDsEnd`: relative date-window bounds
+7. For daily history, call `ChartQuery` in rolling 7-day windows. Airbnb returns
+   `DAY` granularity for 7-day windows, but coarser ranges such as 30, 90, or
+   365 days return weekly or monthly chart points. De-duplicate overlapping
+   window endpoints by `listing_id`, metric, series, and date.
+8. Use `ListOfMetricsQuery` for summary windows such as last 7, 30, and 365
+   days, then compose higher-period views from stored daily primitives where
+   possible.
+
+Rate-limit handling:
+
+- Airbnb may return HTTP `429` when too many Performance API calls are issued.
+- Use small batches, per-request timeouts, inter-batch delays, and exponential or
+  fixed backoff.
+- If consecutive batches return only `429`, stop the run, store a partial
+  receipt, wait for cooldown, and resume later. Do not continue hammering the
+  API.
+
+Per-listing acceptance:
+
+- Every stored metric row includes `listing_id`, metric family, subroute,
+  relative date window, source URL/API, `observed_at`, and value metadata.
+- Daily chart rows include `ds`, series label/index, granularity, value, and
+  whether the row is a comparison series.
+- A run is recommendation-grade only when every active listing has the required
+  route/date coverage or a clear unavailable/rate-limited receipt.
 
 ## Pricing settings and Smart Pricing
 
