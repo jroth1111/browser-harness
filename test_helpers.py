@@ -116,6 +116,121 @@ def test_switch_tab_reports_missing_session_id():
             raise AssertionError("expected RuntimeError")
 
 
+def test_close_tab_closes_current_and_switches_to_remaining_real_tab():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        if method == "Target.getTargetInfo":
+            return {"targetInfo": {"targetId": "target-1", "url": "https://old.example", "title": "Old"}}
+        if method == "Target.closeTarget":
+            return {"success": True}
+        if method == "Target.getTargets":
+            return {"targetInfos": [
+                {"type": "page", "targetId": "target-2", "url": "https://new.example", "title": "New"}
+            ]}
+        if method == "Target.attachToTarget":
+            return {"sessionId": "session-2"}
+        return {}
+
+    with patch("helpers.cdp", side_effect=fake_cdp), \
+         patch("helpers._send", return_value={"session_id": "session-2"}) as send:
+        assert helpers.close_tab() is True
+
+    assert calls == [
+        ("Target.getTargetInfo", {}),
+        ("Target.closeTarget", {"targetId": "target-1"}),
+        ("Target.getTargets", {}),
+        ("Target.activateTarget", {"targetId": "target-2"}),
+        ("Target.attachToTarget", {"targetId": "target-2", "flatten": True}),
+    ]
+    assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2"}
+
+
+def test_close_tab_closes_non_current_without_switching():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        if method == "Target.getTargetInfo":
+            return {"targetInfo": {"targetId": "target-1", "url": "https://current.example"}}
+        if method == "Target.closeTarget":
+            return {"success": True}
+        raise AssertionError(method)
+
+    with patch("helpers.cdp", side_effect=fake_cdp):
+        assert helpers.close_tab("target-2") is True
+
+    assert calls == [
+        ("Target.getTargetInfo", {}),
+        ("Target.closeTarget", {"targetId": "target-2"}),
+    ]
+
+
+def test_close_tab_reports_missing_target_id():
+    with patch("helpers.current_tab", return_value={"targetId": "target-1"}):
+        try:
+            helpers.close_tab({})
+        except RuntimeError as e:
+            assert "targetId" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_close_tabs_closes_many_and_switches_once_if_current_closed():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        if method == "Target.getTargetInfo":
+            return {"targetInfo": {"targetId": "target-1", "url": "https://old.example"}}
+        if method == "Target.closeTarget":
+            return {"success": True}
+        if method == "Target.getTargets":
+            return {"targetInfos": [
+                {"type": "page", "targetId": "target-3", "url": "https://new.example", "title": "New"}
+            ]}
+        if method == "Target.attachToTarget":
+            return {"sessionId": "session-3"}
+        return {}
+
+    with patch("helpers.cdp", side_effect=fake_cdp), \
+         patch("helpers._send", return_value={"session_id": "session-3"}):
+        assert helpers.close_tabs(["target-1", {"targetId": "target-2"}]) == {
+            "target-1": True,
+            "target-2": True,
+        }
+
+    assert calls == [
+        ("Target.getTargetInfo", {}),
+        ("Target.closeTarget", {"targetId": "target-1"}),
+        ("Target.closeTarget", {"targetId": "target-2"}),
+        ("Target.getTargets", {}),
+        ("Target.activateTarget", {"targetId": "target-3"}),
+        ("Target.attachToTarget", {"targetId": "target-3", "flatten": True}),
+    ]
+
+
+def test_close_tabs_does_not_switch_when_current_survives():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        if method == "Target.getTargetInfo":
+            return {"targetInfo": {"targetId": "target-1"}}
+        if method == "Target.closeTarget":
+            return {"success": True}
+        raise AssertionError(method)
+
+    with patch("helpers.cdp", side_effect=fake_cdp):
+        assert helpers.close_tabs(["target-2", None, {}]) == {"target-2": True}
+
+    assert calls == [
+        ("Target.getTargetInfo", {}),
+        ("Target.closeTarget", {"targetId": "target-2"}),
+    ]
+
+
 def test_new_tab_reports_missing_target_id():
     with patch("helpers.cdp", return_value={}):
         try:

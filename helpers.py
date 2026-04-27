@@ -198,6 +198,43 @@ def switch_tab(target):
     _send({"meta": "set_session", "session_id": sid})
     return sid
 
+def close_tab(target=None):
+    """Close a tab by targetId/dict, or the current tab when omitted.
+
+    When closing the attached tab, re-attach to the first remaining real tab so
+    the next helper call does not pay a stale-session recovery round-trip.
+    """
+    cur = current_tab()
+    target_id = cur.get("targetId") if target is None else (target.get("targetId") if isinstance(target, dict) else target)
+    if not target_id:
+        raise RuntimeError(f"close_tab missing targetId: {target!r}")
+    was_current = cur.get("targetId") == target_id
+    result = cdp("Target.closeTarget", targetId=target_id)
+    if was_current:
+        tabs = list_tabs(include_chrome=False) or list_tabs(include_chrome=True)
+        if tabs:
+            switch_tab(tabs[0])
+    return result.get("success", True)
+
+def close_tabs(targets):
+    """Close many tabs by targetId/dict and re-attach if the current tab closes."""
+    cur = current_tab()
+    cur_id = cur.get("targetId")
+    target_ids = []
+    for target in targets:
+        target_id = target.get("targetId") if isinstance(target, dict) else target
+        if target_id:
+            target_ids.append(target_id)
+    closed_current = cur_id in target_ids
+    out = {}
+    for target_id in target_ids:
+        out[target_id] = cdp("Target.closeTarget", targetId=target_id).get("success", True)
+    if closed_current:
+        tabs = list_tabs(include_chrome=False) or list_tabs(include_chrome=True)
+        if tabs:
+            switch_tab(tabs[0])
+    return out
+
 def new_tab(url="about:blank"):
     # Always create blank, then goto: passing url to createTarget races with
     # attach, so the brief about:blank is "complete" by the time the caller
