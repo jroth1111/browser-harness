@@ -60,7 +60,8 @@ belongs to a market, competitor, or own-listing state run from
 | Reservations | confirmation code, guest count, dates, status, price breakdown | Auth UI/print/download | Headful profile |
 | Calendar and iCal | booked/blocked dates, availability, imported blocks | iCal export + calendar UI | Headful for export; parser after download |
 | Block reasons | prep, advance notice, min stay, restricted check-in/out, pending/cancelled blocks | Calendar UI date inspection | Headful profile |
-| Listing editor | title, descriptions, photos, rooms, amenities, rules, policies, registration fields | Auth UI | Headful profile |
+| Host listing inventory API | listing IDs, status, title/name, nickname, bedrooms, bathrooms, beds, location label, Instant Book, modified time, host editor path | `BeehiveGetListingsQuery` from `/hosting/listings` with browser-authenticated API key | Headful profile first; Lightpanda only after field parity receipt |
+| Listing editor | full address, guest count, property type, photo count, room/photo tour lines, title, descriptions, photos, rooms, amenities, rules, policies, registration fields | Auth UI/editor text after opening `/hosting/listings/<listing_id>` | Headful profile |
 | Pricing settings | base/weekend price, Smart Pricing min/max, fees, discounts, promotions | Auth UI | Headful profile |
 | Rule-sets | date ranges, price adjustments, LOS discounts, check-in/out rules | Auth UI | Headful profile |
 | Insights conversion | impressions, search-to-listing, listing-to-booking, views, wishlists, lead time | Auth UI | Headful profile |
@@ -74,6 +75,12 @@ belongs to a market, competitor, or own-listing state run from
 Airbnb's personal data file can be requested in HTML, Excel, or JSON format and
 may include host-relevant categories such as listings, reservations, payouts, and
 messages when present in the account.
+
+For own live-listing collection, use the inventory API as the canonical source
+for listing enumeration and status filtering, then use the listing editor only
+for fields the API does not expose or that need private UI verification. Store
+full addresses and raw private outputs only in ignored `.private-data/`
+artifacts.
 
 ## Internal host primitives
 

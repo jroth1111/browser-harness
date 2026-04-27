@@ -21,9 +21,14 @@ Fields:
 - `listing_id`
 - `listing_name`
 - `listing_url`
+- `host_editor_path`
+- `address`
+- `address_source`
 - `market`
 - `suburb_or_area`
+- `location_label`
 - `property_type`
+- `property_type_summary`
 - `room_type`
 - `max_guests`
 - `bedrooms`
@@ -38,6 +43,9 @@ Fields:
 - `checkout_time`
 - `registration_or_permit_id`
 - `listing_status`
+- `api_state`
+- `source_overview`
+- `source_detail_url`
 - `last_verified_at`
 
 Refresh: setup, monthly, and after listing edits.

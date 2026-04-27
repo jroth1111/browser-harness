@@ -406,6 +406,56 @@ Auth/backend:
 - Use authenticated UI only when export is unavailable or the field is visible
   only in the UI.
 
+Start by collecting the live-listing inventory. This establishes the authoritative
+private listing set for subsequent calendar, pricing, Insights, and quality
+collection.
+
+Live-listing inventory capture:
+
+```text
+listing_id
+listing_name
+nickname
+status
+api_state
+public_listing_url
+host_editor_path
+address
+address_source
+location_label
+property_type_summary
+max_guests
+bedrooms
+beds
+bathrooms
+photo_count
+instant_book_enabled
+modified_at
+source_overview
+source_detail_url
+observed_at
+```
+
+Live-listing inventory source order:
+
+1. Use `/hosting/listings` and `BeehiveGetListingsQuery` for enumeration,
+   pagination, status counts, and fields present in the API row.
+2. Filter `status == ACTIVE` for live/listed output.
+3. Open each active listing's authenticated editor route for private detail
+   fields such as full address, guest count, property type, and photo tour
+   signals.
+4. Store JSON/CSV outputs in ignored `.private-data/listing-collections/` and a
+   receipt in `.session-store/capability/`.
+
+Live-listing acceptance:
+
+- Overview pagination reconciles to Airbnb's reported `metadata.totalCount`.
+- Status counts are retained before active filtering.
+- Required fields for every active listing: `listing_id`, `listing_name`,
+  `status`, `address`, `bedrooms`, `bathrooms`, `beds`, and `max_guests`.
+- Private artifacts may contain full addresses; shared docs and commits must
+  not.
+
 Capture calendar and pricing:
 
 ```text

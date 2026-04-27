@@ -111,7 +111,10 @@ previous snapshot; booking pace depends on history.
 
 Capture monthly and after edits:
 
+- live/listed status
 - title
+- full address from the authenticated editor
+- public listing URL or host-editor path
 - description sections
 - photos and hero-photo subject
 - capacity, beds, bedrooms, bathrooms
@@ -128,6 +131,54 @@ Capture monthly and after edits:
 
 Use public listing pages to verify how the listing appears to guests. Use the
 host editor to check settings that are hidden from guests.
+
+### Authenticated live-listing inventory workflow
+
+Use this workflow when the host asks for all currently live Airbnb listings and
+their private attributes.
+
+1. Restore the Airbnb host auth bundle into a separate fresh Chrome
+   profile/process. Do not use a new tab in an already logged-in browser as the
+   restore test.
+2. Open `https://www.airbnb.com.au/hosting/listings` and verify it loads host
+   content.
+3. Inspect `script#data-injector-instances` and page network state for
+   `BeehiveGetListingsQuery`.
+4. Read `layout-init.api_config.key` from `script#data-initializer-bootstrap`
+   and send it as `x-airbnb-api-key` for the persisted API request.
+5. Fetch `/api/v3/BeehiveGetListingsQuery/<persisted_query_hash>` in pages,
+   normally with request variables containing `limit: 30` and offsets of
+   `0, 30, 60...` until `metadata.totalCount` is exhausted.
+6. Treat `status == ACTIVE` as the live/listed inventory. Keep other statuses in
+   the receipt counts, but do not include them in the live-listing output unless
+   explicitly requested.
+7. For each active listing, open
+   `https://www.airbnb.com.au/hosting/listings/<listing_id>`. Airbnb redirects
+   to the listing editor, commonly
+   `/hosting/listings/editor/<listing_id>/details/photo-tour`.
+8. Extract private detail fields from rendered editor text when the API row does
+   not contain enough detail: full address after the `Location` label, `Number
+   of guests`, `Property type`, room/photo lines, and photo count.
+9. Save private JSON/CSV under
+   `domain-skills/airbnb/.private-data/listing-collections/` and save a compact
+   receipt under `.session-store/capability/`.
+
+Empirical source note from 2026-04-27: the listings overview API used
+`BeehiveGetListingsQuery` with persisted hash
+`6a50773b7e0bf1c1c7c54d7b12d12c2db5be0eb4ce1ebfb8df1c3b42a9e2aaca`.
+Do not hard-code the hash as the only path; rediscover it from loaded scripts or
+network state when possible and record the observed hash in the receipt.
+
+Field-level acceptance:
+
+- Overview pagination must reconcile to `metadata.totalCount`.
+- Status counts must be recorded before filtering to active listings.
+- Every active record must include `listing_id`, `listing_name`, `status`,
+  `address`, `bedrooms`, `bathrooms`, `beds`, and `max_guests`.
+- If the API row and editor text disagree, store both source values and mark the
+  record for manual review instead of silently overwriting.
+- Do not print full addresses into shared docs or commits; keep them in ignored
+  private artifacts.
 
 ## Insights
 
