@@ -196,7 +196,7 @@ async def serve(d):
 
     server = await asyncio.start_unix_server(handler, path=SOCK)
     os.chmod(SOCK, 0o600)
-    log(f"listening on {SOCK} (name={NAME}, remote={REMOTE_ID or 'local'})")
+    log(f"listening on {SOCK} (name={NAME})")
     async with server:
         await d.stop.wait()
 
