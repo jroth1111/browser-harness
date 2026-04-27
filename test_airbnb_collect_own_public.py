@@ -61,6 +61,9 @@ def test_parse_listing_text_extracts_review_distribution_and_categories():
     assert parsed["5_star_pct"] == 87
     assert parsed["5_star_count_estimate"] == 110
     assert parsed["1_star_pct"] == 1
+    assert parsed["star_distribution_source"] == "percentage_widget"
+    assert parsed["star_distribution_confidence"] == "percentage_estimate"
+    assert parsed["visible_individual_review_star_count"] == 0
     assert parsed["parking_flag"] is True
     assert parsed["pool_spa_flag"] is True
     assert "wifi" in parsed["visible_amenities_core"]
@@ -90,6 +93,8 @@ def test_parse_listing_text_does_not_confuse_host_reviews_for_listing_reviews():
     assert parsed["overall_rating"] is None
     assert parsed["rating_display_state"] == "no_reviews_yet"
     assert parsed["star_distribution_source"] == "not_visible"
+    assert parsed["star_distribution_confidence"] == "not_available"
+    assert parsed["visible_individual_review_star_count"] == 0
     assert parsed["rating_category_source"] == "not_visible"
     assert parsed.get("5_star_pct") is None
 
@@ -122,6 +127,40 @@ def test_parse_listing_text_uses_visible_individual_review_distribution_for_low_
     assert parsed["5_star_pct"] == 100
     assert parsed["5_star_count_estimate"] == 1
     assert parsed["star_distribution_source"] == "visible_individual_review_stars"
+    assert parsed["star_distribution_confidence"] == "complete_visible_review_rows"
+    assert parsed["visible_individual_review_star_count"] == 1
+
+
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_parse_listing_text_tracks_partial_visible_individual_review_stars(loader):
+    module = loader()
+    parsed = module.parse_listing_text(
+        """
+        Melbourne CBD Stay
+        12 reviews
+        Entire rental unit in Melbourne, Australia
+        7 guests \u00b7 3 bedrooms \u00b7 4 beds \u00b7 2 baths
+        Julia
+        Rating, 5 stars
+        March 2026
+        Great stay.
+        Tom
+        Rating, 4 stars
+        February 2026
+        Good location.
+        Meet your host
+        Msa
+        Host
+        1,039 reviews
+        4.44 out of 5 average rating
+        """
+    )
+
+    assert parsed["review_count"] == 12
+    assert parsed["star_distribution_source"] == "partial_visible_individual_review_stars"
+    assert parsed["star_distribution_confidence"] == "insufficient_visible_review_rows"
+    assert parsed["visible_individual_review_star_count"] == 2
+    assert parsed.get("5_star_pct") is None
 
 
 def test_parse_card_text_extracts_target_search_card_fields():

@@ -239,32 +239,49 @@ def parse_listing_review_count(scope):
 
 
 def parse_review_star_distribution(scope, review_count):
-    star_distribution = {}
+    individual_counts = {
+        str(stars): len(re.findall(rf"\bRating,\s*{stars}\s+stars?\b", scope or "", re.I))
+        for stars in range(1, 6)
+    }
+    total_visible = sum(individual_counts.values())
+    star_distribution = {
+        "visible_individual_review_star_count": total_visible,
+    }
     for stars, pct in re.findall(r"([1-5])\s+stars?,\s*([0-9]+)%\s+of reviews", scope or "", re.I):
         percent = int(pct)
         count = round((review_count or 0) * percent / 100) if review_count is not None else None
         star_distribution[f"{stars}_star_pct"] = percent
         star_distribution[f"{stars}_star_count_estimate"] = count
-    if star_distribution:
+    if any(key.endswith("_star_pct") for key in star_distribution):
         star_distribution["star_distribution_source"] = "percentage_widget"
+        star_distribution["star_distribution_confidence"] = "percentage_estimate"
         return star_distribution
-    if not review_count:
+    if review_count == 0:
         star_distribution["star_distribution_source"] = "not_visible"
+        star_distribution["star_distribution_confidence"] = "not_available"
         return star_distribution
-
-    counts = {
-        str(stars): len(re.findall(rf"\bRating,\s*{stars}\s+stars?\b", scope or "", re.I))
-        for stars in range(1, 6)
-    }
-    total_visible = sum(counts.values())
+    if review_count is None:
+        star_distribution["star_distribution_source"] = (
+            "partial_visible_individual_review_stars" if total_visible else "not_visible"
+        )
+        star_distribution["star_distribution_confidence"] = (
+            "unknown_review_count" if total_visible else "not_available"
+        )
+        return star_distribution
     if total_visible != review_count:
-        star_distribution["star_distribution_source"] = "not_visible"
+        star_distribution["star_distribution_source"] = (
+            "partial_visible_individual_review_stars" if total_visible else "not_visible"
+        )
+        star_distribution["star_distribution_confidence"] = (
+            "insufficient_visible_review_rows" if total_visible else "not_available"
+        )
         return star_distribution
-    for stars, count in counts.items():
+    for stars, count in individual_counts.items():
         if count:
             star_distribution[f"{stars}_star_pct"] = round(count * 100 / review_count)
             star_distribution[f"{stars}_star_count_estimate"] = count
     star_distribution["star_distribution_source"] = "visible_individual_review_stars"
+    star_distribution["star_distribution_confidence"] = "complete_visible_review_rows"
     return star_distribution
 
 
@@ -702,6 +719,8 @@ def main():
             "one_star_pct": parsed.get("1_star_pct"),
             "one_star_count_estimate": parsed.get("1_star_count_estimate"),
             "star_distribution_source": parsed.get("star_distribution_source"),
+            "star_distribution_confidence": parsed.get("star_distribution_confidence"),
+            "visible_individual_review_star_count": parsed.get("visible_individual_review_star_count"),
             "rating_display_state": parsed.get("rating_display_state"),
             "review_scope_confidence": parsed.get("review_scope_confidence"),
             "public_badges": [],

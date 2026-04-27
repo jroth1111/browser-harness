@@ -123,6 +123,10 @@ Fields:
   `rating_display_state`, `star_distribution_source`, and
   `rating_category_source`; do not backfill listing-level nulls from host
   aggregate review widgets.
+- If individual public review rows are visible but fewer than the listing
+  review count, record the visible row count and mark the star distribution as
+  partial. Do not derive a full 1-5 star distribution from a sampled review
+  page.
 - Public comp price matrices with zero valid cards or zero valid prices are
   evidence gaps, not market signals.
 - Backend parity must be sampled for new Airbnb public URL families. If

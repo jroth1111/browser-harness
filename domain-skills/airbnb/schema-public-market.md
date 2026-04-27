@@ -86,6 +86,8 @@ Fields:
 - `one_star_pct`
 - `one_star_count_estimate`
 - `star_distribution_source`
+- `star_distribution_confidence`
+- `visible_individual_review_star_count`
 - `rating_display_state`
 - `review_scope_confidence`
 - `public_badges`
@@ -211,6 +213,8 @@ Fields:
 - `one_star_pct`
 - `one_star_count_estimate`
 - `star_distribution_source`
+- `star_distribution_confidence`
+- `visible_individual_review_star_count`
 - `review_theme_tags`
 
 ## `airbnb_own_public_search_appearance`

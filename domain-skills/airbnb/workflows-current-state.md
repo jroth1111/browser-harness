@@ -384,6 +384,8 @@ rating
 review_count
 rating_display_state
 star_distribution_source
+star_distribution_confidence
+visible_individual_review_star_count
 rating_category_source
 visible_badges
 hero_photo_subject
