@@ -4,11 +4,27 @@ Field-tested against Melbourne apartment sale and rental pages on 2026-04-27 usi
 
 ## Quick summary
 
-- Prefer real browser navigation for listing pages. `http_get()` can return HTTP 429 for direct listing URLs even when the same URL loads in Chrome.
-- After `new_tab(url)` and `wait_for_load()`, `document.body.innerText` contains the useful listing data in a stable, parseable order.
+- Prefer real browser navigation with a persistent, headful Chrome profile for listing pages. `http_get()`, Lightpanda, and fresh headless Chrome can receive only a Kasada/KPSDK challenge shell.
+- After `new_tab(url)` and `wait_for_load()`, call `wait_for_content()` before extraction. Treat `reason == "blocked"` as a backend capability failure, not as an empty property page.
+- When the page is genuinely served, `document.body.innerText` contains the useful listing data in a stable, parseable order.
 - Google result pages are a practical way to discover current `property-apartment-vic-*` listing IDs when address search pages hide the ID.
 - For property-profile URLs under `/property/...`, browser navigation exposes off-market data, rent estimate, sales history, local market activity, and suburb price insights.
 - Domain/building-profile pages may time out or render blank through the harness. Use realestate.com.au pages first, then fall back to Google snippets or browser-rendered Domain pages only when needed.
+
+## Backend capability rule
+
+Realestate.com.au uses Kasada/KPSDK protection. A backend that speaks CDP is not automatically capable of loading this site.
+
+Observed on 2026-04-27:
+
+| Backend | Result |
+|---|---|
+| Persistent headful Chrome profile | Can serve listing/profile content. Use this first. |
+| Fresh `http_get()` | HTTP 429 with KPSDK headers and a tiny challenge document. |
+| Fresh headless Chrome | Loads a tiny `window.KPSDK`/`/ips.js` document with empty body text. |
+| Lightpanda nightly `1.0.0-nightly.5816+a578f4d6` | Same KPSDK challenge shell; not sufficient for listing extraction. |
+
+Do not try to repair this with selector changes, longer sleeps, user-agent overrides, or `navigator.webdriver` patches. The listing HTML/JSON was not served, so there is no property data in the DOM to extract. Switch to a capable backend, usually the user's already-running headful Chrome profile, or a self-hosted Chromium-derived browser whose fingerprint/profile layer has already been validated for this domain.
 
 ## Listing URL patterns
 
@@ -51,9 +67,23 @@ Array.from(document.querySelectorAll('a'))
 
 new_tab(links[0]["href"])
 wait_for_load()
-text = js("document.body.innerText")
+status = wait_for_content(min_text=500, timeout=20)
+if not status["ok"]:
+    raise RuntimeError(f"REA content unavailable: {status['reason']} {status.get('block')}")
+text = status["text"]
 print(text[:8000])
 ```
+
+For quick diagnosis on a suspect backend:
+
+```python
+new_tab("https://www.realestate.com.au/property-house-vic-tarneit-143160680")
+wait_for_load()
+status = wait_for_content(min_text=500, timeout=20)
+print(status["reason"], status["block"], status["url"], status["textLength"], status["html"][:300])
+```
+
+If this prints `blocked` with `kind: kasada_kpsdk`, stop using that backend for REA. The robust action is backend replacement, not DOM work.
 
 ## Fields visible in `body.innerText`
 
@@ -103,7 +133,7 @@ Property-profile pages commonly include:
 - Search result snippets can be stale, but they are good for finding listing IDs. Always open the listing page to verify current price and details.
 - Bed/bath/car icons are plain text in `innerText`; preserve nearby context so a missing car space is not silently inferred as zero or one.
 - For sale-value analysis, distinguish current sale listings from off-market property profiles. Off-market profiles can expose old sold prices that are not current asking prices.
-- Lightpanda nightly `1.0.0-nightly.5816+a578f4d6` is not sufficient for listing extraction as of 2026-04-27. It loads a small KPSDK challenge document (`window.KPSDK`, `/ips.js?...`) with empty body text instead of the REA listing content.
+- Lightpanda and fresh headless Chrome failures are backend capability failures for this domain. A CDP-compatible backend still needs enough real browser surface and session state to pass REA's server-side/browser challenge.
 
 ## Minimal comp workflow
 

@@ -96,6 +96,31 @@ Notes:
 - Browser-harness consumes the local websocket endpoint only.
 - Keep the host binding on `127.0.0.1`; browser-harness rejects user-facing `0.0.0.0` CDP endpoints.
 
+## Lightpanda
+
+Fit:
+Fast DOM and JavaScript extraction for sites that do not require Chrome's full rendering/fingerprint surface. Lightpanda is built from scratch for headless automation and has no graphical rendering engine, which is the source of its performance and also an important capability boundary.
+
+Start locally:
+
+```bash
+lightpanda serve --host 127.0.0.1 --port 9222
+```
+
+Connect browser-harness:
+
+```bash
+export BH_CDP_WS=http://127.0.0.1:9222
+browser-harness --doctor
+browser-harness -c "print(page_info_js())"
+```
+
+Notes:
+
+- Lightpanda is useful when the task needs HTML, DOM queries, and JavaScript execution without Chrome's memory cost.
+- It is not a headful Chrome replacement for heavily protected sites. Domains that depend on GPU/WebGL/canvas/font/layout/plugin/profile signals can serve challenge shells even though CDP is connected successfully.
+- For `realestate.com.au`, observed Lightpanda behavior on 2026-04-27 was a Kasada/KPSDK challenge document with empty body text. Use `wait_for_content()` to detect this and switch to a persistent headful Chrome profile or another validated Chromium-derived backend.
+
 ## Steel Local Docker
 
 Fit:

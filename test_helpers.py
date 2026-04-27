@@ -416,6 +416,81 @@ def test_page_info_js_reports_missing_runtime_value():
             raise AssertionError("expected RuntimeError")
 
 
+def test_endpoint_info_reads_daemon_metadata():
+    with patch("helpers._send", return_value={"endpoint_info": {"browser": "Chrome/135"}}):
+        assert helpers.endpoint_info() == {"browser": "Chrome/135"}
+
+
+def test_detect_block_page_identifies_kasada_shell():
+    html = """<html><body><script>window.KPSDK={}</script>
+    <script src="/abc/def/ips.js?KP_UIDz=token&x-kpsdk-im=token"></script></body></html>"""
+    assert helpers.detect_block_page(html=html, text="") == {
+        "blocked": True,
+        "kind": "kasada_kpsdk",
+        "evidence": ["window.kpsdk", "x-kpsdk", "kp_uidz", "/ips.js"],
+    }
+
+
+def test_detect_block_page_does_not_flag_normal_content_with_kpsdk_marker():
+    html = "<html>" + ("x" * 9000) + "window.KPSDK /ips.js</html>"
+    result = helpers.detect_block_page(html=html, text="28 Chantelle Parade\n$600,000\nProperty ID: 143160680")
+    assert result == {"blocked": False, "kind": None, "evidence": []}
+
+
+def test_detect_block_page_identifies_akamai_denial():
+    html = "Access Denied https://errors.edgesuite.net/18.abc failover-waf"
+    assert helpers.detect_block_page(html=html)["kind"] == "akamai_access_denied"
+
+
+def test_page_content_status_reports_block_state():
+    state = {
+        "url": "https://www.realestate.com.au/property-house-vic-test-1",
+        "title": "",
+        "readyState": "complete",
+        "textLength": 0,
+        "htmlLength": 140,
+        "text": "",
+        "html": "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>",
+    }
+    with patch("helpers.js", return_value=state):
+        result = helpers.page_content_status()
+    assert result["block"]["blocked"] is True
+    assert result["block"]["kind"] == "kasada_kpsdk"
+
+
+def test_wait_for_content_stops_on_block_without_waiting_for_timeout():
+    state = {
+        "url": "https://www.realestate.com.au/property-house-vic-test-1",
+        "title": "",
+        "readyState": "complete",
+        "textLength": 0,
+        "htmlLength": 140,
+        "text": "",
+        "html": "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>",
+    }
+    with patch("helpers.page_content_status", return_value={
+        **state,
+        "block": helpers.detect_block_page(html=state["html"], text=state["text"], url=state["url"]),
+    }), patch("time.sleep", side_effect=AssertionError("blocked pages should return immediately")):
+        result = helpers.wait_for_content(timeout=5)
+    assert result["ok"] is False
+    assert result["reason"] == "blocked"
+
+
+def test_wait_for_content_accepts_useful_text():
+    with patch("helpers.page_content_status", return_value={
+        "url": "https://example.com",
+        "textLength": 250,
+        "htmlLength": 500,
+        "text": "x" * 250,
+        "html": "<html></html>",
+        "block": {"blocked": False, "kind": None, "evidence": []},
+    }):
+        result = helpers.wait_for_content(min_text=200)
+    assert result["ok"] is True
+    assert result["reason"] == "content"
+
+
 def test_js_reports_missing_iframe_session_id():
     with patch("helpers.cdp", return_value={}):
         try:

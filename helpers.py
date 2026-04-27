@@ -49,6 +49,7 @@ def cdp(method, session_id=None, **params):
 
 
 def drain_events():  return _send({"meta": "drain_events"})["events"]
+def endpoint_info(): return _send({"meta": "endpoint_info"}).get("endpoint_info", {})
 
 
 # --- navigation / page ---
@@ -91,6 +92,83 @@ def page_info_js():
     result = _require_key(r, "result", "Runtime.evaluate response")
     value = _require_key(result, "value", "Runtime.evaluate result")
     return json.loads(value)
+
+def detect_block_page(html="", text="", url=""):
+    """Detect known bot/WAF challenge shells from page source/text.
+
+    This is intentionally detection-only. It does not attempt to solve challenges
+    or hide automation; callers use it to avoid mistaking an empty challenge page
+    for real content.
+    """
+    html = html or ""
+    text = text or ""
+    url = url or ""
+    haystack = "\n".join((html, text, url)).lower()
+    stripped_text = text.strip()
+    evidence = []
+    kind = None
+
+    kpsdk_hits = [s for s in ("window.kpsdk", "x-kpsdk", "kp_uidz", "/ips.js") if s in haystack]
+    if len(kpsdk_hits) >= 2 and (not stripped_text or len(html) < 8000):
+        kind = "kasada_kpsdk"
+        evidence.extend(kpsdk_hits)
+
+    akamai_hits = [s for s in ("access denied", "errors.edgesuite.net", "failover-waf") if s in haystack]
+    if not kind and len(akamai_hits) >= 2:
+        kind = "akamai_access_denied"
+        evidence.extend(akamai_hits)
+
+    if not kind:
+        return {"blocked": False, "kind": None, "evidence": []}
+    return {"blocked": True, "kind": kind, "evidence": evidence}
+
+def page_content_status(html_limit=12000, text_limit=12000):
+    """Return JS-derived page content health plus block/challenge detection.
+
+    Use after navigation when a page can be "loaded" but still contain no useful
+    app content, for example a WAF challenge shell. This explicitly executes page
+    JavaScript.
+    """
+    expr = f"""
+(() => {{
+  const body = document.body;
+  const root = document.documentElement;
+  const text = body ? body.innerText : "";
+  const html = root ? root.outerHTML : "";
+  return {{
+    url: location.href,
+    title: document.title,
+    readyState: document.readyState,
+    textLength: text.length,
+    htmlLength: html.length,
+    text: text.slice(0, {int(text_limit)}),
+    html: html.slice(0, {int(html_limit)})
+  }};
+}})()
+"""
+    state = js(expr) or {}
+    block = detect_block_page(
+        html=state.get("html", ""),
+        text=state.get("text", ""),
+        url=state.get("url", ""),
+    )
+    return {**state, "block": block}
+
+def wait_for_content(min_text=200, timeout=15.0, poll=0.5):
+    """Wait until body text is useful, a known block page appears, or timeout hits.
+
+    Returns a structured status dict. This explicitly executes page JavaScript.
+    """
+    deadline = time.time() + timeout
+    last = {}
+    while time.time() < deadline:
+        last = page_content_status()
+        if last.get("block", {}).get("blocked"):
+            return {**last, "ok": False, "reason": "blocked"}
+        if int(last.get("textLength") or 0) >= min_text:
+            return {**last, "ok": True, "reason": "content"}
+        time.sleep(poll)
+    return {**last, "ok": False, "reason": "timeout"}
 
 # --- input ---
 _debug_click_counter = 0
