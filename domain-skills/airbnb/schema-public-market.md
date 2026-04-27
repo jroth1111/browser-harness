@@ -118,3 +118,7 @@ Fields:
 - Keep taxes, fees, and nightly components separate when Airbnb exposes them.
 - Capture a sampled screenshot reference for QA when ranking, price, or badge
   observations drive recommendations.
+- Public guest-market observations should normally have `logged_in_flag == false`.
+  Logged-in public observations are valid only for an explicit personalization
+  comparison and must be stored as a separate run/segment, not mixed with normal
+  logged-out comp data.

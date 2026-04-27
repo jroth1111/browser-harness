@@ -26,6 +26,12 @@ must stay ignored, local, and permission-restricted. The `.session-store/`
 manifest should only reference that private bundle and record verification
 receipts.
 
+The Airbnb auth bundle is for private host-only sources only. Do not restore it
+for public guest-visible collection such as search results, public listing pages,
+public reviews, public prices, amenities, rules, or Help/Resource Centre pages.
+Those sources should be observed logged out unless the explicit task is to test
+logged-in personalization.
+
 Recommended layout:
 
 ```text
@@ -83,7 +89,15 @@ For each Airbnb source, save a compact receipt:
 }
 ```
 
+For public guest-visible receipts, `logged_in` should normally be `false`.
+For private host-only receipts, `logged_in` should be `true` and the receipt
+should identify the private source family being proven.
+
 ## Browser profile flow
+
+Use this flow only for private host-only Airbnb work. Public guest-visible work
+should start from a logged-out Lightpanda or fresh browser context and use
+`public-market.md`.
 
 1. Attach browser-harness to the user's normal Chrome profile.
 2. Navigate to Airbnb host dashboard, hosting page, or another safe Airbnb page.

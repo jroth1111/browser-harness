@@ -27,6 +27,29 @@ all hosts have the same tools enabled.
 Do not type Airbnb credentials. If login, MFA, or account selection is required,
 stop and ask the user to complete it in the browser.
 
+## Airbnb auth-state policy
+
+Use the least-privileged Airbnb state that can answer the question.
+
+- Guest-visible public sources must be collected logged out by default. This
+  includes public search results, public listing pages, public reviews, public
+  host responses, public badges, amenities, rules, visible prices, and Help or
+  Resource Centre pages.
+- Do not restore or reuse the host auth bundle for public comp data just because
+  it is available. Logged-in pages can personalize ranking, prices, language,
+  currency, wishlists, account prompts, and host-specific surfaces, which makes
+  guest-market observations less comparable.
+- Use logged-in state only for sources that cannot be accessed logged out:
+  host dashboard, Insights, earnings, reservations, calendar controls, pricing
+  settings, rule-sets, messages, tasks, listing editor, tax/levy/account fields,
+  exports, and Airbnb-selected similar-listing context inside host tools.
+- If comparing guest-visible behavior for logged-out vs logged-in users is the
+  explicit question, run two separate observations and store them as separate
+  search contexts. Never merge logged-out and logged-in public observations into
+  one comp set.
+- Every observation receipt must record `logged_in_flag`; public comp receipts
+  should normally have `logged_in_flag: false`.
+
 ## Exploration phases
 
 ### 1. Public capability pass

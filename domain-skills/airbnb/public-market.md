@@ -11,6 +11,9 @@ read `schema-public-market.md`. For decisions and alerts, read
 ## Quick summary
 
 - Use browser navigation, not `http_get()`, for Airbnb pages.
+- Collect public guest-market data logged out by default. Do not use the host
+  auth bundle for public search, public listing, public review, or public price
+  observations unless the explicit task is to compare logged-in personalization.
 - Use Lightpanda first for public pages only after `diagnose_url_capability()`
   proves the expected text and fields are present.
 - Search result pages expose the most reliable price data. Listing pages often show `loading` in the booking widget even when dates and guests are provided.
@@ -20,6 +23,9 @@ read `schema-public-market.md`. For decisions and alerts, read
 - For host intelligence, public comp data must be normalized with the exact
   search context: dates, nights, guests, filters, map area, device, logged-in
   state, currency, and observation time.
+- For normal comp intelligence, `logged_in_flag` should be `False`. If it is
+  `True`, treat the run as a separate logged-in/personalized observation and do
+  not mix it with logged-out guest-market comps.
 
 ## Useful URL patterns
 
@@ -93,6 +99,9 @@ search_run = {
 }
 ```
 
+Reject or quarantine a public search run if the browser/session was logged in
+and the task did not explicitly request a logged-in public comparison.
+
 The search card fields to preserve are:
 
 | Field | Why |
@@ -155,6 +164,10 @@ For comp listing snapshots, add:
 - Authenticated host pages should not be scraped with public assumptions. Use a
   logged-in browser session, prefer exports/downloads, and stop at the login
   wall if the user has not granted access.
+- Public pages should not be scraped with private host assumptions. If the URL
+  is guest-visible, start from a logged-out Lightpanda or fresh browser context
+  and only switch to logged-in state when the public source itself proves
+  inaccessible without login.
 
 ## Public comp workflow
 
