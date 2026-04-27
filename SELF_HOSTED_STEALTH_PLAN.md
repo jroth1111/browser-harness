@@ -21,6 +21,16 @@ The first version of this plan had the correct direction, but it was still too b
 
 This revision treats the plan as an implementation contract. Later work should implement the phases in order and mark a phase complete only when its acceptance checks pass.
 
+## Second Review Additions
+
+This pass tightens three remaining weak spots:
+
+- Endpoint security must not require DNS lookups. Accept literal loopback addresses and `localhost`; reject other hostnames by default rather than resolving arbitrary names.
+- Doctor needs a tiny daemon metadata contract. Without that, endpoint provenance, resolved websocket URL, and remote-allow warnings would have to be inferred from logs.
+- Fake-CDP tests need concrete fixtures and expected method traces. Otherwise the most important stealth requirements could degrade into inspection-only checks.
+
+The rest of the document incorporates those changes directly.
+
 ## Hard Constraints
 
 These constraints override convenience and compatibility.
@@ -135,6 +145,46 @@ Browser-harness should have four small surfaces:
 
 No new top-level manager, service, queue, database, config package, provider SDK, or browser binary manager should be added.
 
+## Public Contract After Phase 1
+
+The intended user-facing contract after the first two phases is:
+
+Environment:
+
+- `BH_NAME`: optional local daemon namespace. Default `default`.
+- `BH_CDP_WS`: optional local/self-hosted CDP endpoint.
+- `BH_CDP_ALLOW_REMOTE=1`: explicit unsafe override for non-loopback self-hosted endpoints.
+- `BH_DEBUG_CLICKS=1`: explicit debug overlay mode.
+
+Commands:
+
+- `browser-harness <<'PY' ... PY`: execute stdin/heredoc code with helpers pre-imported.
+- `browser-harness -c "..."`: execute one command string.
+- `browser-harness --doctor [--json] [--network]`: run local diagnostics; external checks only with `--network`.
+- `browser-harness --setup`: guide local Chrome/Edge attachment.
+- `browser-harness --reload`: stop the local daemon and remove stale socket/pid files.
+- `browser-harness --update [-y]`: explicit update path; this may contact GitHub because the user asked for update behavior.
+
+Removed compatibility:
+
+- `BU_NAME`
+- `BU_CDP_WS`
+- `/tmp/bu-*.sock`
+- `/tmp/bu-*.pid`
+- `/tmp/bu-*.log`
+- implicit normal-run update banner
+- hidden tab-title marker
+
+Helper categories:
+
+| Category | Helpers |
+| --- | --- |
+| Stealth-preserving default helpers | `new_tab`, `goto_url`, `page_info`, `capture_screenshot`, `click_at_xy`, `type_text`, `press_key`, `scroll`, `list_tabs`, `switch_tab`, `current_tab`, `ensure_real_tab` |
+| Explicit page-execution helpers | `js`, `dispatch_key`, `upload_file`, `page_info_js`, `wait_for_load_js` if kept |
+| Diagnostic helpers | doctor-only probes for webdriver, WebGL, locale/timezone, WebRTC, and network checks |
+
+The default workflow in `SKILL.md` should use only stealth-preserving helpers unless a domain skill explicitly chooses JS/DOM access.
+
 ## CDP Method Policy
 
 The policy is intentionally strict. A later implementation should add tests that encode it.
@@ -165,14 +215,53 @@ Rejected by default:
 - non-loopback hosts,
 - `0.0.0.0`,
 - public IPs,
-- domain names that do not resolve to loopback,
+- arbitrary domain names,
 - URLs with unsupported schemes.
+
+Host validation rules:
+
+- Accept literal loopback IPs:
+  - `127.0.0.0/8`
+  - `::1`
+- Accept exact hostnames:
+  - `localhost`
+  - `localhost.`
+- Reject all other hostnames by default without DNS resolution.
+- Do not perform DNS lookups as part of normal validation; DNS resolution is a network-capable operation and can make local/offline checks less deterministic.
+- Treat `0.0.0.0` as unsafe even though a Docker service may listen on it inside a container. The host-facing URL given to browser-harness should be loopback-bound.
 
 Explicit escape hatch:
 
-- `BH_CDP_ALLOW_REMOTE=1` may allow a non-loopback endpoint for self-hosted machines on a private network.
+- `BH_CDP_ALLOW_REMOTE=1` may allow a non-loopback endpoint for a user-owned self-hosted machine.
 - When this is set, doctor must print a high-severity warning that remote CDP is equivalent to browser control.
 - There is no silent fallback from rejected remote endpoints.
+
+Scheme rules:
+
+- `ws://` browser websocket URLs are supported.
+- `http://` DevTools base URLs are supported through `/json/version`.
+- `wss://` and `https://` may be supported only if the implementation adds tests for them; they should still obey the same host/remote-allow policy.
+- Any endpoint containing credentials in the URL should be rejected in normal output or redacted in every log/doctor field.
+
+Endpoint metadata contract:
+
+The daemon should keep a small in-memory endpoint record after resolution:
+
+```python
+{
+    "source": "env" | "devtools_active_port",
+    "input": "BH_CDP_WS" | "DevToolsActivePort",
+    "resolved_url": "ws://127.0.0.1:9222/devtools/browser/...",
+    "http_base": "http://127.0.0.1:9222" | None,
+    "host": "127.0.0.1",
+    "port": 9222,
+    "is_loopback": True,
+    "remote_allowed": False,
+    "warnings": [],
+}
+```
+
+Expose this through a daemon meta request such as `{"meta": "endpoint_info"}`. Keep it diagnostic-only; helpers should not depend on provider identity.
 
 Deletion requirements:
 
@@ -214,6 +303,19 @@ Required changes:
 - Replace `profile-use`/`browser-use.com/profile.sh` messaging with local setup guidance.
 - Replace docs examples that point at Browser Use URLs with neutral local examples.
 
+Detailed deletion map:
+
+| Old name/path | New state |
+| --- | --- |
+| `BU_CDP_WS` | Deleted. Use `BH_CDP_WS`. |
+| `BU_NAME` | Deleted. Use `BH_NAME`. |
+| `/tmp/bu-{name}.sock` | Deleted active path. Use `/tmp/bh-{name}.sock`. |
+| `/tmp/bu-{name}.pid` | Deleted active path. Use `/tmp/bh-{name}.pid`. |
+| `/tmp/bu-{name}.log` | Deleted active path. Use `/tmp/bh-{name}.log`. |
+| `/tmp/bu-version-cache.json` | Deleted active path. Use no default version cache, or `/tmp/bh-version-cache.json` only for explicit update checks. |
+| `profile-use not installed -- curl -fsSL https://browser-use.com/profile.sh | sh` | Replace with local setup instructions. |
+| `docs.browser-use.com` example URL in `SKILL.md` | Replace with a neutral local-safe example, e.g. `https://example.com`. |
+
 Implementation details:
 
 - Keep argument handling simple:
@@ -225,6 +327,8 @@ Implementation details:
 - Do not add argparse.
 - Do not create a config object. Small private helper functions are enough.
 - Do not keep `BU_*` compatibility. Breaking the old names is cleaner and matches the local-only contract.
+- Keep old path cleanup best-effort only. Do not block startup if stale `/tmp/bu-*` files cannot be removed.
+- Redact endpoint URLs in errors/logs if credentials or tokens are ever present.
 
 Tests:
 
@@ -245,11 +349,21 @@ Tests:
 
 Acceptance:
 
-- `rg "BU_CDP_WS|BU_NAME|/tmp/bu-|browser-use.com/profile|api.browser-use|cloud.browser-use" daemon.py admin.py run.py helpers.py SKILL.md install.md README.md pyproject.toml docs` returns no active runtime/docs references.
+- `rg "BU_CDP_WS|BU_NAME|/tmp/bu-|browser-use.com/profile|api.browser-use|cloud.browser-use" daemon.py admin.py run.py helpers.py SKILL.md install.md README.md pyproject.toml` returns no active runtime/docs references. After Phase 2 creates `docs/`, include `docs` in this check too.
 - `printf 'print(1)\\n' | browser-harness` executes through pre-imported helpers.
 - `browser-harness -c "print(1)"` still works.
 - `BH_CDP_WS=http://127.0.0.1:9222 browser-harness --doctor` attempts `/json/version`.
 - `browser-harness --doctor` performs no external network request by default.
+
+Phase 0 implementation checklist:
+
+- Add endpoint parser tests first.
+- Rename constants and temp paths.
+- Add `BH_CDP_WS` HTTP base resolution.
+- Add stdin runner and remove normal update banner.
+- Remove Browser Use hosted/profile strings.
+- Run static string checks.
+- Commit only after tests and static checks pass.
 
 ## Phase 1: CDP-Minimal Stealth Contract
 
@@ -290,6 +404,66 @@ Implementation details:
 - Static tests may scan for the title marker expression and automatic forbidden enables.
 - Do not solve stealth by injecting JavaScript. If a helper needs JS, its name/docs must say so.
 
+Concrete fake-CDP fixture:
+
+```python
+class FakeCDP:
+    def __init__(self, responses=None):
+        self.calls = []
+        self.responses = responses or {}
+
+    async def send_raw(self, method, params=None, session_id=None):
+        self.calls.append((method, params or {}, session_id))
+        if method in self.responses:
+            response = self.responses[method]
+            return response() if callable(response) else response
+        if method == "Target.getTargets":
+            return {"targetInfos": [{"targetId": "page-1", "type": "page", "url": "https://example.com"}]}
+        if method == "Target.attachToTarget":
+            return {"sessionId": "session-1"}
+        if method == "Target.createTarget":
+            return {"targetId": "page-new"}
+        if method == "Target.getTargetInfo":
+            return {"targetInfo": {"targetId": "page-1", "type": "page", "url": "https://example.com", "title": "Example"}}
+        if method == "Page.getLayoutMetrics":
+            return {
+                "layoutViewport": {"clientWidth": 1280, "clientHeight": 720, "pageX": 0, "pageY": 0},
+                "contentSize": {"width": 1280, "height": 1600},
+            }
+        return {}
+```
+
+Expected attach trace with an existing page:
+
+```python
+[
+    ("Target.getTargets", {}, None),
+    ("Target.attachToTarget", {"targetId": "page-1", "flatten": True}, None),
+]
+```
+
+Expected attach trace with no page:
+
+```python
+[
+    ("Target.getTargets", {}, None),
+    ("Target.createTarget", {"url": "about:blank"}, None),
+    ("Target.attachToTarget", {"targetId": "page-new", "flatten": True}, None),
+]
+```
+
+Forbidden trace entries anywhere in default attach/session/page-info/tab-switch tests:
+
+```python
+{
+    "Runtime.enable",
+    "Console.enable",
+    "DOM.enable",
+    "Network.enable",
+    "Runtime.evaluate",
+}
+```
+
 Fake-CDP forbidden method list:
 
 - `Runtime.enable`
@@ -315,6 +489,15 @@ Acceptance:
 - Tests fail if the green-circle title marker or marker cleanup expression reappears.
 - Normal core helpers still work: `new_tab`, `goto_url`, `wait_for_load`, `page_info`, `capture_screenshot`, `click_at_xy`, `type_text`, `press_key`, `scroll`, `list_tabs`, `switch_tab`, `current_tab`, `ensure_real_tab`.
 - The attach path is CDP-minimal and page-non-mutating.
+
+Phase 1 implementation checklist:
+
+- Add fake-CDP tests that encode the current forbidden method list.
+- Delete marker injection from daemon event tap and session switch.
+- Delete marker helpers and tab-switch mutation.
+- Rewrite `page_info`.
+- Split JS-based load/page-info behavior into explicit helper names only if still needed.
+- Re-run the full existing helper tests so explicit `js()` behavior remains intact.
 
 ## Phase 2: Local Provider Contract And Recipes
 
@@ -378,6 +561,42 @@ Required provider sections:
    - current browser-harness is Chromium CDP-shaped,
    - any future support would be a separate non-CDP adapter decision.
 
+Provider docs skeleton:
+
+Each provider section should use this exact shape so users can compare options quickly:
+
+```markdown
+### Provider Name
+
+Fit:
+Local/self-hosted CDP endpoint type and why a user would choose it.
+
+Start locally:
+One or two commands, copied from the provider's own local/self-hosted docs and adjusted only to bind host CDP to 127.0.0.1.
+
+Connect browser-harness:
+export BH_CDP_WS=http://127.0.0.1:<port>
+browser-harness --doctor
+browser-harness -c "print(page_info())"
+
+Notes:
+- what the provider owns,
+- what browser-harness owns,
+- known stealth/security caveats.
+```
+
+Provider endpoint examples to verify while writing docs:
+
+| Provider | Expected local endpoint shape | Browser-harness role |
+| --- | --- | --- |
+| Local Chrome/Edge | `ws://127.0.0.1:<port>/devtools/browser/<id>` from `DevToolsActivePort` | Discover and attach. |
+| CloakBrowser | `http://127.0.0.1:9222` or browser websocket from `cloakserve` | Consume endpoint only. |
+| Browserless Docker | `http://127.0.0.1:3000` or its websocket endpoint | Consume local Docker CDP service only. |
+| Steel Docker | local session/debug websocket returned by Steel | Consume returned endpoint only; Steel owns session lifecycle. |
+| Kernel images | `http://127.0.0.1:9222` | Consume isolated Chromium CDP endpoint only. |
+| Kameleo | `ws://localhost:5050/playwright/<profile-id>` | Consume profile-specific local endpoint only. |
+| Camoufox/Clover | Playwright/Juggler server, not Chromium CDP | Document as non-CDP reference only. |
+
 Doctor endpoint details:
 
 - source: `BH_CDP_WS`, DevToolsActivePort discovery, or unknown,
@@ -396,6 +615,14 @@ Acceptance:
 - `browser-harness --doctor` can explain what endpoint it is attached to.
 - No provider SDK is added to `pyproject.toml`.
 
+Phase 2 implementation checklist:
+
+- Create `docs/local-cdp-providers.md`.
+- Add docs links from `install.md` and `README.md`.
+- Add endpoint info to doctor output using the daemon metadata contract.
+- Verify docs include no provider account signup, API key, or hosted browser requirement.
+- Verify `pyproject.toml` dependencies are unchanged.
+
 ## Phase 3: Local Stealth Doctor
 
 Objective: add diagnostics that catch browser-harness regressions and common endpoint mistakes while staying offline by default.
@@ -410,6 +637,14 @@ Owned files:
 Output contract:
 
 Human output by default. JSON output with `--doctor --json`.
+
+Exit codes:
+
+- `0`: all checks pass, or only warnings are present.
+- `1`: at least one check fails.
+- `2`: doctor invocation is invalid, for example unsupported flags.
+
+Warnings are not failures because remote-allowed self-hosted endpoints and weak local browser fingerprints may still be intentional. Failures are reserved for unsafe defaults, unreachable endpoints, missing daemon/browser state, or policy violations.
 
 Suggested JSON shape:
 
@@ -446,6 +681,24 @@ Default offline checks:
 - normal command path does not call release/update network,
 - installed files contain no active Browser Use cloud runtime references.
 
+Stable check ids:
+
+| Check id | Default status when bad | Evidence source |
+| --- | --- | --- |
+| `endpoint.present` | `fail` | endpoint resolver / daemon metadata |
+| `endpoint.scheme` | `fail` | parsed `BH_CDP_WS` or resolved endpoint |
+| `endpoint.loopback` | `fail` unless remote allowed | host validator |
+| `endpoint.remote_allowed` | `warn` | `BH_CDP_ALLOW_REMOTE=1` |
+| `endpoint.version` | `warn` | `/json/version` when HTTP base is available |
+| `daemon.alive` | `fail` | Unix socket probe |
+| `daemon.socket_permissions` | `fail` | socket mode should remain `0600` |
+| `cdp.attach_minimal` | `fail` | fake-CDP policy probe or code-level behavior test |
+| `cdp.no_console_enable` | `fail` | fake-CDP policy probe |
+| `page.no_title_marker` | `fail` | static scan plus fake helper trace |
+| `helpers.page_info_no_runtime` | `fail` | fake helper trace |
+| `network.default_offline` | `fail` | mocked `urllib.request.urlopen` in tests |
+| `strings.no_cloud_runtime` | `fail` | static scan of active files |
+
 Diagnostic page checks:
 
 - Use a local temporary HTML page when page-level checks are needed.
@@ -469,6 +722,7 @@ Tests:
 - Remote endpoint with allowance maps to `warn`.
 - Fake forbidden CDP traffic maps to `fail`.
 - Network checks only run when `--network` is present.
+- Human output includes the same check ids as JSON output, or enough labels to map back to them.
 
 Acceptance:
 
@@ -476,6 +730,15 @@ Acceptance:
 - Doctor reports endpoint, CDP hygiene, and page-mutation hygiene.
 - JSON output is stable enough for tests and future automation.
 - Every warning/failure includes a local fix.
+
+Phase 3 implementation checklist:
+
+- Add a small `DoctorCheck` data shape only if plain dicts become hard to read.
+- Keep check collection separate from printing so JSON and human output use the same results.
+- Mock external network APIs in tests and assert they are not called by default.
+- Add one fake endpoint fixture for each status: pass, warn, fail.
+- Add one test for socket permissions if the platform supports Unix sockets.
+- Keep optional network checks isolated behind `--network`.
 
 ## Phase 4: Optional Agent Utilities
 
@@ -559,7 +822,7 @@ Standard commands after each implementation phase:
 ```bash
 uv run pytest
 git diff --check
-rg "BU_CDP_WS|BU_NAME|/tmp/bu-|browser-use.com/profile|api.browser-use|cloud.browser-use" daemon.py admin.py run.py helpers.py SKILL.md install.md README.md pyproject.toml docs
+rg "BU_CDP_WS|BU_NAME|/tmp/bu-|browser-use.com/profile|api.browser-use|cloud.browser-use" daemon.py admin.py run.py helpers.py SKILL.md install.md README.md pyproject.toml
 rg "Runtime.enable|Console.enable" daemon.py helpers.py
 ```
 
