@@ -264,6 +264,9 @@ quality metrics.
 8. Use `ListOfMetricsQuery` for summary windows such as last 7, 30, and 365
    days, then compose higher-period views from stored daily primitives where
    possible.
+9. Persist successful raw API responses to run-scoped JSONL checkpoints after
+   each batch. Reuse the same run ID to resume later; retry failed or
+   rate-limited requests instead of treating them as durable data.
 
 Rate-limit handling:
 
@@ -273,6 +276,10 @@ Rate-limit handling:
 - If consecutive batches return only `429`, stop the run, store a partial
   receipt, wait for cooldown, and resume later. Do not continue hammering the
   API.
+- Prefer fewer API calls over more browser navigation. The browser should be
+  used for authentication/bootstrap, API discovery, and fields not present in
+  the backend response; it should not be used as the primary transport for
+  metrics already available through `ListOfMetricsQuery` or `ChartQuery`.
 
 Per-listing acceptance:
 

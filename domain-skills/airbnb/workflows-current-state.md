@@ -545,6 +545,10 @@ Insights collection rule:
   keep Airbnb's own period summary rows for rates, ratios, and averages.
 - Stop and store a partial receipt on sustained HTTP `429`; resume after
   cooldown instead of continuing to send requests.
+- Treat backend/API collection as canonical for Insights fields when the API
+  response is listing-scoped and field-complete. Use browser rendering only to
+  establish auth/bootstrap, discover request shapes, verify parity, or fill
+  fields the API does not expose.
 
 Capture private settings:
 

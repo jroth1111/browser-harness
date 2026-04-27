@@ -187,8 +187,50 @@ def fetch_performance_batch(requests, api_key, base_headers):
     return [fetch_performance_one(item, api_key, base_headers) for item in requests]
 
 
-def run_request_batches(label, requests, api_key, base_headers):
-    results = []
+def result_key(meta):
+    return "|".join(
+        str(meta.get(key, ""))
+        for key in (
+            "request_kind",
+            "listing_id",
+            "route_family",
+            "route_subroute",
+            "relative_ds_start",
+            "relative_ds_end",
+        )
+    )
+
+
+def load_checkpoint(path):
+    if not path.exists():
+        return {}
+    rows = {}
+    with path.open() as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("ok"):
+                rows[result_key(row)] = row
+    return rows
+
+
+def append_checkpoint(path, rows):
+    if not rows:
+        return
+    with path.open("a") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, separators=(",", ":"), ensure_ascii=False) + "\n")
+
+
+def run_request_batches(label, requests, api_key, base_headers, checkpoint_path):
+    checkpointed = load_checkpoint(checkpoint_path)
+    requests_to_run = [
+        request
+        for request in requests
+        if result_key(request["meta"]) not in checkpointed
+    ]
+    results = list(checkpointed.values())
     failures = []
     batch_size = int(os.environ.get("AIRBNB_INSIGHTS_BATCH_SIZE", "4"))
     delay = float(os.environ.get("AIRBNB_INSIGHTS_BATCH_DELAY_SEC", "1.5"))
@@ -196,8 +238,16 @@ def run_request_batches(label, requests, api_key, base_headers):
     backoff = float(os.environ.get("AIRBNB_INSIGHTS_429_BACKOFF_SEC", "90"))
     stop_after_429_batches = int(os.environ.get("AIRBNB_INSIGHTS_STOP_AFTER_429_BATCHES", "2"))
     consecutive_429_batches = 0
-    for index in range(0, len(requests), batch_size):
-        batch = requests[index : index + batch_size]
+    if checkpointed:
+        print(json.dumps({
+            "phase": label,
+            "checkpoint_path": str(checkpoint_path),
+            "checkpointed_ok": len(checkpointed),
+            "remaining": len(requests_to_run),
+            "total": len(requests),
+        }))
+    for index in range(0, len(requests_to_run), batch_size):
+        batch = requests_to_run[index : index + batch_size]
         pending = batch
         batch_results = []
         for attempt in range(retry_limit + 1):
@@ -213,6 +263,7 @@ def run_request_batches(label, requests, api_key, base_headers):
                 break
             pending = retryable
         results.extend(batch_results)
+        append_checkpoint(checkpoint_path, [result for result in batch_results if result.get("ok")])
         failures.extend([result for result in batch_results if not result.get("ok")])
         if batch_results and all(result.get("status") == 429 for result in batch_results):
             consecutive_429_batches += 1
@@ -220,7 +271,7 @@ def run_request_batches(label, requests, api_key, base_headers):
             consecutive_429_batches = 0
         print(json.dumps({
             "phase": label,
-            "progress": min(index + len(batch), len(requests)),
+            "progress": len(checkpointed) + min(index + len(batch), len(requests_to_run)),
             "total": len(requests),
             "failures": len(failures),
             "consecutive_429_batches": consecutive_429_batches,
@@ -309,7 +360,7 @@ def write_csv(path, rows):
 
 def main():
     observed_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    run_id = "airbnb-insights-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_id = os.environ.get("AIRBNB_INSIGHTS_RUN_ID") or "airbnb-insights-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     listing_file = latest_live_listing_file()
     listing_run = json.loads(listing_file.read_text())
     listings = listing_run.get("records") or []
@@ -373,8 +424,22 @@ def main():
                 }
                 chart_requests.append(req)
 
-    summary_results, summary_failures = run_request_batches("summary", summary_requests, api_key, base_headers)
-    chart_results, chart_failures = run_request_batches("daily_chart", chart_requests, api_key, base_headers)
+    summary_raw_path = OUTPUT_PATH / f"{run_id}-summary-raw.jsonl"
+    chart_raw_path = OUTPUT_PATH / f"{run_id}-daily-chart-raw.jsonl"
+    summary_results, summary_failures = run_request_batches(
+        "summary",
+        summary_requests,
+        api_key,
+        base_headers,
+        summary_raw_path,
+    )
+    chart_results, chart_failures = run_request_batches(
+        "daily_chart",
+        chart_requests,
+        api_key,
+        base_headers,
+        chart_raw_path,
+    )
     failures = [*summary_failures, *chart_failures]
 
     summary_rows = []
@@ -427,6 +492,7 @@ def main():
             "transport": "Python HTTP replay with browser-session cookies and Airbnb bootstrap API key",
             "operation_hashes": OPERATION_HASHES,
             "granularity_strategy": "rolling 7-day relative windows to force DAY chart granularity; overlapping endpoints de-duplicated",
+            "checkpoint_strategy": "successful raw API responses are appended to JSONL after each batch and skipped on rerun when AIRBNB_INSIGHTS_RUN_ID is reused",
         },
         "listing_count": len(listings),
         "route_count": len(routes),
@@ -438,6 +504,8 @@ def main():
         "summary_rows_count": len(summary_rows),
         "daily_rows_count": len(daily_rows),
         "failures_count": len(failures),
+        "summary_raw_path": str(summary_raw_path),
+        "chart_raw_path": str(chart_raw_path),
         "summary_rows": summary_rows,
         "daily_rows": daily_rows,
         "failures": failures[:100],
@@ -470,6 +538,8 @@ def main():
         "failures_count": len(failures),
         "all_api_requests_ok": not [f for f in failures if f.get("status") != 200],
         "all_parsers_found_rows": len(failures) == 0,
+        "summary_raw_path": str(summary_raw_path),
+        "chart_raw_path": str(chart_raw_path),
         "json_path": str(json_path),
         "summary_csv_path": str(summary_csv_path),
         "daily_csv_path": str(daily_csv_path),
