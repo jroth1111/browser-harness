@@ -111,6 +111,8 @@ Wait 5 seconds, then reconnect. This resets all CDP state.
 - browser-harness --setup — re-run the full interactive browser-attach flow.
 - browser-harness --update -y - explicitly check for an update, pull it, and restart the daemon.
 
+For self-hosted CDP endpoints, see `docs/local-cdp-providers.md`.
+
 ## Architecture
 
 ```text

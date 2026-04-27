@@ -116,6 +116,8 @@ def _validate_endpoint_url(url, *, source, http_base=None):
         "is_loopback": is_loopback,
         "remote_allowed": allowed_remote and not is_loopback,
         "warnings": warnings,
+        "browser": None,
+        "protocol_version": None,
     }
 
 
@@ -131,6 +133,8 @@ def _resolve_devtools_http_base(url):
     if not ws_url:
         raise RuntimeError(f"{_redact_url(url)}/json/version did not include webSocketDebuggerUrl")
     ws_info = _validate_endpoint_url(ws_url, source="env", http_base=url)
+    ws_info["browser"] = data.get("Browser")
+    ws_info["protocol_version"] = data.get("Protocol-Version")
     ws_info["warnings"] = [*info["warnings"], *ws_info["warnings"]]
     return ws_url, ws_info
 

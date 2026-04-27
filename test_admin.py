@@ -57,3 +57,30 @@ def test_doctor_json_shape():
         assert admin.run_doctor(json_output=True) == 1
     assert '"status": "fail"' in stdout.getvalue()
     assert '"id": "daemon.alive"' in stdout.getvalue()
+
+
+def test_doctor_reports_endpoint_metadata():
+    class Stat:
+        st_mode = 0o100600
+
+    endpoint = {
+        "source": "env",
+        "resolved_url": "ws://127.0.0.1:9222/devtools/browser/abc",
+        "host": "127.0.0.1",
+        "is_loopback": True,
+        "remote_allowed": False,
+        "browser": "Chrome/123",
+        "protocol_version": "1.3",
+    }
+
+    stdout = StringIO()
+    with patch("admin._chrome_running", return_value=True), \
+         patch("admin.daemon_alive", return_value=True), \
+         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+         patch("pathlib.Path.stat", return_value=Stat()), \
+         patch("sys.stdout", stdout):
+        assert admin.run_doctor() == 0
+    output = stdout.getvalue()
+    assert "endpoint.present" in output
+    assert "ws://127.0.0.1:9222/devtools/browser/abc" in output
+    assert "endpoint.version - Chrome/123 1.3" in output

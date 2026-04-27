@@ -32,6 +32,8 @@ When this page appears, tick the checkbox so the agent can connect to your brows
 
 See [domain-skills/](domain-skills/) for example tasks.
 
+For self-hosted browser endpoints such as CloakBrowser, Browserless, Steel, Kernel Chromium images, and Kameleo, see [docs/local-cdp-providers.md](docs/local-cdp-providers.md).
+
 ## How simple is it? (~592 lines of Python)
 
 - `install.md` — first-time install and browser bootstrap
