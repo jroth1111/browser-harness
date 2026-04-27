@@ -48,6 +48,8 @@ def drain_events():  return _send({"meta": "drain_events"})["events"]
 
 # --- navigation / page ---
 def goto_url(url):
+    cdp("Page.enable")
+    drain_events()
     r = cdp("Page.navigate", url=url)
     d = (Path(__file__).parent / "domain-skills" / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
     return {**r, "domain_skills": sorted(p.name for p in d.rglob("*.md"))[:10]} if d.is_dir() else r
@@ -215,7 +217,6 @@ def wait(seconds=1.0):
 def wait_for_load(timeout=15.0):
     """Wait for Page.loadEventFired without executing page JavaScript."""
     cdp("Page.enable")
-    drain_events()
     deadline = time.time() + timeout
     while time.time() < deadline:
         for event in drain_events():

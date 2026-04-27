@@ -362,7 +362,17 @@ def _check(status, check_id, detail="", fix=None):
 
 def _scan_active_files(patterns):
     import re
-    files = ["daemon.py", "admin.py", "run.py", "helpers.py", "SKILL.md", "install.md", "README.md", "pyproject.toml"]
+    files = [
+        "daemon.py",
+        "admin.py",
+        "run.py",
+        "helpers.py",
+        "SKILL.md",
+        "install.md",
+        "README.md",
+        "pyproject.toml",
+        "docs/local-cdp-providers.md",
+    ]
     hits = []
     root = Path(__file__).resolve().parent
     rx = re.compile(patterns)

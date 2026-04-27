@@ -49,11 +49,33 @@ def test_bh_cdp_ws_websocket_passes_through():
 
 
 def test_bh_cdp_ws_http_base_resolves_json_version():
+    opened = []
+
+    def fake_open(url, timeout=0):
+        opened.append(url)
+        return FakeResponse({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/abc"})
+
     with patch.dict(os.environ, {"BH_CDP_WS": "http://127.0.0.1:9222"}, clear=False), \
-         patch("urllib.request.urlopen", return_value=FakeResponse({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/abc"})):
+         patch("urllib.request.urlopen", side_effect=fake_open):
         resolved, info = daemon.resolve_cdp_endpoint()
     assert resolved == "ws://127.0.0.1:9222/devtools/browser/abc"
     assert info["http_base"] == "http://127.0.0.1:9222"
+    assert opened == ["http://127.0.0.1:9222/json/version"]
+
+
+def test_bh_cdp_ws_http_base_preserves_query_for_json_version():
+    opened = []
+
+    def fake_open(url, timeout=0):
+        opened.append(url)
+        return FakeResponse({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/abc"})
+
+    with patch.dict(os.environ, {"BH_CDP_WS": "http://127.0.0.1:9222?fingerprint=111"}, clear=False), \
+         patch("urllib.request.urlopen", side_effect=fake_open):
+        resolved, info = daemon.resolve_cdp_endpoint()
+    assert resolved == "ws://127.0.0.1:9222/devtools/browser/abc"
+    assert info["http_base"] == "http://127.0.0.1:9222?fingerprint=111"
+    assert opened == ["http://127.0.0.1:9222/json/version?fingerprint=111"]
 
 
 def test_public_endpoint_rejects_without_remote_allow():
@@ -62,6 +84,16 @@ def test_public_endpoint_rejects_without_remote_allow():
             daemon.resolve_cdp_endpoint()
         except RuntimeError as e:
             assert "refusing non-loopback" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_zero_host_rejects_even_with_remote_allow():
+    with patch.dict(os.environ, {"BH_CDP_WS": "ws://0.0.0.0:9222/devtools/browser/abc", "BH_CDP_ALLOW_REMOTE": "1"}, clear=True):
+        try:
+            daemon.resolve_cdp_endpoint()
+        except RuntimeError as e:
+            assert "0.0.0.0 is unsafe" in str(e)
         else:
             raise AssertionError("expected RuntimeError")
 

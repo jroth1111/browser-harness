@@ -97,6 +97,8 @@ def _validate_endpoint_url(url, *, source, http_base=None):
         raise RuntimeError("CDP endpoint URLs must not contain credentials")
     host = parsed.hostname
     port = parsed.port
+    if (host or "").strip("[]") == "0.0.0.0":
+        raise RuntimeError("CDP endpoint host 0.0.0.0 is unsafe; use 127.0.0.1 or localhost")
     is_loopback = _is_loopback_host(host)
     allowed_remote = _remote_allowed()
     warnings = []
@@ -121,13 +123,19 @@ def _validate_endpoint_url(url, *, source, http_base=None):
     }
 
 
+def _devtools_version_url(url):
+    parsed = urlparse(url)
+    path = parsed.path.rstrip("/")
+    path = f"{path}/json/version" if path else "/json/version"
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", parsed.query, ""))
+
+
 def _resolve_devtools_http_base(url):
     parsed = urlparse(url)
     if parsed.scheme != "http":
         raise RuntimeError(f"unsupported DevTools HTTP endpoint scheme: {parsed.scheme or '(missing)'}")
     info = _validate_endpoint_url(url, source="env", http_base=url)
-    base = url.rstrip("/")
-    with urllib.request.urlopen(f"{base}/json/version", timeout=5) as resp:
+    with urllib.request.urlopen(_devtools_version_url(url), timeout=5) as resp:
         data = json.loads(resp.read().decode())
     ws_url = data.get("webSocketDebuggerUrl")
     if not ws_url:

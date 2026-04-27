@@ -35,6 +35,23 @@ def test_page_info_uses_target_and_layout_metrics_not_runtime():
     assert "Runtime.evaluate" not in [method for method, _ in calls]
 
 
+def test_goto_url_prepares_page_load_events_before_navigation():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        return {"frameId": "frame-1"} if method == "Page.navigate" else {}
+
+    with patch("helpers.cdp", side_effect=fake_cdp), \
+         patch("helpers.drain_events", return_value=[]):
+        assert helpers.goto_url("https://example.com") == {"frameId": "frame-1"}
+
+    assert calls == [
+        ("Page.enable", {}),
+        ("Page.navigate", {"url": "https://example.com"}),
+    ]
+
+
 def test_switch_tab_does_not_mutate_title():
     calls = []
 
@@ -63,7 +80,22 @@ def test_wait_for_load_uses_page_events_not_runtime():
         return {}
 
     with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers.drain_events", side_effect=[[], [{"method": "Page.loadEventFired"}]]):
+         patch("helpers.drain_events", side_effect=[[], [{"method": "Page.loadEventFired"}]]), \
+         patch("time.sleep"):
+        assert helpers.wait_for_load(timeout=1)
+
+    assert calls == [("Page.enable", {})]
+
+
+def test_wait_for_load_sees_already_queued_load_event():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        return {}
+
+    with patch("helpers.cdp", side_effect=fake_cdp), \
+         patch("helpers.drain_events", return_value=[{"method": "Page.loadEventFired"}]):
         assert helpers.wait_for_load(timeout=0.1)
 
     assert calls == [("Page.enable", {})]
