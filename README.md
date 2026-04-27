@@ -1,6 +1,4 @@
-<img src="https://r2.browser-use.com/github/ajsdlasnnalsgasld.png" alt="Browser Harness" width="100%" />
-
-# Browser Harness ♞
+# Browser Harness
 
 The simplest, thinnest, **self-healing** harness that gives LLM **complete freedom** to complete any browser task. Built directly on CDP.
 
@@ -34,21 +32,13 @@ When this page appears, tick the checkbox so the agent can connect to your brows
 
 See [domain-skills/](domain-skills/) for example tasks.
 
-## Free remote browsers
-
-Useful for stealth, sub-agents, or deployment.<br>
-**Free tier: 3 concurrent browsers, proxies, captcha solving, and more. No card required.**
-
-- Grab a key at [cloud.browser-use.com/new-api-key](https://cloud.browser-use.com/new-api-key)
-- Or let the agent sign up itself via [docs.browser-use.com/llms.txt](https://docs.browser-use.com/llms.txt) (setup flow + challenge context included).
-
 ## How simple is it? (~592 lines of Python)
 
 - `install.md` — first-time install and browser bootstrap
 - `SKILL.md` — day-to-day usage
 - `run.py` (~36 lines) — runs plain Python with helpers preloaded
 - `helpers.py` (~195 lines) — starting tool calls; the agent edits these
-- `admin.py` + `daemon.py` (~361 lines) — daemon bootstrap plus the CDP websocket and socket bridge
+- `admin.py` + `daemon.py` — daemon bootstrap plus the CDP websocket and socket bridge
 
 ## Contributing
 

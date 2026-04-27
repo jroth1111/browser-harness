@@ -37,29 +37,6 @@ PY
 
 run.py calls ensure_daemon() before exec — you never start/stop manually unless you want to.
 
-### Remote browsers
-
-Use remote for parallel sub-agents (each gets its own isolated browser via a distinct BU_NAME) or on a headless server. BROWSER_USE_API_KEY must be set. start_remote_daemon, list_cloud_profiles, list_local_profiles, sync_local_profile are pre-imported.
-
-```bash
-browser-harness <<'PY'
-start_remote_daemon("work")                               # default — clean browser, no profile
-# start_remote_daemon("work", profileName="my-work")      # reuse a cloud profile (already logged in)
-# start_remote_daemon("work", profileId="<uuid>")         # same, but by UUID
-# start_remote_daemon("work", proxyCountryCode="de", timeout=120)   # DE proxy, 2-hour timeout
-# start_remote_daemon("work", proxyCountryCode=None)      # disable the Browser Use proxy
-PY
-
-BU_NAME=work browser-harness <<'PY'
-new_tab("https://example.com")
-print(page_info())
-PY
-```
-
-start_remote_daemon prints liveUrl and auto-opens it in the local browser (if a GUI is detected) so the user can watch along. Headless servers print only — share the URL with the user. The daemon PATCHes the cloud browser to stop on shutdown, which persists profile state. Running remote daemons bill until timeout.
-
-Profiles (cookies-only login state) live in interaction-skills/profile-sync.md — covers list_cloud_profiles(), the chat-driven "which profile?" pattern, and sync_local_profile() for uploading a local Chrome profile.
-
 ## Search first
 
 Search domain-skills/ first for the domain you are working on before inventing a new approach.
@@ -74,7 +51,6 @@ Only if you start struggling with a specific mechanic while navigating, look in 
 - iframes.md
 - network-requests.md
 - print-as-pdf.md
-- profile-sync.md
 - screenshots.md
 - scrolling.md
 - shadow-dom.md
@@ -139,7 +115,7 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 - Connect to the user's running Chrome. Don't launch your own browser.
 - cdp-use is only for CDPClient.send_raw. Prefer raw CDP strings over typed wrappers.
 - run.py stays tiny. No argparse, subcommands, or extra control layer.
-- Helpers stay short. Browser primitives in helpers.py; daemon/bootstrap and remote session admin live in admin.py.
+- Helpers stay short. Browser primitives in helpers.py; daemon/bootstrap lives in admin.py.
 - Don't add a manager layer. No retries framework, session manager, daemon supervisor, config system, or logging framework.
 
 ## Gotchas (field-tested)
@@ -147,9 +123,6 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 - Omnibox popups are fake page targets. Filter chrome://omnibox-popup... and other internals when you need a real tab.
 - CDP target order != Chrome's visible tab-strip order. Use UI automation when the user means "the first/second tab I can see"; Target.activateTarget only shows a known target.
 - Default daemon sessions can go stale. ensure_real_tab() re-attaches to a real page.
-- Browser Use API is camelCase on the wire. cdpUrl, proxyCountryCode, etc.
-- Remote cdpUrl is HTTPS, not ws. Resolve the websocket URL via /json/version.
-- Stop cloud browsers with PATCH /browsers/{id} + {"action":"stop"}.
 - After every meaningful action, re-screenshot before assuming it worked. Use the image to verify changed state, open menus, navigation, visible errors, and whether the page is in the state you expected.
 - Use screenshots to drive exploration. They are often the fastest way to find the next click target, notice hidden blockers, and decide if a selector is even worth writing.
 - Prefer compositor-level actions over framework hacks. Try screenshots, coordinate clicks, and raw key input before adding DOM-specific workarounds.
