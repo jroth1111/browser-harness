@@ -111,7 +111,7 @@ def test_restore_cookies_falls_back_to_browser_level_storage_set_cookies():
     def client(method, session_id=None, **params):
         calls.append((method, params, session_id))
         if method == "Network.setCookies":
-            raise RuntimeError("{'code': -32601, 'message': \"'Network.setCookies' wasn't found\"}")
+            raise RuntimeError("{'code': -31998, 'message': 'NotImplemented'}")
         if method == "Storage.setCookies":
             return {}
         raise AssertionError(method)
@@ -126,6 +126,62 @@ def test_restore_cookies_falls_back_to_browser_level_storage_set_cookies():
         ("Network.setCookies", {"cookies": [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}]}, None),
         ("Storage.setCookies", {"cookies": [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}]}, None),
     ]
+
+
+def test_restore_cookies_falls_back_to_individual_network_set_cookie():
+    calls = []
+
+    def client(method, session_id=None, **params):
+        calls.append((method, params, session_id))
+        if method in {"Network.setCookies", "Storage.setCookies"}:
+            raise RuntimeError("{'code': -31998, 'message': 'NotImplemented'}")
+        if method == "Network.setCookie":
+            return {"success": True}
+        raise AssertionError(method)
+
+    result = login_session.restore_cookies(
+        client,
+        [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}],
+    )
+
+    assert result == {"restored": 1}
+    assert calls == [
+        ("Network.setCookies", {"cookies": [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}]}, None),
+        ("Storage.setCookies", {"cookies": [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}]}, None),
+        ("Network.setCookie", {
+            "name": "sid",
+            "value": "secret",
+            "domain": ".example.com",
+            "path": "/",
+            "secure": True,
+            "url": "https://example.com/",
+        }, None),
+    ]
+
+
+def test_set_cookie_param_strips_nonportable_bulk_fields():
+    cookie = {
+        "name": "sid",
+        "value": "secret",
+        "domain": ".example.com",
+        "path": "/",
+        "secure": True,
+        "httpOnly": True,
+        "expires": -1,
+        "priority": "Medium",
+        "sourceScheme": "Secure",
+        "sourcePort": 443,
+    }
+
+    assert login_session.set_cookie_param(cookie) == {
+        "name": "sid",
+        "value": "secret",
+        "domain": ".example.com",
+        "path": "/",
+        "secure": True,
+        "httpOnly": True,
+        "url": "https://example.com/",
+    }
 
 
 def test_session_manifest_redacts_cookie_and_storage_values():

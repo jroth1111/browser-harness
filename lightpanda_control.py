@@ -1,0 +1,162 @@
+"""Small Lightpanda control/translation helpers for browser-harness.
+
+Lightpanda exposes a browser-level CDP websocket. Page operations need an
+attached target session, while browser/storage operations should stay on the
+browser connection. This module provides that routing in the same `send_raw`
+shape used by login_session.py.
+"""
+import json
+import os
+import signal
+import socket
+import subprocess
+import time
+import urllib.request
+from pathlib import Path
+
+from websockets.sync.client import connect
+
+
+_BROWSER_SCOPED_PREFIXES = ("Browser.", "Target.", "Storage.")
+
+
+def free_port():
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+def wait_json_version(port, timeout=20.0):
+    deadline = time.time() + timeout
+    url = f"http://127.0.0.1:{port}/json/version"
+    last_error = None
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1) as response:
+                return json.loads(response.read().decode())
+        except Exception as error:
+            last_error = error
+            time.sleep(0.2)
+    raise RuntimeError(f"Lightpanda did not expose {url}: {last_error}")
+
+
+class LightpandaCDP:
+    """CDP adapter that routes page commands through an attached target."""
+
+    def __init__(self, ws_url):
+        self.ws_url = ws_url
+        self.ws = connect(ws_url, open_timeout=5)
+        self.next_id = 0
+        self.target_id = None
+        self.page_session_id = None
+
+    def close(self):
+        try:
+            self.ws.close()
+        except Exception:
+            pass
+
+    def _request(self, method, params=None, session_id=None):
+        self.next_id += 1
+        message = {"id": self.next_id, "method": method}
+        if params is not None:
+            message["params"] = params
+        if session_id:
+            message["sessionId"] = session_id
+        self.ws.send(json.dumps(message))
+        while True:
+            reply = json.loads(self.ws.recv())
+            if reply.get("id") != self.next_id:
+                continue
+            if "error" in reply:
+                raise RuntimeError(f"{method} failed: {reply['error']}")
+            return reply.get("result", {})
+
+    def _default_session_for(self, method):
+        if method.startswith(_BROWSER_SCOPED_PREFIXES):
+            return None
+        return self.page_session_id
+
+    def send_raw(self, method, params=None, session_id=None):
+        sid = self._default_session_for(method) if session_id is None else session_id
+        return self._request(method, params or {}, session_id=sid)
+
+    def ensure_page(self, url="about:blank"):
+        if self.page_session_id:
+            return self.page_session_id
+        self.target_id = self._request("Target.createTarget", {"url": url})["targetId"]
+        attached = self._request("Target.attachToTarget", {
+            "targetId": self.target_id,
+            "flatten": True,
+        })
+        self.page_session_id = attached["sessionId"]
+        self.send_raw("Page.enable")
+        self.send_raw("Runtime.enable")
+        self.send_raw("Network.enable")
+        return self.page_session_id
+
+
+class LightpandaServer:
+    """Launch a local Lightpanda CDP server and return a routed CDP client."""
+
+    def __init__(self, binary="lightpanda", port=None, host="127.0.0.1", log_path=None):
+        self.binary = str(Path(binary).expanduser()) if "/" in str(binary) else str(binary)
+        self.host = host
+        self.port = port or free_port()
+        self.log_path = Path(log_path).expanduser() if log_path else None
+        self.proc = None
+        self.version = None
+        self.client = None
+        self._log_file = None
+
+    def start(self, timeout=20.0):
+        if self.proc:
+            return self
+        if self.log_path:
+            self.log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._log_file = self.log_path.open("a")
+            stdout = self._log_file
+            stderr = self._log_file
+        else:
+            stdout = subprocess.DEVNULL
+            stderr = subprocess.DEVNULL
+        self.proc = subprocess.Popen(
+            [self.binary, "serve", "--host", self.host, "--port", str(self.port)],
+            stdout=stdout,
+            stderr=stderr,
+            start_new_session=True,
+        )
+        self.version = wait_json_version(self.port, timeout=timeout)
+        self.client = LightpandaCDP(self.version["webSocketDebuggerUrl"])
+        self.client.ensure_page()
+        return self
+
+    def close(self):
+        if self.client:
+            self.client.close()
+            self.client = None
+        if self.proc:
+            try:
+                os.kill(self.proc.pid, signal.SIGTERM)
+                self.proc.wait(timeout=5)
+            except Exception:
+                try:
+                    os.kill(self.proc.pid, signal.SIGKILL)
+                except Exception:
+                    pass
+                try:
+                    self.proc.wait(timeout=3)
+                except Exception:
+                    pass
+            self.proc = None
+        if self._log_file:
+            self._log_file.close()
+            self._log_file = None
+
+    def __enter__(self):
+        return self.start()
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()

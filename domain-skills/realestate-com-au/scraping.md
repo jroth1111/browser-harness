@@ -23,6 +23,7 @@ Observed on 2026-04-27:
 | Fresh `http_get()` | HTTP 429 with KPSDK headers and a tiny challenge document. |
 | Fresh headless Chrome | Loads a tiny `window.KPSDK`/`/ips.js` document with empty body text. |
 | Lightpanda nightly `1.0.0-nightly.5816+a578f4d6` | Same KPSDK challenge shell; not sufficient for listing extraction. |
+| Lightpanda CDP via `lightpanda_control.py` on 2026-04-27 | Logged-out public home still returned a KPSDK challenge shell with `textLength == 0`; control-layer fixes do not make this backend sufficient for REA. |
 
 Do not try to repair this with selector changes, longer sleeps, user-agent overrides, or `navigator.webdriver` patches. The listing HTML/JSON was not served, so there is no property data in the DOM to extract. Switch to a capable backend, usually the user's already-running headful Chrome profile, or a self-hosted Chromium-derived browser whose fingerprint/profile layer has already been validated for this domain.
 

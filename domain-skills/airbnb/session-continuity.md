@@ -115,6 +115,19 @@ an explicit capability receipt proves the source works. It lacks the full Chrome
 profile, rendering, and fingerprint surface. Use it for public sources and static
 docs first; use headful Chrome for private authenticated exploration and exports.
 
+Observed on 2026-04-27: Lightpanda could restore a saved Airbnb host auth bundle
+and load these private host URLs when driven through `lightpanda_control.py` and
+`login_session.restore_session_state_and_verify()`:
+
+- `https://www.airbnb.com.au/hosting`
+- `https://www.airbnb.com.au/hosting/listings`
+- `https://www.airbnb.com.au/hosting/reservations`
+
+The required cookie restore route was per-cookie `Network.setCookie`; Lightpanda
+reported bulk cookie setters as unavailable for the saved bundle. Keep the
+capability receipt under `.session-store/capability/` and recheck before using
+Lightpanda for new private Airbnb source families.
+
 ## Airbnb seed URLs
 
 Prefer safe, broad pages for session checks:

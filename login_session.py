@@ -55,14 +55,28 @@ _COOKIE_PARAM_FIELDS = {
     "sourcePort",
     "partitionKey",
 }
+_COOKIE_SET_COOKIE_FIELDS = {
+    "name",
+    "value",
+    "url",
+    "domain",
+    "path",
+    "secure",
+    "httpOnly",
+    "sameSite",
+    "expires",
+}
 
 
 def _cdp_method_missing_error(error):
     rendered = repr(error).lower()
     return (
         "-32601" in rendered
+        or "-31998" in rendered
         or "methodnotfound" in rendered
         or "method not found" in rendered
+        or "notimplemented" in rendered
+        or "not implemented" in rendered
         or "wasn't found" in rendered
     )
 
@@ -323,17 +337,58 @@ def cookie_param(cookie):
     return out
 
 
+def set_cookie_param(cookie):
+    out = {key: cookie[key] for key in _COOKIE_SET_COOKIE_FIELDS if key in cookie and cookie[key] is not None}
+    if out.get("expires", 0) < 0:
+        out.pop("expires", None)
+    domain = out.get("domain")
+    if "url" not in out and domain:
+        host = str(domain).lstrip(".")
+        path = out.get("path") or "/"
+        scheme = "https" if out.get("secure", True) else "http"
+        out["url"] = f"{scheme}://{host}{path}"
+    return out
+
+
+def _restore_cookies_individually(client, cookies, session_id=None):
+    restored = 0
+    failures = []
+    for cookie in cookies:
+        params = set_cookie_param(cookie)
+        if not params.get("name") or params.get("value") is None:
+            continue
+        try:
+            result = send_cdp(client, "Network.setCookie", params, session_id=session_id)
+            if result.get("success", True):
+                restored += 1
+                continue
+            failures.append({"name": params.get("name"), "domain": params.get("domain"), "reason": "success_false"})
+        except Exception as error:
+            failures.append({"name": params.get("name"), "domain": params.get("domain"), "reason": repr(error)})
+    out = {"restored": restored}
+    if failures:
+        out["failed"] = len(failures)
+        out["failures"] = failures
+    return out
+
+
 def restore_cookies(client, cookies, session_id=None):
     params = [cookie_param(cookie) for cookie in cookies if cookie.get("name") and cookie.get("value") is not None]
     if not params:
         return {"restored": 0}
     try:
         send_cdp(client, "Network.setCookies", {"cookies": params}, session_id=session_id)
+        return {"restored": len(params)}
     except Exception as error:
         if not _cdp_method_missing_error(error):
             raise
+    try:
         send_cdp(client, "Storage.setCookies", {"cookies": params}, session_id=session_id)
-    return {"restored": len(params)}
+        return {"restored": len(params)}
+    except Exception as error:
+        if not _cdp_method_missing_error(error):
+            raise
+    return _restore_cookies_individually(client, cookies, session_id=session_id)
 
 
 def restore_origin_storage(client, origin_state, include_session_storage=False, session_id=None):
