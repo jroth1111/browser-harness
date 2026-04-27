@@ -1,5 +1,6 @@
 import admin
 from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -37,6 +38,62 @@ def test_profile_use_missing_message_is_local_only():
             raise AssertionError("expected RuntimeError")
     assert "browser-use.com/profile" not in msg
     assert "browser-harness --setup" in msg
+
+
+def test_macos_remote_debugging_keyboard_script():
+    script = admin._remote_debugging_keyboard_applescript(wait=1.5, app_name="Google Chrome")
+
+    assert script[0] == 'tell application "Google Chrome" to activate'
+    assert "delay 1.50" in script
+    assert "keystroke tab" in script
+    assert "keystroke space" in script
+    assert "keystroke return" in script
+
+
+def test_accept_remote_debugging_dialog_keyboard_runs_osascript_on_macos():
+    with patch("platform.system", return_value="Darwin"), \
+         patch("subprocess.run") as run:
+        run.return_value.returncode = 0
+        run.return_value.stderr = ""
+        result = admin._accept_remote_debugging_dialog_keyboard(wait=0.25)
+
+    assert result["ok"] is True
+    args = run.call_args.args[0]
+    assert args[0] == "osascript"
+    assert "keystroke space" in args
+
+
+def test_accept_remote_debugging_dialog_keyboard_rejects_non_macos():
+    with patch("platform.system", return_value="Linux"):
+        result = admin._accept_remote_debugging_dialog_keyboard()
+
+    assert result["ok"] is False
+    assert "macOS" in result["reason"]
+
+
+def test_launch_headful_profile_builds_loopback_chrome_command(tmp_path):
+    chrome = tmp_path / "Chrome"
+    chrome.write_text("")
+    profile = tmp_path / "profile"
+
+    with patch("subprocess.Popen") as popen:
+        popen.return_value.pid = 1234
+        result = admin.launch_headful_profile(
+            profile,
+            port=9333,
+            url="https://example.com",
+            chrome_path=str(chrome),
+        )
+
+    cmd = popen.call_args.args[0]
+    assert cmd[0] == str(chrome)
+    assert f"--user-data-dir={profile}" in cmd
+    assert "--remote-debugging-address=127.0.0.1" in cmd
+    assert "--remote-debugging-port=9333" in cmd
+    assert cmd[-1] == "https://example.com"
+    assert result["pid"] == 1234
+    assert result["http_endpoint"] == "http://127.0.0.1:9333"
+    assert Path(result["profile_path"]).exists()
 
 
 def test_doctor_default_does_not_check_latest_release():

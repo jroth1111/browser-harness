@@ -28,6 +28,21 @@ Use `browser-harness --setup` and follow the Chrome/Edge remote-debugging prompt
   --remote-debugging-port=9222
 ```
 
+On macOS, the setup flow can opt into keyboard-only consent for Chrome's native
+remote-debugging dialog:
+
+```bash
+browser-harness --setup --accept-remote-debugging-dialog
+```
+
+For an agent-owned headful profile with no inspect-page prompt, launch visible
+Chrome directly:
+
+```bash
+browser-harness --launch-profile /tmp/browser-harness-profile --port 9222
+export BH_CDP_WS=http://127.0.0.1:9222
+```
+
 Connect browser-harness:
 
 ```bash

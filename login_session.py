@@ -343,6 +343,115 @@ def restore_session_state(client, state, include_session_storage=False, session_
     return {"cookies": cookie_result, "storage": storage_results}
 
 
+def wait_for_page_status(client, min_text=250, timeout=30.0, poll=0.5, session_id=None):
+    deadline = time.time() + timeout
+    last = {}
+    while time.time() < deadline:
+        last = page_status(client, session_id=session_id)
+        if int(last.get("textLength") or 0) >= min_text:
+            return {**last, "ok": True, "reason": "content"}
+        time.sleep(poll)
+    return {**last, "ok": False, "reason": "timeout"}
+
+
+def navigate_and_wait(client, url, min_text=250, timeout=30.0, poll=0.5, session_id=None):
+    send_cdp(client, "Page.enable", session_id=session_id)
+    send_cdp(client, "Page.navigate", {"url": url}, session_id=session_id)
+    return wait_for_page_status(client, min_text=min_text, timeout=timeout, poll=poll, session_id=session_id)
+
+
+def _same_origin(url, origin):
+    got = urlparse(url or "")
+    want = urlparse(origin or "")
+    return bool(got.scheme and got.netloc and got.scheme == want.scheme and got.netloc == want.netloc)
+
+
+def wait_for_origin(client, origin, timeout=30.0, poll=0.5, session_id=None):
+    deadline = time.time() + timeout
+    last = {}
+    while time.time() < deadline:
+        last = page_status(client, session_id=session_id)
+        if _same_origin(last.get("url"), origin):
+            return {**last, "ok": True, "reason": "origin"}
+        time.sleep(poll)
+    return {**last, "ok": False, "reason": "origin_timeout"}
+
+
+def login_redirect_observed(status, login_path_markers=("/login",), login_title_markers=("login", "sign in", "sign up")):
+    parsed = urlparse(status.get("url") or "")
+    path = parsed.path.lower()
+    title = (status.get("title") or "").lower()
+    return any(marker in path for marker in login_path_markers) or any(marker in title for marker in login_title_markers)
+
+
+def verify_authenticated_urls(
+    client,
+    urls,
+    min_text=250,
+    timeout=30.0,
+    poll=0.5,
+    session_id=None,
+    login_path_markers=("/login",),
+    login_title_markers=("login", "sign in", "sign up"),
+):
+    results = []
+    for url in urls:
+        status = navigate_and_wait(client, url, min_text=min_text, timeout=timeout, poll=poll, session_id=session_id)
+        login_redirect = login_redirect_observed(
+            status,
+            login_path_markers=login_path_markers,
+            login_title_markers=login_title_markers,
+        )
+        results.append({
+            "requested_url": url,
+            "final_url": status.get("url", ""),
+            "title": status.get("title", ""),
+            "ok": bool(status.get("ok") and not login_redirect),
+            "reason": "login_redirect" if login_redirect else status.get("reason"),
+            "text_length": status.get("textLength"),
+        })
+    return {"ok": all(item["ok"] for item in results), "resources_checked": results}
+
+
+def restore_session_state_and_verify(
+    client,
+    state,
+    urls,
+    include_session_storage=True,
+    min_text=250,
+    timeout=30.0,
+    poll=0.5,
+    session_id=None,
+):
+    """Restore private auth state into the current browser context and verify URLs.
+
+    The caller is responsible for providing a fresh browser profile/process when
+    they need proof that the state is restorable without an existing login.
+    """
+    send_cdp(client, "Page.enable", session_id=session_id)
+    send_cdp(client, "Network.enable", session_id=session_id)
+    origin_state = (state.get("origins") or [{}])[0]
+    origin = origin_state.get("origin") or origin_url((state.get("urls") or ["about:blank"])[0]).rstrip("/")
+    if origin and origin != "about:blank":
+        send_cdp(client, "Page.navigate", {"url": origin + "/"}, session_id=session_id)
+        wait_for_origin(client, origin, timeout=timeout, poll=poll, session_id=session_id)
+    restore = restore_session_state(
+        client,
+        state,
+        include_session_storage=include_session_storage,
+        session_id=session_id,
+    )
+    verification = verify_authenticated_urls(
+        client,
+        urls,
+        min_text=min_text,
+        timeout=timeout,
+        poll=poll,
+        session_id=session_id,
+    )
+    return {"ok": verification["ok"], "restore": restore, **verification}
+
+
 def browser_session_headers(client, url, headers=None, cookie_urls=None, cookies=None, session_id=None):
     """Headers for same-domain HTTP using browser UA and matching cookies."""
     out = {

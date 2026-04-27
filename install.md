@@ -43,6 +43,18 @@ That makes new Codex or Claude Code sessions in other folders load the runtime b
 
 Prefer `browser-harness --setup` — it runs the full attach-and-escalate flow below as one interactive command. The manual steps that follow are only for when `--setup` is unavailable or you need to debug a specific failure.
 
+On macOS, if the user explicitly approves keyboard automation for Chrome's
+remote-debugging consent dialog, use:
+
+```bash
+browser-harness --setup --accept-remote-debugging-dialog
+```
+
+That opens `chrome://inspect/#remote-debugging` when needed and sends the native
+keyboard sequence `Tab`, `Space`, `Tab`, `Return`. It requires macOS
+Accessibility permission for the controlling terminal/app. Do not use it
+silently; remote debugging consent is a browser-control permission.
+
 1. Run `uv sync`.
    If `browser-harness` is still missing after that, run `command -v browser-harness >/dev/null || uv tool install -e .`.
 2. First try the harness directly. If this works, skip manual browser setup:
@@ -71,7 +83,7 @@ osascript -e 'tell application "Google Chrome" to activate' \
 
    On Linux: open that URL manually in the existing Chrome window.
    If Chrome shows the profile picker first, tell the user to choose their normal profile, *then* (only if `DevToolsActivePort` is still missing) open the inspect page in that profile. Keep polling instead of waiting for the user to type a follow-up.
-4. Be explicit with the user about the two possible Chrome actions: choose their normal profile if the profile picker is open, and in the remote-debugging tab tick the checkbox and click `Allow` once if Chrome shows it.
+4. Be explicit with the user about the two possible Chrome actions: choose their normal profile if the profile picker is open, and in the remote-debugging tab tick the checkbox and click `Allow` once if Chrome shows it. On macOS, `browser-harness --setup --accept-remote-debugging-dialog` can send the checkbox/Allow keyboard sequence after the user has explicitly approved that automation.
 5. Try to do everything yourself. Only ask the user to do something if it is truly necessary, like selecting the Chrome profile or clicking `Allow`. While the user is doing that, sleep and check every 3 seconds whether it is completed. After asking, keep retrying for at least 30 seconds even if you see connection-refused, stale websocket, or other weird transient attach errors.
 6. If setup still lands on the profile picker, have the user choose their normal profile, then (only if `DevToolsActivePort` is still missing) open `chrome://inspect/#remote-debugging` in that profile and keep polling instead of restarting the explanation. As soon as attach succeeds, continue immediately with the verification task without asking again.
 7. Verify with:
@@ -109,6 +121,8 @@ Wait 5 seconds, then reconnect. This resets all CDP state.
 
 - browser-harness --doctor - show local daemon, endpoint, and CDP hygiene.
 - browser-harness --setup — re-run the full interactive browser-attach flow.
+- browser-harness --setup --accept-remote-debugging-dialog — macOS opt-in keyboard consent automation for the Chrome remote-debugging dialog.
+- browser-harness --launch-profile PATH --port 9222 — launch visible Chrome with a loopback CDP endpoint and an explicit user-data-dir.
 - browser-harness --update -y - explicitly check for an update, pull it, and restart the daemon.
 
 For self-hosted CDP endpoints, see `docs/local-cdp-providers.md`.

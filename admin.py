@@ -80,7 +80,7 @@ def daemon_alive(name=None):
         return False
 
 
-def ensure_daemon(wait=60.0, name=None, env=None):
+def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog=False):
     """Idempotent. Self-heals stale daemon, cold Chrome, and missing Allow on chrome://inspect."""
     if daemon_alive(name):
         # Stale daemons accept connects AND reply to meta:* (pure Python) even when the
@@ -115,7 +115,15 @@ def ensure_daemon(wait=60.0, name=None, env=None):
         msg = _log_tail(name) or ""
         if local and attempt == 0 and _needs_chrome_remote_debugging_prompt(msg):
             _open_chrome_inspect()
-            print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
+            if accept_remote_debugging_dialog:
+                result = _accept_remote_debugging_dialog_keyboard()
+                if result.get("ok"):
+                    print("browser-harness: sent keyboard approval for chrome://inspect remote-debugging dialog", file=sys.stderr)
+                else:
+                    print(f"browser-harness: keyboard approval failed: {result.get('error') or result.get('reason')}", file=sys.stderr)
+                    print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
+            else:
+                print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
             restart_daemon(name)
             continue
         raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check /tmp/bh-{name or NAME}.log")
@@ -306,7 +314,114 @@ def _open_chrome_inspect():
         pass
 
 
-def run_setup():
+def _remote_debugging_keyboard_applescript(wait=1.0, app_name="Google Chrome"):
+    return [
+        f'tell application "{app_name}" to activate',
+        f"delay {float(wait):.2f}",
+        'tell application "System Events"',
+        "keystroke tab",
+        "delay 0.10",
+        "keystroke space",
+        "delay 0.10",
+        "keystroke tab",
+        "delay 0.10",
+        "keystroke return",
+        "end tell",
+    ]
+
+
+def _accept_remote_debugging_dialog_keyboard(wait=1.0, app_name="Google Chrome"):
+    """Opt-in keyboard-only consent for Chrome's native remote-debugging dialog."""
+    import platform, subprocess
+    if platform.system() != "Darwin":
+        return {"ok": False, "reason": "keyboard consent automation is implemented for macOS only"}
+    args = ["osascript"]
+    for line in _remote_debugging_keyboard_applescript(wait=wait, app_name=app_name):
+        args.extend(["-e", line])
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=10, check=False)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    return {
+        "ok": result.returncode == 0,
+        "returncode": result.returncode,
+        "stderr": result.stderr.strip(),
+        "error": result.stderr.strip() if result.returncode else "",
+    }
+
+
+def _default_chrome_executable():
+    import platform, shutil
+    if platform.system() == "Darwin":
+        candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ]
+        for candidate in candidates:
+            if Path(candidate).exists():
+                return candidate
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def _validate_port(port):
+    port = int(port)
+    if port < 1 or port > 65535:
+        raise ValueError("port must be in 1..65535")
+    return port
+
+
+def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_path=None):
+    """Launch visible Chrome with a loopback CDP endpoint and explicit profile."""
+    import subprocess
+    profile = Path(profile_path).expanduser()
+    profile.mkdir(parents=True, exist_ok=True)
+    port = _validate_port(port)
+    chrome = chrome_path or _default_chrome_executable()
+    if not chrome:
+        raise RuntimeError("could not find a Chrome/Chromium executable")
+    cmd = [
+        chrome,
+        f"--user-data-dir={profile}",
+        "--remote-debugging-address=127.0.0.1",
+        f"--remote-debugging-port={port}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--new-window",
+        url,
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return {
+        "pid": proc.pid,
+        "profile_path": str(profile),
+        "http_endpoint": f"http://127.0.0.1:{port}",
+        "env": f"BH_CDP_WS=http://127.0.0.1:{port}",
+        "command": cmd,
+    }
+
+
+def run_launch_profile(profile_path, port=9222, url="about:blank", chrome_path=None, json_output=False):
+    """CLI wrapper for launching an agent-owned headful Chrome profile."""
+    import sys
+    try:
+        result = launch_headful_profile(profile_path, port=port, url=url, chrome_path=chrome_path)
+    except Exception as e:
+        print(f"launch failed: {e}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"launched Chrome pid {result['pid']}")
+        print(f"profile: {result['profile_path']}")
+        print(f"endpoint: {result['http_endpoint']}")
+        print(f"export {result['env']}")
+    return 0
+
+
+def run_setup(accept_remote_debugging_dialog=False):
     """Interactive bootstrap: attach to the running browser, guiding the user through chrome://inspect if needed.
 
     Exit code 0 on success, 1 on failure."""
@@ -323,7 +438,7 @@ def run_setup():
 
     # First attach attempt.
     try:
-        ensure_daemon(wait=20.0)
+        ensure_daemon(wait=20.0, accept_remote_debugging_dialog=accept_remote_debugging_dialog)
         print("daemon is up.")
         return 0
     except RuntimeError as e:
@@ -336,6 +451,12 @@ def run_setup():
         print("  1. if chrome shows the profile picker, pick your normal profile;")
         print("  2. tick 'Discover network targets' and click Allow if prompted.")
         _open_chrome_inspect()
+        if accept_remote_debugging_dialog:
+            result = _accept_remote_debugging_dialog_keyboard()
+            if result.get("ok"):
+                print("sent keyboard approval for the remote-debugging dialog.")
+            else:
+                print(f"keyboard approval failed: {result.get('error') or result.get('reason')}")
     else:
         print(f"attach failed: {first_err}")
         print("retrying for up to 60s (chrome may still be starting up)...")
@@ -344,7 +465,7 @@ def run_setup():
     last = first_err
     while time.time() < deadline:
         try:
-            ensure_daemon(wait=5.0)
+            ensure_daemon(wait=5.0, accept_remote_debugging_dialog=accept_remote_debugging_dialog)
             print("daemon is up.")
             return 0
         except RuntimeError as e:

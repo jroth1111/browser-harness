@@ -19,6 +19,8 @@ PY
 
 - Invoke as browser-harness — it's on $PATH. No cd, no uv run.
 - First navigation is new_tab(url), not goto_url(url) — goto runs in the user's active tab and clobbers their work.
+- On macOS, `browser-harness --setup --accept-remote-debugging-dialog` can opt into keyboard-only approval for Chrome's remote-debugging consent dialog.
+- `browser-harness --launch-profile PATH --port 9222` launches a visible agent-owned Chrome profile with loopback CDP when you need a fresh profile/process.
 
 Available interaction skills:
 - interaction-skills/connection.md — startup sequence, tab visibility, omnibox popup fix
@@ -140,7 +142,7 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 ## Design constraints
 
 - Coordinate clicks default. Input.dispatchMouseEvent goes through iframes/shadow/cross-origin at the compositor level.
-- Connect to the user's running Chrome. Don't launch your own browser.
+- Default to the user's running Chrome. Only launch Chrome yourself through `--launch-profile` when the task explicitly needs an agent-owned fresh profile/process.
 - cdp-use is only for CDPClient.send_raw. Prefer raw CDP strings over typed wrappers.
 - run.py stays tiny. No argparse, subcommands, or extra control layer.
 - Helpers stay short. Browser primitives in helpers.py; daemon/bootstrap lives in admin.py.

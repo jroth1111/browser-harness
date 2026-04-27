@@ -57,3 +57,45 @@ def test_doctor_rejects_unknown_flags():
             assert e.code == 2
         else:
             raise AssertionError("expected SystemExit")
+
+
+def test_setup_accepts_remote_debugging_dialog_flag():
+    with patch.object(sys, "argv", ["browser-harness", "--setup", "--accept-remote-debugging-dialog"]), \
+         patch("run.run_setup", return_value=0) as setup:
+        try:
+            run.main()
+        except SystemExit as e:
+            assert e.code == 0
+        else:
+            raise AssertionError("expected SystemExit")
+
+    setup.assert_called_once_with(accept_remote_debugging_dialog=True)
+
+
+def test_launch_profile_passes_options():
+    with patch.object(sys, "argv", [
+        "browser-harness",
+        "--launch-profile",
+        "/tmp/profile",
+        "--port",
+        "9333",
+        "--url",
+        "https://example.com",
+        "--chrome",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "--json",
+    ]), patch("run.run_launch_profile", return_value=0) as launch:
+        try:
+            run.main()
+        except SystemExit as e:
+            assert e.code == 0
+        else:
+            raise AssertionError("expected SystemExit")
+
+    launch.assert_called_once_with(
+        "/tmp/profile",
+        port=9333,
+        url="https://example.com",
+        chrome_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        json_output=True,
+    )

@@ -153,6 +153,11 @@ Restore verification must use a fresh browser profile or separate browser
 process. Same-profile tabs reuse the already-authenticated browser store and do
 not prove that the saved state is sufficient.
 
+Use `restore_session_state_and_verify(...)` when possible. It restores cookies
+and origin storage into the supplied CDP client, navigates to authenticated URLs,
+and marks login redirects as failed verification. The caller still must provide
+a fresh browser profile/process when proving that a saved bundle avoids re-login.
+
 ## Lightweight backend rule
 
 Lightweight backends can reuse already-extracted data, but they should not be the

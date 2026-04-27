@@ -175,6 +175,67 @@ def test_cookie_param_keeps_restorable_fields_only():
     }
 
 
+def test_restore_session_state_and_verify_passes_authenticated_urls():
+    class Client:
+        def __init__(self):
+            self.calls = []
+            self.page_statuses = iter([
+                {"url": "about:blank", "title": "", "readyState": "complete", "textLength": 0},
+                {"url": "https://www.example.com/", "title": "Home", "readyState": "complete", "textLength": 0},
+                {"url": "https://www.example.com/private", "title": "Private", "readyState": "complete", "textLength": 500},
+            ])
+
+        def __call__(self, method, session_id=None, **params):
+            self.calls.append((method, params, session_id))
+            if method == "Runtime.evaluate":
+                expression = params["expression"]
+                if expression == "location.origin":
+                    return {"result": {"value": "https://www.example.com"}}
+                if "localStorageRestored" in expression:
+                    return {"result": {"value": {"origin": "https://www.example.com", "localStorageRestored": 1, "sessionStorageRestored": 1}}}
+                return {"result": {"value": next(self.page_statuses)}}
+            return {}
+
+    state = {
+        "cookies": [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}],
+        "origins": [{
+            "origin": "https://www.example.com",
+            "localStorage": {"token": "local-secret"},
+            "sessionStorage": {"state": "session-secret"},
+        }],
+    }
+    with patch("time.sleep"):
+        result = login_session.restore_session_state_and_verify(
+            Client(),
+            state,
+            ["https://www.example.com/private"],
+            min_text=250,
+            timeout=2,
+        )
+
+    assert result["ok"] is True
+    assert result["restore"]["cookies"] == {"restored": 1}
+    assert result["restore"]["storage"][0]["localStorageRestored"] == 1
+    assert result["resources_checked"][0]["title"] == "Private"
+
+
+def test_verify_authenticated_urls_fails_login_redirect():
+    states = iter([
+        {"url": "https://www.example.com/login?redirect=private", "title": "Log in", "readyState": "complete", "textLength": 500},
+    ])
+
+    def client(method, **params):
+        if method == "Runtime.evaluate":
+            return {"result": {"value": next(states)}}
+        return {}
+
+    with patch("time.sleep"):
+        result = login_session.verify_authenticated_urls(client, ["https://www.example.com/private"], timeout=1)
+
+    assert result["ok"] is False
+    assert result["resources_checked"][0]["reason"] == "login_redirect"
+
+
 def test_http_get_with_login_session_captures_http_error_body():
     html = "<html>blocked</html>"
     err = urllib.error.HTTPError(
