@@ -119,7 +119,8 @@ Notes:
 
 - Lightpanda is useful when the task needs HTML, DOM queries, and JavaScript execution without Chrome's memory cost.
 - It is not a headful Chrome replacement for heavily protected sites. Domains that depend on GPU/WebGL/canvas/font/layout/plugin/profile signals can serve challenge shells even though CDP is connected successfully.
-- For `realestate.com.au`, observed Lightpanda behavior on 2026-04-27 was a Kasada/KPSDK challenge document with empty body text. Use `wait_for_content()` to detect this and switch to a persistent headful Chrome profile or another validated Chromium-derived backend.
+- For `realestate.com.au`, observed Lightpanda behavior on 2026-04-27 was a Kasada/KPSDK challenge document with empty body text. Use `diagnose_url_capability()` to detect this and switch to a persistent headful Chrome profile or another validated Chromium-derived backend.
+- If a headful profile has already solved the target domain, use `fetch_with_browser_session(url, seed_url=...)` from that profile to gather HTML/data, then pass the extracted results to Lightpanda-only workflows.
 
 ## Steel Local Docker
 

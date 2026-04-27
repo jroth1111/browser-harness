@@ -105,6 +105,8 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 - After goto: wait_for_load().
 - Loaded-but-empty pages: use wait_for_content() when a site may serve a bot/WAF challenge shell. It returns `ok`, `reason`, `text`, `html`, and `block` so you can distinguish real blank content from `kasada_kpsdk` / access-denied pages.
 - Browser-session HTTP: after a real browser profile has passed a site challenge, `http_get_browser_session(url)` fetches same-domain pages with that browser's user agent and matching cookies; pair it with `extract_argonaut_exchange(html)` on Argonaut/REA pages.
+- Robust solved sessions: `seed_browser_session(url)` verifies a headful/profile session; `fetch_with_browser_session(url, seed_url=...)` retries stale-cookie HTTP fetches by re-seeding in the browser.
+- Headless/backend triage: `diagnose_url_capability(url)` reports backend kind, challenge block state, and recommendation. Use it before spending time on selectors when Lightpanda/headless returns blank content.
 - Wrong/stale tab: ensure_real_tab(). Use it when the current tab is stale or internal; the daemon also auto-recovers from stale sessions on the next call.
 - Verification: print(page_info()) is the simplest "is this alive?" check, but screenshots are the default way to verify whether a visible action actually worked.
 - DOM reads: use js(...) for inspection and extraction when the screenshot shows that coordinates are the wrong tool.

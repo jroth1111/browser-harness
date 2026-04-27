@@ -1,6 +1,7 @@
 from unittest.mock import patch
 import base64
 import gzip
+import io
 import json
 
 import helpers
@@ -552,6 +553,175 @@ def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
     assert timeout == 20.0
     assert req.headers["User-agent"] == "Browser UA"
     assert req.headers["Cookie"] == "KP_UIDz=rea"
+
+
+def test_http_get_browser_session_response_captures_blocking_http_error():
+    html = "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>"
+    err = helpers.urllib.error.HTTPError(
+        "https://www.realestate.com.au/property/1",
+        429,
+        "Too Many Requests",
+        {"Content-Encoding": "gzip"},
+        io.BytesIO(gzip.compress(html.encode())),
+    )
+
+    with patch("helpers.js", return_value="Browser UA"), \
+         patch("helpers.browser_cookie_header", return_value="KP_UIDz=rea"), \
+         patch("urllib.request.urlopen", side_effect=err):
+        result = helpers.http_get_browser_session_response("https://www.realestate.com.au/property/1")
+
+    assert result["ok"] is False
+    assert result["http_ok"] is False
+    assert result["status"] == 429
+    assert result["block"]["kind"] == "kasada_kpsdk"
+    assert "window.KPSDK" in result["text"]
+
+
+def test_seed_browser_session_closes_tab_and_returns_cookie_names():
+    with patch("helpers.new_tab", return_value="target-1") as new_tab, \
+         patch("helpers.wait_for_load", return_value=True) as wait_for_load, \
+         patch("helpers.wait_for_content", return_value={
+             "ok": True,
+             "reason": "content",
+             "textLength": 800,
+             "block": {"blocked": False, "kind": None, "evidence": []},
+         }) as wait_for_content, \
+         patch("helpers.browser_cookies", return_value=[
+             {"name": "KP_UIDz", "value": "rea", "domain": ".realestate.com.au", "path": "/", "secure": True},
+             {"name": "other", "value": "prop", "domain": ".property.com.au", "path": "/", "secure": True},
+         ]), \
+         patch("helpers.close_tab") as close_tab:
+        result = helpers.seed_browser_session("https://www.realestate.com.au/property/1", min_text=500, timeout=7)
+
+    new_tab.assert_called_once_with("https://www.realestate.com.au/property/1")
+    wait_for_load.assert_called_once_with(timeout=7)
+    wait_for_content.assert_called_once_with(min_text=500, timeout=7)
+    close_tab.assert_called_once_with("target-1")
+    assert result["ok"] is True
+    assert result["targetId"] == "target-1"
+    assert result["cookieNames"] == ["KP_UIDz"]
+
+
+def test_fetch_with_browser_session_reseeds_and_retries_blocked_fetch():
+    blocked = {
+        "ok": False,
+        "http_ok": True,
+        "status": 200,
+        "url": "https://www.realestate.com.au/property/1",
+        "text": "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>",
+        "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": ["window.kpsdk"]},
+        "headers": {},
+    }
+    served = {
+        "ok": True,
+        "http_ok": True,
+        "status": 200,
+        "url": "https://www.realestate.com.au/property/1",
+        "text": "<html>property</html>",
+        "block": {"blocked": False, "kind": None, "evidence": []},
+        "headers": {},
+    }
+
+    with patch("helpers.http_get_browser_session_response", side_effect=[blocked, served]) as fetch, \
+         patch("helpers.seed_browser_session", return_value={
+             "ok": True,
+             "reason": "content",
+             "block": {"blocked": False, "kind": None, "evidence": []},
+             "cookieNames": ["KP_UIDz"],
+             "textLength": 900,
+         }) as seed:
+        result = helpers.fetch_with_browser_session(
+            "https://www.realestate.com.au/property/1",
+            seed_url="https://www.realestate.com.au/",
+            retries=1,
+            timeout=5,
+        )
+
+    assert result["ok"] is True
+    assert result["reason"] == "content"
+    assert result["text"] == "<html>property</html>"
+    assert [a["stage"] for a in result["attempts"]] == ["fetch", "seed", "fetch"]
+    seed.assert_called_once_with("https://www.realestate.com.au/", min_text=500, timeout=5, close=True)
+    assert fetch.call_count == 2
+
+
+def test_fetch_with_browser_session_reports_seed_failure():
+    blocked = {
+        "ok": False,
+        "http_ok": True,
+        "status": 200,
+        "url": "https://www.realestate.com.au/property/1",
+        "text": "blocked",
+        "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": []},
+        "headers": {},
+    }
+    with patch("helpers.http_get_browser_session_response", return_value=blocked), \
+         patch("helpers.seed_browser_session", return_value={
+             "ok": False,
+             "reason": "blocked",
+             "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": []},
+         }):
+        result = helpers.fetch_with_browser_session(
+            "https://www.realestate.com.au/property/1",
+            seed_url="https://www.realestate.com.au/",
+            retries=1,
+        )
+
+    assert result["ok"] is False
+    assert result["reason"] == "seed_blocked"
+    assert [a["stage"] for a in result["attempts"]] == ["fetch", "seed"]
+
+
+def test_browser_backend_info_detects_lightpanda_risks():
+    with patch("helpers.endpoint_info", return_value={"browser": "Lightpanda/1.0"}), \
+         patch("helpers.cdp", return_value={"product": "Lightpanda/1.0", "userAgent": "Lightpanda"}), \
+         patch("helpers.js", return_value={
+             "userAgent": "Lightpanda",
+             "webdriver": False,
+             "plugins": 0,
+         }):
+        info = helpers.browser_backend_info()
+
+    assert info["kind"] == "lightpanda"
+    assert "lightpanda may not satisfy full browser fingerprint challenges" in info["risks"]
+    assert "navigator.plugins is empty" in info["risks"]
+
+
+def test_browser_backend_info_detects_headless_chrome():
+    with patch("helpers.endpoint_info", return_value={"browser": "Chrome/135"}), \
+         patch("helpers.cdp", return_value={"product": "Chrome/135", "userAgent": "HeadlessChrome/135"}), \
+         patch("helpers.js", return_value={
+             "userAgent": "Mozilla/5.0 HeadlessChrome/135",
+             "webdriver": True,
+             "plugins": 3,
+         }):
+        info = helpers.browser_backend_info()
+
+    assert info["kind"] == "headless_chrome"
+    assert "headless_chrome may not satisfy full browser fingerprint challenges" in info["risks"]
+    assert "navigator.webdriver is true" in info["risks"]
+
+
+def test_diagnose_url_capability_reports_backend_recommendation_and_closes_tab():
+    with patch("helpers.new_tab", return_value="target-1"), \
+         patch("helpers.wait_for_load", return_value=True), \
+         patch("helpers.wait_for_content", return_value={
+             "ok": False,
+             "reason": "blocked",
+             "url": "https://www.realestate.com.au/property/1",
+             "title": "",
+             "textLength": 0,
+             "htmlLength": 800,
+             "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": []},
+         }), \
+         patch("helpers.browser_backend_info", return_value={"kind": "headless_chrome", "risks": []}), \
+         patch("helpers.close_tab") as close_tab:
+        result = helpers.diagnose_url_capability("https://www.realestate.com.au/property/1", timeout=4)
+
+    assert result["ok"] is False
+    assert result["reason"] == "blocked"
+    assert "persistent headful Chrome" in result["recommendation"]
+    close_tab.assert_called_once_with("target-1")
 
 
 def test_extract_argonaut_exchange_decodes_nested_json_strings():

@@ -2,6 +2,7 @@
 import base64, gzip, json, os, socket, time, urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
+import urllib.error
 
 
 def _load_env():
@@ -213,14 +214,13 @@ def browser_cookie_header(url, cookie_urls=None):
         pairs.append(f"{name}={value}")
     return "; ".join(pairs)
 
-def http_get_browser_session(url, headers=None, cookie_urls=None, timeout=20.0):
-    """HTTP GET using the attached browser's user agent and matching cookies.
+def _origin_url(url):
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return url
+    return f"{parsed.scheme}://{parsed.netloc}/"
 
-    This is useful after a real browser profile has passed a site challenge and
-    you want to fetch additional same-domain HTML/API pages without rendering
-    each one. It does not solve challenges; without valid browser cookies it will
-    receive the same block page as ordinary HTTP.
-    """
+def _browser_session_headers(url, headers=None, cookie_urls=None):
     ua = js("navigator.userAgent")
     h = {
         "User-Agent": ua,
@@ -233,11 +233,220 @@ def http_get_browser_session(url, headers=None, cookie_urls=None, timeout=20.0):
         h["Cookie"] = cookie_header
     if headers:
         h.update(headers)
-    with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
-        data = r.read()
-        if r.headers.get("Content-Encoding") == "gzip":
+    return h
+
+def _read_http_text(response):
+    data = response.read()
+    if response.headers.get("Content-Encoding") == "gzip":
+        try:
             data = gzip.decompress(data)
-        return data.decode()
+        except (OSError, EOFError):
+            pass
+    return data.decode("utf-8", "replace")
+
+def http_get_browser_session_response(url, headers=None, cookie_urls=None, timeout=20.0):
+    """HTTP GET result using the attached browser's UA and matching cookies.
+
+    Returns `{ok, http_ok, status, url, text, block, headers}` and captures HTTP
+    error bodies so callers can detect WAF/challenge pages instead of losing the
+    response to an exception.
+    """
+    h = _browser_session_headers(url, headers=headers, cookie_urls=cookie_urls)
+    req = urllib.request.Request(url, headers=h)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            text = _read_http_text(r)
+            status = getattr(r, "status", None) or (r.getcode() if hasattr(r, "getcode") else 200)
+            final_url = r.geturl() if hasattr(r, "geturl") else url
+            response_headers = dict(r.headers)
+    except urllib.error.HTTPError as e:
+        text = _read_http_text(e)
+        status = e.code
+        final_url = e.geturl()
+        response_headers = dict(e.headers)
+
+    block = detect_block_page(html=text, url=final_url)
+    http_ok = 200 <= int(status or 0) < 400
+    return {
+        "ok": http_ok and not block.get("blocked"),
+        "http_ok": http_ok,
+        "status": status,
+        "url": final_url,
+        "text": text,
+        "block": block,
+        "headers": response_headers,
+    }
+
+def http_get_browser_session(url, headers=None, cookie_urls=None, timeout=20.0):
+    """HTTP GET using the attached browser's user agent and matching cookies.
+
+    This is useful after a real browser profile has passed a site challenge and
+    you want to fetch additional same-domain HTML/API pages without rendering
+    each one. It does not solve challenges; without valid browser cookies it will
+    receive the same block page as ordinary HTTP.
+    """
+    result = http_get_browser_session_response(url, headers=headers, cookie_urls=cookie_urls, timeout=timeout)
+    if not result["http_ok"]:
+        raise RuntimeError(f"browser-session HTTP failed: {result['status']} {result['url']}")
+    return result["text"]
+
+def seed_browser_session(url, min_text=500, timeout=20.0, close=True):
+    """Navigate a real browser tab to `url` and verify useful content appears.
+
+    Returns a structured status with `ok`, `reason`, `block`, `cookieNames`, and
+    `targetId`. This is the explicit "solve/refresh the browser session first"
+    primitive for domains whose direct HTTP requests depend on browser cookies.
+    """
+    tid = None
+    try:
+        tid = new_tab(url)
+        wait_for_load(timeout=timeout)
+        status = wait_for_content(min_text=min_text, timeout=timeout)
+        cookie_names = sorted({
+            c.get("name", "")
+            for c in browser_cookies([_origin_url(url), url])
+            if c.get("name") and _cookie_matches_url(c, url)
+        })
+        return {**status, "targetId": tid, "seedUrl": url, "cookieNames": cookie_names}
+    finally:
+        if close and tid:
+            close_tab(tid)
+
+def fetch_with_browser_session(url, seed_url=None, retries=1, min_text=500, timeout=20.0, headers=None):
+    """Fetch `url` with browser cookies, optionally re-seeding and retrying.
+
+    Use this when a persistent headful profile can satisfy a site challenge but
+    direct HTTP may have stale/missing cookies. The returned dict includes the
+    final response text plus compact attempt evidence.
+    """
+    attempts = []
+    cookie_urls = [url]
+    if seed_url and _origin_url(seed_url) != _origin_url(url):
+        cookie_urls.append(seed_url)
+    for attempt in range(max(0, retries) + 1):
+        response = http_get_browser_session_response(url, headers=headers, cookie_urls=cookie_urls, timeout=timeout)
+        attempts.append({
+            "stage": "fetch",
+            "attempt": attempt + 1,
+            "status": response.get("status"),
+            "url": response.get("url"),
+            "ok": response.get("ok"),
+            "http_ok": response.get("http_ok"),
+            "block": response.get("block"),
+            "textLength": len(response.get("text") or ""),
+        })
+        if response.get("ok"):
+            return {**response, "attempts": attempts, "reason": "content"}
+        if not seed_url or attempt >= max(0, retries):
+            reason = "blocked" if response.get("block", {}).get("blocked") else "http_error"
+            return {**response, "attempts": attempts, "reason": reason}
+        seed = seed_browser_session(seed_url, min_text=min_text, timeout=timeout, close=True)
+        attempts.append({
+            "stage": "seed",
+            "attempt": attempt + 1,
+            "ok": seed.get("ok"),
+            "reason": seed.get("reason"),
+            "block": seed.get("block"),
+            "cookieNames": seed.get("cookieNames", []),
+            "textLength": seed.get("textLength"),
+        })
+        if not seed.get("ok"):
+            return {
+                **response,
+                "ok": False,
+                "attempts": attempts,
+                "reason": f"seed_{seed.get('reason', 'failed')}",
+                "seed": seed,
+            }
+
+def browser_backend_info():
+    """Diagnose the attached CDP backend. Explicitly runs JS for page-level facts."""
+    version = {}
+    version_error = None
+    try:
+        version = cdp("Browser.getVersion")
+    except Exception as e:
+        version_error = str(e)
+    js_probe = {}
+    js_error = None
+    try:
+        js_probe = js("""({
+            userAgent: navigator.userAgent,
+            webdriver: navigator.webdriver,
+            platform: navigator.platform,
+            languages: navigator.languages,
+            plugins: navigator.plugins ? navigator.plugins.length : null,
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            deviceMemory: navigator.deviceMemory || null
+        })""") or {}
+    except Exception as e:
+        js_error = str(e)
+
+    endpoint = endpoint_info()
+    blob = " ".join(str(x or "") for x in (
+        endpoint.get("browser"),
+        version.get("product"),
+        version.get("userAgent"),
+        js_probe.get("userAgent"),
+    )).lower()
+    if "lightpanda" in blob:
+        kind = "lightpanda"
+    elif "headless" in blob:
+        kind = "headless_chrome"
+    elif "chrome" in blob or "chromium" in blob or "edge" in blob:
+        kind = "chromium"
+    else:
+        kind = "unknown"
+
+    risks = []
+    if kind in {"lightpanda", "headless_chrome"}:
+        risks.append(f"{kind} may not satisfy full browser fingerprint challenges")
+    if js_probe.get("webdriver") is True:
+        risks.append("navigator.webdriver is true")
+    if js_probe.get("plugins") == 0:
+        risks.append("navigator.plugins is empty")
+    return {
+        "kind": kind,
+        "endpoint": endpoint,
+        "version": version,
+        "versionError": version_error,
+        "js": js_probe,
+        "jsError": js_error,
+        "risks": risks,
+    }
+
+def _backend_recommendation(status, backend):
+    block = status.get("block") or {}
+    if block.get("kind") == "kasada_kpsdk":
+        if backend.get("kind") in {"lightpanda", "headless_chrome"}:
+            return "Seed or fetch this domain with a persistent headful Chrome profile; this backend received a Kasada/KPSDK shell."
+        return "Use a persistent browser profile that can pass the Kasada/KPSDK challenge, then reuse browser-session HTTP."
+    if status.get("ok"):
+        return "Backend served useful content."
+    return "Inspect the page status and consider a persistent headful profile if the target serves challenge pages."
+
+def diagnose_url_capability(url, min_text=500, timeout=20.0, close=True):
+    """Navigate to `url` and report backend capability/content status."""
+    tid = None
+    try:
+        tid = new_tab(url)
+        wait_for_load(timeout=timeout)
+        status = wait_for_content(min_text=min_text, timeout=timeout)
+        backend = browser_backend_info()
+        return {
+            "ok": status.get("ok", False),
+            "reason": status.get("reason"),
+            "url": status.get("url"),
+            "title": status.get("title"),
+            "textLength": status.get("textLength"),
+            "htmlLength": status.get("htmlLength"),
+            "block": status.get("block"),
+            "backend": backend,
+            "recommendation": _backend_recommendation(status, backend),
+        }
+    finally:
+        if close and tid:
+            close_tab(tid)
 
 def _extract_json_assignment(html, name):
     marker = f"window.{name}="
