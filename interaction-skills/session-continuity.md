@@ -8,6 +8,12 @@ client that can send methods and can create redacted session manifests, build
 same-domain browser-session HTTP headers, and open a login page while waiting for
 the user to complete credentials/MFA manually.
 
+When the user explicitly wants to avoid logging in again, create a separate
+private auth-state bundle with `login_session.session_state(...)`. That bundle
+contains raw cookie/storage values and belongs only in an ignored private path
+such as `.private-data/`. The redacted `.session-store/` manifest should point to
+the private bundle and record verification receipts, but must not copy secrets.
+
 ## What belongs here
 
 Generalizable:
@@ -35,6 +41,10 @@ Site-specific details belong in `domain-skills/<site>/`:
 - Store only redacted metadata and capability receipts in the repository.
 - If raw cookie export is explicitly requested, write it outside the repo or to
   an encrypted local store; record only a redacted manifest.
+- If restorable auth state is explicitly requested, store the raw bundle under
+  an ignored private path with restrictive permissions, and verify restore in a
+  separate browser profile/process. Opening a new tab in the same logged-in
+  browser profile is not a valid restore test.
 
 ## Ignored local stores
 
@@ -48,6 +58,9 @@ domain-skills/<site>/.private-data/
 Use `.session-store/` for local continuity manifests and capability receipts.
 Use `.private-data/` only for temporary local private files the user explicitly
 wants kept outside git.
+
+Restorable auth bundles go under `.private-data/auth-state/` by default because
+they contain live session secrets.
 
 Recommended layout:
 
@@ -124,6 +137,21 @@ prompt_user_login(cdp_client, "https://example.com/login", success_url_contains=
 manifest = session_manifest(cdp_client, "https://example.com/account", site="example")
 print(manifest["cookie_names"])
 ```
+
+Private auth-state example:
+
+```python
+from login_session import session_state, restore_session_state
+
+state = session_state(cdp_client, "https://example.com/account", site="example")
+# Write state to an ignored private file with mode 0600.
+# In a fresh browser profile, navigate to the origin, then restore:
+restore_session_state(cdp_client, state, include_session_storage=True)
+```
+
+Restore verification must use a fresh browser profile or separate browser
+process. Same-profile tabs reuse the already-authenticated browser store and do
+not prove that the saved state is sufficient.
 
 ## Lightweight backend rule
 

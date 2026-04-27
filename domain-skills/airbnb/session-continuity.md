@@ -19,6 +19,13 @@ Use `.session-store/` for Airbnb continuity manifests and capability receipts.
 Use `.private-data/` only for temporary Airbnb exports the user explicitly wants
 kept outside git, such as downloaded CSV/PDF/JSON reports during a task.
 
+If the user explicitly wants to avoid logging in again from another browser
+session, store the raw restorable auth bundle under
+`.private-data/auth-state/`. This bundle contains live cookie/storage values and
+must stay ignored, local, and permission-restricted. The `.session-store/`
+manifest should only reference that private bundle and record verification
+receipts.
+
 Recommended layout:
 
 ```text
@@ -85,6 +92,9 @@ For each Airbnb source, save a compact receipt:
 5. Record cookie names/domains and source capability, not cookie values.
 6. Use `fetch_with_browser_session()` only for same-domain authenticated fetches
    after the profile has loaded useful private content.
+7. If a private restorable auth bundle is required, export it with
+   `login_session.session_state(...)` into `.private-data/auth-state/` and verify
+   it in a separate fresh browser profile/process.
 
 Example:
 
@@ -120,6 +130,9 @@ Use the least sensitive page that proves the needed source is reachable.
 
 - Reuse a profile label instead of rediscovering auth state each time.
 - Recheck private session capability before collecting data.
+- Do not treat a new tab in the same logged-in Chrome profile as a restore test.
+  Verify restorable auth state by importing it into a separate fresh browser
+  profile/process and loading authenticated host resources.
 - If a private capture fails, distinguish expired auth, MFA, source layout
   change, backend limitation, and parser failure.
 - Delete temporary exports from `.private-data/` after the user no longer needs

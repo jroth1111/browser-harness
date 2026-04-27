@@ -100,6 +100,81 @@ def test_session_manifest_redacts_cookie_and_storage_values():
     assert "secret" not in repr(manifest)
 
 
+def test_session_manifest_redacts_identifiers_from_storage_key_names():
+    def client(method, **params):
+        if method == "Network.getCookies":
+            return {"cookies": []}
+        if method == "Runtime.evaluate":
+            return {"result": {"value": {
+                "url": "https://www.example.com/account",
+                "origin": "https://www.example.com",
+                "localStorageKeys": [
+                    "/v2/get-data-layer-variables/-userId-117563320-bevId-1777262403-EAZmVkYjhlMjgzZG-listingId-1603434441736660031-",
+                    "tab-tracking-v2-tabTimestamp-1baecc2d-a158-4d95-9daf-2d6e1c640211",
+                ],
+                "sessionStorageKeys": ["reservationId=ABC123456789"],
+            }}}
+        raise AssertionError(method)
+
+    manifest = login_session.session_manifest(client, "https://www.example.com/account")
+
+    rendered = repr(manifest)
+    assert "117563320" not in rendered
+    assert "1777262403" not in rendered
+    assert "EAZmVkYjhlMjgzZG" not in rendered
+    assert "1603434441736660031" not in rendered
+    assert "1baecc2d-a158-4d95-9daf-2d6e1c640211" not in rendered
+    assert "ABC123456789" not in rendered
+    assert "/v2/get-data-layer-variables/-userId-<redacted>-bevId-<redacted>-listingId-<redacted>" in rendered
+    assert "tab-tracking-v2-tabTimestamp-<uuid>" in rendered
+    assert "reservationId=<redacted>" in rendered
+
+
+def test_session_state_keeps_values_for_private_restore_bundle():
+    def client(method, **params):
+        if method == "Network.getCookies":
+            return {"cookies": [
+                {"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True},
+            ]}
+        if method == "Runtime.evaluate":
+            return {"result": {"value": {
+                "url": "https://www.example.com/account",
+                "origin": "https://www.example.com",
+                "localStorage": {"token": "local-secret"},
+                "sessionStorage": {"state": "session-secret"},
+            }}}
+        raise AssertionError(method)
+
+    state = login_session.session_state(client, "https://www.example.com/account", site="example")
+
+    assert state["cookies"][0]["value"] == "secret"
+    assert state["origins"][0]["localStorage"]["token"] == "local-secret"
+    assert state["origins"][0]["sessionStorage"]["state"] == "session-secret"
+
+
+def test_cookie_param_keeps_restorable_fields_only():
+    cookie = {
+        "name": "sid",
+        "value": "secret",
+        "domain": ".example.com",
+        "path": "/",
+        "secure": True,
+        "httpOnly": True,
+        "expires": -1,
+        "size": 99,
+        "session": True,
+    }
+
+    assert login_session.cookie_param(cookie) == {
+        "name": "sid",
+        "value": "secret",
+        "domain": ".example.com",
+        "path": "/",
+        "secure": True,
+        "httpOnly": True,
+    }
+
+
 def test_http_get_with_login_session_captures_http_error_body():
     html = "<html>blocked</html>"
     err = urllib.error.HTTPError(

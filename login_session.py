@@ -13,10 +13,48 @@ helpers that work with any CDP client shaped as:
 """
 import gzip
 import inspect
+import json
+import re
 import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
+
+
+_SENSITIVE_STORAGE_LABELS = (
+    "accountId",
+    "bevId",
+    "confirmationCode",
+    "guestId",
+    "hostId",
+    "listingId",
+    "profileId",
+    "reservationId",
+    "userId",
+)
+_STORAGE_BOUNDARY_LABELS = _SENSITIVE_STORAGE_LABELS + ("userDataFields",)
+_SENSITIVE_STORAGE_SEGMENT = re.compile(
+    rf"(?i)([-_/?:&=]?(?:{'|'.join(_SENSITIVE_STORAGE_LABELS)})[-_=])"
+    rf"(.+?)(?=(?:[-_/?:&=](?:{'|'.join(_STORAGE_BOUNDARY_LABELS)})[-_=])|[/&?]|$)"
+)
+_UUIDISH = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
+_LONG_NUMBER = re.compile(r"\d{5,}")
+_COOKIE_PARAM_FIELDS = {
+    "name",
+    "value",
+    "url",
+    "domain",
+    "path",
+    "secure",
+    "httpOnly",
+    "sameSite",
+    "expires",
+    "priority",
+    "sameParty",
+    "sourceScheme",
+    "sourcePort",
+    "partitionKey",
+}
 
 
 def _signature(fn):
@@ -160,6 +198,44 @@ def storage_key_snapshot(client, session_id=None):
     }
 
 
+def storage_value_snapshot(client, session_id=None):
+    """Return local/session storage keys and values for private auth export."""
+    return runtime_value(client, """(() => {
+  const dump = (store) => {
+    const out = {};
+    try {
+      for (let i = 0; store && i < store.length; i++) {
+        const key = store.key(i);
+        if (key) out[key] = store.getItem(key);
+      }
+    } catch (e) {}
+    return out;
+  };
+  return {
+    url: location.href,
+    origin: location.origin,
+    localStorage: dump(window.localStorage),
+    sessionStorage: dump(window.sessionStorage)
+  };
+})()""", session_id=session_id) or {
+        "url": "",
+        "origin": "",
+        "localStorage": {},
+        "sessionStorage": {},
+    }
+
+
+def redact_storage_key(key):
+    """Redact private identifiers from storage key names before persistence."""
+    redacted = _SENSITIVE_STORAGE_SEGMENT.sub(lambda match: f"{match.group(1)}<redacted>", str(key))
+    redacted = _UUIDISH.sub("<uuid>", redacted)
+    return _LONG_NUMBER.sub("<num>", redacted)
+
+
+def redacted_storage_keys(keys):
+    return sorted({redact_storage_key(key) for key in (keys or []) if key})
+
+
 def session_manifest(client, urls, site=None, profile_label=None, account_label=None, backend=None, session_id=None):
     """Create a redacted login/session manifest.
 
@@ -179,12 +255,92 @@ def session_manifest(client, urls, site=None, profile_label=None, account_label=
         "logged_in_observed": bool(cookie_names),
         "cookie_names": cookie_names,
         "cookie_domains": cookie_domains,
-        "local_storage_keys": sorted(storage.get("localStorageKeys") or []),
-        "session_storage_keys": sorted(storage.get("sessionStorageKeys") or []),
+        "local_storage_keys": redacted_storage_keys(storage.get("localStorageKeys")),
+        "session_storage_keys": redacted_storage_keys(storage.get("sessionStorageKeys")),
         "current_url": storage.get("url", ""),
         "origin": storage.get("origin", ""),
         "observed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+
+
+def session_state(client, urls, site=None, profile_label=None, account_label=None, backend=None, session_id=None):
+    """Create a private restorable auth state.
+
+    This includes cookie and storage values. Store only in an ignored/private
+    local path with restrictive file permissions.
+    """
+    urls = [urls] if isinstance(urls, str) else list(urls)
+    storage = storage_value_snapshot(client, session_id=session_id)
+    return {
+        "state_format": "browser-harness.login_session.v1",
+        "site": site,
+        "profile_label": profile_label,
+        "account_label": account_label,
+        "browser_backend": backend,
+        "urls": urls,
+        "cookies": browser_cookies(client, urls),
+        "origins": [{
+            "origin": storage.get("origin", ""),
+            "url": storage.get("url", ""),
+            "localStorage": storage.get("localStorage") or {},
+            "sessionStorage": storage.get("sessionStorage") or {},
+        }],
+        "observed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+
+def cookie_param(cookie):
+    out = {key: cookie[key] for key in _COOKIE_PARAM_FIELDS if key in cookie and cookie[key] is not None}
+    if out.get("expires", 0) < 0:
+        out.pop("expires", None)
+    return out
+
+
+def restore_cookies(client, cookies, session_id=None):
+    params = [cookie_param(cookie) for cookie in cookies if cookie.get("name") and cookie.get("value") is not None]
+    if not params:
+        return {"restored": 0}
+    send_cdp(client, "Network.setCookies", {"cookies": params}, session_id=session_id)
+    return {"restored": len(params)}
+
+
+def restore_origin_storage(client, origin_state, include_session_storage=False, session_id=None):
+    payload = {
+        "localStorage": origin_state.get("localStorage") or {},
+        "sessionStorage": origin_state.get("sessionStorage") or {},
+        "includeSessionStorage": bool(include_session_storage),
+    }
+    return runtime_value(client, f"""(() => {{
+  const state = {json.dumps(payload)};
+  const restore = (store, values) => {{
+    let count = 0;
+    for (const [key, value] of Object.entries(values || {{}})) {{
+      store.setItem(key, value == null ? "" : String(value));
+      count++;
+    }}
+    return count;
+  }};
+  return {{
+    origin: location.origin,
+    localStorageRestored: restore(window.localStorage, state.localStorage),
+    sessionStorageRestored: state.includeSessionStorage ? restore(window.sessionStorage, state.sessionStorage) : 0
+  }};
+}})()""", session_id=session_id)
+
+
+def restore_session_state(client, state, include_session_storage=False, session_id=None):
+    cookie_result = restore_cookies(client, state.get("cookies") or [], session_id=session_id)
+    storage_results = []
+    current_origin = runtime_value(client, "location.origin", session_id=session_id)
+    for origin_state in state.get("origins") or []:
+        if origin_state.get("origin") == current_origin:
+            storage_results.append(restore_origin_storage(
+                client,
+                origin_state,
+                include_session_storage=include_session_storage,
+                session_id=session_id,
+            ))
+    return {"cookies": cookie_result, "storage": storage_results}
 
 
 def browser_session_headers(client, url, headers=None, cookie_urls=None, cookies=None, session_id=None):
