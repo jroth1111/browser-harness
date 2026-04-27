@@ -7,6 +7,10 @@ General source-exploration rules live in
 `interaction-skills/data-source-exploration.md`. This file keeps the
 Airbnb-specific source families, examples, and acceptance notes.
 
+For market, competitor, or own-listing current-state capture, use
+`workflows-current-state.md` after this discovery protocol identifies which
+sources and backends are available.
+
 ## Goal
 
 Build a complete inventory of public, authenticated, exportable, and manual data

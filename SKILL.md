@@ -32,6 +32,7 @@ Available domain skills:
 - airbnb/overview.md
 - airbnb/enhancement-roadmap.md
 - airbnb/exploration-protocol.md
+- airbnb/workflows-current-state.md
 - airbnb/data-inventory.md
 - airbnb/session-continuity.md
 - airbnb/host-sources.md

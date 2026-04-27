@@ -23,6 +23,21 @@ Each primitive should carry:
 - privacy class
 - target schema
 
+For current-state work, every primitive should also carry `state_run_id` when it
+belongs to a market, competitor, or own-listing state run from
+`workflows-current-state.md`.
+
+## Current-state primitive groups
+
+| State group | Primitive families | Auth posture | Target files |
+|---|---|---|---|
+| Market demand state | events, holidays, weather, transport, regulation/supply signals | Public/external | `schema-demand-context.md` |
+| Competitor market state | public search runs, search cards, comp prices, comp availability | Logged out | `schema-public-market.md` |
+| Competitor listing state | comp amenities, rules, reviews, badges, hero subjects, rating/review count | Logged out | `schema-public-market.md` |
+| Own guest-visible state | own public rank, price, availability, badges, rules, amenities, review themes | Logged out | `public-market.md`, `schema-core.md` |
+| Own private host state | calendar, reservations, economics, pricing, rules, Insights, quality | Logged in only when needed | `host-sources.md`, schema files |
+| Listing-date state | combined date-level state, pace gap, comp index, restriction choke, quality risk | Mixed from source primitives | `analytics-alerts.md`, `decisioning.md` |
+
 ## Public Airbnb primitives
 
 | Primitive family | Examples | Capture method | Backend |

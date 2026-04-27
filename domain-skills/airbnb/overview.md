@@ -14,6 +14,7 @@ Read the smallest file that matches the job:
 | `overview.md` | Routing, objectives, principles, source ladder, build order |
 | `enhancement-roadmap.md` | Enhancement backlog and priority sequence |
 | `exploration-protocol.md` | Discovery-first process for public, private, Lightpanda, and headful sources |
+| `workflows-current-state.md` | Sensing workflows for market, competitor, and own-listing current state |
 | `data-inventory.md` | Public/private data primitive catalog and source matrix |
 | `session-continuity.md` | Auth/session continuity, cookie safety, local ignored session store |
 | `host-sources.md` | Authenticated host collection workflows and refresh cadence |
@@ -30,17 +31,22 @@ Read the smallest file that matches the job:
 
 This split follows the data lifecycle:
 
-1. Collect host-account data.
-2. Collect public market data.
-3. Enrich with demand context and internal finance data.
-4. Store observations in data-family schemas.
-5. Derive metrics, alerts, and host actions.
-6. Track recommendations, experiments, and outcomes.
+1. Define a current-state run with dates, guests, stay lengths, market, backend,
+   and logged-in state.
+2. Collect public market and competitor data logged out by default.
+3. Collect own-listing guest-visible state logged out.
+4. Collect private host-only state logged in only when needed.
+5. Enrich with demand context and internal finance data.
+6. Store observations in data-family schemas.
+7. Derive metrics, alerts, and host actions.
+8. Track recommendations, experiments, and outcomes.
 
 When starting a new Airbnb host engagement, read `exploration-protocol.md`
-before assuming the available sources are known. Treat every Airbnb source as a
-primitive that can be composed later for pricing, operations, quality, or
-portfolio decisions.
+before assuming the available sources are known. For any task about the current
+state of the market, competitors, or the host's own listings, run
+`workflows-current-state.md` before making pricing or restriction
+recommendations. Treat every Airbnb source as a primitive that can be composed
+later for pricing, operations, quality, or portfolio decisions.
 
 For generalizable mechanics, read `interaction-skills/data-source-exploration.md`
 and `interaction-skills/session-continuity.md`. Airbnb files should contain

@@ -66,6 +66,29 @@ Use this file after collecting host/account data and public market data.
 
 ## Analysis playbooks
 
+### Current-state sensing
+
+Question: What is true right now about the market, competitors, and my own
+listings?
+
+Required workflow:
+
+- Run `workflows-current-state.md`.
+- Capture market demand state before interpreting competitor prices.
+- Capture public competitor and own-listing guest-visible state logged out.
+- Capture private host-only calendar, pricing, reservation, Insights, and
+  quality state logged in only when needed.
+- Assemble listing-date state rows before creating recommendations.
+
+Checks:
+
+- public comp context uses exact dates, nights, guests, filters, currency,
+  device, map boundary, and logged-in flag
+- own listing public state and competitor state use matching search contexts
+- private host state has current calendar, price, rule, and Insights snapshots
+- demand-context flags explain high or low comp pressure
+- each bottleneck tag has evidence references
+
 ### Revenue management
 
 Question: Am I pricing correctly by date, demand window, stay length, and guest
