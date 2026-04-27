@@ -69,6 +69,65 @@ def test_cookie_header_filters_cookie_scope():
     assert login_session.cookie_header(None, "https://www.example.com/page", cookies=cookies) == "sid=abc"
 
 
+def test_browser_cookies_uses_page_session_when_provided():
+    calls = []
+
+    def client(method, session_id=None, **params):
+        calls.append((method, params, session_id))
+        if method == "Network.getCookies":
+            return {"cookies": []}
+        raise AssertionError(method)
+
+    assert login_session.browser_cookies(client, "https://www.example.com/", session_id="page-session") == []
+    assert calls == [("Network.getCookies", {"urls": ["https://www.example.com/"]}, "page-session")]
+
+
+def test_browser_cookies_falls_back_to_browser_level_storage_cookies():
+    calls = []
+
+    def client(method, session_id=None, **params):
+        calls.append((method, params, session_id))
+        if method == "Network.getCookies":
+            raise RuntimeError("{'code': -32601, 'message': \"'Network.getCookies' wasn't found\"}")
+        if method == "Storage.getCookies":
+            return {"cookies": [
+                {"name": "sid", "value": "abc", "domain": ".example.com", "path": "/", "secure": True},
+                {"name": "other", "value": "bad", "domain": ".other.test", "path": "/", "secure": True},
+            ]}
+        raise AssertionError(method)
+
+    cookies = login_session.browser_cookies(client, "https://www.example.com/account")
+
+    assert [cookie["name"] for cookie in cookies] == ["sid"]
+    assert calls == [
+        ("Network.getCookies", {"urls": ["https://www.example.com/account"]}, None),
+        ("Storage.getCookies", {}, None),
+    ]
+
+
+def test_restore_cookies_falls_back_to_browser_level_storage_set_cookies():
+    calls = []
+
+    def client(method, session_id=None, **params):
+        calls.append((method, params, session_id))
+        if method == "Network.setCookies":
+            raise RuntimeError("{'code': -32601, 'message': \"'Network.setCookies' wasn't found\"}")
+        if method == "Storage.setCookies":
+            return {}
+        raise AssertionError(method)
+
+    result = login_session.restore_cookies(
+        client,
+        [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}],
+    )
+
+    assert result == {"restored": 1}
+    assert calls == [
+        ("Network.setCookies", {"cookies": [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}]}, None),
+        ("Storage.setCookies", {"cookies": [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}]}, None),
+    ]
+
+
 def test_session_manifest_redacts_cookie_and_storage_values():
     def client(method, **params):
         if method == "Network.getCookies":

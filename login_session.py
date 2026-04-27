@@ -57,6 +57,16 @@ _COOKIE_PARAM_FIELDS = {
 }
 
 
+def _cdp_method_missing_error(error):
+    rendered = repr(error).lower()
+    return (
+        "-32601" in rendered
+        or "methodnotfound" in rendered
+        or "method not found" in rendered
+        or "wasn't found" in rendered
+    )
+
+
 def _signature(fn):
     try:
         return inspect.signature(fn)
@@ -132,20 +142,37 @@ def cookie_matches_url(cookie, url):
     return request_path.startswith(path.rstrip("/") or "/")
 
 
-def browser_cookies(client, urls):
+def browser_cookies(client, urls, session_id=None):
     """Return cookies visible to the browser for `urls`.
 
     The returned values are sensitive. Callers should avoid printing or storing
     raw values.
     """
     urls = [urls] if isinstance(urls, str) else list(urls)
-    return send_cdp(client, "Network.getCookies", {"urls": urls}).get("cookies", [])
+    try:
+        return send_cdp(client, "Network.getCookies", {"urls": urls}, session_id=session_id).get("cookies", [])
+    except Exception as error:
+        if not _cdp_method_missing_error(error):
+            raise
+
+    try:
+        cookies = send_cdp(client, "Storage.getCookies", {}, session_id=session_id).get("cookies", [])
+    except Exception as error:
+        if not _cdp_method_missing_error(error):
+            raise
+        cookies = send_cdp(client, "Network.getAllCookies", {}, session_id=session_id).get("cookies", [])
+
+    return [
+        cookie
+        for cookie in cookies
+        if any(cookie_matches_url(cookie, url) for url in urls)
+    ]
 
 
-def cookie_header(client, url, cookie_urls=None, cookies=None):
+def cookie_header(client, url, cookie_urls=None, cookies=None, session_id=None):
     """Build a domain/path/secure-filtered Cookie header for `url`."""
     cookie_urls = [url] if cookie_urls is None else ([cookie_urls] if isinstance(cookie_urls, str) else list(cookie_urls))
-    source_cookies = browser_cookies(client, cookie_urls) if cookies is None else list(cookies)
+    source_cookies = browser_cookies(client, cookie_urls, session_id=session_id) if cookies is None else list(cookies)
     pairs = []
     seen = set()
     for cookie in source_cookies:
@@ -242,7 +269,7 @@ def session_manifest(client, urls, site=None, profile_label=None, account_label=
     Raw cookie and storage values are intentionally omitted.
     """
     urls = [urls] if isinstance(urls, str) else list(urls)
-    cookies = browser_cookies(client, urls)
+    cookies = browser_cookies(client, urls, session_id=session_id)
     storage = storage_key_snapshot(client, session_id=session_id)
     cookie_names = sorted({c.get("name", "") for c in cookies if c.get("name")})
     cookie_domains = sorted({c.get("domain", "") for c in cookies if c.get("domain")})
@@ -278,7 +305,7 @@ def session_state(client, urls, site=None, profile_label=None, account_label=Non
         "account_label": account_label,
         "browser_backend": backend,
         "urls": urls,
-        "cookies": browser_cookies(client, urls),
+        "cookies": browser_cookies(client, urls, session_id=session_id),
         "origins": [{
             "origin": storage.get("origin", ""),
             "url": storage.get("url", ""),
@@ -300,7 +327,12 @@ def restore_cookies(client, cookies, session_id=None):
     params = [cookie_param(cookie) for cookie in cookies if cookie.get("name") and cookie.get("value") is not None]
     if not params:
         return {"restored": 0}
-    send_cdp(client, "Network.setCookies", {"cookies": params}, session_id=session_id)
+    try:
+        send_cdp(client, "Network.setCookies", {"cookies": params}, session_id=session_id)
+    except Exception as error:
+        if not _cdp_method_missing_error(error):
+            raise
+        send_cdp(client, "Storage.setCookies", {"cookies": params}, session_id=session_id)
     return {"restored": len(params)}
 
 
@@ -460,7 +492,7 @@ def browser_session_headers(client, url, headers=None, cookie_urls=None, cookies
         "Accept-Language": "en-AU,en;q=0.9",
         "Accept-Encoding": "gzip",
     }
-    cookie = cookie_header(client, url, cookie_urls=cookie_urls, cookies=cookies)
+    cookie = cookie_header(client, url, cookie_urls=cookie_urls, cookies=cookies, session_id=session_id)
     if cookie:
         out["Cookie"] = cookie
     if headers:
