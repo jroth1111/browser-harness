@@ -1,8 +1,8 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
-import base64, gzip, json, os, socket, time, urllib.request
+import base64, json, os, socket, time, urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
-import urllib.error
+import login_session
 
 
 def _load_env():
@@ -172,22 +172,7 @@ def wait_for_content(min_text=200, timeout=15.0, poll=0.5):
     return {**last, "ok": False, "reason": "timeout"}
 
 def _cookie_matches_url(cookie, url):
-    parsed = urlparse(url)
-    host = (parsed.hostname or "").lower()
-    if not host:
-        return False
-    domain = (cookie.get("domain") or host).lower()
-    domain_base = domain.lstrip(".")
-    if domain.startswith("."):
-        if host != domain_base and not host.endswith(f".{domain_base}"):
-            return False
-    elif host != domain_base:
-        return False
-    if cookie.get("secure") and parsed.scheme != "https":
-        return False
-    path = cookie.get("path") or "/"
-    request_path = parsed.path or "/"
-    return request_path.startswith(path.rstrip("/") or "/")
+    return login_session.cookie_matches_url(cookie, url)
 
 def browser_cookies(urls):
     """Return cookies visible to the attached browser for `urls`.
@@ -195,54 +180,17 @@ def browser_cookies(urls):
     This explicitly queries browser session state through CDP. Do not print or
     commit the returned values.
     """
-    urls = [urls] if isinstance(urls, str) else list(urls)
-    return cdp("Network.getCookies", urls=urls).get("cookies", [])
+    return login_session.browser_cookies(cdp, urls)
 
 def browser_cookie_header(url, cookie_urls=None):
     """Cookie header for `url` from attached-browser cookies, domain-filtered."""
-    cookie_urls = [url] if cookie_urls is None else ([cookie_urls] if isinstance(cookie_urls, str) else list(cookie_urls))
-    pairs = []
-    seen = set()
-    for cookie in browser_cookies(cookie_urls):
-        name = cookie.get("name")
-        value = cookie.get("value")
-        if not name or value is None or not _cookie_matches_url(cookie, url):
-            continue
-        if name in seen:
-            continue
-        seen.add(name)
-        pairs.append(f"{name}={value}")
-    return "; ".join(pairs)
+    return login_session.cookie_header(cdp, url, cookie_urls=cookie_urls)
 
 def _origin_url(url):
-    parsed = urlparse(url)
-    if not parsed.scheme or not parsed.netloc:
-        return url
-    return f"{parsed.scheme}://{parsed.netloc}/"
+    return login_session.origin_url(url)
 
 def _browser_session_headers(url, headers=None, cookie_urls=None):
-    ua = js("navigator.userAgent")
-    h = {
-        "User-Agent": ua,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-AU,en;q=0.9",
-        "Accept-Encoding": "gzip",
-    }
-    cookie_header = browser_cookie_header(url, cookie_urls=cookie_urls)
-    if cookie_header:
-        h["Cookie"] = cookie_header
-    if headers:
-        h.update(headers)
-    return h
-
-def _read_http_text(response):
-    data = response.read()
-    if response.headers.get("Content-Encoding") == "gzip":
-        try:
-            data = gzip.decompress(data)
-        except (OSError, EOFError):
-            pass
-    return data.decode("utf-8", "replace")
+    return login_session.browser_session_headers(cdp, url, headers=headers, cookie_urls=cookie_urls)
 
 def http_get_browser_session_response(url, headers=None, cookie_urls=None, timeout=20.0):
     """HTTP GET result using the attached browser's UA and matching cookies.
@@ -251,31 +199,40 @@ def http_get_browser_session_response(url, headers=None, cookie_urls=None, timeo
     error bodies so callers can detect WAF/challenge pages instead of losing the
     response to an exception.
     """
-    h = _browser_session_headers(url, headers=headers, cookie_urls=cookie_urls)
-    req = urllib.request.Request(url, headers=h)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            text = _read_http_text(r)
-            status = getattr(r, "status", None) or (r.getcode() if hasattr(r, "getcode") else 200)
-            final_url = r.geturl() if hasattr(r, "geturl") else url
-            response_headers = dict(r.headers)
-    except urllib.error.HTTPError as e:
-        text = _read_http_text(e)
-        status = e.code
-        final_url = e.geturl()
-        response_headers = dict(e.headers)
+    return login_session.http_get_with_login_session(
+        cdp,
+        url,
+        headers=headers,
+        cookie_urls=cookie_urls,
+        timeout=timeout,
+        block_detector=detect_block_page,
+    )
 
-    block = detect_block_page(html=text, url=final_url)
-    http_ok = 200 <= int(status or 0) < 400
-    return {
-        "ok": http_ok and not block.get("blocked"),
-        "http_ok": http_ok,
-        "status": status,
-        "url": final_url,
-        "text": text,
-        "block": block,
-        "headers": response_headers,
-    }
+def login_session_manifest(urls, site=None, profile_label=None, account_label=None, backend=None):
+    """Redacted login/session manifest for the attached browser.
+
+    Contains cookie names/domains and storage keys, never raw cookie or storage
+    values. Use this to create local session continuity receipts.
+    """
+    return login_session.session_manifest(
+        cdp,
+        urls,
+        site=site,
+        profile_label=profile_label,
+        account_label=account_label,
+        backend=backend,
+    )
+
+def prompt_user_login(login_url, success_url_contains=None, min_text=200, timeout=180.0, poll=2.0):
+    """Open a login page and wait for the user to complete login manually."""
+    return login_session.prompt_user_login(
+        cdp,
+        login_url,
+        success_url_contains=success_url_contains,
+        min_text=min_text,
+        timeout=timeout,
+        poll=poll,
+    )
 
 def http_get_browser_session(url, headers=None, cookie_urls=None, timeout=20.0):
     """HTTP GET using the attached browser's user agent and matching cookies.

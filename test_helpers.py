@@ -3,6 +3,7 @@ import base64
 import gzip
 import io
 import json
+import urllib.error
 
 import helpers
 
@@ -521,7 +522,7 @@ def test_browser_cookie_header_filters_to_target_domain():
         {"name": "other", "value": "prop", "domain": ".property.com.au", "path": "/", "secure": True},
         {"name": "empty", "value": "", "domain": ".realestate.com.au", "path": "/", "secure": True},
     ]
-    with patch("helpers.browser_cookies", return_value=cookies):
+    with patch("helpers.login_session.browser_cookies", return_value=cookies):
         assert helpers.browser_cookie_header("https://www.realestate.com.au/property/1") == "KP_UIDz=rea; empty="
 
 
@@ -544,8 +545,8 @@ def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
         opened.append((req, timeout))
         return Response()
 
-    with patch("helpers.js", return_value="Browser UA"), \
-         patch("helpers.browser_cookie_header", return_value="KP_UIDz=rea"), \
+    with patch("login_session.browser_user_agent", return_value="Browser UA"), \
+         patch("login_session.cookie_header", return_value="KP_UIDz=rea"), \
          patch("urllib.request.urlopen", side_effect=fake_open):
         assert helpers.http_get_browser_session("https://www.realestate.com.au/property/1") == "<html>ok</html>"
 
@@ -555,9 +556,35 @@ def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
     assert req.headers["Cookie"] == "KP_UIDz=rea"
 
 
+def test_login_session_manifest_uses_redacted_generic_module():
+    with patch("helpers.login_session.session_manifest", return_value={"cookie_names": ["sid"]}) as manifest:
+        assert helpers.login_session_manifest("https://example.com", site="example") == {"cookie_names": ["sid"]}
+    manifest.assert_called_once_with(
+        helpers.cdp,
+        "https://example.com",
+        site="example",
+        profile_label=None,
+        account_label=None,
+        backend=None,
+    )
+
+
+def test_prompt_user_login_delegates_to_generic_module():
+    with patch("helpers.login_session.prompt_user_login", return_value={"ok": True}) as prompt:
+        assert helpers.prompt_user_login("https://example.com/login", success_url_contains="/account") == {"ok": True}
+    prompt.assert_called_once_with(
+        helpers.cdp,
+        "https://example.com/login",
+        success_url_contains="/account",
+        min_text=200,
+        timeout=180.0,
+        poll=2.0,
+    )
+
+
 def test_http_get_browser_session_response_captures_blocking_http_error():
     html = "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>"
-    err = helpers.urllib.error.HTTPError(
+    err = urllib.error.HTTPError(
         "https://www.realestate.com.au/property/1",
         429,
         "Too Many Requests",
@@ -565,8 +592,8 @@ def test_http_get_browser_session_response_captures_blocking_http_error():
         io.BytesIO(gzip.compress(html.encode())),
     )
 
-    with patch("helpers.js", return_value="Browser UA"), \
-         patch("helpers.browser_cookie_header", return_value="KP_UIDz=rea"), \
+    with patch("login_session.browser_user_agent", return_value="Browser UA"), \
+         patch("login_session.cookie_header", return_value="KP_UIDz=rea"), \
          patch("urllib.request.urlopen", side_effect=err):
         result = helpers.http_get_browser_session_response("https://www.realestate.com.au/property/1")
 

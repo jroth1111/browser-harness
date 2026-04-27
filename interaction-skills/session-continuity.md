@@ -3,6 +3,11 @@
 Use this for tasks that need authenticated browser continuity across agent
 sessions.
 
+For Python code, prefer the generic `login_session.py` module. It accepts any CDP
+client that can send methods and can create redacted session manifests, build
+same-domain browser-session HTTP headers, and open a login page while waiting for
+the user to complete credentials/MFA manually.
+
 ## What belongs here
 
 Generalizable:
@@ -109,6 +114,16 @@ Example shape:
 5. Record cookie names/domains and capability, not cookie values.
 6. Use `fetch_with_browser_session()` only for same-domain authenticated fetches
    after the profile has loaded useful private content.
+
+Generic module example:
+
+```python
+from login_session import prompt_user_login, session_manifest
+
+prompt_user_login(cdp_client, "https://example.com/login", success_url_contains="/account")
+manifest = session_manifest(cdp_client, "https://example.com/account", site="example")
+print(manifest["cookie_names"])
+```
 
 ## Lightweight backend rule
 
