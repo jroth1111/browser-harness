@@ -86,7 +86,7 @@ def page_info_js():
 # --- input ---
 _debug_click_counter = 0
 
-def click_at_xy(x, y, button="left", clicks=1):
+def click_at_xy(x, y, button="left", clicks=1, humanize=False, steps=12):
     if os.environ.get("BH_DEBUG_CLICKS"):
         global _debug_click_counter
         try:
@@ -105,11 +105,23 @@ def click_at_xy(x, y, button="left", clicks=1):
         except Exception as e:
             print(f"[debug_click] overlay failed: {e}")
         _debug_click_counter += 1
+    if humanize:
+        start_x = max(0, x - 40)
+        start_y = y
+        for i in range(1, max(2, steps) + 1):
+            t = i / max(2, steps)
+            eased = t * t * (3 - 2 * t)
+            cdp("Input.dispatchMouseEvent", type="mouseMoved", x=start_x + (x - start_x) * eased, y=start_y + (y - start_y) * eased)
     cdp("Input.dispatchMouseEvent", type="mousePressed", x=x, y=y, button=button, clickCount=clicks)
     cdp("Input.dispatchMouseEvent", type="mouseReleased", x=x, y=y, button=button, clickCount=clicks)
 
-def type_text(text):
-    cdp("Input.insertText", text=text)
+def type_text(text, delay=0):
+    if delay <= 0:
+        cdp("Input.insertText", text=text)
+        return
+    for ch in text:
+        cdp("Input.insertText", text=ch)
+        time.sleep(delay)
 
 _KEYS = {  # key → (windowsVirtualKeyCode, code, text)
     "Enter": (13, "Enter", "\r"), "Tab": (9, "Tab", "\t"), "Backspace": (8, "Backspace", ""),
@@ -253,6 +265,61 @@ def upload_file(selector, path):
     nid = cdp("DOM.querySelector", nodeId=doc["root"]["nodeId"], selector=selector)["nodeId"]
     if not nid: raise RuntimeError(f"no element for {selector}")
     cdp("DOM.setFileInputFiles", files=[path] if isinstance(path, str) else list(path), nodeId=nid)
+
+def _ax_value(field):
+    if isinstance(field, dict):
+        return field.get("value", "")
+    return field or ""
+
+def ax_snapshot(max_nodes=120):
+    """Explicit accessibility-tree snapshot. Not enabled or collected on attach."""
+    nodes = cdp("Accessibility.getFullAXTree").get("nodes", [])
+    out = []
+    for node in nodes[:max_nodes]:
+        role = _ax_value(node.get("role"))
+        name = _ax_value(node.get("name"))
+        value = _ax_value(node.get("value"))
+        if not role and not name and not value:
+            continue
+        out.append({
+            "ref": node.get("backendDOMNodeId") or node.get("nodeId"),
+            "role": role,
+            "name": name,
+            "value": value,
+        })
+    return out
+
+def capture_screenshot_trace(directory="/tmp/bh-trace", frames=3, interval=0.5, full=False):
+    """Opt-in screenshot timeline. Writes artifacts only when called."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i in range(frames):
+        path = directory / f"frame-{i:03d}.png"
+        paths.append(capture_screenshot(str(path), full=full))
+        if i != frames - 1:
+            time.sleep(interval)
+    return paths
+
+def discover_local_cdp_endpoints(ports=(9222, 3000, 5050), host="127.0.0.1", timeout=0.25):
+    """Probe loopback DevTools HTTP endpoints. Does not scan public networks."""
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        raise ValueError("local CDP discovery only supports loopback hosts")
+    found = []
+    for port in ports:
+        base = f"http://{host}:{int(port)}"
+        try:
+            with urllib.request.urlopen(f"{base}/json/version", timeout=timeout) as r:
+                data = json.loads(r.read().decode())
+        except Exception:
+            continue
+        found.append({
+            "http_base": base,
+            "webSocketDebuggerUrl": data.get("webSocketDebuggerUrl"),
+            "browser": data.get("Browser"),
+            "protocol_version": data.get("Protocol-Version"),
+        })
+    return found
 
 def http_get(url, headers=None, timeout=20.0):
     """Pure local HTTP -- no browser. Use for static pages / APIs. Wrap in ThreadPoolExecutor for bulk."""
