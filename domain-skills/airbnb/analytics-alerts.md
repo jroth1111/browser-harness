@@ -84,10 +84,14 @@ Checks:
 
 - public comp context uses exact dates, nights, guests, filters, currency,
   device, map boundary, and logged-in flag
+- public comp search has field-level evidence: valid cards or listing IDs plus
+  total-price evidence for the requested stay
 - own listing public state and competitor state use matching search contexts
 - private host state has current calendar, price, rule, and Insights snapshots
 - demand-context flags explain high or low comp pressure
 - each bottleneck tag has evidence references
+- backend parity is proven or the weaker backend has been rejected for that
+  source family
 
 ### Revenue management
 
@@ -109,6 +113,8 @@ Required data:
 Checks:
 
 - comp price index by date and stay length
+- no comp price index or price-risk alert is calculated from a run with zero
+  valid competitor cards or missing total prices
 - booking pace versus prior period or similar listings
 - underpriced peak dates below 85% of comp median
 - overpriced conversion risk above 125-130% of comp median with weak conversion

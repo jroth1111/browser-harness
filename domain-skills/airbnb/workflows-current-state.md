@@ -23,6 +23,12 @@ Use the least-privileged source that answers the question.
 Do not mix logged-out guest-market observations with logged-in personalized
 observations in the same comp set.
 
+Backend choice must be invisible in the final data model. Lightpanda, headful
+Chrome, and any other CDP client must populate the same canonical fields for the
+same source context. If a backend cannot produce the required fields, mark that
+backend/source pair as unsupported for the workflow and fall back; do not create
+a partial dataset that looks comparable.
+
 ## Workflow 0 - Define The State Run
 
 Create a state run before collecting data. This keeps every observation
@@ -134,6 +140,10 @@ Auth/backend:
 - Use fresh/headful Chrome logged out when Lightpanda misses visual/rank/price
   evidence.
 - Do not use the host auth bundle for normal comp work.
+- Require backend-invariant canonical output. A Lightpanda run and a headful
+  Chrome run for the same search context should produce matching result fields
+  after normalization. If they do not, keep the headful data for host
+  intelligence and store the Lightpanda result only as a capability receipt.
 
 Search matrix:
 
@@ -190,6 +200,29 @@ hero_photo_subject_tag
 obvious_differentiator_tags
 ```
 
+Field-level acceptance:
+
+- A public search run is usable for competitor state only when it has result-card
+  evidence, not merely page text.
+- For comp price intelligence, require listing URLs or stable listing IDs plus
+  visible total prices for the exact dates, guests, currency, and filters.
+- For rank/visibility intelligence, require stable card ordering or record that
+  rank is unavailable for the backend.
+- If `document.body.innerText` contains only the Airbnb no-JavaScript shell,
+  navigation/menu text, or a search form with no result cards, classify the
+  source as `backend_capability_failed`.
+- Do not calculate median comp price, comp price index, market compression, or
+  under/overpricing alerts from a search run with zero valid cards or zero
+  valid prices.
+
+Empirical backend rule:
+
+- On 2026-04-27, logged-out Lightpanda could load Airbnb Melbourne search pages
+  but produced zero `/rooms/` links and zero AUD total prices. Fresh logged-out
+  headful Chrome for the same search context produced hydrated result text,
+  room links, and total prices. For Airbnb public search/card extraction, use
+  Lightpanda only after it proves field-level parity with headful Chrome.
+
 Competitor inclusion rules:
 
 - Same property type or defensible substitute.
@@ -213,7 +246,11 @@ Outputs:
 
 Goal: understand why competitors can charge more, rank better, or convert better.
 
-For each selected comp listing, open the public listing page logged out.
+For each selected comp listing, open the public listing page logged out. The
+selected comp list may come from Workflow 2, a host-curated comp URL list,
+Google or search-engine discovery, or Airbnb listing URLs found in prior
+headful public searches. Do not make Workflow 3 depend exclusively on
+Lightpanda search-result links.
 
 Capture:
 
@@ -247,6 +284,18 @@ review_theme_negative_tags
 observed_at
 ```
 
+Field-level acceptance:
+
+- A listing snapshot is usable only when it captures at least the room/listing
+  ID, title or location label, capacity/property facts, rating or review count
+  where visible, and amenity/content signals relevant to the comp decision.
+- If a backend returns only the Airbnb no-JavaScript shell or a skeletal listing
+  title without property facts, treat it as a backend capability failure for the
+  listing snapshot and retry in logged-out headful Chrome.
+- Listing-page price widgets are not enough for comp pricing unless they render
+  a total guest price for the exact dates and guests. Prefer Workflow 2 search
+  totals for the price matrix.
+
 Review and content tags:
 
 - cleanliness praise or complaint
@@ -278,6 +327,14 @@ Auth/backend:
 - Logged out for public search and public listing pages.
 - Same search contexts as competitor Workflow 2.
 - Logged in only for private editor fields that are not guest-visible.
+- Requires either host-provided public listing URLs or a reliable
+  private-host-to-public listing mapping. If neither exists, emit
+  `own_listing_public_url_missing` and do not infer guest-visible state from
+  host-only pages.
+- Empirical note from 2026-04-27: restored Lightpanda auth loaded
+  `/hosting/listings`, but that page exposed zero `/rooms/` links. Do not assume
+  the host listings overview provides a public URL mapping; verify the mapping
+  field before running own-listing public capture.
 
 Capture guest-visible state:
 
@@ -511,6 +568,19 @@ Output:
 - evidence references
 - recommendation candidates for `decisioning.md`
 
+Partial-state rule:
+
+- If comp median price is missing, mark price-index fields as `unknown` and
+  suppress underpriced/overpriced recommendations.
+- If own public listing state is missing, tag `own_listing_public_url_missing`
+  and suppress search-card and guest-visible listing-page conclusions.
+- If private host state is available but public market state failed, the system
+  can still report calendar, reservation, pricing-setting, and Insights state,
+  but must label market-relative conclusions as evidence gaps.
+- A listing-date state row may exist as a diagnostic shell, but it is not a
+  pricing recommendation input until the required public, private, and demand
+  evidence for that decision has passed field-level validation.
+
 ## Workflow 7 - Cadence
 
 Event-driven loop:
@@ -539,6 +609,9 @@ Monthly learning loop:
 - Run: outcome attribution, pace curve updates, comp-set weights, elasticity
   estimates, conversion/quality trends.
 - Output: model calibration notes and changed guardrail recommendations.
+- Requires prior recommendation/action history and booking outcomes. A one-off
+  current-state run can prepare the tables but cannot validate elasticity or
+  recommendation accuracy.
 
 Post-stay reputation loop:
 
@@ -560,6 +633,11 @@ Before using current-state data for recommendations:
 - Calendar state is a snapshot, not an overwritten latest-only value.
 - Demand-context sources are cited and confidence-scored.
 - Every derived bottleneck has source evidence, not just an inference.
+- Backend parity is proven for any backend-specific extraction path, or the
+  non-parity is recorded and the workflow falls back to a backend that produces
+  the canonical fields.
+- Page-level success is not enough. Each source must pass field-level acceptance
+  for the specific workflow output it feeds.
 
 ## Deliverables
 

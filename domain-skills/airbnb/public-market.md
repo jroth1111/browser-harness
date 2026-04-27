@@ -16,6 +16,11 @@ read `schema-public-market.md`. For decisions and alerts, read
   observations unless the explicit task is to compare logged-in personalization.
 - Use Lightpanda first for public pages only after `diagnose_url_capability()`
   proves the expected text and fields are present.
+- The public market output schema is backend-invariant. Lightpanda and headful
+  Chrome must produce the same canonical search/listing records after
+  normalization for the same context. If Lightpanda cannot produce those fields,
+  use a fresh logged-out headful Chrome profile and keep the Lightpanda output
+  only as a capability receipt.
 - Search result pages expose the most reliable price data. Listing pages often show `loading` in the booking widget even when dates and guests are provided.
 - `document.body.innerText` is enough to extract listing title, property type, capacity, bedrooms, beds, baths, rating, reviews, host, amenities, house rules, and visible location text.
 - For revenue comps, scrape search result totals for a fixed stay length and guest count, then normalize to nightly guest-facing gross.
@@ -102,6 +107,16 @@ search_run = {
 Reject or quarantine a public search run if the browser/session was logged in
 and the task did not explicitly request a logged-in public comparison.
 
+Reject or quarantine a public search run if it lacks field-level evidence. A
+loaded Airbnb page title, search form, navigation links, or no-JavaScript alert
+is not a valid comp source. For a price/rank search run, require:
+
+- result cards or `/rooms/` links
+- total-price strings for the requested dates and guests
+- enough visible card text to associate title/location/property facts with
+  price and rank
+- the exact search context that produced the card set
+
 The search card fields to preserve are:
 
 | Field | Why |
@@ -158,7 +173,16 @@ For comp listing snapshots, add:
 - Listing pages may provide the exact building address in description text, but the map section still says exact location is provided after booking.
 - Search result totals exclude taxes. They are guest-facing gross before tax, not platform-adjusted host payout and not net income.
 - A minimum-bedroom search can still include non-target locations. Filter by title, suburb, property type, bedroom/bath count, and whether the listing text mentions the building/address.
-- Lightpanda nightly `1.0.0-nightly.5816+a578f4d6` can extract Airbnb listing and search-result text as of 2026-04-27. Pages include a visible no-JavaScript warning in `innerText`, but the useful static content still appears.
+- Lightpanda can load Airbnb pages but may stop at generic no-JavaScript shell
+  content. On 2026-04-27, logged-out Lightpanda loaded Melbourne search pages
+  with title and about 1,189 characters of text, but produced zero room links
+  and zero AUD total prices. Fresh logged-out headful Chrome for the same search
+  exposed hydrated result cards, room links, and total prices. Treat this as a
+  backend capability failure for public comp search, not as usable low-confidence
+  market data.
+- Direct listing pages in Lightpanda may expose a title and room links but still
+  miss capacity, reviews, amenities, and date-specific price evidence. Require
+  listing-snapshot field evidence before using Lightpanda for Workflow 3.
 - If headless or Lightpanda produces a loaded-but-empty page, run
   `diagnose_url_capability(url)` before debugging selectors.
 - Authenticated host pages should not be scraped with public assumptions. Use a

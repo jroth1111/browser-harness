@@ -3,6 +3,61 @@ from unittest.mock import MagicMock, patch
 import lightpanda_control
 
 
+def test_evaluate_field_contract_requires_page_text_and_named_fields():
+    class Client:
+        def __init__(self):
+            self.calls = []
+
+        def send_raw(self, method, params, session_id=None):
+            self.calls.append((method, params, session_id))
+            expression = params["expression"]
+            if "textLength" in expression:
+                return {"result": {"value": {
+                    "url": "https://www.airbnb.com.au/s/Melbourne/homes",
+                    "title": "Airbnb",
+                    "textLength": 1189,
+                    "linkCount": 50,
+                }}}
+            if "rooms" in expression:
+                return {"result": {"value": False}}
+            if "AUD" in expression:
+                return {"result": {"value": True}}
+            return {"result": {"value": None}}
+
+    result = lightpanda_control.evaluate_field_contract(
+        Client(),
+        {
+            "room_links": 'Array.from(document.querySelectorAll("a[href]")).some(a => /rooms/.test(a.href))',
+            "aud_prices": '/AUD/.test(document.body.innerText)',
+        },
+        min_text=1500,
+        session_id="SID-1",
+    )
+
+    assert result["ok"] is False
+    assert result["passed"] == {"room_links": False, "aud_prices": True}
+    assert result["missing"] == ["min_text", "room_links"]
+
+
+def test_wait_for_field_contract_polls_until_fields_present():
+    results = [
+        {"ok": False, "missing": ["room_links"]},
+        {"ok": True, "missing": []},
+    ]
+
+    with patch("lightpanda_control.evaluate_field_contract", side_effect=results) as evaluate:
+        result = lightpanda_control.wait_for_field_contract(
+            object(),
+            {"room_links": "true"},
+            timeout=1.0,
+            poll=0.0,
+        )
+
+    assert result["ok"] is True
+    assert result["reason"] == "fields_present"
+    assert evaluate.call_count == 2
+
+
 def test_lightpanda_cdp_routes_browser_and_page_scoped_methods():
     client = lightpanda_control.LightpandaCDP.__new__(lightpanda_control.LightpandaCDP)
     client.page_session_id = "SID-1"

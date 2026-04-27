@@ -9,6 +9,12 @@ traceable back to source observations, timestamps, confidence, and evidence.
 - Every derived field can be traced to source fields.
 - Every alert has enough evidence to review or suppress it.
 - Missing data is explicit; never silently treat missing as zero.
+- Backend choice does not change the canonical records. If Lightpanda and
+  headful Chrome produce different required fields for the same source context,
+  the weaker backend result is a capability failure, not an alternate dataset.
+- Page-level success is separate from field-level success. A loaded title,
+  non-empty `innerText`, or HTTP/UI success does not validate a source unless the
+  fields required by the downstream table are present.
 - Sensitive guest data is minimized, purpose-limited, and not copied into public
   skill files, logs, or screenshots.
 
@@ -101,11 +107,20 @@ Fields:
 | `medium` | Visible UI text or public listing text with clear labels |
 | `low` | Inferred from partial text, screenshots, or ambiguous card ordering |
 | `blocked` | Source unavailable, login required, challenge page, or incomplete load |
+| `backend_capability_failed` | Backend loaded a page but did not expose required fields that another supported backend exposes |
 
 ## Validation rules
 
 - Guest-facing total price must have dates, nights, guest count, currency, and
   source context.
+- Public search/card observations must contain result-card evidence. For comp
+  price runs, require room/listing identity plus total-price evidence; do not
+  use page text length alone.
+- Public comp price matrices with zero valid cards or zero valid prices are
+  evidence gaps, not market signals.
+- Backend parity must be sampled for new public URL families. If Lightpanda
+  lacks fields that logged-out headful Chrome exposes for the same context, use
+  headful Chrome for host intelligence and record the Lightpanda limitation.
 - Host payout must reconcile to an earnings report or reservation payout view.
 - Calendar date statuses must be one of available, booked, blocked, unavailable,
   or unknown.

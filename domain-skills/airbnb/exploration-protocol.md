@@ -157,6 +157,13 @@ Use `data-inventory.md` as the canonical registry.
 
 ## Airbnb Lightpanda acceptance criteria
 
+Backend choice must not change the canonical data. For the same source URL,
+auth state, date range, guests, filters, device, currency, and observation
+window, Lightpanda and headful Chrome should produce equivalent records after
+normalization. Equivalent does not mean byte-identical DOM; it means the same
+required fields, ordering semantics, prices, listing IDs, availability signals,
+and quality/confidence classification.
+
 Lightpanda is acceptable for a source only when:
 
 - `diagnose_url_capability()` returns `ok == True`.
@@ -165,8 +172,30 @@ Lightpanda is acceptable for a source only when:
 - no login, MFA, file download, or visual confirmation is required.
 - sampled output matches a headful Chrome capture for the same URL context.
 
-If any criterion fails, use persistent headful Chrome for exploration and record
-the Lightpanda limitation.
+For public search pages, `ok == True` and non-empty text are not sufficient.
+The capability receipt must show field-level evidence:
+
+- at least one `/rooms/` listing URL when collecting competitors
+- visible total-price evidence for price-matrix runs
+- result-card ordering or an explicit reason rank is unavailable
+- no no-JavaScript shell as the only page body
+
+When testing Lightpanda directly, use `lightpanda_control.evaluate_field_contract`
+or `wait_for_field_contract` with Airbnb-specific checks for room links, AUD
+total prices, and result-card text. This makes the comparison with headful
+Chrome explicit and repeatable.
+
+Empirical note from 2026-04-27: logged-out Lightpanda loaded Airbnb Melbourne
+search pages with title and about 1,189 characters of generic text, but exposed
+zero room links and zero AUD total prices. The same logged-out search context in
+fresh headful Chrome exposed 24 room links, 32 total-price strings, and 8,218
+characters of hydrated result text. Treat that as a Lightpanda capability
+failure for public search/card extraction, not as a low-confidence comp run.
+
+If any criterion fails, use a fresh logged-out headful Chrome profile for public
+guest-market exploration and record the Lightpanda limitation. Do not emit a
+weaker Lightpanda-derived public comp dataset unless the user explicitly asks
+for a backend capability comparison rather than host intelligence.
 
 ## Airbnb private-session continuity
 

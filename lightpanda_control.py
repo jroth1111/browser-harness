@@ -18,6 +18,18 @@ from websockets.sync.client import connect
 
 
 _BROWSER_SCOPED_PREFIXES = ("Browser.", "Target.", "Storage.")
+_PAGE_EVIDENCE_JS = """(() => {
+  const text = document.body ? document.body.innerText : "";
+  const links = Array.from(document.querySelectorAll("a[href]"))
+    .map(a => a.href)
+    .filter(Boolean);
+  return {
+    url: location.href,
+    title: document.title,
+    textLength: text.length,
+    linkCount: links.length
+  };
+})()"""
 
 
 def free_port():
@@ -40,6 +52,53 @@ def wait_json_version(port, timeout=20.0):
             last_error = error
             time.sleep(0.2)
     raise RuntimeError(f"Lightpanda did not expose {url}: {last_error}")
+
+
+def runtime_value(client, expression, session_id=None):
+    result = client.send_raw(
+        "Runtime.evaluate",
+        {"expression": expression, "returnByValue": True, "awaitPromise": True},
+        session_id=session_id,
+    )
+    return result.get("result", {}).get("value")
+
+
+def evaluate_field_contract(client, checks, min_text=0, session_id=None):
+    """Return page evidence plus named field-check results.
+
+    `checks` maps stable field names to JavaScript expressions that evaluate in
+    the page context. A backend passes only when page text and every required
+    field expression are present. This keeps Lightpanda/headful comparison at
+    the canonical-field layer instead of accepting a merely loaded page.
+    """
+    page = runtime_value(client, _PAGE_EVIDENCE_JS, session_id=session_id) or {}
+    passed = {}
+    for name, expression in (checks or {}).items():
+        passed[name] = bool(runtime_value(
+            client,
+            f"(() => Boolean({expression}))()",
+            session_id=session_id,
+        ))
+    missing = [name for name, ok in passed.items() if not ok]
+    if int(page.get("textLength") or 0) < int(min_text or 0):
+        missing.insert(0, "min_text")
+    return {
+        "ok": not missing,
+        "page": page,
+        "passed": passed,
+        "missing": missing,
+    }
+
+
+def wait_for_field_contract(client, checks, min_text=0, timeout=30.0, poll=0.5, session_id=None):
+    deadline = time.time() + timeout
+    last = {}
+    while time.time() < deadline:
+        last = evaluate_field_contract(client, checks, min_text=min_text, session_id=session_id)
+        if last["ok"]:
+            return {**last, "reason": "fields_present"}
+        time.sleep(poll)
+    return {**last, "reason": "field_timeout"}
 
 
 class LightpandaCDP:
