@@ -75,6 +75,27 @@ def _is_loopback_host(host):
         return False
 
 
+def _is_unspecified_host(host):
+    if not host:
+        return False
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_unspecified
+    except ValueError:
+        return False
+
+
+def _merge_warnings(*warning_lists):
+    out = []
+    seen = set()
+    for warnings in warning_lists:
+        for warning in warnings:
+            if warning in seen:
+                continue
+            seen.add(warning)
+            out.append(warning)
+    return out
+
+
 def _redact_url(url):
     parsed = urlparse(url)
     if not parsed.username and not parsed.password:
@@ -91,14 +112,14 @@ def _remote_allowed():
 
 def _validate_endpoint_url(url, *, source, http_base=None):
     parsed = urlparse(url)
-    if parsed.scheme not in {"ws", "http"}:
+    if parsed.scheme not in {"ws", "wss", "http", "https"}:
         raise RuntimeError(f"unsupported CDP endpoint scheme: {parsed.scheme or '(missing)'}")
     if parsed.username or parsed.password:
         raise RuntimeError("CDP endpoint URLs must not contain credentials")
     host = parsed.hostname
     port = parsed.port
-    if (host or "").strip("[]") == "0.0.0.0":
-        raise RuntimeError("CDP endpoint host 0.0.0.0 is unsafe; use 127.0.0.1 or localhost")
+    if _is_unspecified_host(host):
+        raise RuntimeError(f"CDP endpoint host {host} is unsafe; use 127.0.0.1 or localhost")
     is_loopback = _is_loopback_host(host)
     allowed_remote = _remote_allowed()
     warnings = []
@@ -108,6 +129,8 @@ def _validate_endpoint_url(url, *, source, http_base=None):
                 "refusing non-loopback CDP endpoint; set BH_CDP_ALLOW_REMOTE=1 only for a user-owned self-hosted browser"
             )
         warnings.append("remote CDP endpoint allowed by BH_CDP_ALLOW_REMOTE=1")
+    if parsed.scheme in {"wss", "https"} and is_loopback:
+        warnings.append(f"{parsed.scheme} on loopback is unusual; ws/http to 127.0.0.1 is the normal local shape")
     return {
         "source": source,
         "input": "BH_CDP_WS" if source == "env" else "DevToolsActivePort",
@@ -132,7 +155,7 @@ def _devtools_version_url(url):
 
 def _resolve_devtools_http_base(url):
     parsed = urlparse(url)
-    if parsed.scheme != "http":
+    if parsed.scheme not in {"http", "https"}:
         raise RuntimeError(f"unsupported DevTools HTTP endpoint scheme: {parsed.scheme or '(missing)'}")
     info = _validate_endpoint_url(url, source="env", http_base=url)
     with urllib.request.urlopen(_devtools_version_url(url), timeout=5) as resp:
@@ -143,7 +166,7 @@ def _resolve_devtools_http_base(url):
     ws_info = _validate_endpoint_url(ws_url, source="env", http_base=url)
     ws_info["browser"] = data.get("Browser")
     ws_info["protocol_version"] = data.get("Protocol-Version")
-    ws_info["warnings"] = [*info["warnings"], *ws_info["warnings"]]
+    ws_info["warnings"] = _merge_warnings(info["warnings"], ws_info["warnings"])
     return ws_url, ws_info
 
 
@@ -152,7 +175,7 @@ def _resolve_cdp_endpoint_from_env():
     if not url:
         return None
     parsed = urlparse(url)
-    if parsed.scheme == "http":
+    if parsed.scheme in {"http", "https"}:
         return _resolve_devtools_http_base(url)
     info = _validate_endpoint_url(url, source="env")
     return url, info

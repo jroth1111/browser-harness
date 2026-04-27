@@ -317,9 +317,10 @@ def discover_local_cdp_endpoints(ports=(9222, 3000, 5050), host="127.0.0.1", tim
     """Probe loopback DevTools HTTP endpoints. Does not scan public networks."""
     if host not in {"127.0.0.1", "localhost", "::1"}:
         raise ValueError("local CDP discovery only supports loopback hosts")
+    netloc_host = f"[{host}]" if ":" in host else host
     found = []
     for port in ports:
-        base = f"http://{host}:{int(port)}"
+        base = f"http://{netloc_host}:{int(port)}"
         try:
             with urllib.request.urlopen(f"{base}/json/version", timeout=timeout) as r:
                 data = json.loads(r.read().decode())

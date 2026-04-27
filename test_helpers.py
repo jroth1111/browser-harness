@@ -182,3 +182,34 @@ def test_discover_local_cdp_endpoints_reads_json_version():
             "browser": "Chrome/123",
             "protocol_version": "1.3",
         }]
+
+
+def test_discover_local_cdp_endpoints_brackets_ipv6_loopback():
+    opened = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "webSocketDebuggerUrl": "ws://[::1]:9222/devtools/browser/abc",
+                "Browser": "Chrome/123",
+                "Protocol-Version": "1.3",
+            }).encode()
+
+    def fake_open(url, timeout=0):
+        opened.append(url)
+        return Response()
+
+    with patch("urllib.request.urlopen", side_effect=fake_open):
+        assert helpers.discover_local_cdp_endpoints(ports=(9222,), host="::1") == [{
+            "http_base": "http://[::1]:9222",
+            "webSocketDebuggerUrl": "ws://[::1]:9222/devtools/browser/abc",
+            "browser": "Chrome/123",
+            "protocol_version": "1.3",
+        }]
+    assert opened == ["http://[::1]:9222/json/version"]

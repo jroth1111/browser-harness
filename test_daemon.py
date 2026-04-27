@@ -98,6 +98,16 @@ def test_zero_host_rejects_even_with_remote_allow():
             raise AssertionError("expected RuntimeError")
 
 
+def test_ipv6_unspecified_host_rejects_even_with_remote_allow():
+    with patch.dict(os.environ, {"BH_CDP_WS": "ws://[::]:9222/devtools/browser/abc", "BH_CDP_ALLOW_REMOTE": "1"}, clear=True):
+        try:
+            daemon.resolve_cdp_endpoint()
+        except RuntimeError as e:
+            assert ":: is unsafe" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
 def test_public_endpoint_warns_with_remote_allow():
     url = "ws://203.0.113.10:9222/devtools/browser/abc"
     with patch.dict(os.environ, {"BH_CDP_WS": url, "BH_CDP_ALLOW_REMOTE": "1"}, clear=True):
@@ -105,6 +115,74 @@ def test_public_endpoint_warns_with_remote_allow():
     assert resolved == url
     assert info["remote_allowed"]
     assert info["warnings"]
+
+
+def test_remote_http_base_does_not_duplicate_warning():
+    def fake_open(url, timeout=0):
+        return FakeResponse({
+            "webSocketDebuggerUrl": "ws://10.0.0.10:9222/devtools/browser/abc",
+            "Browser": "Chrome/123",
+            "Protocol-Version": "1.3",
+        })
+
+    env = {"BH_CDP_WS": "http://10.0.0.10:9222", "BH_CDP_ALLOW_REMOTE": "1"}
+    with patch.dict(os.environ, env, clear=True), \
+         patch("urllib.request.urlopen", side_effect=fake_open):
+        _, info = daemon.resolve_cdp_endpoint()
+    remote_warnings = [w for w in info["warnings"] if "BH_CDP_ALLOW_REMOTE" in w]
+    assert len(remote_warnings) == 1, info["warnings"]
+
+
+def test_credentials_in_endpoint_rejected():
+    with patch.dict(os.environ, {"BH_CDP_WS": "ws://user:pass@127.0.0.1:9222/devtools/browser/x"}, clear=True):
+        try:
+            daemon.resolve_cdp_endpoint()
+        except RuntimeError as e:
+            assert "must not contain credentials" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_wss_loopback_accepted_with_warning():
+    url = "wss://127.0.0.1:9222/devtools/browser/abc"
+    with patch.dict(os.environ, {"BH_CDP_WS": url}, clear=True):
+        resolved, info = daemon.resolve_cdp_endpoint()
+    assert resolved == url
+    assert info["is_loopback"]
+    assert any("wss on loopback is unusual" in w for w in info["warnings"])
+
+
+def test_https_base_resolves_through_json_version():
+    def fake_open(url, timeout=0):
+        return FakeResponse({"webSocketDebuggerUrl": "wss://127.0.0.1:9222/devtools/browser/abc"})
+
+    with patch.dict(os.environ, {"BH_CDP_WS": "https://127.0.0.1:9222"}, clear=True), \
+         patch("urllib.request.urlopen", side_effect=fake_open):
+        resolved, info = daemon.resolve_cdp_endpoint()
+    assert resolved == "wss://127.0.0.1:9222/devtools/browser/abc"
+    assert info["http_base"] == "https://127.0.0.1:9222"
+    assert any("https on loopback is unusual" in w for w in info["warnings"])
+    assert any("wss on loopback is unusual" in w for w in info["warnings"])
+
+
+def test_wss_to_remote_host_still_requires_allowance():
+    with patch.dict(os.environ, {"BH_CDP_WS": "wss://203.0.113.10:9222/devtools/browser/abc"}, clear=True):
+        try:
+            daemon.resolve_cdp_endpoint()
+        except RuntimeError as e:
+            assert "refusing non-loopback" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_unknown_scheme_rejected():
+    with patch.dict(os.environ, {"BH_CDP_WS": "ftp://127.0.0.1:9222"}, clear=True):
+        try:
+            daemon.resolve_cdp_endpoint()
+        except RuntimeError as e:
+            assert "unsupported" in str(e) and "ftp" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
 
 
 def test_attach_first_page_is_cdp_minimal():

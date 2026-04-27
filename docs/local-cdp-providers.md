@@ -12,7 +12,7 @@ browser-harness --doctor
 browser-harness -c "print(page_info())"
 ```
 
-`BH_CDP_WS` accepts either a browser websocket URL such as `ws://127.0.0.1:9222/devtools/browser/<id>` or a DevTools HTTP base URL such as `http://127.0.0.1:9222`. HTTP bases are resolved through `/json/version`.
+`BH_CDP_WS` accepts either a browser websocket URL such as `ws://127.0.0.1:9222/devtools/browser/<id>` or a DevTools HTTP base URL such as `http://127.0.0.1:9222`. HTTP bases are resolved through `/json/version`. `wss://` and `https://` endpoints are accepted for self-hosted TLS setups and follow the same loopback/remote-allow rules, but local loopback endpoints normally use `ws://` or `http://`.
 
 ## Local Chrome Or Edge
 
