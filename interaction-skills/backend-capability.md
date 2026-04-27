@@ -44,6 +44,49 @@ content you are trying to extract.
   fingerprint surface.
 - `unknown`: run the diagnostic and rely on the served/blocked result.
 
+## Backend-invariant extraction
+
+Backend choice is an implementation detail, not a data-shape choice. For the
+same URL, auth state, date range, filters, device, currency, and observation
+window, every supported backend must produce the same canonical records after
+normalization. Equivalent output does not require byte-identical DOM; it requires
+the same required fields, ordering semantics, prices, IDs, availability signals,
+and confidence classification for the workflow.
+
+Treat a backend as unsupported for a source when it loads a page but cannot
+produce the workflow's required fields. Do not silently emit a weaker dataset
+from the cheaper backend.
+
+Use field-level acceptance gates:
+
+- page-level success: load event, title, non-empty `innerText`, HTTP/UI status
+- field-level success: required selectors/text/API fields are present and
+  attributable to the requested source context
+- canonical success: extracted fields normalize to the same schema as the
+  reference backend or export
+
+For Lightpanda-specific CDP runs, use `lightpanda_control.evaluate_field_contract`
+or `wait_for_field_contract` to check named required fields instead of accepting
+non-empty page text.
+
+Example:
+
+```python
+from lightpanda_control import wait_for_field_contract
+
+result = wait_for_field_contract(
+    client,
+    {
+        "item_links": 'document.querySelectorAll("a[href*=items]").length > 0',
+        "prices": '/\\$[\\d,]+/.test(document.body.innerText)',
+    },
+    min_text=500,
+    timeout=20,
+)
+if not result["ok"]:
+    raise RuntimeError(("backend_capability_failed", result["missing"], result["page"]))
+```
+
 ## Solved-session bridge
 
 When a persistent headful browser can load a protected site but a lightweight

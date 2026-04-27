@@ -155,22 +155,22 @@ Every discovered primitive should map to:
 
 Use `data-inventory.md` as the canonical registry.
 
-## Airbnb Lightpanda acceptance criteria
+## Airbnb-specific Lightpanda acceptance criteria
 
-Backend choice must not change the canonical data. For the same source URL,
-auth state, date range, guests, filters, device, currency, and observation
-window, Lightpanda and headful Chrome should produce equivalent records after
-normalization. Equivalent does not mean byte-identical DOM; it means the same
-required fields, ordering semantics, prices, listing IDs, availability signals,
-and quality/confidence classification.
+General backend-invariant extraction rules live in
+`interaction-skills/backend-capability.md`. This section only adds
+Airbnb-specific fields, URL families, and empirical findings.
 
 Lightpanda is acceptable for a source only when:
 
 - `diagnose_url_capability()` returns `ok == True`.
-- expected fields appear in `document.body.innerText` or DOM queries.
-- price/rank/card ordering is stable enough for the task.
-- no login, MFA, file download, or visual confirmation is required.
-- sampled output matches a headful Chrome capture for the same URL context.
+- Airbnb-specific expected fields appear in `document.body.innerText` or DOM
+  queries.
+- Airbnb search price/rank/card ordering is stable enough for the task.
+- the source does not require Airbnb login, MFA, file download, or visual
+  confirmation.
+- sampled output matches a headful Chrome capture for the same Airbnb URL
+  context.
 
 For public search pages, `ok == True` and non-empty text are not sufficient.
 The capability receipt must show field-level evidence:

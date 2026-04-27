@@ -153,8 +153,23 @@ Notes:
 
 - Lightpanda is useful when the task needs HTML, DOM queries, and JavaScript execution without Chrome's memory cost.
 - It is not a headful Chrome replacement for heavily protected sites. Domains that depend on GPU/WebGL/canvas/font/layout/plugin/profile signals can serve challenge shells even though CDP is connected successfully.
-- Some cookie bulk APIs may be absent or return `NotImplemented`. `login_session.restore_cookies()` falls back from bulk setters to per-cookie `Network.setCookie`, which was required for Lightpanda private Airbnb restore on 2026-04-27.
-- Use `diagnose_url_capability()` to distinguish "backend connected" from "target content served."
+- Some cookie bulk APIs may be absent or return `NotImplemented`.
+  `login_session.restore_cookies()` falls back from bulk setters to per-cookie
+  `Network.setCookie`. Site-specific restore receipts belong in the relevant
+  domain skill.
+- Use `diagnose_url_capability()` to distinguish "backend connected" from
+  "target content served."
+- Use field-level contracts to distinguish "target content served" from
+  "workflow data is present." Non-empty page text is not enough when the
+  workflow needs specific links, prices, rows, buttons, downloads, or embedded
+  payloads.
+- A Lightpanda result should be canonical-record compatible with headful Chrome
+  or another trusted source for the same context. If the fields differ, classify
+  the Lightpanda result as `backend_capability_failed` for that source family
+  and fall back instead of emitting a weaker dataset.
+- `lightpanda_control.evaluate_field_contract()` and
+  `wait_for_field_contract()` provide reusable named field gates for direct
+  Lightpanda CDP tests.
 - If a headful profile has already solved a protected domain, use `fetch_with_browser_session(url, seed_url=...)` from that profile to gather HTML/data, then pass the extracted results to Lightpanda-only workflows.
 - Example: for `realestate.com.au`, observed Lightpanda behavior on 2026-04-27 was a Kasada/KPSDK challenge document with empty body text; the REA-specific workflow lives in `domain-skills/realestate-com-au/scraping.md`.
 

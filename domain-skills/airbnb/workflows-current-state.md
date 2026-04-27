@@ -23,11 +23,9 @@ Use the least-privileged source that answers the question.
 Do not mix logged-out guest-market observations with logged-in personalized
 observations in the same comp set.
 
-Backend choice must be invisible in the final data model. Lightpanda, headful
-Chrome, and any other CDP client must populate the same canonical fields for the
-same source context. If a backend cannot produce the required fields, mark that
-backend/source pair as unsupported for the workflow and fall back; do not create
-a partial dataset that looks comparable.
+General backend parity rules live in `interaction-skills/backend-capability.md`.
+For Airbnb, apply those rules to Airbnb-specific search contexts, listing URLs,
+host pages, and required fields below.
 
 ## Workflow 0 - Define The State Run
 
@@ -145,9 +143,10 @@ Auth/backend:
 - Use fresh/headful Chrome logged out when Lightpanda misses visual/rank/price
   evidence.
 - Do not use the host auth bundle for normal comp work.
-- Require backend-invariant canonical output. A Lightpanda run and a headful
-  Chrome run for the same search context should produce matching result fields
-  after normalization. If they do not, keep the headful data for host
+- Require the general backend-invariant output rule from
+  `interaction-skills/backend-capability.md`: a Lightpanda run and a headful
+  Chrome run for the same Airbnb search context should normalize to matching
+  search-result records. If they do not, keep the headful data for host
   intelligence and store the Lightpanda result only as a capability receipt.
 
 Search matrix:

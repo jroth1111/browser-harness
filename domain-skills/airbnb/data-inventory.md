@@ -42,13 +42,13 @@ belongs to a market, competitor, or own-listing state run from
 
 | Primitive family | Examples | Capture method | Backend |
 |---|---|---|---|
-| Search context | destination, map bounds, dates, guests, filters, currency, device, login state | Public search URL + screenshot/text | Lightpanda if cards render; otherwise headful |
-| Search-card visibility | rank, page/scroll depth, title, location label, badge, rating, review count, price | Public search text/DOM/screenshot | Lightpanda if stable |
-| Public listing facts | room ID, property type, capacity, bedrooms, beds, bathrooms, location text | Listing page text/DOM | Lightpanda usually sufficient |
-| Public price/availability | total guest price, nightly component, minimum-stay message, unavailable message | Search results first; listing page second | Lightpanda or headful |
-| Public trust signals | Guest Favourite, top-home highlight, top-percent label, review count, rating | Search/listing page | Lightpanda if visible |
-| Public content quality | hero subject, photo count, photo tour signals, amenities, rules | Listing page text/visual audit | Headful for visual QA; Lightpanda for text |
-| Public review themes | review text, host response, stay metadata where visible | Listing review section | Lightpanda if reviews render |
+| Search context | destination, map bounds, dates, guests, filters, currency, device, login state | Public search URL + screenshot/text | Lightpanda only if Airbnb cards render with field parity; otherwise headful |
+| Search-card visibility | rank, page/scroll depth, title, location label, badge, rating, review count, price | Public search text/DOM/screenshot | Lightpanda only if card order and fields match headful |
+| Public listing facts | room ID, property type, capacity, bedrooms, beds, bathrooms, location text | Listing page text/DOM | Lightpanda only after listing-fact field contract passes |
+| Public price/availability | total guest price, nightly component, minimum-stay message, unavailable message | Search results first; listing page second | Backend with total-price field parity |
+| Public trust signals | Guest Favourite, top-home highlight, top-percent label, review count, rating | Search/listing page | Backend with visible trust-signal parity |
+| Public content quality | hero subject, photo count, photo tour signals, amenities, rules | Listing page text/visual audit | Headful for visual QA; Lightpanda only for matching text fields |
+| Public review themes | review text, host response, stay metadata where visible | Listing review section | Lightpanda only if reviews render with field parity |
 | Public Help/Resource docs | feature definitions, pricing tools, policy semantics | Static pages | Lightpanda or HTTP |
 
 ## Authenticated Airbnb primitives

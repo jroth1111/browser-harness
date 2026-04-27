@@ -16,11 +16,12 @@ read `schema-public-market.md`. For decisions and alerts, read
   observations unless the explicit task is to compare logged-in personalization.
 - Use Lightpanda first for public pages only after `diagnose_url_capability()`
   proves the expected text and fields are present.
-- The public market output schema is backend-invariant. Lightpanda and headful
-  Chrome must produce the same canonical search/listing records after
-  normalization for the same context. If Lightpanda cannot produce those fields,
-  use a fresh logged-out headful Chrome profile and keep the Lightpanda output
-  only as a capability receipt.
+- Apply the general backend-invariant extraction rule from
+  `interaction-skills/backend-capability.md`: public market records must have the
+  same canonical search/listing fields regardless of backend. If Lightpanda
+  cannot produce Airbnb search/listing fields for the same context, use a fresh
+  logged-out headful Chrome profile and keep the Lightpanda output only as a
+  capability receipt.
 - Search result pages expose the most reliable price data. Listing pages often show `loading` in the booking widget even when dates and guests are provided.
 - `document.body.innerText` is enough to extract listing title, property type, capacity, bedrooms, beds, baths, rating, reviews, host, amenities, house rules, and visible location text.
 - For revenue comps, scrape search result totals for a fixed stay length and guest count, then normalize to nightly guest-facing gross.

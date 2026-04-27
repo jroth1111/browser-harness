@@ -142,11 +142,13 @@ reported bulk cookie setters as unavailable for the saved bundle. Keep the
 capability receipt under `.session-store/capability/` and recheck before using
 Lightpanda for new private Airbnb source families.
 
-Backend parity still applies to private data. A restored Lightpanda session is
-usable only for private host fields it exposes equivalently to headful Chrome or
-to an Airbnb export. If a private host page loads but omits required tables,
-filters, downloads, or date-level fields, fall back to the persistent headful
-Chrome host profile and record the Lightpanda limitation.
+Apply the general backend-invariant rule from
+`interaction-skills/backend-capability.md` to private data too. For Airbnb, a
+restored Lightpanda session is usable only for private host fields it exposes
+equivalently to headful Chrome or to an Airbnb export. If a private host page
+loads but omits required Airbnb tables, filters, downloads, or date-level fields,
+fall back to the persistent headful Chrome host profile and record the
+Lightpanda limitation.
 
 ## Airbnb seed URLs
 

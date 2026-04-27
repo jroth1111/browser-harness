@@ -133,6 +133,7 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 - Robust solved sessions: `seed_browser_session(url)` verifies a headful/profile session; `fetch_with_browser_session(url, seed_url=...)` retries stale-cookie HTTP fetches by re-seeding in the browser.
 - Generic login/session module: use `login_session.py` when you need the same user-login/session primitives with another CDP client. It never types credentials; it opens login pages, waits for the user, builds redacted manifests, and reuses browser cookies for same-domain HTTP.
 - Lightpanda control: use `lightpanda_control.py` when testing Lightpanda directly. It launches/connects to Lightpanda, creates and attaches a page target, and routes page-scoped CDP calls through the target session while keeping browser/storage calls at browser scope.
+- Lightpanda field gates: `evaluate_field_contract()` and `wait_for_field_contract()` verify named workflow fields so a loaded page is not mistaken for usable data.
 - Headless/backend triage: `diagnose_url_capability(url)` reports backend kind, challenge block state, and recommendation. Use it before spending time on selectors when Lightpanda/headless returns blank content.
 - Wrong/stale tab: ensure_real_tab(). Use it when the current tab is stale or internal; the daemon also auto-recovers from stale sessions on the next call.
 - Verification: print(page_info()) is the simplest "is this alive?" check, but screenshots are the default way to verify whether a visible action actually worked.
