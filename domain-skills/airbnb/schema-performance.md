@@ -161,9 +161,14 @@ Fields:
 
 Refresh: daily for tactical metrics; weekly/monthly for broader reporting.
 
-## `airbnb_insights_daily_point`
+## `airbnb_insights_chart_point`
 
-Atomic daily chart primitive from Airbnb `ChartQuery`.
+Atomic chart/history point from Airbnb `ChartQuery`.
+
+Use this table for both tactical daily history and lower-call-volume trend
+history. When `series_granularity == DAY`, the row is a daily primitive. When
+Airbnb returns `WEEK` or `MONTH` for broader chart windows, preserve that
+granularity and do not compose it as daily data.
 
 Fields:
 
@@ -187,10 +192,11 @@ Fields:
 - `source_url`
 - `observed_at`
 
-Design rule: store the daily primitive first, then compose 7-day, 30-day,
-monthly, quarterly, and yearly views from it where the metric is additive or
-otherwise composable. Preserve Airbnb summary rows separately for metrics whose
-aggregation semantics are ratios or averages.
+Design rule: store the chart point with its native `series_granularity`. For
+recent tactical control, prefer `DAY` rows from rolling 7-day windows and then
+compose 7-day, 30-day, monthly, quarterly, and yearly views where the metric is
+additive or otherwise composable. Preserve Airbnb summary rows separately for
+metrics whose aggregation semantics are ratios or averages.
 
 ## Performance joins
 

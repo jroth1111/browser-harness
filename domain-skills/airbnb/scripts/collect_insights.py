@@ -9,7 +9,9 @@ The collector uses Airbnb's authenticated Performance API from inside the
 browser context:
 
 - ListOfMetricsQuery: period summary metrics
-- ChartQuery: daily chart primitives from rolling 7-day windows
+- ChartQuery: chart/history points. `AIRBNB_INSIGHTS_CHART_MODE=rolling_daily`
+  uses rolling 7-day windows to force DAY granularity; `single_window` asks
+  Airbnb for one broad trend window and preserves Airbnb's returned granularity.
 
 Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 """
@@ -119,6 +121,15 @@ def rolling_windows(history_days, window_days=7):
         windows.append({"label": f"daily_{start}_{end}", "ds_start": start, "ds_end": end})
         start = end
     return windows
+
+
+def chart_windows_for_history(history_days):
+    mode = os.environ.get("AIRBNB_INSIGHTS_CHART_MODE", "rolling_daily")
+    if mode == "single_window":
+        return [{"label": f"chart_{-int(history_days)}_0", "ds_start": -int(history_days), "ds_end": 0}]
+    if mode != "rolling_daily":
+        raise SystemExit(f"Unsupported AIRBNB_INSIGHTS_CHART_MODE={mode!r}; use rolling_daily or single_window")
+    return rolling_windows(history_days)
 
 
 def performance_request(operation_name, route, listing_id, ds_start, ds_end):
@@ -245,7 +256,7 @@ def run_request_batches(label, requests, api_key, base_headers, checkpoint_path)
             "checkpointed_ok": len(checkpointed),
             "remaining": len(requests_to_run),
             "total": len(requests),
-        }))
+        }), flush=True)
     for index in range(0, len(requests_to_run), batch_size):
         batch = requests_to_run[index : index + batch_size]
         pending = batch
@@ -275,9 +286,9 @@ def run_request_batches(label, requests, api_key, base_headers, checkpoint_path)
             "total": len(requests),
             "failures": len(failures),
             "consecutive_429_batches": consecutive_429_batches,
-        }))
+        }), flush=True)
         if consecutive_429_batches >= stop_after_429_batches:
-            remaining = requests[index + len(batch) :]
+            remaining = requests_to_run[index + len(batch) :]
             for item in remaining:
                 failures.append({
                     **item["meta"],
@@ -369,7 +380,8 @@ def main():
     routes = ROUTES[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_ROUTES", len(ROUTES)))]
     summary_periods = SUMMARY_PERIODS[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_PERIODS", len(SUMMARY_PERIODS)))]
     history_days = int(os.environ.get("AIRBNB_INSIGHTS_HISTORY_DAYS", "365"))
-    chart_windows = rolling_windows(history_days)
+    chart_mode = os.environ.get("AIRBNB_INSIGHTS_CHART_MODE", "rolling_daily")
+    chart_windows = chart_windows_for_history(history_days)
 
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     SESSION_PATH.mkdir(parents=True, exist_ok=True)
@@ -491,17 +503,24 @@ def main():
             "daily_chart_api": "ChartQuery",
             "transport": "Python HTTP replay with browser-session cookies and Airbnb bootstrap API key",
             "operation_hashes": OPERATION_HASHES,
-            "granularity_strategy": "rolling 7-day relative windows to force DAY chart granularity; overlapping endpoints de-duplicated",
+            "granularity_strategy": (
+                "rolling 7-day relative windows to force DAY chart granularity; overlapping endpoints de-duplicated"
+                if chart_mode == "rolling_daily"
+                else "single broad ChartQuery window; Airbnb chooses DAY/WEEK/MONTH granularity for the requested range"
+            ),
+            "chart_mode": chart_mode,
             "checkpoint_strategy": "successful raw API responses are appended to JSONL after each batch and skipped on rerun when AIRBNB_INSIGHTS_RUN_ID is reused",
         },
         "listing_count": len(listings),
         "route_count": len(routes),
         "summary_periods": summary_periods,
         "history_days": history_days,
+        "chart_mode": chart_mode,
         "chart_window_count": len(chart_windows),
         "summary_request_count": len(summary_requests),
         "chart_request_count": len(chart_requests),
         "summary_rows_count": len(summary_rows),
+        "chart_rows_count": len(daily_rows),
         "daily_rows_count": len(daily_rows),
         "failures_count": len(failures),
         "summary_raw_path": str(summary_raw_path),
@@ -528,12 +547,14 @@ def main():
         "route_count": len(routes),
         "summary_period_count": len(summary_periods),
         "history_days": history_days,
+        "chart_mode": chart_mode,
         "chart_window_count": len(chart_windows),
         "summary_request_count": len(summary_requests),
         "chart_request_count": len(chart_requests),
         "expected_summary_requests": expected_summary,
         "expected_chart_requests": expected_charts,
         "summary_rows_count": len(summary_rows),
+        "chart_rows_count": len(daily_rows),
         "daily_rows_count": len(daily_rows),
         "failures_count": len(failures),
         "all_api_requests_ok": not [f for f in failures if f.get("status") != 200],
@@ -542,6 +563,7 @@ def main():
         "chart_raw_path": str(chart_raw_path),
         "json_path": str(json_path),
         "summary_csv_path": str(summary_csv_path),
+        "chart_csv_path": str(daily_csv_path),
         "daily_csv_path": str(daily_csv_path),
         "failure_sample": [
             {
@@ -555,7 +577,7 @@ def main():
         ],
     }
     receipt_path.write_text(json.dumps(receipt, indent=2))
-    print(json.dumps(receipt, indent=2))
+    print(json.dumps(receipt, indent=2), flush=True)
 
 
 main()

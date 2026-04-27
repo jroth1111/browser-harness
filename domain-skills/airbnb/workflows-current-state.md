@@ -549,8 +549,11 @@ Insights collection rule:
 - Prefer Airbnb's authenticated Performance APIs once discovered:
   `ListOfMetricsQuery` for summary windows and `ChartQuery` for chart/history
   points.
-- Use rolling 7-day `ChartQuery` windows for daily primitives. Longer Airbnb
-  chart windows may return weekly or monthly granularity.
+- Use `AIRBNB_INSIGHTS_CHART_MODE=rolling_daily` with rolling 7-day `ChartQuery`
+  windows for recent daily primitives. Use
+  `AIRBNB_INSIGHTS_CHART_MODE=single_window` for broad trend sweeps when API
+  call volume is the binding constraint; preserve `series_granularity` because
+  longer Airbnb chart windows may return weekly or monthly points.
 - Compose higher-period views from daily primitives when the metric is additive;
   keep Airbnb's own period summary rows for rates, ratios, and averages.
 - Stop and store a partial receipt on sustained HTTP `429`; resume after
@@ -559,6 +562,11 @@ Insights collection rule:
   response is listing-scoped and field-complete. Use browser rendering only to
   establish auth/bootstrap, discover request shapes, verify parity, or fill
   fields the API does not expose.
+- Latest verified runs on 2026-04-27:
+  `airbnb-insights-20260427T095000Z-daily30` covered 27 active listings across
+  16 routes with 2,025 summary rows and 26,784 daily chart rows;
+  `airbnb-insights-20260427T095000Z-trend365` covered the same listing/route
+  scope with 11,232 monthly trend rows. Both receipts recorded 0 failures.
 
 Capture private settings:
 

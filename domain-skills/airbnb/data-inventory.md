@@ -85,8 +85,11 @@ artifacts.
 For Insights collection, the canonical scope is listing-specific. The
 Performance app's "All listings" route is useful for discovery, but stored rows
 must include `filters.listingIds` evidence or an equivalent listing-specific
-route. Daily history comes from rolling 7-day `ChartQuery` windows because
-Airbnb coarsens longer chart ranges to weekly/monthly points.
+route. Recent tactical history should come from rolling 7-day `ChartQuery`
+windows because Airbnb returns `DAY` granularity there. Long-horizon trend
+sweeps may use one broad `ChartQuery` window to reduce request volume, but those
+rows must keep Airbnb's returned `series_granularity` because longer ranges can
+be monthly or weekly rather than daily.
 
 ## Internal host primitives
 

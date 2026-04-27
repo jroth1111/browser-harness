@@ -257,16 +257,33 @@ quality metrics.
      `occupancy_rate`, `conversion_rate`, `p3_impressions`, or `wishlist`
    - `filters.listingIds`: exactly one listing ID for listing-level capture
    - `relativeDsStart` and `relativeDsEnd`: relative date-window bounds
-7. For daily history, call `ChartQuery` in rolling 7-day windows. Airbnb returns
-   `DAY` granularity for 7-day windows, but coarser ranges such as 30, 90, or
-   365 days return weekly or monthly chart points. De-duplicate overlapping
-   window endpoints by `listing_id`, metric, series, and date.
+7. Choose the chart/history mode by the decision being supported:
+   - `AIRBNB_INSIGHTS_CHART_MODE=rolling_daily`: call `ChartQuery` in rolling
+     7-day windows. Airbnb returns `DAY` granularity for these windows. Use this
+     for recent tactical history, then de-duplicate overlapping window endpoints
+     by `listing_id`, metric, series, and date.
+   - `AIRBNB_INSIGHTS_CHART_MODE=single_window`: call one broad `ChartQuery`
+     window. Use this for long-horizon trend reconnaissance where fewer API
+     calls matter more than daily granularity. Preserve Airbnb's returned
+     `series_granularity` (`DAY`, `WEEK`, or `MONTH`) instead of pretending it is
+     daily.
 8. Use `ListOfMetricsQuery` for summary windows such as last 7, 30, and 365
-   days, then compose higher-period views from stored daily primitives where
-   possible.
+   days. Compose higher-period views from stored daily primitives where possible,
+   but keep Airbnb's own period summaries for rates, ratios, averages, and
+   quality percentages.
 9. Persist successful raw API responses to run-scoped JSONL checkpoints after
    each batch. Reuse the same run ID to resume later; retry failed or
    rate-limited requests instead of treating them as durable data.
+
+Empirical coverage captured on 2026-04-27:
+
+- `airbnb-insights-20260427T095000Z-daily30`: 27 active listings, 16 metric
+  routes, 1,296 summary API requests, 2,160 rolling chart requests, 2,025
+  summary rows, 26,784 chart rows, all chart rows at `DAY` granularity, 0
+  failures.
+- `airbnb-insights-20260427T095000Z-trend365`: 27 active listings, 16 metric
+  routes, 432 broad chart requests, 11,232 chart rows, 13 monthly trend points
+  per route/listing, 0 failures.
 
 Rate-limit handling:
 

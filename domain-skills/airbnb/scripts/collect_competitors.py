@@ -371,7 +371,7 @@ def main():
                     "filters_applied": [f"query={target_query(listing)}", f"min_bedrooms={listing.get('bedrooms')}"],
                     "source_url": url,
                 }
-                print(json.dumps({"phase": "search", "search_run_id": run_key, "url": url}))
+                print(json.dumps({"phase": "search", "search_run_id": run_key, "url": url}), flush=True)
                 navigate(url)
                 wait_for_load()
                 wait(pause)
@@ -468,7 +468,7 @@ def main():
     comp_listing_snapshots = []
     for item in list(comp_snapshot_queue.values())[:max_listing_snapshots]:
         url = listing_url_with_context(item["listing_url"], item["checkin"], item["nights"], item["adults"])
-        print(json.dumps({"phase": "listing_snapshot", "comp_listing_id": item["comp_listing_id"], "url": url}))
+        print(json.dumps({"phase": "listing_snapshot", "comp_listing_id": item["comp_listing_id"], "url": url}), flush=True)
         navigate(url)
         wait_for_load()
         wait(pause)
@@ -591,7 +591,7 @@ def main():
         "failure_sample": failures[:10],
     }
     receipt_path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False))
-    print(json.dumps(receipt, indent=2, ensure_ascii=False))
+    print(json.dumps(receipt, indent=2, ensure_ascii=False), flush=True)
 
 
 main()
