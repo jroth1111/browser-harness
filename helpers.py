@@ -88,14 +88,25 @@ def page_info_js():
 # --- input ---
 _debug_click_counter = 0
 
+def _debug_click_dpr(image_width):
+    """Infer screenshot pixel scale from CDP layout metrics without page JS."""
+    try:
+        info = page_info()
+    except Exception:
+        return 1
+    viewport_width = int(info.get("w") or 0)
+    if viewport_width <= 0:
+        return 1
+    return image_width / viewport_width
+
 def click_at_xy(x, y, button="left", clicks=1, humanize=False, steps=12):
     if os.environ.get("BH_DEBUG_CLICKS"):
         global _debug_click_counter
         try:
             from PIL import Image, ImageDraw
-            dpr = js("window.devicePixelRatio") or 1
             path = capture_screenshot(f"/tmp/debug_click_{_debug_click_counter}.png")
             img = Image.open(path)
+            dpr = _debug_click_dpr(img.width)
             draw = ImageDraw.Draw(img)
             px, py = int(x * dpr), int(y * dpr)
             r = int(15 * dpr)

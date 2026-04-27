@@ -118,6 +118,22 @@ def test_click_humanize_is_opt_in():
     assert [params["type"] for _, params in calls] == ["mouseMoved", "mouseMoved", "mouseMoved", "mousePressed", "mouseReleased"]
 
 
+def test_debug_click_dpr_uses_page_info_not_js():
+    with patch("helpers.page_info", return_value={"w": 500}), \
+         patch("helpers.js", side_effect=AssertionError("debug overlay must not execute page JS")):
+        assert helpers._debug_click_dpr(1000) == 2
+
+
+def test_debug_click_dpr_falls_back_without_viewport_width():
+    with patch("helpers.page_info", return_value={"dialog": {"type": "alert"}}):
+        assert helpers._debug_click_dpr(1000) == 1
+
+
+def test_debug_click_dpr_falls_back_when_metrics_fail():
+    with patch("helpers.page_info", side_effect=RuntimeError("metrics unavailable")):
+        assert helpers._debug_click_dpr(1000) == 1
+
+
 def test_ax_snapshot_compacts_accessibility_tree():
     with patch("helpers.cdp", return_value={"nodes": [
         {"nodeId": "1", "role": {"value": "button"}, "name": {"value": "Save"}},
