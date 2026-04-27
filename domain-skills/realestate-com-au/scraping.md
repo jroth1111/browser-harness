@@ -26,6 +26,37 @@ Observed on 2026-04-27:
 
 Do not try to repair this with selector changes, longer sleeps, user-agent overrides, or `navigator.webdriver` patches. The listing HTML/JSON was not served, so there is no property data in the DOM to extract. Switch to a capable backend, usually the user's already-running headful Chrome profile, or a self-hosted Chromium-derived browser whose fingerprint/profile layer has already been validated for this domain.
 
+## Browser-session HTTP fallback
+
+Once a headful Chrome profile has passed the REA challenge, the browser's same-domain cookies can be reused for direct HTTP fetches. This is the fastest robust path for bulk property/profile pages because it avoids rendering every page while still using the solved browser session.
+
+```python
+# Step 1: seed a real headful Chrome profile once.
+new_tab("https://www.realestate.com.au/property/l30-unit-3003-500-elizabeth-st-melbourne-vic-3000/")
+wait_for_load()
+seed = wait_for_content(min_text=500, timeout=20)
+if not seed["ok"]:
+    raise RuntimeError(f"REA seed blocked: {seed['reason']} {seed.get('block')}")
+
+# Step 2: fetch additional same-domain pages using the attached browser session.
+html = http_get_browser_session(
+    "https://www.realestate.com.au/property-house-vic-tarneit-143160680"
+)
+if detect_block_page(html=html)["blocked"]:
+    raise RuntimeError("REA session cookies did not satisfy the HTTP fetch")
+
+# Step 3: Argonaut pages expose embedded route data.
+exchange = extract_argonaut_exchange(html)
+print(exchange.keys())
+```
+
+Notes:
+
+- `http_get_browser_session()` filters cookies to the target domain. It does not send `realestate.com.au` cookies to `property.com.au`.
+- This fallback does not make fresh Lightpanda or fresh headless Chrome pass the initial challenge. It reuses an already-valid browser session.
+- If you need Lightpanda/headless for the rest of a workflow, use headful Chrome to seed/fetch REA HTML first, then pass the extracted data to the lightweight backend.
+- On property-profile pages, `extract_argonaut_exchange(html)` commonly contains `resi-property_property-profile -> property_detail_data` with the parsed profile payload.
+
 ## Listing URL patterns
 
 Common current listing pattern:

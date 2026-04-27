@@ -1,5 +1,5 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
-import base64, json, os, socket, time, urllib.request
+import base64, gzip, json, os, socket, time, urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -169,6 +169,135 @@ def wait_for_content(min_text=200, timeout=15.0, poll=0.5):
             return {**last, "ok": True, "reason": "content"}
         time.sleep(poll)
     return {**last, "ok": False, "reason": "timeout"}
+
+def _cookie_matches_url(cookie, url):
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    domain = (cookie.get("domain") or host).lower()
+    domain_base = domain.lstrip(".")
+    if domain.startswith("."):
+        if host != domain_base and not host.endswith(f".{domain_base}"):
+            return False
+    elif host != domain_base:
+        return False
+    if cookie.get("secure") and parsed.scheme != "https":
+        return False
+    path = cookie.get("path") or "/"
+    request_path = parsed.path or "/"
+    return request_path.startswith(path.rstrip("/") or "/")
+
+def browser_cookies(urls):
+    """Return cookies visible to the attached browser for `urls`.
+
+    This explicitly queries browser session state through CDP. Do not print or
+    commit the returned values.
+    """
+    urls = [urls] if isinstance(urls, str) else list(urls)
+    return cdp("Network.getCookies", urls=urls).get("cookies", [])
+
+def browser_cookie_header(url, cookie_urls=None):
+    """Cookie header for `url` from attached-browser cookies, domain-filtered."""
+    cookie_urls = [url] if cookie_urls is None else ([cookie_urls] if isinstance(cookie_urls, str) else list(cookie_urls))
+    pairs = []
+    seen = set()
+    for cookie in browser_cookies(cookie_urls):
+        name = cookie.get("name")
+        value = cookie.get("value")
+        if not name or value is None or not _cookie_matches_url(cookie, url):
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        pairs.append(f"{name}={value}")
+    return "; ".join(pairs)
+
+def http_get_browser_session(url, headers=None, cookie_urls=None, timeout=20.0):
+    """HTTP GET using the attached browser's user agent and matching cookies.
+
+    This is useful after a real browser profile has passed a site challenge and
+    you want to fetch additional same-domain HTML/API pages without rendering
+    each one. It does not solve challenges; without valid browser cookies it will
+    receive the same block page as ordinary HTTP.
+    """
+    ua = js("navigator.userAgent")
+    h = {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-AU,en;q=0.9",
+        "Accept-Encoding": "gzip",
+    }
+    cookie_header = browser_cookie_header(url, cookie_urls=cookie_urls)
+    if cookie_header:
+        h["Cookie"] = cookie_header
+    if headers:
+        h.update(headers)
+    with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
+        data = r.read()
+        if r.headers.get("Content-Encoding") == "gzip":
+            data = gzip.decompress(data)
+        return data.decode()
+
+def _extract_json_assignment(html, name):
+    marker = f"window.{name}="
+    start = html.find(marker)
+    if start < 0:
+        return None
+    i = html.find("{", start + len(marker))
+    if i < 0:
+        return None
+    depth = 0
+    quote = None
+    escape = False
+    for pos in range(i, len(html)):
+        ch = html[pos]
+        if quote:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == quote:
+                quote = None
+            continue
+        if ch in {"'", '"'}:
+            quote = ch
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return html[i:pos + 1]
+    return None
+
+def _decode_nested_json_strings(value):
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith(("{", "[")):
+            try:
+                return _decode_nested_json_strings(json.loads(stripped))
+            except (TypeError, ValueError):
+                return value
+        return value
+    if isinstance(value, list):
+        return [_decode_nested_json_strings(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _decode_nested_json_strings(v) for k, v in value.items()}
+    return value
+
+def extract_argonaut_exchange(html=None, decode_json_strings=True):
+    """Extract `window.ArgonautExchange` from current page HTML or supplied HTML.
+
+    REA Argonaut pages embed route data as a JSON assignment where values may be
+    JSON-encoded strings. By default those nested strings are decoded too.
+    """
+    if html is None:
+        html = js("document.documentElement.outerHTML")
+    raw = _extract_json_assignment(html or "", "ArgonautExchange")
+    if not raw:
+        return {}
+    data = json.loads(raw)
+    return _decode_nested_json_strings(data) if decode_json_strings else data
 
 # --- input ---
 _debug_click_counter = 0

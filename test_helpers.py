@@ -491,6 +491,92 @@ def test_wait_for_content_accepts_useful_text():
     assert result["reason"] == "content"
 
 
+def test_cookie_matches_url_respects_domain_path_and_secure():
+    assert helpers._cookie_matches_url(
+        {"domain": ".realestate.com.au", "path": "/", "secure": True},
+        "https://www.realestate.com.au/property/1",
+    )
+    assert helpers._cookie_matches_url(
+        {"domain": "www.realestate.com.au", "path": "/property", "secure": True},
+        "https://www.realestate.com.au/property/1",
+    )
+    assert not helpers._cookie_matches_url(
+        {"domain": ".realestate.com.au", "path": "/", "secure": True},
+        "https://www.property.com.au/property/1",
+    )
+    assert not helpers._cookie_matches_url(
+        {"domain": ".realestate.com.au", "path": "/buy", "secure": False},
+        "https://www.realestate.com.au/property/1",
+    )
+    assert not helpers._cookie_matches_url(
+        {"domain": ".realestate.com.au", "path": "/", "secure": True},
+        "http://www.realestate.com.au/property/1",
+    )
+
+
+def test_browser_cookie_header_filters_to_target_domain():
+    cookies = [
+        {"name": "KP_UIDz", "value": "rea", "domain": ".realestate.com.au", "path": "/", "secure": True},
+        {"name": "other", "value": "prop", "domain": ".property.com.au", "path": "/", "secure": True},
+        {"name": "empty", "value": "", "domain": ".realestate.com.au", "path": "/", "secure": True},
+    ]
+    with patch("helpers.browser_cookies", return_value=cookies):
+        assert helpers.browser_cookie_header("https://www.realestate.com.au/property/1") == "KP_UIDz=rea; empty="
+
+
+def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
+    opened = []
+
+    class Response:
+        headers = {"Content-Encoding": "gzip"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return gzip.compress(b"<html>ok</html>")
+
+    def fake_open(req, timeout=0):
+        opened.append((req, timeout))
+        return Response()
+
+    with patch("helpers.js", return_value="Browser UA"), \
+         patch("helpers.browser_cookie_header", return_value="KP_UIDz=rea"), \
+         patch("urllib.request.urlopen", side_effect=fake_open):
+        assert helpers.http_get_browser_session("https://www.realestate.com.au/property/1") == "<html>ok</html>"
+
+    req, timeout = opened[0]
+    assert timeout == 20.0
+    assert req.headers["User-agent"] == "Browser UA"
+    assert req.headers["Cookie"] == "KP_UIDz=rea"
+
+
+def test_extract_argonaut_exchange_decodes_nested_json_strings():
+    nested = {"propertyProfile": {"address": "3003/500 Elizabeth Street", "beds": 3}}
+    exchange = {"resi-property_property-profile": {"property_detail_data": json.dumps(nested)}}
+    html = f"<script>window.ArgonautExchange={json.dumps(exchange)};</script>"
+
+    assert helpers.extract_argonaut_exchange(html) == {
+        "resi-property_property-profile": {"property_detail_data": nested}
+    }
+
+
+def test_extract_argonaut_exchange_handles_braces_inside_strings():
+    exchange = {"app": {"value": "literal } brace", "nested": json.dumps({"x": "{brace}"})}}
+    html = f"<script>window.ArgonautExchange={json.dumps(exchange)};</script><div>after</div>"
+
+    assert helpers.extract_argonaut_exchange(html) == {
+        "app": {"value": "literal } brace", "nested": {"x": "{brace}"}}
+    }
+
+
+def test_extract_argonaut_exchange_returns_empty_dict_when_missing():
+    assert helpers.extract_argonaut_exchange("<html></html>") == {}
+
+
 def test_js_reports_missing_iframe_session_id():
     with patch("helpers.cdp", return_value={}):
         try:
