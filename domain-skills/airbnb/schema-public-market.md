@@ -136,6 +136,108 @@ Fields:
 - `competitor_score`
 - `reason_codes`
 
+## `airbnb_own_public_listing_audit`
+
+Guest-visible public listing-page audit for the host's own live listings. This
+is collected logged out and should not use host-authenticated state.
+
+Fields:
+
+- `listing_id`
+- `observed_at`
+- `logged_in_flag`
+- `source_url`
+- `public_listing_url`
+- `title_text`
+- `title_length`
+- `property_type`
+- `max_guests`
+- `bedrooms`
+- `beds`
+- `bathrooms`
+- `photo_count`
+- `visible_amenities_core`
+- `parking_flag`
+- `pool_spa_flag`
+- `pet_friendly_flag`
+- `workspace_wifi_flag`
+- `family_amenities_flag`
+- `accessible_features_flag`
+- `house_rules_summary_flags`
+- `cancellation_policy_visible`
+- `guest_favourite_visible`
+- `top_percent_badge_visible`
+- `content_confidence`
+
+## `airbnb_own_public_review_summary`
+
+Guest-visible own-listing review and rating summary. Airbnb may expose review
+star percentages instead of exact counts; store percentages and derived count
+estimates separately.
+
+Fields:
+
+- `listing_id`
+- `observed_at`
+- `logged_in_flag`
+- `source_url`
+- `overall_rating`
+- `review_count`
+- `accuracy_rating`
+- `checkin_rating`
+- `cleanliness_rating`
+- `communication_rating`
+- `location_rating`
+- `value_rating`
+- `five_star_pct`
+- `five_star_count_estimate`
+- `four_star_pct`
+- `four_star_count_estimate`
+- `three_star_pct`
+- `three_star_count_estimate`
+- `two_star_pct`
+- `two_star_count_estimate`
+- `one_star_pct`
+- `one_star_count_estimate`
+- `review_theme_tags`
+
+## `airbnb_own_public_search_appearance`
+
+Own-listing guest-visible search/rank appearance for the same search contexts
+used by competitor collection.
+
+Fields:
+
+- `search_run_id`
+- `listing_id`
+- `observed_at`
+- `observer_location_country`
+- `device_type`
+- `logged_in_flag`
+- `currency`
+- `destination`
+- `check_in_date`
+- `check_out_date`
+- `nights`
+- `guest_count_adults`
+- `guest_count_children`
+- `guest_count_pets`
+- `filters_applied`
+- `source_url`
+- `search_appears_flag`
+- `search_result_position`
+- `listing_url`
+- `visible_title_short`
+- `visible_location_label`
+- `visible_price_total`
+- `visible_price_per_night`
+- `visible_rating`
+- `visible_review_count`
+- `visible_badge`
+- `top_home_highlight_visible`
+- `available_flag`
+- `rank_observation_confidence`
+
 ## Public data quality rules
 
 - A price observation is invalid without dates, nights, guests, currency, and

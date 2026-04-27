@@ -74,6 +74,9 @@ Acceptance rules:
 
 - Every downstream observation references `state_run_id`.
 - Public comp work normally uses `logged_in_flag = false`.
+- Public multi-page search ranking must use `logged_in_flag = false`. Owner
+  account login can bias Airbnb ranking toward the owner's listings, so rank
+  observations from an owner session are invalid for market visibility.
 - If a logged-in public run is intentionally performed, it gets a separate
   `state_run_id` and a note explaining the personalization test.
 
@@ -143,6 +146,9 @@ Auth/backend:
 - Use fresh/headful Chrome logged out when Lightpanda misses visual/rank/price
   evidence.
 - Do not use the host auth bundle for normal comp work.
+- Ranking observations are valid only from a logged-out profile. If known
+  Airbnb authenticated-session cookies are present, stop and relaunch a fresh
+  logged-out profile before collecting multi-page search rank.
 - Require the general backend-invariant output rule from
   `interaction-skills/backend-capability.md`: a Lightpanda run and a headful
   Chrome run for the same Airbnb search context should normalize to matching
@@ -252,6 +258,8 @@ Executable workflow:
 - Use `scripts/collect_competitors.py` for closest-competitor collection from
   the latest live-listing inventory.
 - Run logged out in a fresh browser profile.
+- The executable collector refuses public rank collection when known Airbnb
+  authenticated-session cookies are present.
 - Capture multiple future check-in dates as separate search contexts so the
   comp set and price matrix form a time series over repeated runs.
 - Store raw search/listing checkpoints and receipts under ignored private paths.
@@ -400,9 +408,32 @@ Compare against competitors:
 Outputs:
 
 - `airbnb_listing_content_audit`
+- `airbnb_own_public_listing_audit`
+- `airbnb_own_public_review_summary`
+- `airbnb_own_public_search_appearance`
 - own listing rows in public search/result snapshots
 - own listing public price/availability matrix
 - guest-visible state summary
+
+Executable workflow:
+
+- Use `scripts/collect_own_public.py` for logged-out guest-visible collection
+  from the latest complete live-listing inventory.
+- Run it in a fresh logged-out browser profile. Do not attach the host auth
+  bundle or reuse a logged-in host session for this workflow.
+- The executable collector refuses own-listing public search/rank collection
+  when known Airbnb authenticated-session cookies are present.
+- Treat public listing-page content and review summaries as canonical for
+  guest-visible content fields when all active listing pages load and pass
+  field-level checks.
+- Treat search appearance/rank as context-specific: date, nights, guests,
+  destination/query, bedroom filter, currency, device, and logged-in state are
+  all part of the key.
+- Store raw text checkpoints and receipts only in ignored private paths.
+- If a target listing is not seen in the top result window, record
+  `search_appears_flag=false` with `rank_observation_confidence` set to
+  `not_seen_in_top_results`; do not infer that the listing is unavailable or
+  invisible globally.
 
 ## Workflow 5 - Own Listing Private Host State
 

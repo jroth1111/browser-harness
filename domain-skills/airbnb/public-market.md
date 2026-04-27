@@ -32,6 +32,9 @@ read `schema-public-market.md`. For decisions and alerts, read
 - For normal comp intelligence, `logged_in_flag` should be `False`. If it is
   `True`, treat the run as a separate logged-in/personalized observation and do
   not mix it with logged-out guest-market comps.
+- Multi-page search ranking and rank comparisons must be collected logged out.
+  A host/owner session can personalize ordering toward the owner's account and
+  makes rank observations unsuitable for market visibility analysis.
 
 ## Useful URL patterns
 
@@ -105,8 +108,10 @@ search_run = {
 }
 ```
 
-Reject or quarantine a public search run if the browser/session was logged in
-and the task did not explicitly request a logged-in public comparison.
+Reject or quarantine a public search run if the browser/session was logged in.
+For rank/visibility work, there is no owner-session exception; use a fresh
+logged-out profile and store logged-in rank only as a separate personalization
+test when explicitly requested.
 
 Reject or quarantine a public search run if it lacks field-level evidence. A
 loaded Airbnb page title, search form, navigation links, or no-JavaScript alert
@@ -225,6 +230,8 @@ Default behavior:
 - uses only `status == ACTIVE` listings as targets
 - searches Airbnb logged out by target address/building, check-in date,
   3-night stay, adult count, and minimum bedroom count
+- refuses to run if known Airbnb authenticated-session cookies are present,
+  because owner-login state biases public ranking
 - records date-specific public search runs, search-card result rows, price
   matrix rows, target-to-comp links, and deduplicated public comp listing
   snapshots
@@ -272,6 +279,78 @@ Validation from that run: every target had four search contexts, every search
 context had cards, every target had comp links, all card rows had titles and
 total prices, all listing snapshots had rating and capacity fields, and 110 of
 120 listing snapshots exposed visible review star distribution.
+
+## Executable own public collection
+
+Use `scripts/collect_own_public.py` to audit the host's own live listings as a
+logged-out guest. This workflow closes the gap between private listing
+inventory and what guests can actually see in public search/listing pages.
+
+Default behavior:
+
+- reads the latest complete `airbnb-live-listings-*.json` private artifact
+  produced by `scripts/collect_listings.py`
+- uses only `status == ACTIVE` listings as targets
+- opens every public room page logged out and records content, amenity, rules,
+  badge, rating-category, review-count, and review-star-distribution fields
+- runs logged-out public searches for each target listing using target address
+  or location, dates, stay length, adult count, and bedroom filter
+- refuses to run if known Airbnb authenticated-session cookies are present,
+  because own-listing rank must not be observed from the owner's account
+- records whether the host listing appears in the top result window, its rank,
+  visible title/location, total guest price, rating, review count, and badge
+- writes JSON/CSV outputs under ignored `.private-data/own-public-collections/`
+- stores a capability receipt under ignored `.session-store/capability/`
+- refuses partial listing inventories by default. Use `AIRBNB_LISTINGS_FILE`
+  only when intentionally testing against a partial scope.
+
+Useful controls:
+
+```text
+AIRBNB_OWN_PUBLIC_CHECKIN_DATES=2026-05-15,2026-06-12
+AIRBNB_OWN_PUBLIC_CHECKIN_OFFSETS=14,30,60,90
+AIRBNB_OWN_PUBLIC_NIGHTS=3,7
+AIRBNB_OWN_PUBLIC_TOP_RESULTS=30
+AIRBNB_OWN_PUBLIC_NAV_DELAY_SEC=2
+AIRBNB_OWN_PUBLIC_LIMIT_LISTINGS=1
+AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
+```
+
+Run against a fresh logged-out agent Chrome profile:
+
+```bash
+browser-harness --launch-profile domain-skills/airbnb/.session-store/profiles/own-public \
+  --port 52872 --url about:blank --json
+
+BH_NAME=airbnb-own-public BH_CDP_WS=http://127.0.0.1:52872 \
+  python3 run.py < domain-skills/airbnb/scripts/collect_own_public.py
+```
+
+Search-card parsing trap: Airbnb cards may put date lines such as
+`26 to 30 May`, `26-30 May`, or `29 May to 1 June` before the title. Do not
+accept the first non-empty card line as `visible_title_short`; skip date, price,
+capacity, badge, rating, and "Show price breakdown" lines, then prefer the
+first remaining title-like line after the location label.
+
+Empirical own-public run on 2026-04-27:
+
+- 27 active target listings
+- 27 logged-out public listing-page content audits
+- 27 logged-out public review summaries
+- 27 logged-out search/rank contexts for 2026-05-27 to 2026-05-30
+- 3 own listings appeared in the top 30 result window for their target context
+- 27 of 27 review rows had overall rating and review count
+- 20 of 27 review rows exposed star distribution and rating categories
+- 0 failures
+
+Validation from that run: every public listing page loaded, every target search
+context had cards, every content row had title/capacity fields, every review row
+had an overall rating, and no own search-appearance row had a date string parsed
+as the title. The seven missing star-distribution rows were missing because
+Airbnb did not expose that widget in the logged-out listing text for those
+listings. A separate one-listing guard smoke run confirmed the executable
+receipt records the logged-out guard and zero authenticated-session cookie names
+before collecting rank fields.
 
 ## Host-facing outputs
 

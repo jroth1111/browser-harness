@@ -51,6 +51,14 @@ belongs to a market, competitor, or own-listing state run from
 | Public review themes | review text, host response, stay metadata where visible | Listing review section | Lightpanda only if reviews render with field parity |
 | Public Help/Resource docs | feature definitions, pricing tools, policy semantics | Static pages | Lightpanda or HTTP |
 
+For own guest-visible collection, run `scripts/collect_own_public.py` logged
+out against a fresh browser profile. It consumes the complete live-listing
+inventory, opens each own public listing page, records content/review/rating
+fields, and runs own-listing public search appearances for date-specific rank
+and price context. Public data from this workflow belongs in
+`airbnb_own_public_listing_audit`, `airbnb_own_public_review_summary`, and
+`airbnb_own_public_search_appearance`.
+
 ## Authenticated Airbnb primitives
 
 | Primitive family | Examples | Capture method | Backend |

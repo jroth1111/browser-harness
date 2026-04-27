@@ -112,6 +112,10 @@ Fields:
 - Public search/card observations must contain result-card evidence. For comp
   price runs, require room/listing identity plus total-price evidence; do not
   use page text length alone.
+- Public search ranking observations must be logged out. If known Airbnb
+  authenticated-session cookies are present, rank and visibility fields are
+  invalid for market analysis because owner-account state can personalize
+  ordering.
 - Public comp price matrices with zero valid cards or zero valid prices are
   evidence gaps, not market signals.
 - Backend parity must be sampled for new Airbnb public URL families. If

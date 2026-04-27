@@ -3,7 +3,7 @@
 Run from the browser-harness repo against a fresh logged-out agent Chrome
 profile:
 
-    python3 run.py --launch-profile domain-skills/airbnb/.session-store/profiles/public-comps \
+    browser-harness --launch-profile domain-skills/airbnb/.session-store/profiles/public-comps \
       --port 52870 --url about:blank --json
 
     BH_NAME=airbnb-public-comps BH_CDP_WS=http://127.0.0.1:52870 \
@@ -37,6 +37,17 @@ DEFAULT_TOP_RESULTS = "12"
 DEFAULT_TOP_COMPS_PER_CONTEXT = "8"
 DEFAULT_MAX_LISTING_SNAPSHOTS = "120"
 _NAVIGATED = False
+AUTH_COOKIE_NAMES = {
+    "_aaj",
+    "_aat",
+    "_airbed_session_id",
+    "_iidt",
+    "_pt",
+    "_vid_t",
+    "hli",
+    "li",
+    "rclu",
+}
 
 
 def utc_now():
@@ -51,6 +62,24 @@ def navigate(url):
         _NAVIGATED = True
     else:
         goto_url(url)
+
+
+def assert_logged_out_public_session():
+    cookies = browser_cookies([BASE + "/"])
+    names = sorted({cookie.get("name") for cookie in cookies if cookie.get("name")})
+    auth_names = sorted(set(names) & AUTH_COOKIE_NAMES)
+    if auth_names:
+        raise SystemExit(
+            "Refusing public search/rank collection in a logged-in Airbnb session; "
+            f"detected authenticated cookie names {auth_names}. Use a fresh logged-out "
+            "browser profile because owner-account login biases public ranking."
+        )
+    return {
+        "checked": True,
+        "expected_logged_out": True,
+        "auth_cookie_names_present": auth_names,
+        "cookie_name_count": len(names),
+    }
 
 
 def latest_live_listing_file() -> Path:
@@ -127,6 +156,17 @@ def money_to_int(text):
     return int(match.group(1).replace(",", "")) if match else None
 
 
+def is_search_card_date_line(line):
+    normalized = line.replace("\u2013", " to ").replace("\u2014", " to ")
+    normalized = re.sub(r"[\u00a0\u2000-\u200b\u202f]+", " ", normalized)
+    month = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)"
+    return bool(
+        re.search(rf"\b\d{{1,2}}\s+(?:to|-)\s+\d{{1,2}}\s+{month}\b", normalized, re.I)
+        or re.search(rf"\b\d{{1,2}}\s+{month}\s+(?:to|-)\s+\d{{1,2}}(?:\s+{month})?\b", normalized, re.I)
+        or re.search(rf"\b{month}\s+\d{{1,2}}\s+(?:to|-)\s+(?:{month}\s+)?\d{{1,2}}\b", normalized, re.I)
+    )
+
+
 def first_match(pattern, text, cast=None):
     match = re.search(pattern, text or "", re.I)
     if not match:
@@ -153,12 +193,21 @@ def parse_card_text(text):
     bathrooms = first_match(r"([0-9]+(?:\.[0-9]+)?)\s+baths?", text, float)
     title = None
     location = None
+    title_candidates = []
     for line in lines:
-        if " in " in line and not line.startswith("$"):
+        if " in " in line and not re.search(r"\$|AUD|rating|reviews?|bedrooms?|beds?|baths?|guests?", line, re.I):
             location = line
             continue
-        if title is None and not re.search(r"bedroom|beds?|baths?|AUD|rating|reviews?|guest favourite|superhost", line, re.I):
-            title = line
+        if is_search_card_date_line(line):
+            continue
+        if re.search(r"\$|AUD|rating|reviews?|guest favourite|superhost|show price breakdown", line, re.I):
+            continue
+        if re.search(r"\b\d+(?:\.\d+)?\s*(?:guests?|bedrooms?|beds?|baths?)\b", line, re.I):
+            continue
+        if re.fullmatch(r"[,.\u00b7\s]+", line):
+            continue
+        title_candidates.append(line)
+    title = title_candidates[0] if title_candidates else None
     return {
         "visible_title_short": title,
         "visible_location_label": location,
@@ -341,6 +390,7 @@ def write_csv(path, rows):
 def main():
     observed_at = utc_now()
     run_id = os.environ.get("AIRBNB_COMP_RUN_ID") or "airbnb-public-comps-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    logged_out_guard = assert_logged_out_public_session()
     listing_file = latest_live_listing_file()
     listing_run = json.loads(listing_file.read_text())
     listings = [row for row in listing_run.get("records") or [] if row.get("status") == "ACTIVE"]
@@ -559,6 +609,7 @@ def main():
             "backend": "headful_chrome_logged_out",
             "collection_strategy": "Airbnb public search cards by target listing/date/stay length, then deduplicated public listing snapshots",
             "granularity_strategy": "date-specific search contexts; rerun over time to build time series",
+            "logged_out_guard": logged_out_guard,
             "raw_search_path": str(raw_search_path),
             "raw_listing_path": str(raw_listing_path),
         },
@@ -597,6 +648,7 @@ def main():
     receipt = {
         "run_id": run_id,
         "observed_at": observed_at,
+        "logged_out_guard": logged_out_guard,
         "target_listing_count": len(listings),
         "expected_search_runs": expected_search_runs,
         "search_run_count": len(search_runs),
@@ -620,4 +672,5 @@ def main():
     print(json.dumps(receipt, indent=2, ensure_ascii=False), flush=True)
 
 
-main()
+if __name__ == "__main__":
+    main()

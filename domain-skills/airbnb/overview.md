@@ -166,9 +166,13 @@ Phase 3 - revenue optimization:
 3. `airbnb_public_search_result_snapshot`
 4. `airbnb_public_comp_listing_snapshot`
 5. `airbnb_public_price_availability_matrix`
-6. Price-index and booking-pace alerts
+6. `airbnb_own_public_listing_audit`
+7. `airbnb_own_public_review_summary`
+8. `airbnb_own_public_search_appearance`
+9. Price-index and booking-pace alerts
 
-Outcome: comp-set price intelligence and restriction optimization.
+Outcome: comp-set price intelligence, own guest-visible positioning, and
+restriction optimization.
 
 Phase 4 - operational scale:
 
