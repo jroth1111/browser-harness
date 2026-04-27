@@ -301,6 +301,8 @@ Default behavior:
 - uses only `status == ACTIVE` listings as targets
 - opens every public room page logged out and records content, amenity, rules,
   badge, rating-category, review-count, and review-star-distribution fields
+- records `rating_category_source` so absent category ratings are treated as an
+  Airbnb visibility state, not silently as parser failure
 - runs logged-out public searches for each target listing using target address
   or location, dates, stay length, adult count, and bedroom filter
 - refuses to run if known Airbnb authenticated-session cookies are present,

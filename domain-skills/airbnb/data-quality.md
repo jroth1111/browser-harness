@@ -119,6 +119,10 @@ Fields:
 - Public rank observations must preserve the bounded result window: requested
   result limit, scroll depth/page, search context, and whether the row was from
   the initial viewport or lazy-loaded search results.
+- Public review/category fields must carry source/status fields such as
+  `rating_display_state`, `star_distribution_source`, and
+  `rating_category_source`; do not backfill listing-level nulls from host
+  aggregate review widgets.
 - Public comp price matrices with zero valid cards or zero valid prices are
   evidence gaps, not market signals.
 - Backend parity must be sampled for new Airbnb public URL families. If

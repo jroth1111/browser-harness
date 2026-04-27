@@ -57,6 +57,7 @@ def test_parse_listing_text_extracts_review_distribution_and_categories():
     assert parsed["cleanliness_rating"] == 4.8
     assert parsed["accuracy_rating"] == 4.9
     assert parsed["checkin_rating"] == 4.7
+    assert parsed["rating_category_source"] == "category_widget"
     assert parsed["5_star_pct"] == 87
     assert parsed["5_star_count_estimate"] == 110
     assert parsed["1_star_pct"] == 1
@@ -89,6 +90,7 @@ def test_parse_listing_text_does_not_confuse_host_reviews_for_listing_reviews():
     assert parsed["overall_rating"] is None
     assert parsed["rating_display_state"] == "no_reviews_yet"
     assert parsed["star_distribution_source"] == "not_visible"
+    assert parsed["rating_category_source"] == "not_visible"
     assert parsed.get("5_star_pct") is None
 
 
@@ -116,6 +118,7 @@ def test_parse_listing_text_uses_visible_individual_review_distribution_for_low_
     assert parsed["review_count"] == 1
     assert parsed["overall_rating"] is None
     assert parsed["rating_display_state"] == "hidden_until_minimum_reviews"
+    assert parsed["rating_category_source"] == "not_visible"
     assert parsed["5_star_pct"] == 100
     assert parsed["5_star_count_estimate"] == 1
     assert parsed["star_distribution_source"] == "visible_individual_review_stars"

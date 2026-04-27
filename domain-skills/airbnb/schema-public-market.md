@@ -193,6 +193,7 @@ Fields:
 - `review_count`
 - `rating_display_state`
 - `review_scope_confidence`
+- `rating_category_source`
 - `accuracy_rating`
 - `checkin_rating`
 - `cleanliness_rating`

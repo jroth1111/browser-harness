@@ -382,6 +382,9 @@ visible_price_total
 visible_price_per_night
 rating
 review_count
+rating_display_state
+star_distribution_source
+rating_category_source
 visible_badges
 hero_photo_subject
 property_type

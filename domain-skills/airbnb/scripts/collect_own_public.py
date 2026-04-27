@@ -290,6 +290,12 @@ def rating_display_state(scope, rating, review_count):
     return "not_visible"
 
 
+def rating_category_source(category_ratings):
+    if any(value is not None for value in category_ratings.values()):
+        return "category_widget"
+    return "not_visible"
+
+
 def parse_listing_text(text):
     text = re.sub(r"\n{2,}", "\n", (text or "").strip())
     review_scope = listing_review_scope(text)
@@ -309,6 +315,14 @@ def parse_listing_text(text):
         rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 average rating", review_scope, float)
     review_count = parse_listing_review_count(review_scope)
     star_distribution = parse_review_star_distribution(review_scope, review_count)
+    category_ratings = {
+        "accuracy_rating": parse_rating_category(review_scope, "Accuracy"),
+        "checkin_rating": parse_rating_category(review_scope, "Check-in"),
+        "cleanliness_rating": parse_rating_category(review_scope, "Cleanliness"),
+        "communication_rating": parse_rating_category(review_scope, "Communication"),
+        "location_rating": parse_rating_category(review_scope, "Location"),
+        "value_rating": parse_rating_category(review_scope, "Value"),
+    }
     amenities_text = text.lower()
     cancellation = first_match(r"(Flexible|Moderate|Firm|Strict|Non-refundable)[^\n]*(?:cancellation|refund)?", text)
     checkin = first_match(r"(Check-in after[^\n]+)", text)
@@ -325,12 +339,8 @@ def parse_listing_text(text):
         "review_count": review_count,
         "rating_display_state": rating_display_state(review_scope, rating, review_count),
         "review_scope_confidence": "listing_section_before_host",
-        "accuracy_rating": parse_rating_category(review_scope, "Accuracy"),
-        "checkin_rating": parse_rating_category(review_scope, "Check-in"),
-        "cleanliness_rating": parse_rating_category(review_scope, "Cleanliness"),
-        "communication_rating": parse_rating_category(review_scope, "Communication"),
-        "location_rating": parse_rating_category(review_scope, "Location"),
-        "value_rating": parse_rating_category(review_scope, "Value"),
+        "rating_category_source": rating_category_source(category_ratings),
+        **category_ratings,
         "guest_favourite_visible": bool(re.search(r"guest favourite", text, re.I)),
         "top_percent_badge_visible": first_match(r"(Top\s+\d+%[^\\n]*)", text),
         "parking_flag": bool(re.search(r"\bparking\b|car ?park|garage", amenities_text)),
@@ -596,6 +606,7 @@ def main():
             "communication_rating": parsed.get("communication_rating"),
             "location_rating": parsed.get("location_rating"),
             "value_rating": parsed.get("value_rating"),
+            "rating_category_source": parsed.get("rating_category_source"),
             "five_star_pct": parsed.get("5_star_pct"),
             "five_star_count_estimate": parsed.get("5_star_count_estimate"),
             "four_star_pct": parsed.get("4_star_pct"),
@@ -761,6 +772,7 @@ def main():
         ]),
         "review_rows_no_reviews_yet_count": len([row for row in review_summaries if row.get("rating_display_state") == "no_reviews_yet"]),
         "review_rows_hidden_until_minimum_reviews_count": len([row for row in review_summaries if row.get("rating_display_state") == "hidden_until_minimum_reviews"]),
+        "review_rows_rating_category_not_visible_count": len([row for row in review_summaries if row.get("rating_category_source") == "not_visible"]),
         "failures_count": len(failures),
         "all_public_listing_pages_ok": len(content_audits) == len(listings),
         "all_search_contexts_attempted": len(search_runs) == expected_search_runs,
