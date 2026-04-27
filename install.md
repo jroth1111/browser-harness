@@ -53,7 +53,7 @@ print(page_info())
 PY
 ```
 
-   Reuse an existing healthy daemon if it is already responding. Do not kill it during setup unless the attach is clearly stale and you are confident no other agent is using the same `BU_NAME`. For parallel agents, use distinct `BU_NAME`s so they do not fight over the same default session.
+   Reuse an existing healthy daemon if it is already responding. Do not kill it during setup unless the attach is clearly stale and you are confident no other agent is using the same `BH_NAME`. For parallel agents, use distinct `BH_NAME`s so they do not fight over the same default session.
 
 3. If it failed, **read the error and escalate from there — do not assume you need `chrome://inspect`**. The remote-debugging checkbox is per-profile sticky in Chrome, so any profile that has had it toggled on once will auto-enable CDP on every future launch; the inspect page is only needed the first time per profile.
 
@@ -97,7 +97,7 @@ If restart_daemon() also hangs, kill Chrome entirely, clean sockets, and reopen:
 
 ```bash
 pkill -9 -f "Google Chrome"
-rm -f /tmp/bu-default.sock /tmp/bu-default.pid
+rm -f /tmp/bh-default.sock /tmp/bh-default.pid
 open -a "Google Chrome"
 ```
 
@@ -107,27 +107,26 @@ Wait 5 seconds, then reconnect. This resets all CDP state.
 
 ## Maintenance commands
 
-- browser-harness --doctor — show version, install mode, daemon and Chrome state, and whether an update is pending.
+- browser-harness --doctor - show local daemon, endpoint, and CDP hygiene.
 - browser-harness --setup — re-run the full interactive browser-attach flow.
-- browser-harness --update -y — pull the latest version and restart the daemon. Run this yourself when you see the `[browser-harness] update available: X -> Y` banner — don't ask the user. The banner is rate-limited to once per day.
+- browser-harness --update -y - explicitly check for an update, pull it, and restart the daemon.
 
 ## Architecture
 
 ```text
-Chrome -> CDP WS -> daemon.py -> /tmp/bu-<NAME>.sock -> run.py
+Chrome -> CDP WS -> daemon.py -> /tmp/bh-<NAME>.sock -> run.py
 ```
 
 - Protocol is one JSON line each way.
 - Requests are {method, params, session_id} for CDP or {meta: ...} for daemon control.
 - Responses are {result} / {error} / {events} / {session_id}.
-- BU_NAME namespaces socket, pid, and log files.
+- BH_NAME namespaces socket, pid, and log files.
 
 ## Keeping the harness current
 
-- On each run, `browser-harness` prints `[browser-harness] update available: X -> Y` (once per day) when a newer GitHub release exists.
-- When you see that banner, run `browser-harness --update -y` yourself — don't ask the user. It pulls the new code (`git pull --ff-only` for editable clones, `uv tool upgrade browser-harness` for PyPI installs) and stops the running daemon so the next call picks up the new code. With `-y` it won't prompt.
+- Run `browser-harness --update -y` when the user explicitly asks to update. It pulls the new code (`git pull --ff-only` for editable clones, `uv tool upgrade browser-harness` for PyPI installs) and stops the running daemon so the next call picks up the new code. With `-y` it won't prompt.
 - `--update` refuses to run on an editable clone with uncommitted changes. If that happens, tell the user and let them resolve the dirty worktree.
-- Use `browser-harness --doctor` any time to see version, install mode, daemon and Chrome state, and whether an update is pending.
+- Use `browser-harness --doctor` any time to see local daemon, endpoint, and CDP hygiene.
 
 ## Cold-start reminders
 

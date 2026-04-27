@@ -3,8 +3,6 @@ import os, sys
 from admin import (
     _version,
     ensure_daemon,
-    list_local_profiles,
-    print_update_banner,
     restart_daemon,
     run_doctor,
     run_setup,
@@ -17,7 +15,7 @@ HELP = """Browser Harness
 Read SKILL.md for the default workflow and examples.
 
 Typical usage:
-  uv run bh <<'PY'
+  browser-harness <<'PY'
   ensure_real_tab()
   print(page_info())
   PY
@@ -26,7 +24,8 @@ Helpers are pre-imported. The daemon auto-starts and connects to the running bro
 
 Commands:
   browser-harness --version        print the installed version
-  browser-harness --doctor         diagnose install, daemon, and browser state
+  browser-harness --doctor [--json] [--network]
+                                   diagnose local daemon, endpoint, and CDP state
   browser-harness --setup          interactively attach to your running browser
   browser-harness --update [-y]    pull the latest version (agents: pass -y)
   browser-harness --reload         stop the daemon so next call picks up code changes
@@ -42,7 +41,12 @@ def main():
         print(_version() or "unknown")
         return
     if args and args[0] == "--doctor":
-        sys.exit(run_doctor())
+        allowed = {"--json", "--network"}
+        unknown = [a for a in args[1:] if a not in allowed]
+        if unknown:
+            print(f"unsupported --doctor flag: {unknown[0]}", file=sys.stderr)
+            sys.exit(2)
+        sys.exit(run_doctor(json_output="--json" in args[1:], network="--network" in args[1:]))
     if args and args[0] == "--setup":
         sys.exit(run_setup())
     if args and args[0] == "--update":
@@ -55,11 +59,18 @@ def main():
     if args and args[0] == "--debug-clicks":
         os.environ["BH_DEBUG_CLICKS"] = "1"
         args = args[1:]
-    if not args or args[0] != "-c":
+    if args and args[0] == "-c":
+        if len(args) < 2:
+            sys.exit("Usage: browser-harness -c \"print(page_info())\"")
+        code = args[1]
+    elif not args and not sys.stdin.isatty():
+        code = sys.stdin.read()
+        if not code.strip():
+            sys.exit("Usage: browser-harness -c \"print(page_info())\"")
+    else:
         sys.exit("Usage: browser-harness -c \"print(page_info())\"")
-    print_update_banner()
     ensure_daemon()
-    exec(args[1], globals())
+    exec(code, globals())
 
 
 if __name__ == "__main__":

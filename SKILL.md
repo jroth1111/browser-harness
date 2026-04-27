@@ -11,7 +11,7 @@ Direct browser control via CDP. Read helpers.py — that's where the functions l
 
 ```bash
 browser-harness <<'PY'
-new_tab("https://docs.browser-use.com")
+new_tab("https://example.com")
 wait_for_load()
 print(page_info())
 PY

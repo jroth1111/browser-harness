@@ -1,7 +1,15 @@
-"""CDP WS holder + Unix socket relay. One daemon per BU_NAME."""
-import asyncio, json, os, socket, sys, time, urllib.request
+"""CDP WS holder + Unix socket relay. One daemon per BH_NAME."""
+import asyncio
+import ipaddress
+import json
+import os
+import socket
+import sys
+import time
+import urllib.request
 from collections import deque
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 from cdp_use.client import CDPClient
 
@@ -20,10 +28,10 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME", "default")
-SOCK = f"/tmp/bu-{NAME}.sock"
-LOG = f"/tmp/bu-{NAME}.log"
-PID = f"/tmp/bu-{NAME}.pid"
+NAME = os.environ.get("BH_NAME", "default")
+SOCK = f"/tmp/bh-{NAME}.sock"
+LOG = f"/tmp/bh-{NAME}.log"
+PID = f"/tmp/bh-{NAME}.pid"
 BUF = 500
 PROFILES = [
     Path.home() / "Library/Application Support/Google/Chrome",
@@ -55,31 +63,129 @@ def log(msg):
     open(LOG, "a").write(f"{msg}\n")
 
 
-def get_ws_url():
-    if url := os.environ.get("BU_CDP_WS"):
+def _is_loopback_host(host):
+    if not host:
+        return False
+    host = host.strip("[]").lower()
+    if host in {"localhost", "localhost."}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _redact_url(url):
+    parsed = urlparse(url)
+    if not parsed.username and not parsed.password:
         return url
+    host = parsed.hostname or ""
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    return urlunparse((parsed.scheme, host, parsed.path, "", parsed.query, parsed.fragment))
+
+
+def _remote_allowed():
+    return os.environ.get("BH_CDP_ALLOW_REMOTE") == "1"
+
+
+def _validate_endpoint_url(url, *, source, http_base=None):
+    parsed = urlparse(url)
+    if parsed.scheme not in {"ws", "http"}:
+        raise RuntimeError(f"unsupported CDP endpoint scheme: {parsed.scheme or '(missing)'}")
+    if parsed.username or parsed.password:
+        raise RuntimeError("CDP endpoint URLs must not contain credentials")
+    host = parsed.hostname
+    port = parsed.port
+    is_loopback = _is_loopback_host(host)
+    allowed_remote = _remote_allowed()
+    warnings = []
+    if not is_loopback:
+        if not allowed_remote:
+            raise RuntimeError(
+                "refusing non-loopback CDP endpoint; set BH_CDP_ALLOW_REMOTE=1 only for a user-owned self-hosted browser"
+            )
+        warnings.append("remote CDP endpoint allowed by BH_CDP_ALLOW_REMOTE=1")
+    return {
+        "source": source,
+        "input": "BH_CDP_WS" if source == "env" else "DevToolsActivePort",
+        "resolved_url": _redact_url(url),
+        "http_base": _redact_url(http_base) if http_base else None,
+        "host": host,
+        "port": port,
+        "is_loopback": is_loopback,
+        "remote_allowed": allowed_remote and not is_loopback,
+        "warnings": warnings,
+    }
+
+
+def _resolve_devtools_http_base(url):
+    parsed = urlparse(url)
+    if parsed.scheme != "http":
+        raise RuntimeError(f"unsupported DevTools HTTP endpoint scheme: {parsed.scheme or '(missing)'}")
+    info = _validate_endpoint_url(url, source="env", http_base=url)
+    base = url.rstrip("/")
+    with urllib.request.urlopen(f"{base}/json/version", timeout=5) as resp:
+        data = json.loads(resp.read().decode())
+    ws_url = data.get("webSocketDebuggerUrl")
+    if not ws_url:
+        raise RuntimeError(f"{_redact_url(url)}/json/version did not include webSocketDebuggerUrl")
+    ws_info = _validate_endpoint_url(ws_url, source="env", http_base=url)
+    ws_info["warnings"] = [*info["warnings"], *ws_info["warnings"]]
+    return ws_url, ws_info
+
+
+def _resolve_cdp_endpoint_from_env():
+    url = os.environ.get("BH_CDP_WS")
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme == "http":
+        return _resolve_devtools_http_base(url)
+    info = _validate_endpoint_url(url, source="env")
+    return url, info
+
+
+def _resolve_cdp_endpoint_from_devtools_active_port(wait_for_port=True):
     for base in PROFILES:
         try:
             port, path = (base / "DevToolsActivePort").read_text().strip().split("\n", 1)
         except (FileNotFoundError, NotADirectoryError):
             continue
-        deadline = time.time() + 30
-        while True:
-            probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            probe.settimeout(1)
-            try:
-                probe.connect(("127.0.0.1", int(port.strip())))
-                break
-            except OSError:
-                if time.time() >= deadline:
-                    raise RuntimeError(
-                        f"Chrome's remote-debugging page is open, but DevTools is not live yet on 127.0.0.1:{port.strip()} — if Chrome opened a profile picker, choose your normal profile first, then tick the checkbox and click Allow if shown"
-                    )
-                time.sleep(1)
-            finally:
-                probe.close()
-        return f"ws://127.0.0.1:{port.strip()}{path.strip()}"
-    raise RuntimeError(f"DevToolsActivePort not found in {[str(p) for p in PROFILES]} — enable chrome://inspect/#remote-debugging")
+        port = port.strip()
+        path = path.strip()
+        if wait_for_port:
+            deadline = time.time() + 30
+            while True:
+                probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                probe.settimeout(1)
+                try:
+                    probe.connect(("127.0.0.1", int(port)))
+                    break
+                except OSError:
+                    if time.time() >= deadline:
+                        raise RuntimeError(
+                            "Chrome's remote-debugging page is open, but DevTools is not live yet "
+                            f"on 127.0.0.1:{port} - if Chrome opened a profile picker, choose your "
+                            "normal profile first, then tick the checkbox and click Allow if shown"
+                        )
+                    time.sleep(1)
+                finally:
+                    probe.close()
+        url = f"ws://127.0.0.1:{port}{path}"
+        return url, _validate_endpoint_url(url, source="devtools_active_port")
+    raise RuntimeError(f"DevToolsActivePort not found in {[str(p) for p in PROFILES]} - enable chrome://inspect/#remote-debugging")
+
+
+def resolve_cdp_endpoint(wait_for_port=True):
+    env_endpoint = _resolve_cdp_endpoint_from_env()
+    if env_endpoint:
+        return env_endpoint
+    return _resolve_cdp_endpoint_from_devtools_active_port(wait_for_port=wait_for_port)
+
+
+def get_ws_url():
+    return resolve_cdp_endpoint()[0]
 
 
 def is_real_page(t):
@@ -90,6 +196,7 @@ class Daemon:
     def __init__(self):
         self.cdp = None
         self.session = None
+        self.endpoint_info = None
         self.events = deque(maxlen=BUF)
         self.dialog = None
         self.stop = None  # asyncio.Event, set inside start()
@@ -99,7 +206,6 @@ class Daemon:
         targets = (await self.cdp.send_raw("Target.getTargets"))["targetInfos"]
         pages = [t for t in targets if is_real_page(t)]
         if not pages:
-            # No real pages — create one instead of attaching to omnibox popup
             tid = (await self.cdp.send_raw("Target.createTarget", {"url": "about:blank"}))["targetId"]
             log(f"no real pages found, created about:blank ({tid})")
             pages = [{"targetId": tid, "url": "about:blank", "type": "page"}]
@@ -107,20 +213,12 @@ class Daemon:
             "Target.attachToTarget", {"targetId": pages[0]["targetId"], "flatten": True}
         ))["sessionId"]
         log(f"attached {pages[0]['targetId']} ({pages[0].get('url','')[:80]}) session={self.session}")
-        for d in ("Page", "DOM", "Runtime", "Network"):
-            try:
-                await asyncio.wait_for(
-                    self.cdp.send_raw(f"{d}.enable", session_id=self.session),
-                    timeout=5
-                )
-            except Exception as e:
-                log(f"enable {d}: {e}")
         return pages[0]
 
     async def start(self):
         self.stop = asyncio.Event()
-        url = get_ws_url()
-        log(f"connecting to {url}")
+        url, self.endpoint_info = resolve_cdp_endpoint()
+        log(f"connecting to {_redact_url(url)}")
         self.cdp = CDPClient(url)
         try:
             await self.cdp.start()
@@ -128,17 +226,15 @@ class Daemon:
             raise RuntimeError(f"CDP WS handshake failed: {e} -- click Allow in Chrome if prompted, then retry")
         await self.attach_first_page()
         orig = self.cdp._event_registry.handle_event
-        mark_js = "if(!document.title.startsWith('\U0001F7E2'))document.title='\U0001F7E2 '+document.title"
+
         async def tap(method, params, session_id=None):
             self.events.append({"method": method, "params": params, "session_id": session_id})
             if method == "Page.javascriptDialogOpening":
                 self.dialog = params
             elif method == "Page.javascriptDialogClosed":
                 self.dialog = None
-            elif method in ("Page.loadEventFired", "Page.domContentEventFired"):
-                try: await asyncio.wait_for(self.cdp.send_raw("Runtime.evaluate", {"expression": mark_js}, session_id=self.session), timeout=2)
-                except Exception: pass
             return await orig(method, params, session_id)
+
         self.cdp._event_registry.handle_event = tap
 
     async def handle(self, req):
@@ -147,12 +243,9 @@ class Daemon:
             out = list(self.events); self.events.clear()
             return {"events": out}
         if meta == "session":     return {"session_id": self.session}
+        if meta == "endpoint_info": return {"endpoint_info": self.endpoint_info}
         if meta == "set_session":
             self.session = req.get("session_id")
-            try:
-                await asyncio.wait_for(self.cdp.send_raw("Page.enable", session_id=self.session), timeout=3)
-                await asyncio.wait_for(self.cdp.send_raw("Runtime.evaluate", {"expression": "if(!document.title.startsWith('\U0001F7E2'))document.title='\U0001F7E2 '+document.title"}, session_id=self.session), timeout=2)
-            except Exception: pass
             return {"session_id": self.session}
         if meta == "pending_dialog": return {"dialog": self.dialog}
         if meta == "shutdown":    self.stop.set(); return {"ok": True}

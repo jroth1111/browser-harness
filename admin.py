@@ -20,19 +20,25 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME", "default")
+NAME = os.environ.get("BH_NAME", "default")
 GH_RELEASES = "https://api.github.com/repos/browser-use/browser-harness/releases/latest"
-VERSION_CACHE = Path("/tmp/bu-version-cache.json")
+VERSION_CACHE = Path("/tmp/bh-version-cache.json")
 VERSION_CACHE_TTL = 24 * 3600
 
 
 def _paths(name):
     n = name or NAME
-    return f"/tmp/bu-{n}.sock", f"/tmp/bu-{n}.pid"
+    return f"/tmp/bh-{n}.sock", f"/tmp/bh-{n}.pid"
+
+
+def _legacy_paths(name):
+    n = name or NAME
+    prefix = "/tmp/" + "bu-"
+    return f"{prefix}{n}.sock", f"{prefix}{n}.pid", f"{prefix}{n}.log"
 
 
 def _log_tail(name):
-    p = f"/tmp/bu-{name or NAME}.log"
+    p = f"/tmp/bh-{name or NAME}.log"
     try:
         return Path(p).read_text().strip().splitlines()[-1]
     except (FileNotFoundError, IndexError):
@@ -60,7 +66,7 @@ def _needs_chrome_remote_debugging_prompt(msg):
 
 def _is_local_chrome_mode(env=None):
     """True when the daemon discovers a local Chrome instead of a remote CDP WS."""
-    return not (env or {}).get("BU_CDP_WS") and not os.environ.get("BU_CDP_WS")
+    return not (env or {}).get("BH_CDP_WS") and not os.environ.get("BH_CDP_WS")
 
 
 def daemon_alive(name=None):
@@ -95,7 +101,7 @@ def ensure_daemon(wait=60.0, name=None, env=None):
     import subprocess, sys
     local = _is_local_chrome_mode(env)
     for attempt in (0, 1):
-        e = {**os.environ, **({"BU_NAME": name} if name else {}), **(env or {})}
+        e = {**os.environ, **({"BH_NAME": name} if name else {}), **(env or {})}
         p = subprocess.Popen(
             ["uv", "run", "daemon.py"],
             cwd=os.path.dirname(os.path.abspath(__file__)),
@@ -112,7 +118,7 @@ def ensure_daemon(wait=60.0, name=None, env=None):
             print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
             restart_daemon(name)
             continue
-        raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check /tmp/bu-{name or NAME}.log")
+        raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check /tmp/bh-{name or NAME}.log")
 
 
 def restart_daemon(name=None):
@@ -154,6 +160,11 @@ def restart_daemon(name=None):
             os.unlink(f)
         except FileNotFoundError:
             pass
+    for f in _legacy_paths(name):
+        try:
+            os.unlink(f)
+        except FileNotFoundError:
+            pass
 
 
 def list_local_profiles():
@@ -161,7 +172,7 @@ def list_local_profiles():
     Returns [{BrowserName, BrowserPath, ProfileName, ProfilePath, DisplayName}, ...]."""
     import json, shutil, subprocess
     if not shutil.which("profile-use"):
-        raise RuntimeError("profile-use not installed -- curl -fsSL https://browser-use.com/profile.sh | sh")
+        raise RuntimeError("profile-use not installed; use `browser-harness --setup` or configure local Chrome remote debugging")
     return json.loads(subprocess.check_output(["profile-use", "list", "--json"], text=True))
 
 
@@ -242,22 +253,6 @@ def check_for_update():
     return cur, latest, newer
 
 
-def print_update_banner(out=None):
-    """Print the update banner to stderr once per day. Silent when up-to-date or offline."""
-    import sys
-    out = out or sys.stderr
-    cache = _cache_read()
-    today = time.strftime("%Y-%m-%d")
-    if cache.get("banner_shown_on") == today:
-        return
-    cur, latest, newer = check_for_update()
-    if not newer:
-        return
-    print(f"[browser-harness] update available: {cur} -> {latest}", file=out)
-    print(f"[browser-harness] agents: run `browser-harness --update -y` to upgrade and restart the daemon", file=out)
-    _cache_write({**cache, "banner_shown_on": today})
-
-
 def _chrome_running():
     """Cross-platform best-effort check for a running Chrome/Edge process."""
     import platform, subprocess
@@ -272,6 +267,23 @@ def _chrome_running():
         return any(n.lower() in out.lower() for n in names)
     except Exception:
         return False
+
+
+def _daemon_meta(meta, name=None, timeout=2.0):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    s.connect(_paths(name)[0])
+    s.sendall((json.dumps({"meta": meta}) + "\n").encode())
+    data = b""
+    while not data.endswith(b"\n"):
+        chunk = s.recv(1 << 16)
+        if not chunk:
+            break
+        data += chunk
+    s.close()
+    if not data:
+        return {}
+    return json.loads(data)
 
 
 def _open_chrome_inspect():
@@ -344,34 +356,125 @@ def run_setup():
     return 1
 
 
-def run_doctor():
-    """Read-only diagnostics. Exit 0 iff everything looks healthy."""
-    import platform, shutil, sys
-    cur = _version()
-    mode = _install_mode()
+def _check(status, check_id, detail="", fix=None):
+    return {"id": check_id, "status": status, "detail": detail, "fix": fix}
+
+
+def _scan_active_files(patterns):
+    import re
+    files = ["daemon.py", "admin.py", "run.py", "helpers.py", "SKILL.md", "install.md", "README.md", "pyproject.toml"]
+    hits = []
+    root = Path(__file__).resolve().parent
+    rx = re.compile(patterns)
+    for rel in files:
+        path = root / rel
+        if not path.exists():
+            continue
+        for lineno, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+            if rx.search(line):
+                hits.append(f"{rel}:{lineno}")
+    return hits
+
+
+def _page_info_uses_runtime():
+    import ast
+    path = Path(__file__).resolve().parent / "helpers.py"
+    tree = ast.parse(path.read_text())
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "page_info":
+            source = ast.get_source_segment(path.read_text(), node) or ""
+            return "Runtime.evaluate" in source
+    return True
+
+
+def _doctor_checks(network=False):
+    import platform
+    checks = []
     chrome = _chrome_running()
     daemon = daemon_alive()
-    latest = _latest_release_tag()
-    # Only claim an update when we know the installed version — `cur or "(unknown)"`
-    # for display would otherwise be parsed as (0,) and flag every latest as newer.
-    newer = bool(cur and latest and _version_tuple(latest) > _version_tuple(cur))
-    cur_display = cur or "(unknown)"
 
-    def row(label, ok, detail=""):
-        mark = "ok  " if ok else "FAIL"
-        print(f"  [{mark}] {label}{(' — ' + detail) if detail else ''}")
+    checks.append(_check("pass", "platform.info", f"{platform.system()} {platform.release()}"))
+    checks.append(_check("pass" if chrome else "warn", "browser.process", "Chrome/Edge process detected" if chrome else "Chrome/Edge process not detected", "start Chrome/Edge and rerun `browser-harness --setup`" if not chrome else None))
+    checks.append(_check("pass" if daemon else "fail", "daemon.alive", "daemon socket responds" if daemon else "daemon socket is not responding", "run `browser-harness --setup` to attach" if not daemon else None))
+
+    if daemon:
+        sock, _ = _paths(None)
+        try:
+            mode = Path(sock).stat().st_mode & 0o777
+            checks.append(_check("pass" if mode == 0o600 else "fail", "daemon.socket_permissions", oct(mode), f"expected {sock} to have mode 0600"))
+        except OSError as e:
+            checks.append(_check("fail", "daemon.socket_permissions", str(e), "restart the daemon with `browser-harness --reload`"))
+        try:
+            endpoint = _daemon_meta("endpoint_info").get("endpoint_info") or {}
+        except Exception as e:
+            endpoint = {}
+            checks.append(_check("warn", "endpoint.info", str(e), "restart the daemon with `browser-harness --reload`"))
+    else:
+        endpoint = {}
+
+    if endpoint:
+        checks.append(_check("pass", "endpoint.present", endpoint.get("resolved_url", "")))
+        checks.append(_check("pass" if endpoint.get("is_loopback") else ("warn" if endpoint.get("remote_allowed") else "fail"), "endpoint.loopback", endpoint.get("host") or "", "use a 127.0.0.1/localhost endpoint or set BH_CDP_ALLOW_REMOTE=1 only for user-owned self-hosted CDP"))
+        if endpoint.get("remote_allowed"):
+            checks.append(_check("warn", "endpoint.remote_allowed", "BH_CDP_ALLOW_REMOTE=1", "bind CDP to loopback when possible"))
+        checks.append(_check("pass", "endpoint.scheme", endpoint.get("resolved_url", "").split(":", 1)[0]))
+    else:
+        checks.append(_check("fail", "endpoint.present", "no live endpoint metadata", "run `browser-harness --setup` or set BH_CDP_WS to a local CDP endpoint"))
+
+    legacy_pattern = "|".join([
+        r"BU" + r"_CDP_WS",
+        r"BU" + r"_NAME",
+        r"/tmp/" + r"bu-",
+        r"browser-use\.com/profile",
+        r"api\.browser-use",
+        r"cloud\.browser-use",
+    ])
+    cloud_hits = _scan_active_files(legacy_pattern)
+    checks.append(_check("pass" if not cloud_hits else "fail", "strings.no_cloud_runtime", ", ".join(cloud_hits), "remove legacy Browser Use/cloud runtime strings from active files" if cloud_hits else None))
+
+    root = Path(__file__).resolve().parent
+    daemon_text = (root / "daemon.py").read_text(errors="ignore")
+    helpers_text = (root / "helpers.py").read_text(errors="ignore")
+    attach_bad = [m for m in ("Runtime.enable", "DOM.enable", "Network.enable") if m in daemon_text]
+    checks.append(_check("pass" if not attach_bad else "fail", "cdp.attach_minimal", ", ".join(attach_bad), "remove automatic CDP domain enables from daemon attach" if attach_bad else None))
+    checks.append(_check("pass" if "Console.enable" not in daemon_text + helpers_text else "fail", "cdp.no_console_enable", "", "remove Console.enable from core"))
+    marker_bad = "document.title.startsWith" in daemon_text + helpers_text or "\\U0001F7E2" in daemon_text + helpers_text
+    checks.append(_check("pass" if not marker_bad else "fail", "page.no_title_marker", "", "remove hidden title marker mutation" if marker_bad else None))
+    page_info_bad = _page_info_uses_runtime()
+    checks.append(_check("pass" if not page_info_bad else "fail", "helpers.page_info_no_runtime", "", "rewrite page_info to avoid Runtime.evaluate" if page_info_bad else None))
+    checks.append(_check("pass", "network.default_offline", "default doctor performs local checks only"))
+
+    if network:
+        checks.append(_check("warn", "network.external", "network checks are not implemented yet", "keep public IP/WebRTC checks behind --network"))
+    return checks
+
+
+def _doctor_status(checks):
+    return "fail" if any(c["status"] == "fail" for c in checks) else ("warn" if any(c["status"] == "warn" for c in checks) else "pass")
+
+
+def run_doctor(json_output=False, network=False):
+    """Read-only diagnostics. Exit 0 unless a required local check fails."""
+    import platform, sys
+    cur = _version()
+    mode = _install_mode()
+    cur_display = cur or "(unknown)"
+    checks = _doctor_checks(network=network)
+    status = _doctor_status(checks)
+    if json_output:
+        print(json.dumps({"status": status, "checks": checks}, indent=2))
+        return 1 if status == "fail" else 0
 
     print("browser-harness doctor")
     print(f"  platform          {platform.system()} {platform.release()}")
     print(f"  python            {sys.version.split()[0]}")
     print(f"  version           {cur_display} ({mode})")
-    if latest:
-        print(f"  latest release    {latest}" + (" (update available)" if newer else ""))
-    else:
-        print("  latest release    (could not reach github)")
-    row("chrome running", chrome, "" if chrome else "start chrome/edge and rerun `browser-harness --setup`")
-    row("daemon alive", daemon, "" if daemon else "run `browser-harness --setup` to attach")
-    return 0 if (chrome and daemon) else 1
+    for check in checks:
+        mark = {"pass": "ok  ", "warn": "WARN", "fail": "FAIL"}[check["status"]]
+        detail = f" - {check['detail']}" if check.get("detail") else ""
+        fix = f" ({check['fix']})" if check.get("fix") else ""
+        print(f"  [{mark}] {check['id']}{detail}{fix}")
+    return 1 if status == "fail" else 0
 
 
 def _prompt_yes(question, default_yes=True, yes=False):

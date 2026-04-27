@@ -18,8 +18,8 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME", "default")
-SOCK = f"/tmp/bu-{NAME}.sock"
+NAME = os.environ.get("BH_NAME", "default")
+SOCK = f"/tmp/bh-{NAME}.sock"
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
 
 
@@ -53,14 +53,31 @@ def goto_url(url):
     return {**r, "domain_skills": sorted(p.name for p in d.rglob("*.md"))[:10]} if d.is_dir() else r
 
 def page_info():
-    """{url, title, w, h, sx, sy, pw, ph} — viewport + scroll + page size.
+    """{url, title, w, h, sx, sy, pw, ph} - viewport + scroll + page size.
 
     If a native dialog (alert/confirm/prompt/beforeunload) is open, returns
-    {dialog: {type, message, ...}} instead — the page's JS thread is frozen
+    {dialog: {type, message, ...}} instead - the page's JS thread is frozen
     until the dialog is handled (see interaction-skills/dialogs.md)."""
     dialog = _send({"meta": "pending_dialog"}).get("dialog")
     if dialog:
         return {"dialog": dialog}
+    target = cdp("Target.getTargetInfo").get("targetInfo", {})
+    metrics = cdp("Page.getLayoutMetrics")
+    viewport = metrics.get("cssLayoutViewport") or metrics.get("layoutViewport") or {}
+    content = metrics.get("cssContentSize") or metrics.get("contentSize") or {}
+    return {
+        "url": target.get("url", ""),
+        "title": target.get("title", ""),
+        "w": int(viewport.get("clientWidth") or 0),
+        "h": int(viewport.get("clientHeight") or 0),
+        "sx": int(viewport.get("pageX") or 0),
+        "sy": int(viewport.get("pageY") or 0),
+        "pw": int(content.get("width") or 0),
+        "ph": int(content.get("height") or 0),
+    }
+
+def page_info_js():
+    """JS-based page info fallback. This explicitly executes page JavaScript."""
     r = cdp("Runtime.evaluate",
             expression="JSON.stringify({url:location.href,title:document.title,w:innerWidth,h:innerHeight,sx:scrollX,sy:scrollY,pw:document.documentElement.scrollWidth,ph:document.documentElement.scrollHeight})",
             returnByValue=True)
@@ -138,22 +155,13 @@ def current_tab():
     t = cdp("Target.getTargetInfo").get("targetInfo", {})
     return {"targetId": t.get("targetId"), "url": t.get("url", ""), "title": t.get("title", "")}
 
-def _mark_tab():
-    """Prepend 🟢 to tab title so the user can see which tab the agent controls."""
-    try: cdp("Runtime.evaluate", expression="if(!document.title.startsWith('\U0001F7E2'))document.title='\U0001F7E2 '+document.title")
-    except Exception: pass
-
 def switch_tab(target):
     # Accept either a raw targetId string or the dict returned by current_tab() / list_tabs(),
     # so `switch_tab(current_tab())` works without a manual ["targetId"] dance.
     target_id = target.get("targetId") if isinstance(target, dict) else target
-    # Unmark old tab
-    try: cdp("Runtime.evaluate", expression="if(document.title.startsWith('\U0001F7E2 '))document.title=document.title.slice(2)")
-    except Exception: pass
     cdp("Target.activateTarget", targetId=target_id)
     sid = cdp("Target.attachToTarget", targetId=target_id, flatten=True)["sessionId"]
     _send({"meta": "set_session", "session_id": sid})
-    _mark_tab()
     return sid
 
 def new_tab(url="about:blank"):
@@ -193,7 +201,19 @@ def wait(seconds=1.0):
     time.sleep(seconds)
 
 def wait_for_load(timeout=15.0):
-    """Poll document.readyState == 'complete' or timeout."""
+    """Wait for Page.loadEventFired without executing page JavaScript."""
+    cdp("Page.enable")
+    drain_events()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for event in drain_events():
+            if event.get("method") == "Page.loadEventFired":
+                return True
+        time.sleep(0.3)
+    return False
+
+def wait_for_load_js(timeout=15.0):
+    """JS-based load wait fallback. This explicitly executes page JavaScript."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         if js("document.readyState") == "complete": return True
@@ -201,7 +221,7 @@ def wait_for_load(timeout=15.0):
     return False
 
 def js(expression, target_id=None):
-    """Run JS in the attached tab (default) or inside an iframe target (via iframe_target()).
+    """Explicitly run JavaScript in the attached tab or an iframe target.
 
     Expressions with top-level `return` are automatically wrapped in an IIFE, so both
     `document.title` and `const x = 1; return x` are valid inputs.
@@ -220,7 +240,7 @@ def dispatch_key(selector, key="Enter", event="keypress"):
     """Dispatch a DOM KeyboardEvent on the matched element.
 
     Use this when a site reacts to synthetic DOM key events on an element more reliably
-    than to raw CDP input events.
+    than to raw CDP input events. This explicitly executes page JavaScript.
     """
     kc = _KC.get(key, ord(key) if len(key) == 1 else 0)
     js(
