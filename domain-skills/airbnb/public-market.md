@@ -220,7 +220,8 @@ collection from the current live-listing inventory.
 
 Default behavior:
 
-- reads the latest `airbnb-live-listings-*.json` private artifact
+- reads the latest `airbnb-live-listings-*.json` private artifact produced by
+  `scripts/collect_listings.py`
 - uses only `status == ACTIVE` listings as targets
 - searches Airbnb logged out by target address/building, check-in date,
   3-night stay, adult count, and minimum bedroom count
@@ -230,6 +231,8 @@ Default behavior:
 - writes raw search/listing JSONL checkpoints plus JSON/CSV outputs under
   ignored `.private-data/public-market-collections/`
 - stores a receipt under ignored `.session-store/capability/`
+- refuses partial listing inventories by default. Use `AIRBNB_LISTINGS_FILE`
+  only when intentionally testing against a partial scope.
 
 Useful controls:
 
@@ -242,6 +245,7 @@ AIRBNB_COMP_TOP_COMPS_PER_CONTEXT=8
 AIRBNB_COMP_MAX_LISTING_SNAPSHOTS=120
 AIRBNB_COMP_NAV_DELAY_SEC=4
 AIRBNB_COMP_LIMIT_LISTINGS=1
+AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
 ```
 
 Run against a fresh logged-out agent Chrome profile:

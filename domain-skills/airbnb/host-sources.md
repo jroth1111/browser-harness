@@ -137,6 +137,8 @@ host editor to check settings that are hidden from guests.
 Use this workflow when the host asks for all currently live Airbnb listings and
 their private attributes.
 
+Executable collector: `scripts/collect_listings.py`.
+
 1. Restore the Airbnb host auth bundle into a separate fresh Chrome
    profile/process. Do not use a new tab in an already logged-in browser as the
    restore test.
@@ -163,11 +165,47 @@ their private attributes.
    `domain-skills/airbnb/.private-data/listing-collections/` and save a compact
    receipt under `.session-store/capability/`.
 
+Recommended run shape:
+
+```bash
+python3 run.py --launch-profile domain-skills/airbnb/.session-store/profiles/listings \
+  --port 52862 --url about:blank --json
+
+AIRBNB_AUTH_STATE_PATH=domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json \
+BH_NAME=airbnb-listings BH_CDP_WS=http://127.0.0.1:52862 \
+  python3 run.py < domain-skills/airbnb/scripts/collect_listings.py
+```
+
+Useful controls:
+
+```text
+AIRBNB_LISTINGS_RUN_ID=airbnb-live-listings-YYYYMMDDTHHMMSSZ
+AIRBNB_LISTINGS_PAGE_LIMIT=30
+AIRBNB_LISTINGS_LIMIT_ACTIVE=1
+AIRBNB_LISTINGS_SKIP_DETAILS=1
+AIRBNB_LISTINGS_DETAIL_PAUSE_SEC=1.5
+AIRBNB_LISTINGS_QUERY_HASH=<rediscovered_hash_if_needed>
+```
+
+`AIRBNB_LISTINGS_SKIP_DETAILS=1` is only for API smoke tests. A
+recommendation-grade live-listing inventory must open the authenticated editor
+detail pages or otherwise prove every required private field.
+
+Partial listing runs are marked with `partial_run: true`. Downstream collectors
+must not use them by default; set `AIRBNB_LISTINGS_FILE` explicitly only when
+running a deliberate partial smoke test.
+
 Empirical source note from 2026-04-27: the listings overview API used
 `BeehiveGetListingsQuery` with persisted hash
 `6a50773b7e0bf1c1c7c54d7b12d12c2db5be0eb4ce1ebfb8df1c3b42a9e2aaca`.
 Do not hard-code the hash as the only path; rediscover it from loaded scripts or
 network state when possible and record the observed hash in the receipt.
+
+Executable collector smoke on 2026-04-27: a fresh Chrome profile restored the
+private host auth bundle, fetched all three overview API pages (`70` listings:
+`27` active, `43` unlisted), opened one active editor detail page, and passed
+the required-field gate for that record. This smoke was intentionally partial
+and is not a downstream listing scope.
 
 Field-level acceptance:
 

@@ -68,10 +68,36 @@ ROUTES = [
 
 
 def latest_live_listing_file() -> Path:
+    explicit = os.environ.get("AIRBNB_LISTINGS_FILE")
+    if explicit:
+        return Path(explicit)
     files = sorted(LISTINGS_PATH.glob("airbnb-live-listings-*.json"))
     if not files:
         raise SystemExit(f"No live-listing collection found under {LISTINGS_PATH}")
-    return files[-1]
+    complete = [path for path in files if is_complete_live_listing_file(path)]
+    if not complete:
+        raise SystemExit(
+            f"No complete live-listing collection found under {LISTINGS_PATH}; "
+            "set AIRBNB_LISTINGS_FILE explicitly for a partial smoke test"
+        )
+    return complete[-1]
+
+
+def is_complete_live_listing_file(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    active_status_count = int((data.get("status_counts") or {}).get("ACTIVE") or 0)
+    records = data.get("records") or []
+    validation = data.get("field_validation") or {}
+    return (
+        bool(records)
+        and len(records) == int(data.get("active_count") or 0)
+        and len(records) == active_status_count
+        and validation.get("all_active_detail_pages_ok") is True
+        and not data.get("partial_run")
+    )
 
 
 def wrapper_value(value):

@@ -76,11 +76,13 @@ Airbnb's personal data file can be requested in HTML, Excel, or JSON format and
 may include host-relevant categories such as listings, reservations, payouts, and
 messages when present in the account.
 
-For own live-listing collection, use the inventory API as the canonical source
-for listing enumeration and status filtering, then use the listing editor only
-for fields the API does not expose or that need private UI verification. Store
-full addresses and raw private outputs only in ignored `.private-data/`
-artifacts.
+For own live-listing collection, run `scripts/collect_listings.py`. It uses the
+inventory API as the canonical source for listing enumeration and status
+filtering, then uses the listing editor only for fields the API does not expose
+or that need private UI verification. Store full addresses and raw private
+outputs only in ignored `.private-data/` artifacts. Partial smoke runs are
+marked `partial_run: true` and are not canonical downstream scope unless
+explicitly selected with `AIRBNB_LISTINGS_FILE`.
 
 For Insights collection, the canonical scope is listing-specific. The
 Performance app's "All listings" route is useful for discovery, but stored rows

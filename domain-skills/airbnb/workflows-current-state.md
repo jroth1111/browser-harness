@@ -420,6 +420,10 @@ Start by collecting the live-listing inventory. This establishes the authoritati
 private listing set for subsequent calendar, pricing, Insights, and quality
 collection.
 
+Executable workflow: `scripts/collect_listings.py`. Downstream collectors such
+as `scripts/collect_insights.py` and `scripts/collect_competitors.py` consume the
+latest `airbnb-live-listings-*.json` artifact created by this step.
+
 Live-listing inventory capture:
 
 ```text
@@ -456,6 +460,18 @@ Live-listing inventory source order:
    signals.
 4. Store JSON/CSV outputs in ignored `.private-data/listing-collections/` and a
    receipt in `.session-store/capability/`.
+
+The executable collector accepts `AIRBNB_AUTH_STATE_PATH` when the run must
+prove auth restoration in a separate fresh profile. Without that variable, it
+uses the caller-provided authenticated browser context. Use
+`AIRBNB_LISTINGS_SKIP_DETAILS=1` only for API smoke tests; it is not sufficient
+for a complete private listing inventory.
+
+Downstream collectors refuse `partial_run: true` listing inventories by default
+and choose the newest complete inventory where `records == active_count ==
+status_counts.ACTIVE` and all required private fields passed validation. Use
+`AIRBNB_LISTINGS_FILE` only to intentionally override the listing scope for a
+bounded test.
 
 Live-listing acceptance:
 
