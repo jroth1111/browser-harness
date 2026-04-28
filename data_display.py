@@ -10,6 +10,7 @@ import csv
 import json
 import pathlib
 import re
+import statistics
 import webbrowser
 
 _RECORD_KEYS = ("records", "rows", "data", "items", "results")
@@ -36,13 +37,13 @@ def render_dataset(path, out=None, view=None, open_browser=False):
         truncated = True
         records = records[:_MAX_EMBEDDED_ROWS]
     schema = _introspect(records)
+    aggregates = _build_aggregates(records, schema)
     out_path = (
         pathlib.Path(out).expanduser().resolve()
         if out
-        else src.with_suffix(src.suffix + ".html") if src.suffix in (".jsonl",)
         else src.with_suffix(".html")
     )
-    html = _emit_html(records, schema, meta, src, view, truncated)
+    html = _emit_html(records, schema, meta, aggregates, src, view, truncated)
     out_path.write_text(html, encoding="utf-8")
     if open_browser:
         webbrowser.open(out_path.as_uri())
@@ -209,15 +210,7 @@ def _describe_field(name, sample):
     string_share = type_counts["str"] / n
     bool_share = type_counts["bool"] / n
 
-    distinct_set = set()
-    for v in non_null:
-        try:
-            distinct_set.add(v)
-        except TypeError:
-            distinct_set.add(repr(v))
-        if len(distinct_set) > 200:
-            break
-    distinct = len(distinct_set)
+    distinct = _bounded_distinct_count(non_null, cap=200)
 
     if not non_null:
         kind = "empty"
@@ -228,7 +221,7 @@ def _describe_field(name, sample):
     elif numeric_share >= 0.9:
         kind = "numeric"
     elif string_share >= 0.9:
-        kind = _classify_string(name, non_null)
+        kind = _classify_string(name, non_null, distinct)
     else:
         kind = "text"
 
@@ -266,7 +259,7 @@ def _describe_field(name, sample):
     }
 
 
-def _classify_string(name, values):
+def _classify_string(name, values, distinct_hint=None):
     if _TIME_NAME_RE.match(name):
         return "time"
     head = values[:50]
@@ -278,11 +271,23 @@ def _classify_string(name, values):
         if all(isinstance(v, str) and _IMG_RE.search(v) for v in head):
             return "image"
         return "url"
-    distinct = len(set(values))
+    distinct = distinct_hint if distinct_hint is not None else _bounded_distinct_count(values, cap=200)
     n = len(values)
     if n >= 5 and distinct <= 30 and distinct <= max(n * 0.5, 1):
         return "categorical"
     return "text"
+
+
+def _bounded_distinct_count(values, cap=200):
+    distinct_set = set()
+    for v in values:
+        try:
+            distinct_set.add(v)
+        except TypeError:
+            distinct_set.add(repr(v))
+        if len(distinct_set) > cap:
+            break
+    return len(distinct_set)
 
 
 def _truncate_example(v, limit=120):
@@ -316,16 +321,155 @@ def _dataset_eligible_views(fields):
     return eligible
 
 
+def _build_aggregates(records, schema):
+    return {
+        "kpis": _aggregate_kpis(records, schema),
+        "bar": _aggregate_bar(records, schema),
+        "line": _aggregate_line(records, schema),
+    }
+
+
+def _aggregate_kpis(records, schema):
+    out = {}
+    measure_fields = [f["name"] for f in schema.get("fields", []) if f.get("is_measure")]
+    for field in measure_fields:
+        vals = []
+        for row in records:
+            v = row.get(field) if isinstance(row, dict) else None
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                vals.append(float(v))
+        if not vals:
+            continue
+        vals_sorted = sorted(vals)
+        count = len(vals_sorted)
+        total = sum(vals_sorted)
+        out[field] = {
+            "count": count,
+            "sum": total,
+            "mean": total / count,
+            "median": float(statistics.median(vals_sorted)),
+            "p90": _percentile(vals_sorted, 0.9),
+            "min": vals_sorted[0],
+            "max": vals_sorted[-1],
+        }
+    return out
+
+
+def _aggregate_bar(records, schema, top_n=50):
+    out = {}
+    bar_fields = [f["name"] for f in schema.get("fields", []) if "bar_x" in f.get("eligible_for", [])]
+    for field in bar_fields:
+        counts = {}
+        for row in records:
+            if not isinstance(row, dict):
+                continue
+            value = row.get(field)
+            key = "∅" if value is None else _stringify_key(value)
+            counts[key] = counts.get(key, 0) + 1
+        ranked = sorted(counts.items(), key=lambda item: item[1], reverse=True)[:top_n]
+        out[field] = [[k, v] for k, v in ranked]
+    return out
+
+
+def _aggregate_line(records, schema):
+    out = {}
+    fields = schema.get("fields", [])
+    line_x_fields = [f["name"] for f in fields if "line_x" in f.get("eligible_for", [])]
+    line_y_fields = [f["name"] for f in fields if "line_y" in f.get("eligible_for", [])]
+    series_fields = [f["name"] for f in fields if "series_by" in f.get("eligible_for", []) and f.get("distinct", 0) <= 8]
+    series_options = [None] + series_fields
+
+    for x_field in line_x_fields:
+        for y_field in line_y_fields:
+            for series_field in series_options:
+                key = _line_key(x_field, y_field, series_field)
+                buckets = {}
+                for row in records:
+                    if not isinstance(row, dict):
+                        continue
+                    x_value = row.get(x_field)
+                    y_value = row.get(y_field)
+                    if x_value is None or not isinstance(y_value, (int, float)) or isinstance(y_value, bool):
+                        continue
+                    x_key = str(x_value)
+                    s_key = str(row.get(series_field) if series_field else "__total__")
+                    if s_key == "None":
+                        s_key = "∅"
+                    x_bucket = buckets.setdefault(x_key, {})
+                    arr = x_bucket.setdefault(s_key, [])
+                    arr.append(float(y_value))
+
+                if not buckets:
+                    continue
+
+                xs = sorted(buckets.keys())
+                all_series = set()
+                for x in xs:
+                    all_series.update(buckets[x].keys())
+                if series_field:
+                    ordered_series = sorted(all_series)[:8]
+                else:
+                    ordered_series = ["__total__"]
+
+                series = []
+                for series_name in ordered_series:
+                    sum_values = []
+                    count_values = []
+                    min_values = []
+                    max_values = []
+                    for x in xs:
+                        vals = buckets[x].get(series_name, [])
+                        if not vals:
+                            sum_values.append(None)
+                            count_values.append(0)
+                            min_values.append(None)
+                            max_values.append(None)
+                            continue
+                        sum_values.append(sum(vals))
+                        count_values.append(len(vals))
+                        min_values.append(min(vals))
+                        max_values.append(max(vals))
+                    series.append(
+                        {
+                            "name": f"{series_name}" if series_name != "__total__" else "__total__",
+                            "sum": sum_values,
+                            "count": count_values,
+                            "min": min_values,
+                            "max": max_values,
+                        }
+                    )
+                out[key] = {"xs": xs, "series": series}
+    return out
+
+
+def _percentile(sorted_values, fraction):
+    if not sorted_values:
+        return None
+    idx = int((len(sorted_values) - 1) * fraction)
+    return float(sorted_values[idx])
+
+
+def _line_key(x_field, y_field, series_field):
+    return f"{x_field}||{y_field}||{series_field or ''}"
+
+
+def _stringify_key(value):
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, sort_keys=True, ensure_ascii=False, default=str)
+    return str(value)
+
+
 # ---------------------------------------------------------------------------
 # HTML emission
 # ---------------------------------------------------------------------------
 
 
-def _emit_html(records, schema, meta, src_path, view, truncated):
+def _emit_html(records, schema, meta, aggregates, src_path, view, truncated):
     title = src_path.name
     payload = {
         "data": records,
         "schema": schema,
+        "aggregates": aggregates,
         "meta": {
             **meta,
             "title": title,
@@ -360,11 +504,18 @@ def _escape_html(s):
 
 
 _TEMPLATE = r"""<!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__ — data display</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('bh-data-display.theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    if (t === 'dark') document.documentElement.classList.add('dark');
+  })();
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -391,42 +542,42 @@ _TEMPLATE = r"""<!DOCTYPE html>
   [x-cloak] { display: none !important; }
 </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 dark:bg-zinc-950 dark:text-zinc-100 light:bg-white light:text-zinc-900 antialiased min-h-screen" x-data="app()" x-init="init()" x-cloak>
+<body class="bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased min-h-screen" x-data="app()" x-init="init()" x-cloak>
 
-<header class="sticky top-0 z-30 border-b border-zinc-800/70 bg-zinc-950/80 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/60">
+<header x-ref="header" class="sticky top-0 z-30 border-b border-zinc-200 dark:border-zinc-800/70 bg-white/80 dark:bg-zinc-950/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-950/60">
   <div class="px-5 py-3 flex items-center gap-4">
     <div class="flex items-center gap-2 text-indigo-400">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
       <span class="font-semibold tracking-tight">data display</span>
     </div>
-    <div class="text-zinc-300 truncate" x-text="meta.title"></div>
-    <div class="ml-auto flex items-center gap-3 text-xs text-zinc-400">
+    <div class="text-zinc-700 dark:text-zinc-300 truncate" x-text="meta.title"></div>
+    <div class="ml-auto flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
       <span class="num"><span x-text="schema.row_count.toLocaleString()"></span> rows</span>
       <span x-show="meta.records_key" x-text="'records: ' + (meta.records_key || '')"></span>
       <span class="num" x-text="schema.fields.length + ' fields'"></span>
       <span x-show="meta.truncated" class="text-amber-400" x-text="'truncated to ' + meta.max_embedded_rows.toLocaleString()"></span>
-      <button @click="toggleTheme()" class="ml-2 px-2 py-1 rounded border border-zinc-700 hover:bg-zinc-800 transition" title="Toggle theme">
+      <button @click="toggleTheme()" class="ml-2 px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" title="Toggle theme">
         <span x-show="theme==='dark'">☾</span>
         <span x-show="theme==='light'">☀</span>
       </button>
     </div>
   </div>
   <!-- meta strip -->
-  <div x-show="metaSummary.length" class="px-5 pb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-400">
+  <div x-show="metaSummary.length" class="px-5 pb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
     <template x-for="kv in metaSummary" :key="kv.k">
-      <div><span class="text-zinc-500" x-text="kv.k + ':'"></span> <span class="text-zinc-200 num" x-text="kv.v"></span></div>
+      <div><span class="text-zinc-500 dark:text-zinc-500" x-text="kv.k + ':'"></span> <span class="text-zinc-700 dark:text-zinc-200 num" x-text="kv.v"></span></div>
     </template>
   </div>
 </header>
 
 <main class="flex">
-  <aside class="w-44 shrink-0 border-r border-zinc-800/70 min-h-[calc(100vh-3rem)]">
-    <nav class="p-2 space-y-1 sticky top-20">
+  <aside class="w-44 shrink-0 border-r border-zinc-200 dark:border-zinc-800/70 min-h-[calc(100vh-3rem)]">
+    <nav class="p-2 space-y-1 sticky" style="top: var(--header-h, 5rem);">
       <template x-for="v in views" :key="v.id">
         <button @click="setView(v.id)"
                 :disabled="!isEligible(v.id)"
                 :class="[
-                  view === v.id ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' : 'text-zinc-300 border-transparent hover:bg-zinc-900',
+                  view === v.id ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' : 'text-zinc-700 dark:text-zinc-300 border-transparent hover:bg-zinc-100 dark:hover:bg-zinc-900',
                   isEligible(v.id) ? '' : 'opacity-30 cursor-not-allowed',
                   'w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition'
                 ]">
@@ -437,7 +588,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
           <span class="kbd" x-text="v.key"></span>
         </button>
       </template>
-      <div class="pt-3 mt-3 border-t border-zinc-800/70 text-[11px] text-zinc-500 px-3 leading-relaxed">
+      <div class="pt-3 mt-3 border-t border-zinc-200 dark:border-zinc-800/70 text-[11px] text-zinc-500 px-3 leading-relaxed">
         <div><span class="kbd">/</span> search</div>
         <div><span class="kbd">j</span>/<span class="kbd">k</span> next/prev row</div>
         <div><span class="kbd">esc</span> close drawer</div>
@@ -454,28 +605,28 @@ _TEMPLATE = r"""<!DOCTYPE html>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           </span>
           <input id="search-box" x-model="q" @input.debounce.150="page = 0; writeHash()" placeholder="search rows…  (press / to focus)"
-            class="w-full pl-9 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md text-sm focus:outline-none focus:border-indigo-500 transition">
+            class="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md text-sm focus:outline-none focus:border-indigo-500 transition">
         </div>
         <div class="text-xs text-zinc-500 num">
           <span x-text="filteredRows.length.toLocaleString()"></span> match · page
           <span x-text="page + 1"></span>/<span x-text="totalPages"></span>
         </div>
         <div class="flex items-center gap-1">
-          <button @click="page = Math.max(0, page-1)" class="px-2 py-1 rounded border border-zinc-800 hover:bg-zinc-900 text-sm">←</button>
-          <button @click="page = Math.min(totalPages-1, page+1)" class="px-2 py-1 rounded border border-zinc-800 hover:bg-zinc-900 text-sm">→</button>
+          <button @click="setPage(Math.max(0, page-1))" class="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-sm">←</button>
+          <button @click="setPage(Math.min(totalPages-1, page+1))" class="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-sm">→</button>
         </div>
       </div>
       <div x-show="filteredRows.length > 5000" class="mb-2 text-xs text-amber-400">
         Showing the first 5000 of <span x-text="filteredRows.length.toLocaleString()"></span> matched rows. Narrow the search or use a chart view for the full set.
       </div>
-      <div class="border border-zinc-800 rounded-md overflow-auto max-h-[calc(100vh-12rem)]">
+      <div class="border border-zinc-200 dark:border-zinc-800 rounded-md overflow-auto max-h-[calc(100vh-12rem)]">
         <table class="text-sm w-full">
-          <thead class="sticky top-0 bg-zinc-900/95 backdrop-blur scroll-shadow text-zinc-400">
+          <thead class="sticky top-0 bg-zinc-50/95 dark:bg-zinc-900/95 backdrop-blur scroll-shadow text-zinc-500 dark:text-zinc-400">
             <tr>
               <th class="px-2 py-2 text-left font-medium w-8">#</th>
               <template x-for="f in tableFields" :key="f.name">
                 <th class="px-2 py-2 text-left font-medium whitespace-nowrap">
-                  <button @click="sortBy(f.name)" class="flex items-center gap-1 hover:text-zinc-200 transition">
+                  <button @click="sortBy(f.name)" class="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-200 transition">
                     <span x-text="f.name"></span>
                     <span class="text-indigo-400" x-show="sortKey === f.name" x-text="sortDir === 'asc' ? '▲' : '▼'"></span>
                     <span class="text-[10px] uppercase opacity-50" x-text="f.kind"></span>
@@ -485,9 +636,9 @@ _TEMPLATE = r"""<!DOCTYPE html>
               <th class="px-2 py-2 text-left font-medium w-12"></th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-zinc-900">
+          <tbody class="divide-y divide-zinc-200 dark:divide-zinc-900">
             <template x-for="(row, i) in pagedRows" :key="page * pageSize + i">
-              <tr class="row-link hover:bg-zinc-900/60">
+              <tr class="row-link hover:bg-zinc-100 dark:hover:bg-zinc-900/60">
                 <td class="px-2 py-1.5 text-zinc-600 num text-xs" x-text="page * pageSize + i + 1"></td>
                 <template x-for="f in tableFields" :key="f.name">
                   <td class="px-2 py-1.5 align-top max-w-xs"
@@ -499,7 +650,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
                       <img :src="row[f.name]" loading="lazy" class="h-12 w-12 object-cover rounded">
                     </template>
                     <template x-if="f.kind !== 'url' && f.kind !== 'image'">
-                      <span x-text="formatCell(row[f.name])" :title="cellTitle(row[f.name])"></span>
+                      <span x-text="formatCell(row, f.name)" :title="cellTitle(row, f.name)"></span>
                     </template>
                   </td>
                 </template>
@@ -521,31 +672,31 @@ _TEMPLATE = r"""<!DOCTYPE html>
       <div class="flex flex-wrap gap-4 mb-3 text-sm items-end">
         <label class="flex flex-col gap-1">
           <span class="text-xs text-zinc-500 uppercase tracking-wide">x · time</span>
-          <select x-model="lineXField" class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
+          <select x-model="lineXField" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
             <template x-for="f in fieldsForRole('line_x')" :key="f.name"><option :value="f.name" x-text="f.name"></option></template>
           </select>
         </label>
         <label class="flex flex-col gap-1">
           <span class="text-xs text-zinc-500 uppercase tracking-wide">y · measure</span>
-          <select x-model="lineYField" class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
+          <select x-model="lineYField" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
             <template x-for="f in fieldsForRole('line_y')" :key="f.name"><option :value="f.name" x-text="f.name"></option></template>
           </select>
         </label>
         <label class="flex flex-col gap-1">
           <span class="text-xs text-zinc-500 uppercase tracking-wide">series&nbsp;by · optional</span>
-          <select x-model="lineSeriesField" class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
+          <select x-model="lineSeriesField" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
             <option value="">(none)</option>
             <template x-for="f in fieldsForRole('series_by')" :key="f.name"><option :value="f.name" x-text="f.name"></option></template>
           </select>
         </label>
         <label class="flex flex-col gap-1">
           <span class="text-xs text-zinc-500 uppercase tracking-wide">aggregate</span>
-          <select x-model="lineAgg" class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5">
+          <select x-model="lineAgg" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5">
             <option value="sum">sum</option><option value="avg">avg</option><option value="count">count</option><option value="min">min</option><option value="max">max</option>
           </select>
         </label>
       </div>
-      <div id="line-chart" class="w-full h-[60vh] border border-zinc-800 rounded"></div>
+      <div id="line-chart" class="w-full h-[60vh] border border-zinc-200 dark:border-zinc-800 rounded"></div>
       <div x-show="!fieldsForRole('line_x').length || !fieldsForRole('line_y').length" class="text-xs text-zinc-500 mt-2">No time field paired with a numeric measure.</div>
     </div>
 
@@ -554,29 +705,29 @@ _TEMPLATE = r"""<!DOCTYPE html>
       <div class="flex flex-wrap gap-4 mb-3 text-sm items-end">
         <label class="flex flex-col gap-1">
           <span class="text-xs text-zinc-500 uppercase tracking-wide">field</span>
-          <select x-model="barField" class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
+          <select x-model="barField" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5 min-w-[10rem]">
             <template x-for="f in fieldsForRole('bar_x')" :key="f.name"><option :value="f.name" x-text="f.name"></option></template>
           </select>
         </label>
         <label class="flex flex-col gap-1">
           <span class="text-xs text-zinc-500 uppercase tracking-wide">top N</span>
-          <input type="number" min="1" max="100" x-model.number="barTopN" class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 w-24 num">
+          <input type="number" min="1" max="50" x-model.number="barTopN" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5 w-24 num">
         </label>
       </div>
-      <div id="bar-chart" class="w-full h-[60vh] border border-zinc-800 rounded"></div>
+      <div id="bar-chart" class="w-full h-[60vh] border border-zinc-200 dark:border-zinc-800 rounded"></div>
     </div>
 
     <!-- KPIS -->
     <div x-show="view==='kpis'" class="p-5">
       <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))">
         <template x-for="f in measureFields" :key="f.name">
-          <div class="border border-zinc-800 rounded-md p-4 bg-zinc-900/40">
+          <div class="border border-zinc-200 dark:border-zinc-800 rounded-md p-4 bg-zinc-50 dark:bg-zinc-900/40">
             <div class="text-[11px] text-zinc-500 uppercase tracking-wide" x-text="f.name"></div>
             <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
               <template x-for="kv in kpisFor(f)" :key="kv.k">
                 <div class="contents">
                   <div class="text-zinc-500" x-text="kv.k"></div>
-                  <div class="text-right num text-zinc-100" x-text="kv.v"></div>
+                  <div class="text-right num text-zinc-900 dark:text-zinc-100" x-text="kv.v"></div>
                 </div>
               </template>
             </div>
@@ -591,14 +742,14 @@ _TEMPLATE = r"""<!DOCTYPE html>
       <div class="flex flex-wrap gap-4 mb-3 text-sm items-end">
         <label class="flex flex-col gap-1">
           <span class="text-xs text-zinc-500 uppercase tracking-wide">root</span>
-          <select x-model.number="treeRowIdx" class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 min-w-[12rem]">
+          <select x-model.number="treeRowIdx" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5 min-w-[12rem]">
             <option value="-1">all rows (array)</option>
             <option value="-2">meta only</option>
             <template x-for="(row, i) in data.slice(0, 200)" :key="i"><option :value="i" x-text="'row ' + (i+1) + treeRowLabel(row)"></option></template>
           </select>
         </label>
       </div>
-      <div class="border border-zinc-800 rounded p-3 max-h-[calc(100vh-12rem)] overflow-auto font-mono text-[13px] leading-relaxed" x-ref="treeRoot" x-effect="renderTree($refs.treeRoot, treeRoot())"></div>
+      <div class="border border-zinc-200 dark:border-zinc-800 rounded p-3 max-h-[calc(100vh-12rem)] overflow-auto font-mono text-[13px] leading-relaxed" x-ref="treeRoot" x-effect="renderTree($refs.treeRoot, treeRoot())"></div>
     </div>
   </section>
 </main>
@@ -607,10 +758,10 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <div x-show="selectedRow !== null" x-transition.opacity class="fixed inset-0 z-40 bg-black/50" @click="selectedRow = null"></div>
 <aside x-show="selectedRow !== null" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
        x-transition:leave="transition ease-in duration-100" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full"
-       class="fixed top-0 right-0 z-40 h-full w-full sm:w-[36rem] bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col">
-  <div class="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+       class="fixed top-0 right-0 z-40 h-full w-full sm:w-[36rem] bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col">
+  <div class="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
     <div class="text-sm text-zinc-400">row detail · <span class="kbd">esc</span> to close</div>
-    <button @click="selectedRow = null" class="text-zinc-400 hover:text-zinc-100">✕</button>
+    <button @click="selectedRow = null" class="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100">✕</button>
   </div>
   <div class="flex-1 overflow-auto p-4 font-mono text-[13px] leading-relaxed" x-ref="drawerRoot" x-effect="if (selectedRow !== null) renderTree($refs.drawerRoot, selectedRow)"></div>
 </aside>
@@ -620,6 +771,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
 function app() {
   return {
     data: [],
+    aggregates: { kpis: {}, bar: {}, line: {} },
     schema: { fields: [], row_count: 0, eligible_views: ['table'] },
     meta: { title: '', source_file: '', records_key: '' },
     view: 'table',
@@ -636,19 +788,24 @@ function app() {
     barField: null,
     barTopN: 20,
     treeRowIdx: -1,
-    theme: 'dark',
+    theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
     _resizeHandlers: [],
+    _sortedCacheKey: null,
+    _sortedCacheRows: [],
+    _cellCache: new WeakMap(),
 
     init() {
       const payload = JSON.parse(document.getElementById('payload-json').textContent);
-      this.data = Array.isArray(payload.data) ? payload.data : [];
+      this.data = Array.isArray(payload.data) ? Object.freeze(payload.data.slice()) : [];
       this.schema = payload.schema || this.schema;
+      this.aggregates = payload.aggregates || this.aggregates;
       this.meta = payload.meta || this.meta;
       this.view = this._pickInitialView();
       this._setupChartDefaults();
       this._restoreFromHash();
       this._bindKeys();
       this._installResize();
+      this.$nextTick(() => this._syncHeaderOffset());
       this.$watch('view', () => { this.writeHash(); this.$nextTick(() => this.renderCharts()); });
       this.$watch('lineXField', () => this.$nextTick(() => this.renderCharts()));
       this.$watch('lineYField', () => this.$nextTick(() => this.renderCharts()));
@@ -751,16 +908,23 @@ function app() {
     },
 
     get sortedRows() {
-      if (!this.sortKey) return this.filteredRows;
-      const k = this.sortKey, dir = this.sortDir === 'asc' ? 1 : -1;
-      return [...this.filteredRows].sort((a, b) => {
-        const av = a[k], bv = b[k];
-        if (av == null && bv == null) return 0;
-        if (av == null) return 1;
-        if (bv == null) return -1;
-        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
-        return String(av).localeCompare(String(bv)) * dir;
-      });
+      const cacheKey = JSON.stringify([this.q, this.sortKey, this.sortDir, this.data.length]);
+      if (this._sortedCacheKey === cacheKey) return this._sortedCacheRows;
+      let rows = this.filteredRows;
+      if (this.sortKey) {
+        const k = this.sortKey, dir = this.sortDir === 'asc' ? 1 : -1;
+        rows = [...rows].sort((a, b) => {
+          const av = a[k], bv = b[k];
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+          return String(av).localeCompare(String(bv)) * dir;
+        });
+      }
+      this._sortedCacheKey = cacheKey;
+      this._sortedCacheRows = rows;
+      return rows;
     },
 
     get pagedRows() {
@@ -775,29 +939,55 @@ function app() {
       return Math.max(1, Math.ceil(total / this.pageSize));
     },
 
+    setPage(nextPage) {
+      this.page = nextPage;
+      this.writeHash();
+    },
+
     sortBy(key) {
       if (this.sortKey === key) this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
       else { this.sortKey = key; this.sortDir = 'asc'; }
+      this.writeHash();
     },
 
-    formatCell(v) {
-      if (v == null) return '';
-      if (typeof v === 'object') {
-        return Array.isArray(v) ? '[' + v.length + ' items]' : '{' + Object.keys(v).length + ' keys}';
+    _cellMeta(row, fieldName) {
+      if (!row || typeof row !== 'object') return { display: '', title: '' };
+      let rowCache = this._cellCache.get(row);
+      if (!rowCache) {
+        rowCache = new Map();
+        this._cellCache.set(row, rowCache);
       }
-      const s = String(v);
-      return s.length > 120 ? s.slice(0, 120) + '…' : s;
+      if (rowCache.has(fieldName)) return rowCache.get(fieldName);
+      const v = row[fieldName];
+      let display = '';
+      let title = '';
+      if (v == null) {
+        display = '';
+        title = '';
+      } else if (typeof v === 'object') {
+        display = Array.isArray(v) ? '[' + v.length + ' items]' : '{' + Object.keys(v).length + ' keys}';
+        title = JSON.stringify(v).slice(0, 1000);
+      } else {
+        const s = String(v);
+        display = s.length > 120 ? s.slice(0, 120) + '…' : s;
+        title = s.slice(0, 1000);
+      }
+      const meta = { display, title };
+      rowCache.set(fieldName, meta);
+      return meta;
     },
 
-    cellTitle(v) {
-      if (v == null) return '';
-      if (typeof v === 'object') return JSON.stringify(v).slice(0, 1000);
-      return String(v).slice(0, 1000);
+    formatCell(row, fieldName) {
+      return this._cellMeta(row, fieldName).display;
+    },
+
+    cellTitle(row, fieldName) {
+      return this._cellMeta(row, fieldName).title;
     },
 
     cellClass(v, field) {
-      if (typeof v === 'number') return 'num text-right text-zinc-100';
-      if (field.kind === 'time') return 'num text-zinc-200 whitespace-nowrap';
+      if (typeof v === 'number') return 'num text-right text-zinc-900 dark:text-zinc-100';
+      if (field.kind === 'time') return 'num text-zinc-700 dark:text-zinc-200 whitespace-nowrap';
       if (field.kind === 'categorical' || field.kind === 'bool') return 'whitespace-nowrap';
       return '';
     },
@@ -805,22 +995,18 @@ function app() {
     showRow(row) { this.selectedRow = row; },
 
     kpisFor(field) {
-      const vals = [];
-      for (const r of this.data) {
-        const v = r[field.name];
-        if (typeof v === 'number' && !Number.isNaN(v)) vals.push(v);
-      }
-      if (!vals.length) return [{ k: 'count', v: '0' }];
-      const sorted = [...vals].sort((a, b) => a - b);
-      const sum = vals.reduce((a, b) => a + b, 0);
+      const stats = this.aggregates.kpis[field.name];
+      if (!stats) return [{ k: 'count', v: '0' }];
+      const count = stats.count || 0;
+      if (!count) return [{ k: 'count', v: '0' }];
       return [
-        { k: 'count',  v: vals.length.toLocaleString() },
-        { k: 'sum',    v: this._fmtNum(sum) },
-        { k: 'mean',   v: this._fmtNum(sum / vals.length) },
-        { k: 'median', v: this._fmtNum(sorted[Math.floor(sorted.length / 2)]) },
-        { k: 'p90',    v: this._fmtNum(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))]) },
-        { k: 'min',    v: this._fmtNum(sorted[0]) },
-        { k: 'max',    v: this._fmtNum(sorted[sorted.length - 1]) },
+        { k: 'count',  v: count.toLocaleString() },
+        { k: 'sum',    v: this._fmtNum(stats.sum) },
+        { k: 'mean',   v: this._fmtNum(stats.mean) },
+        { k: 'median', v: this._fmtNum(stats.median) },
+        { k: 'p90',    v: this._fmtNum(stats.p90) },
+        { k: 'min',    v: this._fmtNum(stats.min) },
+        { k: 'max',    v: this._fmtNum(stats.max) },
       ];
     },
 
@@ -853,8 +1039,8 @@ function app() {
       switch (kind) {
         case 'avg': return values.reduce((a, b) => a + b, 0) / values.length;
         case 'count': return values.length;
-        case 'min': return Math.min(...values);
-        case 'max': return Math.max(...values);
+        case 'min': return values.reduce((acc, val) => (val < acc ? val : acc), values[0]);
+        case 'max': return values.reduce((acc, val) => (val > acc ? val : acc), values[0]);
         case 'sum': default: return values.reduce((a, b) => a + b, 0);
       }
     },
@@ -864,41 +1050,35 @@ function app() {
       if (!chart) return;
       if (!this.lineXField || !this.lineYField) { chart.clear(); return; }
       const xf = this.lineXField, yf = this.lineYField, sf = this.lineSeriesField;
-      const groups = {};
-      for (const r of this.data) {
-        const x = r[xf];
-        const y = r[yf];
-        if (x == null || (this.lineAgg !== 'count' && typeof y !== 'number')) continue;
-        const xKey = String(x);
-        const sKey = sf ? String(r[sf] ?? '∅') : '__total__';
-        groups[xKey] = groups[xKey] || {};
-        groups[xKey][sKey] = groups[xKey][sKey] || [];
-        groups[xKey][sKey].push(typeof y === 'number' ? y : 0);
-      }
-      const xs = Object.keys(groups).sort();
-      let seriesKeys;
-      if (sf) {
-        const all = new Set();
-        xs.forEach(x => Object.keys(groups[x]).forEach(k => all.add(k)));
-        seriesKeys = [...all].slice(0, 8);
-      } else {
-        seriesKeys = ['__total__'];
-      }
-      const series = seriesKeys.map(sk => ({
-        name: sk === '__total__' ? `${this.lineAgg}(${yf})` : sk,
+      const lineKey = `${xf}||${yf}||${sf || ''}`;
+      const bundle = this.aggregates.line[lineKey];
+      if (!bundle) { chart.clear(); return; }
+      const xs = bundle.xs || [];
+      const xField = (this.schema.fields || []).find(f => f.name === xf) || {};
+      const sortedIdx = xs.map((_, idx) => idx).sort((a, b) => {
+        if (xField.kind === 'numeric') {
+          return Number(xs[a]) - Number(xs[b]);
+        }
+        if (xField.kind === 'time') {
+          const ta = Date.parse(xs[a]);
+          const tb = Date.parse(xs[b]);
+          if (Number.isFinite(ta) && Number.isFinite(tb)) return ta - tb;
+        }
+        return String(xs[a]).localeCompare(String(xs[b]));
+      });
+      const sortedXs = sortedIdx.map(i => xs[i]);
+      const series = (bundle.series || []).map(s => ({
+        name: s.name === '__total__' ? `${this.lineAgg}(${yf})` : s.name,
         type: 'line',
-        showSymbol: xs.length <= 60,
+        showSymbol: sortedXs.length <= 60,
         smooth: false,
-        data: xs.map(x => {
-          const arr = (groups[x] && groups[x][sk]) || [];
-          return arr.length ? this._aggregate(arr, this.lineAgg) : null;
-        }),
+        data: sortedIdx.map(i => this._seriesAggValue(s, i, this.lineAgg)),
       }));
       chart.setOption({
         backgroundColor: 'transparent',
         animation: false,
         grid: { left: 60, right: 30, top: 36, bottom: 50, containLabel: true },
-        xAxis: { type: 'category', data: xs, axisLabel: { rotate: xs.length > 12 ? 30 : 0 } },
+        xAxis: { type: 'category', data: sortedXs, axisLabel: { rotate: sortedXs.length > 12 ? 30 : 0 } },
         yAxis: { type: 'value' },
         tooltip: { trigger: 'axis' },
         legend: { top: 4, type: 'scroll' },
@@ -910,13 +1090,8 @@ function app() {
       const chart = this._ensureChart('bar-chart');
       if (!chart) return;
       if (!this.barField) { chart.clear(); return; }
-      const counts = {};
-      for (const r of this.data) {
-        const v = r[this.barField];
-        const k = v == null ? '∅' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
-        counts[k] = (counts[k] || 0) + 1;
-      }
-      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, this.barTopN || 20);
+      const ranked = this.aggregates.bar[this.barField] || [];
+      const sorted = ranked.slice(0, this.barTopN || 20);
       const cats = sorted.map(s => s[0]).reverse();
       const vals = sorted.map(s => s[1]).reverse();
       chart.setOption({
@@ -928,6 +1103,19 @@ function app() {
         tooltip: { trigger: 'axis' },
         series: [{ type: 'bar', data: vals, itemStyle: { color: '#6366f1' } }],
       }, true);
+    },
+
+    _seriesAggValue(series, idx, agg) {
+      if (agg === 'count') return (series.count || [])[idx] || 0;
+      if (agg === 'avg') {
+        const count = (series.count || [])[idx] || 0;
+        const total = (series.sum || [])[idx];
+        if (!count || total == null) return null;
+        return total / count;
+      }
+      if (agg === 'min') return (series.min || [])[idx];
+      if (agg === 'max') return (series.max || [])[idx];
+      return (series.sum || [])[idx];
     },
 
     treeRoot() {
@@ -967,7 +1155,7 @@ function app() {
       const isArr = Array.isArray(value);
       const entries = isArr ? value.map((v, i) => [i, v]) : Object.entries(value);
       const summary = document.createElement('div');
-      summary.className = 'cursor-pointer select-none hover:bg-zinc-900/40 rounded px-1';
+      summary.className = 'cursor-pointer select-none hover:bg-zinc-100 dark:hover:bg-zinc-900/40 rounded px-1';
       const tri = document.createElement('span'); tri.className = 'tree-toggle text-zinc-500'; tri.textContent = '▶';
       const lab = document.createElement('span');
       lab.innerHTML = `<span class="text-zinc-400">${this._htmlEscape(String(key))}</span><span class="text-zinc-500"> ${isArr ? '[' + entries.length + ']' : '{' + entries.length + '}'}</span>`;
@@ -1019,6 +1207,7 @@ function app() {
     toggleTheme() {
       this.theme = this.theme === 'dark' ? 'light' : 'dark';
       document.documentElement.classList.toggle('dark', this.theme === 'dark');
+      localStorage.setItem('bh-data-display.theme', this.theme);
       ['line-chart', 'bar-chart'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1033,6 +1222,7 @@ function app() {
       h.set('view', this.view);
       if (this.q) h.set('q', this.q);
       if (this.sortKey) { h.set('sort', this.sortKey); h.set('dir', this.sortDir); }
+      h.set('page', String(this.page));
       const s = h.toString();
       history.replaceState(null, '', s ? '#' + s : location.pathname);
     },
@@ -1042,6 +1232,7 @@ function app() {
       const v = h.get('view'); if (v && this.isEligible(v)) this.view = v;
       const q = h.get('q'); if (q) this.q = q;
       const sk = h.get('sort'); if (sk) { this.sortKey = sk; this.sortDir = h.get('dir') === 'desc' ? 'desc' : 'asc'; }
+      const page = Number(h.get('page')); if (Number.isFinite(page) && page >= 0) this.page = page;
     },
 
     _bindKeys() {
@@ -1067,8 +1258,15 @@ function app() {
       });
     },
 
+    _syncHeaderOffset() {
+      const header = this.$refs.header;
+      if (!header) return;
+      document.documentElement.style.setProperty('--header-h', header.getBoundingClientRect().height + 'px');
+    },
+
     _installResize() {
       const onResize = () => {
+        this._syncHeaderOffset();
         ['line-chart', 'bar-chart'].forEach(id => {
           const el = document.getElementById(id);
           if (!el) return;

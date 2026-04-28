@@ -90,12 +90,28 @@ The introspector samples the first 500 rows and tags each top-level field.
 A single self-contained `.html` file. External CDNs: Tailwind, ECharts,
 Alpine.js. No server required — open with `file://` or any browser.
 
+Theme behavior:
+
+- defaults to system preference (`prefers-color-scheme`)
+- toggles between light/dark in the report header
+- persists across reloads via `localStorage` key `bh-data-display.theme`
+
 ## Limits
 
-Table view renders up to 5 000 matched rows. Datasets exceeding 50 000 total
-rows are truncated at the embedding stage with a warning banner. Charts
-aggregate in Python before embedding, so they stay fast regardless of dataset
-size.
+- Embed cap: up to 50 000 rows are embedded in the report payload.
+- Table cap: table view shows up to 5 000 matched rows at a time with a warning.
+- Charts and KPI metrics are aggregated in Python before embedding, so chart
+  interactions stay responsive on large datasets.
+
+## URL state
+
+The report keeps interactive state in the URL hash for reload/share continuity:
+
+- `view`
+- `q` (search query)
+- `sort`
+- `dir` (`asc` / `desc`)
+- `page`
 
 ## Cross-references
 
