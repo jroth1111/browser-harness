@@ -107,10 +107,49 @@ def test_partial_ledger_requests_only_missing():
     assert daily, "Expected a gap-fill request for missing recent days"
     starts = [row["relative_ds_start"] for row in daily]
     ends = [row["relative_ds_end"] for row in daily]
-    assert min(starts) >= -2
+    assert min(starts) == -7
+    assert (-2, -1) in {(row["relative_ds_start"], row["relative_ds_end"]) for row in daily}
     # daily_end is today-1 (relative -1) to avoid the Airbnb malformed-input error
     # that occurs when asking for a window ending on today (relative 0).
     assert max(ends) == -1
+
+
+def test_internal_daily_ledger_gap_is_replanned():
+    planner = load_planner()
+    listings, routes, periods, today = sample_inputs()
+    route = routes[0]
+    ledger = {}
+    for ds in ["2026-04-21", "2026-04-22", "2026-04-23", "2026-04-25", "2026-04-26", "2026-04-27"]:
+        ledger[("100", route["family"], route["subroute"], 0, ds, route["subroute"])] = {
+            "listing_id": "100",
+            "route_family": route["family"],
+            "route_subroute": route["subroute"],
+            "series_index": 0,
+            "ds": ds,
+            "primary_metric_name": route["subroute"],
+            "observed_at": "2026-04-28T00:00:00Z",
+        }
+
+    plan = planner.plan_requests(
+        listings=[{"listing_id": "100"}],
+        routes=[route],
+        today=today,
+        ledger_index=ledger,
+        summary_periods=periods,
+        daily_horizon_days=7,
+        older_horizon_days=0,
+        weekly_window_days=7,
+    )
+
+    daily_windows = [
+        (row["relative_ds_start"], row["relative_ds_end"])
+        for row in plan.chart_requests
+        if row["chart_mode"] == "rolling_daily"
+    ]
+    assert len(daily_windows) == 1
+    start, end = daily_windows[0]
+    assert start <= -4 <= end
+    assert end <= -1
 
 
 def test_tier_boundary_no_overlap_between_daily_and_older():
@@ -144,6 +183,71 @@ def test_default_weekly_window_days_elicits_week_granularity():
 
     sig = inspect.signature(planner.plan_requests)
     assert sig.parameters["weekly_window_days"].default >= 56
+
+
+def test_no_window_has_start_equal_to_end():
+    """Empirically verified: Airbnb's ChartQuery rejects ANY window where
+    relative_ds_start == relative_ds_end with malformed_input, regardless of
+    position. Every emitted window must have at least 2 days span.
+    """
+    planner = load_planner()
+    listings, routes, periods, today = sample_inputs()
+    plan = planner.plan_requests(
+        listings=listings,
+        routes=routes,
+        today=today,
+        ledger_index={},
+        summary_periods=periods,
+        daily_horizon_days=14,
+        older_horizon_days=14,
+        weekly_window_days=56,
+    )
+    for row in plan.chart_requests:
+        assert row["relative_ds_start"] < row["relative_ds_end"], (
+            f"Zero-length window emitted: {row}. Airbnb will reject this."
+        )
+
+
+def test_single_day_gap_padded_to_full_window():
+    """When the only missing date is a single day, the planner must pad the
+    window to its full window_days width (anchored at end_ds) so the API is
+    given a valid 7-day window. The ledger dedupes the overlap.
+    """
+    planner = load_planner()
+    listings, routes, periods, today = sample_inputs()
+    route = routes[0]
+    listing = listings[0]
+    # Pre-seed the ledger with every day except the one furthest into the
+    # daily horizon end.
+    from datetime import timedelta as td
+
+    ledger = {}
+    for offset in range(7, 90):  # cover daily_start..daily_end-1 leaving daily_end uncovered
+        ds = (today - td(days=offset + 1)).isoformat()
+        ledger[(listing["listing_id"], route["family"], route["subroute"], 0, ds, route["subroute"])] = {
+            "listing_id": listing["listing_id"],
+            "route_family": route["family"],
+            "route_subroute": route["subroute"],
+            "series_index": 0,
+            "ds": ds,
+            "primary_metric_name": route["subroute"],
+            "series_granularity": "DAY",
+            "observed_at": "2026-04-28T00:00:00Z",
+        }
+    plan = planner.plan_requests(
+        listings=[listing],
+        routes=[route],
+        today=today,
+        ledger_index=ledger,
+        summary_periods=[],
+        daily_horizon_days=90,
+        older_horizon_days=0,
+        weekly_window_days=56,
+    )
+    assert plan.chart_requests, "Expected the single-day gap to be filled"
+    for row in plan.chart_requests:
+        span = row["relative_ds_end"] - row["relative_ds_start"]
+        assert span >= 1, f"Window must have ≥2 day span; got {row}"
 
 
 def test_daily_end_excludes_today_to_avoid_malformed_input():

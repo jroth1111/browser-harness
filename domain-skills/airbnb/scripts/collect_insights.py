@@ -9,9 +9,9 @@ The collector uses Airbnb's authenticated Performance API from inside the
 browser context:
 
 - ListOfMetricsQuery: period summary metrics
-- ChartQuery: chart/history points. `AIRBNB_INSIGHTS_CHART_MODE=rolling_daily`
-  uses rolling 7-day windows to force DAY granularity; `single_window` asks
-  Airbnb for one broad trend window and preserves Airbnb's returned granularity.
+- ChartQuery: chart/history points. The tiered planner uses rolling 7-day
+  windows for recent daily primitives and larger single-window chunks for older
+  history while preserving Airbnb's returned granularity.
 
 Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 """
@@ -36,7 +36,9 @@ BASE = "https://www.airbnb.com.au"
 LISTINGS_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
 SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
 OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/insights-collections")
-LEDGER_PATH = OUTPUT_PATH / ".ledger.jsonl"
+# AIRBNB_INSIGHTS_LEDGER_PATH lets isolated/test runs target a sandbox ledger
+# rather than the production one.
+LEDGER_PATH = Path(os.environ.get("AIRBNB_INSIGHTS_LEDGER_PATH", str(OUTPUT_PATH / ".ledger.jsonl")))
 
 OPERATION_HASHES = {
     "ListOfMetricsQuery": "d72f771d4dd59e594aeefbd90d5a5510d72c4c732f596f6d663af00bb27fac3c",
@@ -153,23 +155,23 @@ def route_path(route, listing_id, ds_start, ds_end):
     )
 
 
-def rolling_windows(history_days, window_days=7):
-    windows = []
-    start = -int(history_days)
-    while start < 0:
-        end = min(start + window_days, 0)
-        windows.append({"label": f"daily_{start}_{end}", "ds_start": start, "ds_end": end})
-        start = end
-    return windows
-
-
-def chart_windows_for_history(history_days):
-    mode = os.environ.get("AIRBNB_INSIGHTS_CHART_MODE", "rolling_daily")
-    if mode == "single_window":
-        return [{"label": f"chart_{-int(history_days)}_0", "ds_start": -int(history_days), "ds_end": 0}]
-    if mode != "rolling_daily":
-        raise SystemExit(f"Unsupported AIRBNB_INSIGHTS_CHART_MODE={mode!r}; use rolling_daily or single_window")
-    return rolling_windows(history_days)
+def resolve_horizons(env=os.environ):
+    """Resolve tiered planner horizons with AIRBNB_INSIGHTS_HISTORY_DAYS as a legacy total."""
+    total_history_days = int(env.get("AIRBNB_INSIGHTS_HISTORY_DAYS", "365"))
+    daily_horizon_days = int(env.get("AIRBNB_INSIGHTS_DAILY_HORIZON_DAYS", str(min(90, total_history_days))))
+    older_horizon_days = int(
+        env.get("AIRBNB_INSIGHTS_OLDER_HORIZON_DAYS", str(max(0, total_history_days - daily_horizon_days)))
+    )
+    weekly_window_days = int(env.get("AIRBNB_INSIGHTS_WEEKLY_WINDOW_DAYS", "56"))
+    if daily_horizon_days < 0 or older_horizon_days < 0 or weekly_window_days <= 0:
+        raise SystemExit("Airbnb Insights horizons must be non-negative and weekly window days must be positive")
+    return {
+        "history_days": daily_horizon_days + older_horizon_days,
+        "daily_horizon_days": daily_horizon_days,
+        "older_horizon_days": older_horizon_days,
+        "weekly_window_days": weekly_window_days,
+        "legacy_history_days": total_history_days,
+    }
 
 
 def apply_patient_mode():
@@ -481,7 +483,7 @@ def main():
         listings = listings[: int(os.environ["AIRBNB_INSIGHTS_LIMIT_LISTINGS"])]
     routes = ROUTES[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_ROUTES", len(ROUTES)))]
     summary_periods = SUMMARY_PERIODS[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_PERIODS", len(SUMMARY_PERIODS)))]
-    history_days = int(os.environ.get("AIRBNB_INSIGHTS_HISTORY_DAYS", "365"))
+    horizons = resolve_horizons()
 
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     SESSION_PATH.mkdir(parents=True, exist_ok=True)
@@ -518,9 +520,9 @@ def main():
         today=today,
         ledger_index=ledger_index,
         summary_periods=summary_periods,
-        daily_horizon_days=int(os.environ.get("AIRBNB_INSIGHTS_DAILY_HORIZON_DAYS", "90")),
-        older_horizon_days=int(os.environ.get("AIRBNB_INSIGHTS_OLDER_HORIZON_DAYS", "275")),
-        weekly_window_days=int(os.environ.get("AIRBNB_INSIGHTS_WEEKLY_WINDOW_DAYS", "56")),
+        daily_horizon_days=horizons["daily_horizon_days"],
+        older_horizon_days=horizons["older_horizon_days"],
+        weekly_window_days=horizons["weekly_window_days"],
     )
     summary_requests = build_requests_from_plan(
         planner_output.summary_requests,
@@ -630,7 +632,8 @@ def main():
         "listing_count": len(listings),
         "route_count": len(routes),
         "summary_periods": summary_periods,
-        "history_days": history_days,
+        "history_days": horizons["history_days"],
+        "horizons": horizons,
         "chart_mode": "tiered_gap_sync",
         "chart_window_count": len(chart_requests),
         "summary_request_count": len(summary_requests),
@@ -662,7 +665,8 @@ def main():
         "listing_count": len(listings),
         "route_count": len(routes),
         "summary_period_count": len(summary_periods),
-        "history_days": history_days,
+        "history_days": horizons["history_days"],
+        "horizons": horizons,
         "chart_mode": "tiered_gap_sync",
         "chart_window_count": len(chart_requests),
         "summary_request_count": len(summary_requests),
@@ -696,4 +700,5 @@ def main():
     print(json.dumps(receipt, indent=2), flush=True)
 
 
-main()
+if __name__ == "__main__":
+    main()
