@@ -32,7 +32,9 @@ When this page appears, tick the checkbox so the agent can connect to your brows
 
 See [domain-skills/](domain-skills/) for example tasks.
 
-For self-hosted browser endpoints such as CloakBrowser, Browserless, Steel, Kernel Chromium images, and Kameleo, see [docs/local-cdp-providers.md](docs/local-cdp-providers.md).
+For browser options such as Codex Browser Use, CloakBrowser, Browserless, Steel,
+Kernel Chromium images, and Kameleo, see
+[docs/local-cdp-providers.md](docs/local-cdp-providers.md).
 
 ## Development
 
@@ -42,6 +44,20 @@ Run the test suite from a clean checkout with:
 uv sync --group dev
 uv run --group dev pytest -q
 ```
+
+If the system-wide `langsmith` pytest plugin is installed and causes a pydantic version conflict, disable it:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q
+```
+
+Live/E2E tests that hit Airbnb's API are gated behind environment flags:
+
+| Test file | Gate env var |
+|---|---|
+| `test_e2e_airbnb_insights_year_view.py` | `AIRBNB_E2E_YEAR_VIEW=1` |
+| `test_e2e_airbnb_insights_negative_controls.py` | `AIRBNB_E2E_NEGATIVE_429=1` |
+| `test_e2e_airbnb_insights_conversion_display.py` | Runs unconditionally against pre-collected fixtures |
 
 ## How simple is it? (~592 lines of Python)
 

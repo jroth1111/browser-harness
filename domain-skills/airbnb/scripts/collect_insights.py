@@ -19,10 +19,11 @@ Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -35,6 +36,7 @@ BASE = "https://www.airbnb.com.au"
 LISTINGS_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
 SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
 OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/insights-collections")
+LEDGER_PATH = OUTPUT_PATH / ".ledger.jsonl"
 
 OPERATION_HASHES = {
     "ListOfMetricsQuery": "d72f771d4dd59e594aeefbd90d5a5510d72c4c732f596f6d663af00bb27fac3c",
@@ -65,6 +67,18 @@ ROUTES = [
     {"family": "conversion", "metric_type": "CONVERSION", "subroute": "p3_impressions", "label": "Views"},
     {"family": "conversion", "metric_type": "CONVERSION", "subroute": "wishlist", "label": "Wishlist additions"},
 ]
+
+
+def _load_local_module(module_filename, module_name):
+    path = Path("domain-skills/airbnb/scripts") / module_filename
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_planner = _load_local_module("insights_planner.py", "airbnb_insights_planner")
+_ledger = _load_local_module("insights_ledger.py", "airbnb_insights_ledger")
 
 
 def latest_live_listing_file() -> Path:
@@ -158,6 +172,16 @@ def chart_windows_for_history(history_days):
     return rolling_windows(history_days)
 
 
+def apply_patient_mode():
+    if os.environ.get("AIRBNB_INSIGHTS_PATIENT_MODE") != "1":
+        return
+    os.environ.setdefault("AIRBNB_INSIGHTS_BATCH_SIZE", "2")
+    os.environ.setdefault("AIRBNB_INSIGHTS_BATCH_DELAY_SEC", "5")
+    os.environ.setdefault("AIRBNB_INSIGHTS_RETRY_LIMIT", "5")
+    os.environ.setdefault("AIRBNB_INSIGHTS_429_BACKOFF_SEC", "300")
+    os.environ.setdefault("AIRBNB_INSIGHTS_STOP_AFTER_429_BATCHES", "1")
+
+
 def performance_request(operation_name, route, listing_id, ds_start, ds_end):
     client = "web-performance-dash-chart" if operation_name == "ChartQuery" else "web-performance-dash-metrics"
     variables = {
@@ -187,6 +211,8 @@ def read_response_text(response):
 
 
 def fetch_performance_one(item, api_key, base_headers):
+    if os.environ.get("AIRBNB_INSIGHTS_FORCE_429_SIM") == "1":
+        return {**item["meta"], "ok": False, "status": 429, "error": "forced_429_simulation"}
     extensions = {"persistedQuery": {"version": 1, "sha256Hash": item["hash"]}}
     path = (
         f"/api/v3/{item['operationName']}/{item['hash']}"
@@ -329,13 +355,20 @@ def run_request_batches(label, requests, api_key, base_headers, checkpoint_path)
 
 
 def components(result):
-    return (
-        (result.get("data") or {})
-        .get("data", {})
-        .get("porygon", {})
-        .get("getPerformanceComponents", {})
-        .get("components", [])
-    )
+    data = result.get("data") or {}
+    if not isinstance(data, dict):
+        return []
+    data = data.get("data") or {}
+    if not isinstance(data, dict):
+        return []
+    porygon = data.get("porygon") or {}
+    if not isinstance(porygon, dict):
+        return []
+    perf = porygon.get("getPerformanceComponents") or {}
+    if not isinstance(perf, dict):
+        return []
+    rows = perf.get("components") or []
+    return rows if isinstance(rows, list) else []
 
 
 def parse_summary(result):
@@ -381,6 +414,39 @@ def parse_chart(result):
     return rows
 
 
+def build_requests_from_plan(plan_items, listings_by_id, routes_by_subroute, operation_name):
+    requests = []
+    for item in plan_items:
+        listing_id = str(item["listing_id"])
+        route = routes_by_subroute[item["route_subroute"]]
+        req = performance_request(
+            operation_name,
+            route,
+            listing_id,
+            int(item["relative_ds_start"]),
+            int(item["relative_ds_end"]),
+        )
+        label = item.get("period_label")
+        if not label:
+            mode = item.get("chart_mode")
+            label = f"{mode}_{item['relative_ds_start']}_{item['relative_ds_end']}"
+        req["meta"] = {
+            "request_kind": item.get("request_kind") or ("daily_chart" if operation_name == "ChartQuery" else "summary"),
+            "listing_id": listing_id,
+            "listing_name": (listings_by_id.get(listing_id) or {}).get("listing_name"),
+            "route_family": route["family"],
+            "route_subroute": route["subroute"],
+            "route_label": route["label"],
+            "period_label": label,
+            "relative_ds_start": int(item["relative_ds_start"]),
+            "relative_ds_end": int(item["relative_ds_end"]),
+            "chart_mode": item.get("chart_mode"),
+            "source_url": route_path(route, listing_id, int(item["relative_ds_start"]), int(item["relative_ds_end"])),
+        }
+        requests.append(req)
+    return requests
+
+
 def write_csv(path, rows):
     if not rows:
         return
@@ -396,6 +462,7 @@ def write_csv(path, rows):
 
 
 def main():
+    apply_patient_mode()
     observed_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     run_id = os.environ.get("AIRBNB_INSIGHTS_RUN_ID") or "airbnb-insights-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     listing_file = latest_live_listing_file()
@@ -406,61 +473,58 @@ def main():
     routes = ROUTES[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_ROUTES", len(ROUTES)))]
     summary_periods = SUMMARY_PERIODS[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_PERIODS", len(SUMMARY_PERIODS)))]
     history_days = int(os.environ.get("AIRBNB_INSIGHTS_HISTORY_DAYS", "365"))
-    chart_mode = os.environ.get("AIRBNB_INSIGHTS_CHART_MODE", "rolling_daily")
-    chart_windows = chart_windows_for_history(history_days)
 
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     SESSION_PATH.mkdir(parents=True, exist_ok=True)
 
-    # Ensure same-origin API key/bootstrap is present before API-only collection.
-    first_listing_id = str(listings[0]["listing_id"])
-    goto_url(route_path(routes[0], first_listing_id, -1, 0))
-    wait_for_load()
-    wait(2)
-    api_key = os.environ.get("AIRBNB_API_KEY") or js("JSON.parse(document.querySelector('#data-initializer-bootstrap')?.textContent || '{}')['layout-init']?.api_config?.key")
-    if not api_key:
-        raise SystemExit("Could not read Airbnb API key from page bootstrap")
-    base_headers = login_session.browser_session_headers(
-        cdp,
-        BASE + "/api/v3/",
-        cookie_urls=[BASE + "/"],
-    )
+    api_key = os.environ.get("AIRBNB_API_KEY")
+    auth_context = "skip_bootstrap"
+    if os.environ.get("AIRBNB_INSIGHTS_SKIP_BOOTSTRAP") != "1":
+        # Ensure same-origin API key/bootstrap is present before API-only collection.
+        first_listing_id = str(listings[0]["listing_id"])
+        goto_url(route_path(routes[0], first_listing_id, -1, 0))
+        wait_for_load()
+        wait(2)
+        api_key = api_key or js("JSON.parse(document.querySelector('#data-initializer-bootstrap')?.textContent || '{}')['layout-init']?.api_config?.key")
+        if not api_key:
+            raise SystemExit("Could not read Airbnb API key from page bootstrap")
+        base_headers = login_session.browser_session_headers(
+            cdp,
+            BASE + "/api/v3/",
+            cookie_urls=[BASE + "/"],
+        )
+        auth_context = "live_browser_session_bootstrap"
+    else:
+        if not api_key:
+            api_key = "forced-bootstrap-skip"
+        base_headers = {}
 
-    summary_requests = []
-    chart_requests = []
-    for listing in listings:
-        listing_id = str(listing["listing_id"])
-        for route in routes:
-            for period in summary_periods:
-                req = performance_request("ListOfMetricsQuery", route, listing_id, period["ds_start"], period["ds_end"])
-                req["meta"] = {
-                    "request_kind": "summary",
-                    "listing_id": listing_id,
-                    "listing_name": listing.get("listing_name"),
-                    "route_family": route["family"],
-                    "route_subroute": route["subroute"],
-                    "route_label": route["label"],
-                    "period_label": period["label"],
-                    "relative_ds_start": period["ds_start"],
-                    "relative_ds_end": period["ds_end"],
-                    "source_url": route_path(route, listing_id, period["ds_start"], period["ds_end"]),
-                }
-                summary_requests.append(req)
-            for window in chart_windows:
-                req = performance_request("ChartQuery", route, listing_id, window["ds_start"], window["ds_end"])
-                req["meta"] = {
-                    "request_kind": "daily_chart",
-                    "listing_id": listing_id,
-                    "listing_name": listing.get("listing_name"),
-                    "route_family": route["family"],
-                    "route_subroute": route["subroute"],
-                    "route_label": route["label"],
-                    "period_label": window["label"],
-                    "relative_ds_start": window["ds_start"],
-                    "relative_ds_end": window["ds_end"],
-                    "source_url": route_path(route, listing_id, window["ds_start"], window["ds_end"]),
-                }
-                chart_requests.append(req)
+    listings_by_id = {str(listing["listing_id"]): listing for listing in listings}
+    routes_by_subroute = {route["subroute"]: route for route in routes}
+    today = date.fromisoformat(observed_at[:10])
+    ledger_index = _ledger.read_ledger_index(LEDGER_PATH)
+    planner_output = _planner.plan_requests(
+        listings=listings,
+        routes=routes,
+        today=today,
+        ledger_index=ledger_index,
+        summary_periods=summary_periods,
+        daily_horizon_days=int(os.environ.get("AIRBNB_INSIGHTS_DAILY_HORIZON_DAYS", "90")),
+        older_horizon_days=int(os.environ.get("AIRBNB_INSIGHTS_OLDER_HORIZON_DAYS", "275")),
+        weekly_window_days=int(os.environ.get("AIRBNB_INSIGHTS_WEEKLY_WINDOW_DAYS", "28")),
+    )
+    summary_requests = build_requests_from_plan(
+        planner_output.summary_requests,
+        listings_by_id=listings_by_id,
+        routes_by_subroute=routes_by_subroute,
+        operation_name="ListOfMetricsQuery",
+    )
+    chart_requests = build_requests_from_plan(
+        planner_output.chart_requests,
+        listings_by_id=listings_by_id,
+        routes_by_subroute=routes_by_subroute,
+        operation_name="ChartQuery",
+    )
 
     summary_raw_path = OUTPUT_PATH / f"{run_id}-summary-raw.jsonl"
     chart_raw_path = OUTPUT_PATH / f"{run_id}-daily-chart-raw.jsonl"
@@ -518,31 +582,48 @@ def main():
         seen.add(key)
         deduped_daily_rows.append(row)
     daily_rows = deduped_daily_rows
+    ledger_rows = [
+        {
+            "listing_id": row.get("listing_id"),
+            "route_family": row.get("route_family"),
+            "route_subroute": row.get("route_subroute"),
+            "series_index": row.get("series_index"),
+            "ds": row.get("ds"),
+            "primary_metric_name": row.get("primary_metric_name"),
+            "value": row.get("value"),
+            "value_string": row.get("value_string"),
+            "value_type": row.get("value_type"),
+            "series_granularity": row.get("series_granularity"),
+            "observed_at": observed_at,
+            "run_id": run_id,
+            "source_url": row.get("source_url"),
+        }
+        for row in daily_rows
+        if row.get("ds")
+    ]
+    _ledger.append_ledger_rows(LEDGER_PATH, ledger_rows)
 
     output = {
         "run_id": run_id,
         "observed_at": observed_at,
-        "auth_context": "restored_private_host_session_in_fresh_agent_chrome_profile",
+        "auth_context": auth_context,
         "source": {
             "listing_scope": str(listing_file),
             "summary_api": "ListOfMetricsQuery",
             "daily_chart_api": "ChartQuery",
             "transport": "Python HTTP replay with browser-session cookies and Airbnb bootstrap API key",
             "operation_hashes": OPERATION_HASHES,
-            "granularity_strategy": (
-                "rolling 7-day relative windows to force DAY chart granularity; overlapping endpoints de-duplicated"
-                if chart_mode == "rolling_daily"
-                else "single broad ChartQuery window; Airbnb chooses DAY/WEEK/MONTH granularity for the requested range"
-            ),
-            "chart_mode": chart_mode,
+            "granularity_strategy": "tiered planner: rolling_daily for recent window + single_window chunks for older window; preserve returned series_granularity",
+            "chart_mode": "tiered_gap_sync",
             "checkpoint_strategy": "successful raw API responses are appended to JSONL after each batch and skipped on rerun when AIRBNB_INSIGHTS_RUN_ID is reused",
+            "ledger_path": str(LEDGER_PATH),
         },
         "listing_count": len(listings),
         "route_count": len(routes),
         "summary_periods": summary_periods,
         "history_days": history_days,
-        "chart_mode": chart_mode,
-        "chart_window_count": len(chart_windows),
+        "chart_mode": "tiered_gap_sync",
+        "chart_window_count": len(chart_requests),
         "summary_request_count": len(summary_requests),
         "chart_request_count": len(chart_requests),
         "summary_rows_count": len(summary_rows),
@@ -565,7 +646,7 @@ def main():
     write_csv(daily_csv_path, daily_rows)
 
     expected_summary = len(listings) * len(routes) * len(summary_periods)
-    expected_charts = len(listings) * len(routes) * len(chart_windows)
+    expected_charts = len(chart_requests)
     receipt = {
         "run_id": run_id,
         "observed_at": observed_at,
@@ -573,8 +654,8 @@ def main():
         "route_count": len(routes),
         "summary_period_count": len(summary_periods),
         "history_days": history_days,
-        "chart_mode": chart_mode,
-        "chart_window_count": len(chart_windows),
+        "chart_mode": "tiered_gap_sync",
+        "chart_window_count": len(chart_requests),
         "summary_request_count": len(summary_requests),
         "chart_request_count": len(chart_requests),
         "expected_summary_requests": expected_summary,
