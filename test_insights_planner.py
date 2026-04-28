@@ -133,6 +133,41 @@ def test_tier_boundary_no_overlap_between_daily_and_older():
     assert max(row["relative_ds_end"] for row in older) <= -15
 
 
+def test_default_weekly_window_days_elicits_week_granularity():
+    """Probe shows Airbnb returns WEEK granularity for windows >=56 days.
+
+    Regression guard: the default must not drop back below the WEEK-eliciting
+    threshold without an accompanying probe update.
+    """
+    planner = load_planner()
+    import inspect
+
+    sig = inspect.signature(planner.plan_requests)
+    assert sig.parameters["weekly_window_days"].default >= 56
+
+
+def test_daily_end_excludes_today_to_avoid_malformed_input():
+    """Regression guard: relative_ds_end=0 (today) triggers ServiceBadRequestError
+    on Airbnb's ChartQuery; daily windows must end at most at today-1.
+    """
+    planner = load_planner()
+    listings, routes, periods, today = sample_inputs()
+    plan = planner.plan_requests(
+        listings=listings,
+        routes=routes,
+        today=today,
+        ledger_index={},
+        summary_periods=periods,
+        daily_horizon_days=14,
+        older_horizon_days=14,
+        weekly_window_days=56,
+    )
+    daily = [row for row in plan.chart_requests if row["chart_mode"] == "rolling_daily"]
+    assert daily
+    assert max(row["relative_ds_end"] for row in daily) <= -1
+    assert all(row["relative_ds_start"] <= row["relative_ds_end"] for row in daily)
+
+
 def test_comparison_series_rows_do_not_affect_gap_math():
     planner = load_planner()
     listings, routes, periods, today = sample_inputs()

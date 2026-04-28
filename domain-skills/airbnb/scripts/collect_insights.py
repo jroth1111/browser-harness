@@ -313,21 +313,30 @@ def run_request_batches(label, requests, api_key, base_headers, checkpoint_path)
         batch = requests_to_run[index : index + batch_size]
         pending = batch
         batch_results = []
+        successful_results = []
+        final_failures = []
         for attempt in range(retry_limit + 1):
             if attempt:
                 time.sleep(backoff if any(r.get("status") == 429 for r in batch_results) else delay * attempt)
             batch_results = fetch_performance_batch(pending, api_key, base_headers)
-            retryable = [
-                req
-                for req, result in zip(pending, batch_results)
-                if result.get("status") == 429 or result.get("error")
-            ]
+            retryable = []
+            for req, result in zip(pending, batch_results):
+                if result.get("ok"):
+                    successful_results.append(result)
+                elif result.get("status") == 429 or result.get("error"):
+                    retryable.append((req, result))
+                else:
+                    final_failures.append(result)
             if not retryable:
                 break
-            pending = retryable
+            if attempt >= retry_limit:
+                final_failures.extend(result for _, result in retryable)
+                break
+            pending = [req for req, _ in retryable]
+        batch_results = [*successful_results, *final_failures]
         results.extend(batch_results)
-        append_checkpoint(checkpoint_path, [result for result in batch_results if result.get("ok")])
-        failures.extend([result for result in batch_results if not result.get("ok")])
+        append_checkpoint(checkpoint_path, successful_results)
+        failures.extend(final_failures)
         if batch_results and all(result.get("status") == 429 for result in batch_results):
             consecutive_429_batches += 1
         else:
@@ -511,7 +520,7 @@ def main():
         summary_periods=summary_periods,
         daily_horizon_days=int(os.environ.get("AIRBNB_INSIGHTS_DAILY_HORIZON_DAYS", "90")),
         older_horizon_days=int(os.environ.get("AIRBNB_INSIGHTS_OLDER_HORIZON_DAYS", "275")),
-        weekly_window_days=int(os.environ.get("AIRBNB_INSIGHTS_WEEKLY_WINDOW_DAYS", "28")),
+        weekly_window_days=int(os.environ.get("AIRBNB_INSIGHTS_WEEKLY_WINDOW_DAYS", "56")),
     )
     summary_requests = build_requests_from_plan(
         planner_output.summary_requests,
