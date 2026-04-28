@@ -26,6 +26,7 @@ Available interaction skills:
 - interaction-skills/connection.md — startup sequence, tab visibility, omnibox popup fix
 - interaction-skills/backend-capability.md — diagnose loaded-but-empty pages and backend capability
 - interaction-skills/data-source-exploration.md — discover public/private data primitives before designing extraction
+- interaction-skills/data-display.md — render scraped datasets as self-contained HTML with tables, charts, and tree views
 - interaction-skills/session-continuity.md — persist auth/session continuity metadata safely
 
 Available domain skills:
@@ -49,6 +50,7 @@ Available domain skills:
 - realestate-com-au/scraping.md
 - tiktok/upload.md
 - polymarket/scraping.md
+- youtube/scraping.md
 
 ## Tool call shape
 
@@ -67,6 +69,7 @@ Search domain-skills/ first for the domain you are working on before inventing a
 Only if you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. The available interaction skills are:
 - backend-capability.md
 - cookies.md
+- data-display.md
 - data-source-exploration.md
 - cross-origin-iframes.md
 - dialogs.md
