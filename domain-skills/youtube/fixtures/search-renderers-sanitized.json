@@ -1,0 +1,56 @@
+{
+  "fixture": "youtube-search-renderers-sanitized",
+  "source": "synthetic shape fixture based on 2026-04-28 mapped renderer inventory",
+  "redactions": ["trackingParams", "visitorData", "apiKey"],
+  "renderers": [
+    {
+      "videoRenderer": {
+        "videoId": "VIDEO12345A",
+        "title": {"runs": [{"text": "Sample video result"}]},
+        "ownerText": {"runs": [{"text": "Sample Channel"}]},
+        "lengthText": {"simpleText": "12:34"},
+        "viewCountText": {"simpleText": "1,234 views"},
+        "publishedTimeText": {"simpleText": "1 day ago"},
+        "thumbnail": {"thumbnails": [{"url": "https://i.ytimg.com/vi/VIDEO12345A/hqdefault.jpg"}]}
+      }
+    },
+    {
+      "channelRenderer": {
+        "channelId": "UC_SAMPLE_CHANNEL",
+        "title": {"simpleText": "Sample Channel"},
+        "subscriberCountText": {"simpleText": "123K subscribers"},
+        "videoCountText": {"runs": [{"text": "42 videos"}]}
+      }
+    },
+    {
+      "shortsLockupViewModel": {
+        "entityId": "shorts-sample",
+        "onTap": {"innertubeCommand": {"reelWatchEndpoint": {"videoId": "SHORT12345B"}}},
+        "accessibilityText": "Sample short"
+      }
+    },
+    {
+      "playlistRenderer": {
+        "playlistId": "PL_SAMPLE",
+        "title": {"simpleText": "Sample playlist"},
+        "videoCount": "7"
+      }
+    },
+    {
+      "lockupViewModel": {
+        "contentId": "VIDEOLOCK123",
+        "metadata": {"lockupMetadataViewModel": {"title": {"content": "Sample lockup"}}}
+      }
+    },
+    {
+      "ad_or_shelf_renderer": {
+        "shelfRenderer": {
+          "title": {"runs": [{"text": "Sample shelf"}]},
+          "content": {"verticalListRenderer": {"items": []}}
+        }
+      }
+    },
+    {"continuationItemRenderer": {"continuationEndpoint": {"continuationCommand": {"token": "REDACTED_CONTINUATION"}}}},
+    {"backgroundPromoRenderer": {"title": {"simpleText": "No results found"}}}
+  ]
+}

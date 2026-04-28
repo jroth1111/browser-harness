@@ -23,7 +23,7 @@ import importlib.util
 import json
 import os
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -81,6 +81,7 @@ def _load_local_module(module_filename, module_name):
 
 _planner = _load_local_module("insights_planner.py", "airbnb_insights_planner")
 _ledger = _load_local_module("insights_ledger.py", "airbnb_insights_ledger")
+_listing_scope = _load_local_module("listing_scope.py", "airbnb_listing_scope")
 
 
 def latest_live_listing_file() -> Path:
@@ -114,6 +115,13 @@ def is_complete_live_listing_file(path: Path) -> bool:
         and validation.get("all_active_detail_pages_ok") is True
         and not data.get("partial_run")
     )
+
+
+def validate_collection_scope(listings, routes):
+    if not listings:
+        raise SystemExit("No listings in scope for Airbnb Insights collection")
+    if not routes:
+        raise SystemExit("No routes in scope for Airbnb Insights collection")
 
 
 def wrapper_value(value):
@@ -163,8 +171,10 @@ def resolve_horizons(env=os.environ):
         env.get("AIRBNB_INSIGHTS_OLDER_HORIZON_DAYS", str(max(0, total_history_days - daily_horizon_days)))
     )
     weekly_window_days = int(env.get("AIRBNB_INSIGHTS_WEEKLY_WINDOW_DAYS", "56"))
-    if daily_horizon_days < 0 or older_horizon_days < 0 or weekly_window_days <= 0:
-        raise SystemExit("Airbnb Insights horizons must be non-negative and weekly window days must be positive")
+    if daily_horizon_days < 0 or older_horizon_days < 0 or weekly_window_days < 2:
+        raise SystemExit(
+            "Airbnb Insights horizons must be non-negative and weekly window days must be at least 2"
+        )
     return {
         "history_days": daily_horizon_days + older_horizon_days,
         "daily_horizon_days": daily_horizon_days,
@@ -425,6 +435,37 @@ def parse_chart(result):
     return rows
 
 
+def has_graphql_errors(result):
+    data = result.get("data")
+    return isinstance(data, dict) and bool(data.get("errors"))
+
+
+def is_confirmed_empty_chart(result):
+    """True only for a recognized chart payload with explicit empty series."""
+    if has_graphql_errors(result):
+        return False
+    chart_sections = [
+        component
+        for component in components(result)
+        if component.get("componentName") == "PIVOT_CHART_SECTION"
+    ]
+    if not chart_sections:
+        return False
+    for section in chart_sections:
+        if "metricLineCharts" not in section:
+            return False
+        charts = section.get("metricLineCharts")
+        if not isinstance(charts, list):
+            return False
+        for chart in charts:
+            points = chart.get("dataPoints")
+            if not isinstance(points, list):
+                return False
+            if points:
+                return False
+    return True
+
+
 def build_requests_from_plan(plan_items, listings_by_id, routes_by_subroute, operation_name):
     requests = []
     for item in plan_items:
@@ -478,11 +519,33 @@ def main():
     run_id = os.environ.get("AIRBNB_INSIGHTS_RUN_ID") or "airbnb-insights-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     listing_file = latest_live_listing_file()
     listing_run = json.loads(listing_file.read_text())
-    listings = listing_run.get("records") or []
-    if os.environ.get("AIRBNB_INSIGHTS_LIMIT_LISTINGS"):
-        listings = listings[: int(os.environ["AIRBNB_INSIGHTS_LIMIT_LISTINGS"])]
+    all_listings = listing_run.get("records") or []
+    if not all_listings:
+        raise SystemExit(f"Listing source file {listing_file} has zero records — refusing to run.")
+    source_status_counts = listing_run.get("status_counts") or _listing_scope.status_counts(all_listings)
+    total_active_listings = int(source_status_counts.get("ACTIVE") or 0)
+    listings, listing_scope = _listing_scope.select_listings(
+        all_listings,
+        os.environ.get("AIRBNB_INSIGHTS_LISTING_SCOPE"),
+    )
+    total_scope_listings = len(listings)
+    if not listings:
+        raise SystemExit(
+            f"Listing source file {listing_file} produced zero listings for scope {listing_scope['label']}"
+        )
+    listing_limit = os.environ.get("AIRBNB_INSIGHTS_LIMIT_LISTINGS")
+    if listing_limit:
+        listings = listings[: int(listing_limit)]
+        print(json.dumps({
+            "warning": "listing_scope_limited",
+            "limit": int(listing_limit),
+            "total_scope_listings": total_scope_listings,
+            "scoped_listing_count": len(listings),
+        }), flush=True)
+    listing_ids_in_scope = [str(l["listing_id"]) for l in listings]
     routes = ROUTES[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_ROUTES", len(ROUTES)))]
     summary_periods = SUMMARY_PERIODS[: int(os.environ.get("AIRBNB_INSIGHTS_LIMIT_PERIODS", len(SUMMARY_PERIODS)))]
+    validate_collection_scope(listings, routes)
     horizons = resolve_horizons()
 
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
@@ -566,14 +629,64 @@ def main():
             summary_rows.append({**{k: v for k, v in result.items() if k not in {"data"}}, **row})
 
     daily_rows = []
+    sentinel_rows = []
     for result in chart_results:
         if not result.get("ok"):
             continue
         parsed = parse_chart(result)
         if not parsed:
-            failures.append({**result, "ok": False, "error": "no_chart_points"})
+            rel_start = result.get("relative_ds_start")
+            rel_end = result.get("relative_ds_end")
+            if is_confirmed_empty_chart(result) and rel_start is not None and rel_end is not None:
+                sentinel_ds = today + timedelta(days=int(rel_start))
+                span_days = max(1, int(rel_end) - int(rel_start) + 1)
+                sentinel_rows.append({
+                    "listing_id": result.get("listing_id"),
+                    "route_family": result.get("route_family"),
+                    "route_subroute": result.get("route_subroute"),
+                    "series_index": 0,
+                    "ds": sentinel_ds.isoformat(),
+                    "primary_metric_name": _ledger.SENTINEL_PRIMARY_METRIC,
+                    "_attempt_span_days": span_days,
+                    "_attempt_window_kind": result.get("chart_mode") or "single_window",
+                    "value": None,
+                    "value_string": None,
+                    "value_type": "ATTEMPT_SENTINEL",
+                    "series_granularity": _ledger.SENTINEL_GRANULARITY,
+                    "observed_at": observed_at,
+                    "run_id": run_id,
+                    "source_url": result.get("source_url"),
+                })
+            else:
+                failures.append({**result, "ok": False, "error": "no_chart_points"})
         for row in parsed:
             daily_rows.append({**{k: v for k, v in result.items() if k not in {"data"}}, **row})
+
+    # De-duplicate sentinel rows by (listing, route, ds). If multiple empty
+    # windows start on the same day, keep the one with the broadest span so we
+    # do not accidentally shrink coverage when a wider single_window and a
+    # narrower rolling_daily window overlap.
+    seen_sentinels = {}
+    for row in sentinel_rows:
+        key = (
+            row.get("listing_id"),
+            row.get("route_family"),
+            row.get("route_subroute"),
+            row.get("ds"),
+        )
+        existing = seen_sentinels.get(key)
+        row_span = int(row.get("_attempt_span_days") or 1)
+        existing_span = int((existing or {}).get("_attempt_span_days") or 1)
+        if (
+            existing is None
+            or row_span > existing_span
+            or (
+                row_span == existing_span
+                and str(row.get("observed_at") or "") >= str(existing.get("observed_at") or "")
+            )
+        ):
+            seen_sentinels[key] = row
+    sentinel_rows = list(seen_sentinels.values())
 
     # De-duplicate overlapping 7-day chart windows while preserving comparison
     # series separately.
@@ -613,6 +726,7 @@ def main():
         if row.get("ds")
     ]
     _ledger.append_ledger_rows(LEDGER_PATH, ledger_rows)
+    _ledger.append_ledger_rows(LEDGER_PATH, sentinel_rows)
 
     output = {
         "run_id": run_id,
@@ -630,6 +744,12 @@ def main():
             "ledger_path": str(LEDGER_PATH),
         },
         "listing_count": len(listings),
+        "listing_status_scope": listing_scope["label"],
+        "total_source_listings": len(all_listings),
+        "total_scope_listings": total_scope_listings,
+        "total_active_listings": total_active_listings,
+        "listing_scope_complete": len(listings) == total_scope_listings,
+        "listing_ids_in_scope": listing_ids_in_scope,
         "route_count": len(routes),
         "summary_periods": summary_periods,
         "history_days": horizons["history_days"],
@@ -641,6 +761,7 @@ def main():
         "summary_rows_count": len(summary_rows),
         "chart_rows_count": len(daily_rows),
         "daily_rows_count": len(daily_rows),
+        "sentinel_rows_count": len(sentinel_rows),
         "failures_count": len(failures),
         "summary_raw_path": str(summary_raw_path),
         "chart_raw_path": str(chart_raw_path),
@@ -663,6 +784,12 @@ def main():
         "run_id": run_id,
         "observed_at": observed_at,
         "listing_count": len(listings),
+        "listing_status_scope": listing_scope["label"],
+        "total_source_listings": len(all_listings),
+        "total_scope_listings": total_scope_listings,
+        "total_active_listings": total_active_listings,
+        "listing_scope_complete": len(listings) == total_scope_listings,
+        "listing_ids_in_scope": listing_ids_in_scope,
         "route_count": len(routes),
         "summary_period_count": len(summary_periods),
         "history_days": horizons["history_days"],
@@ -676,6 +803,7 @@ def main():
         "summary_rows_count": len(summary_rows),
         "chart_rows_count": len(daily_rows),
         "daily_rows_count": len(daily_rows),
+        "sentinel_rows_count": len(sentinel_rows),
         "failures_count": len(failures),
         "all_api_requests_ok": not [f for f in failures if f.get("status") != 200],
         "all_parsers_found_rows": len(failures) == 0,

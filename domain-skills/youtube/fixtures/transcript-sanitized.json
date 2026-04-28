@@ -1,0 +1,27 @@
+{
+  "fixture": "youtube-transcript-sanitized",
+  "source": "synthetic shape fixture based on UI-triggered get_transcript response",
+  "redactions": ["params", "visitorData", "apiKey"],
+  "request": {
+    "endpoint": "/youtubei/v1/get_transcript",
+    "body_shape": ["context", "params", "languageCode", "externalVideoId"],
+    "body": "REDACTED_UI_GENERATED_BODY"
+  },
+  "response": {
+    "transcriptRenderer": {
+      "body": {
+        "transcriptBodyRenderer": {
+          "cueGroups": [
+            {
+              "transcriptCueGroupRenderer": {
+                "cues": [
+                  {"transcriptCueRenderer": {"cue": {"simpleText": "Hello world"}, "startOffsetMs": "0", "durationMs": "1200"}}
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

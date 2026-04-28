@@ -1,0 +1,23 @@
+{
+  "fixture": "youtube-comments-sanitized",
+  "source": "synthetic shape fixture based on /youtubei/v1/next comment continuation inventory",
+  "redactions": ["visitorData", "apiKey", "trackingParams"],
+  "comment_surface": {
+    "commentsHeaderRenderer": {
+      "countText": {"runs": [{"text": "123 comments"}]},
+      "sortMenu": {"sortFilterSubMenuRenderer": {"subMenuItems": [{"title": "Top comments"}, {"title": "Newest first"}]}}
+    },
+    "commentThreadRenderer": {
+      "comment": {
+        "commentRenderer": {
+          "authorText": {"simpleText": "Sample viewer"},
+          "contentText": {"runs": [{"text": "A useful comment"}]},
+          "voteCount": {"simpleText": "12"},
+          "publishedTimeText": {"runs": [{"text": "2 days ago"}]}
+        }
+      },
+      "replies": {"commentRepliesRenderer": {"contents": []}}
+    },
+    "continuationItemRenderer": {"continuationEndpoint": {"continuationCommand": {"token": "REDACTED_COMMENT_CONTINUATION"}}}
+  }
+}

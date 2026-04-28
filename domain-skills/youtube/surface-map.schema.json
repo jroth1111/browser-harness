@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Browser Harness YouTube Surface Map",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "domain",
+    "path_types",
+    "forbidden",
+    "execution_policy",
+    "fallback_nodes",
+    "browser_harness_primitives",
+    "primitives",
+    "search",
+    "video_detail",
+    "fallback_dags",
+    "verification_probes"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "domain": {"type": "string", "const": "youtube.com"},
+    "field_tested": {
+      "type": "object",
+      "required": ["date", "profile", "web_client", "hl", "gl"],
+      "properties": {
+        "date": {"type": "string"},
+        "profile": {"type": "string"},
+        "web_client": {"type": "string"},
+        "hl": {"type": "string"},
+        "gl": {"type": "string"}
+      }
+    },
+    "path_types": {
+      "type": "array",
+      "items": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+      "minItems": 5,
+      "uniqueItems": true
+    },
+    "forbidden": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+    "execution_policy": {
+      "type": "object",
+      "required": ["stop_on", "fallback_on", "never_fallback_to", "receipt_required"],
+      "properties": {
+        "stop_on": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "fallback_on": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "never_fallback_to": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "receipt_required": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+      }
+    },
+    "fallback_nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path_type"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]}
+        }
+      }
+    },
+    "browser_harness_primitives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path_type", "use"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+          "use": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "primitives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "path_type", "primary", "fallback_chain", "inputs", "outputs", "evidence"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+          "primary": {"type": "string", "minLength": 1},
+          "fallback_chain": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "inputs": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+          "outputs": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+          "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+        }
+      }
+    },
+    "search": {
+      "type": "object",
+      "required": [
+        "surface_modes",
+        "url_patterns",
+        "url_parameters",
+        "innertube_query_parameters",
+        "innertube_body_parameters",
+        "filter_groups",
+        "chips",
+        "result_surfaces"
+      ],
+      "properties": {
+        "surface_modes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "path_type", "route", "required"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+              "route": {"type": "string", "minLength": 1},
+              "required": {"type": "array", "items": {"type": "string"}},
+              "optional": {"type": "array", "items": {"type": "string"}},
+              "outputs": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+            }
+          }
+        },
+        "url_parameters": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/named_required_parameter"}
+        },
+        "innertube_query_parameters": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/named_required_parameter"}
+        },
+        "innertube_body_parameters": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/named_required_parameter"}
+        },
+        "filter_groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["group", "filters"],
+            "properties": {
+              "group": {"type": "string", "minLength": 1},
+              "filters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "token", "status"],
+                  "properties": {
+                    "label": {"type": "string", "minLength": 1},
+                    "token": {"type": ["string", "null"]},
+                    "status": {"type": "string", "enum": ["available", "default", "disabled", "selected"]}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "chips": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "result_surfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["renderer", "fields"],
+            "properties": {
+              "renderer": {"type": "string", "minLength": 1},
+              "fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+            }
+          }
+        },
+        "continuation_contract": {"type": "object"}
+      }
+    },
+    "video_detail": {
+      "type": "object",
+      "required": [
+        "url_parameters",
+        "browser_globals",
+        "innertube_endpoints",
+        "player_response_fields",
+        "watch_initial_data_fields",
+        "transcript_fields",
+        "comment_fields",
+        "related_video_fields",
+        "share_fields",
+        "action_fields"
+      ],
+      "properties": {
+        "url_parameters": {"type": "array", "items": {"$ref": "#/$defs/named_required_parameter"}},
+        "browser_globals": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "innertube_endpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["endpoint", "path_type", "body", "use"],
+            "properties": {
+              "endpoint": {"type": "string", "minLength": 1},
+              "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+              "body": {"type": "array", "items": {"type": "string", "minLength": 1}},
+              "use": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "player_response_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "watch_initial_data_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "transcript_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "comment_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "related_video_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "share_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "action_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "storyboard_fields": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "live_status_fields": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "fallback_dags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1},
+        "minItems": 1
+      }
+    },
+    "verification_probes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["positive", "negative"],
+        "properties": {
+          "positive": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+          "negative": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+        }
+      }
+    },
+    "channel": {"type": "object"},
+    "playlist": {"type": "object"},
+    "discovery": {"type": "object"},
+    "innertube": {"type": "object"},
+    "utilities": {"type": "object"},
+    "yt_dlp_policy": {"type": "object"},
+    "availability": {
+      "type": "object",
+      "required": ["default", "statuses"],
+      "properties": {
+        "default": {"type": "string", "enum": ["happy_path", "conditional", "degraded", "terminal_probe"]},
+        "statuses": {
+          "type": "array",
+          "items": {"type": "string", "enum": ["happy_path", "conditional", "degraded", "terminal_probe"]},
+          "uniqueItems": true
+        },
+        "primitives": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/availability_note"}
+        },
+        "fallback_nodes": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/availability_note"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "availability_note": {
+      "type": "object",
+      "required": ["status", "conditional_reason"],
+      "properties": {
+        "status": {"type": "string", "enum": ["happy_path", "conditional", "degraded", "terminal_probe"]},
+        "conditional_reason": {"type": "string", "minLength": 1},
+        "last_live_observation": {"type": "string"}
+      }
+    },
+    "named_required_parameter": {
+      "type": "object",
+      "required": ["name", "required", "meaning"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "required": {"type": "boolean"},
+        "paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "meaning": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
