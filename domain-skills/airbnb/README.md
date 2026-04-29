@@ -92,7 +92,8 @@ find domain-skills/airbnb \
 ## Default Flow
 
 1. Identify the host decision.
-2. Read the matching row in `overview.md` under **Cold-start task router**.
+2. Read the matching row in `overview.md` under **Intent Router**, then use
+   **Expanded Routing Matrix** only if the task spans multiple artifacts.
 3. Collect the smallest source primitives needed for the decision.
 4. Evaluate collected rows with `scripts/decision_gates.py` when a decision is
    needed.

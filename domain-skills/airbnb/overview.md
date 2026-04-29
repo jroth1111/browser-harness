@@ -39,7 +39,9 @@ Before any Airbnb collection, preserve these invariants:
 ## Intent Router
 
 Start here when the user speaks in business language. Pick the row that matches
-the request, then read only the first workflow/playbook named for that row.
+the request, then read only the first workflow/playbook named for that row. This
+is the canonical router for cold readers; later matrices expand this table by
+artifact or execution detail and must not introduce a competing first step.
 
 | User intent | Desired outcome | Read first | Script/helper if needed | Output owner |
 |---|---|---|---|---|
@@ -71,7 +73,12 @@ business evidence sources by themselves.
 
 ## Evidence Source And Auth Guardrails
 
-| Evidence family | Machine `source_family` values | Read first | Run or helper | Hard stop / guardrail |
+Use this table after the intent router has selected the task. It does not choose
+the business workflow; it constrains the evidence source, auth posture, allowed
+joins, and refusal guardrails for the source family already implied by the
+intent.
+
+| Evidence family | Machine `source_family` values | When this source is selected, use | Run or helper | Hard stop / guardrail |
 |---|---|---|---|---|
 | Public Airbnb market | `public_market` | `public-market.md`, then `workflows-current-state.md` | `collect_competitors.py`, `public_scan_planner.py` | Refuse owner cookies; validate dates, guests, currency, room type, limits, and URL inputs before a run. |
 | Own public listing | `own_public` | `public-market.md`, then `workflows-current-state.md` Workflow 4 | `collect_own_public.py` | Observe as a logged-out guest; do not infer guest-visible state from host-only pages. |
@@ -159,7 +166,7 @@ requires local run artifacts.
 |---|---|---|
 | `README.md`, `overview.md` | routers | Start here; these files route readers to workflows, scripts, and schema homes. |
 | `*-workflows.md`, `*-playbook.md`, `host-sources.md`, `public-market.md`, `analytics-alerts.md`, `decisioning.md` | workflows and judgement rules | Reusable guidance. These files own control paths, refusal guards, decision rules, and handoffs, not durable field lists when a schema file exists. |
-| `schema-*.md`, `data-quality.md`, `analytics-alerts.md`, `decisioning.md` | row-contract homes | Durable `airbnb_*` field lists and allowed values. Use the schema row index below before editing or consuming a row. |
+| `schema-*.md`, `data-quality.md`, `analytics-alerts.md`, `decisioning.md`, `realestate-building-rentals.md` | row-contract homes | Durable `airbnb_*` field lists and allowed values. `analytics-alerts.md` and `realestate-building-rentals.md` are deliberate schema exceptions called out in the schema row index. Use the schema row index below before editing or consuming a row. |
 | `scripts/README.md` | executable index | Runnable vs helper-only classification, prerequisites, outputs, and refusal rules. |
 | `scripts/*.py` | implementation | Open after the script index or a failing test identifies the relevant script. |
 | `schemas/*.json` | machine contracts | JSON contracts for collection outputs, receipts, and warehouse manifests. |
@@ -180,15 +187,20 @@ references, tests, package data, and script constants are updated together.
 | Entry and routing | `README.md`, `overview.md` | Cold start, intent router, two-axis model, source guardrails, artifact map, schema lookup | Points to one workflow or script index row |
 | Source and sensing workflows | `exploration-protocol.md`, `workflows-current-state.md`, `host-sources.md`, `public-market.md`, `realestate-building-rentals.md`, `data-inventory.md`, `session-continuity.md` | What source to collect, auth posture, refusal guards, output locations, source-specific acceptance rules | Writes source rows into the schema family named by the workflow |
 | Decision and action playbooks | `market-research-playbook.md`, `analytics-alerts.md`, `operator-insight-workflows.md`, `content-optimization-playbook.md`, `visual-revenue-workflows.md`, `decisioning.md` | Judgement rules, gates, scoring, recommendation/action/outcome flow | Reads collected rows, emits schema rows or decisioning rows |
-| Durable row contracts | `schema-*.md`, `data-quality.md`, `decisioning.md`, `analytics-alerts.md`, `realestate-building-rentals.md` table shapes | Row grains, field lists, allowed values, joins, refresh semantics | Workflow docs may name these rows but should not duplicate their full contracts |
+| Durable row contracts | `schema-*.md`, `data-quality.md`, `decisioning.md`, plus deliberate exceptions in `analytics-alerts.md` and `realestate-building-rentals.md` | Row grains, field lists, allowed values, joins, refresh semantics | Workflow docs may name these rows but should not duplicate their full contracts |
 | Executable control plane | `scripts/README.md`, `scripts/*.py` | What is runnable, what is helper-only, env vars, outputs, local guards, probes | Collectors/probes write ignored run artifacts and receipts; helpers are imported only |
 | Reusable fixtures and machine contracts | `fixtures/`, `schemas/*.json` | Parser, decision-gate, skill-learning fixtures and JSON validation contracts | Tests and guards consume these; do not mix with private run output |
 | Local/generated artifacts | `.private-data/`, `.session-store/`, root `outputs/` | Private evidence, session continuity, generated reports/workbooks | Ignored by git; cite paths only when sanitized and relevant |
 
-## Cold-start task router
+## Expanded Routing Matrix
 
-Use this section before opening multiple files. Start with the user’s host
-question, then read progressively until you have enough context.
+Use this section after the canonical Intent Router when the task spans multiple
+artifacts or you need the full read/collect/decide/output chain. It expands the
+intent router; it is not a second router and should not override the first
+workflow selected above.
+
+Start with the user’s host question, then read progressively until you have
+enough context.
 
 The skill is organized as an intent-first ladder:
 
@@ -203,8 +215,9 @@ Progressive read order:
 
 1. Read this `overview.md` file for routing, source reliability, executable
    entry points, and schema lookup.
-2. Choose one row in the task router below. Read only the `Read first` files
-   for that row.
+2. Choose one row in the Intent Router, then use the matching row below only
+   when you need the expanded chain. Read only the `Read first` files for that
+   row.
 3. If data must be collected, open `scripts/README.md` and the governing
    markdown named for the collector. Do not open collector code until you need
    implementation details or a parser contract.
@@ -595,9 +608,9 @@ schema as the row contract and treat the workflow as control-path guidance.
 | `airbnb_market_event`, `airbnb_holiday_calendar`, `airbnb_weather_context`, `airbnb_transport_access_signal`, `airbnb_regulatory_market_signal`, `airbnb_demand_calendar` | `schema-demand-context.md` |
 | `airbnb_data_capture_run`, `airbnb_source_observation`, `airbnb_field_quality` | `data-quality.md` |
 | `airbnb_recommendation`, `airbnb_action_log`, `airbnb_experiment`, `airbnb_outcome_attribution` | `decisioning.md` |
-| `airbnb_alerts` | `analytics-alerts.md` |
+| `airbnb_alerts` | `analytics-alerts.md` (deliberate schema exception; alert rules and dashboard playbooks live with the alert row) |
 | `airbnb_image_improvement_prompt`, `airbnb_visual_listing_observation`, `airbnb_visual_image_observation`, `airbnb_interior_design_opportunity`, `airbnb_portfolio_design_action` | `schema-visual-revenue.md` |
-| REA rental observation/event/building-price JSONL rows | `realestate-building-rentals.md` |
+| REA rental observation/event/building-price JSONL rows | `realestate-building-rentals.md` (deliberate schema exception; source lifecycle semantics and JSONL row shapes live together) |
 
 ## Source anchors
 

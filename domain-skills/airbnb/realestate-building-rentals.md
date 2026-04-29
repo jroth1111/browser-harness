@@ -18,6 +18,11 @@ when did a known listing return to market?
   for arbitrage underwriting, and `decisioning.md` only after a decision becomes
   an action.
 
+Schema exception: this file deliberately owns the REA observation/event/building
+price JSONL row shapes because their fields are inseparable from REA retry,
+gone-listing, revisit, and idempotency semantics. Airbnb decision and
+underwriting rows still live in `schema-market-research.md` and `decisioning.md`.
+
 ## Source Buildings
 
 The monitored building universe starts with the latest complete Airbnb host
@@ -456,7 +461,9 @@ the learned weights back to this prior before changing production scoring.
 
 ## Table Shape
 
-Observation rows include:
+Observation rows include the REA source JSONL contract. This is a deliberate
+schema exception; keep these row shapes with the REA lifecycle rules unless a
+later migration creates a dedicated REA schema file.
 
 | Field | Meaning |
 |---|---|

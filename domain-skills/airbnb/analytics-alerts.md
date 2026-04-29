@@ -2,6 +2,11 @@
 
 Use this file after collecting host/account data and public market data.
 
+Schema exception: this file deliberately owns the `airbnb_alerts` row contract
+because the alert table is tightly coupled to the alert playbooks, dashboard
+tiles, thresholds, and suppression rules below. Other durable row contracts stay
+in `schema-*.md`, `data-quality.md`, or `decisioning.md`.
+
 ## Revenue and yield metrics
 
 | Metric | Formula |
@@ -437,7 +442,9 @@ Checks:
 
 ## `airbnb_alerts`
 
-Alert event table.
+Alert event table. This is a deliberate schema exception: keep this row contract
+with the alert rules unless a later migration moves all alert semantics into a
+dedicated schema file.
 
 Fields:
 
