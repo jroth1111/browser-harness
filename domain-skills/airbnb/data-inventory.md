@@ -2,10 +2,10 @@
 
 Use this as the registry of Airbnb data primitives. A primitive is a small,
 source-grounded fact that can be recombined later for pricing, conversion,
-operations, quality, or portfolio decisions.
+market research, operations, quality, or portfolio decisions.
 
 General primitive discovery rules live in
-`interaction-skills/data-source-exploration.md`. This file is Airbnb-specific:
+`../../interaction-skills/data-source-exploration.md`. This file is Airbnb-specific:
 source names, Airbnb surfaces, and Airbnb examples belong here.
 
 ## Primitive design
@@ -34,15 +34,18 @@ belongs to a market, competitor, or own-listing state run from
 | Market demand state | events, holidays, weather, transport, regulation/supply signals | Public/external | `schema-demand-context.md` |
 | Competitor market state | public search runs, search cards, comp prices, comp availability | Logged out | `schema-public-market.md` |
 | Competitor listing state | comp amenities, rules, reviews, badges, hero subjects, rating/review count | Logged out | `schema-public-market.md` |
+| Market research derived state | absorption, stay-length gaps, capacity curves, comp theses, channel fit, underwriting decisions | Mixed from public, external, and finance primitives | `market-research-playbook.md`, `schema-market-research.md` |
 | Own guest-visible state | own public rank, price, availability, badges, rules, amenities, review themes | Logged out | `public-market.md`, `schema-core.md` |
 | Own private host state | calendar, reservations, economics, pricing, rules, Insights, quality | Logged in only when needed | `host-sources.md`, schema files |
-| Listing-date state | combined date-level state, pace gap, comp index, restriction choke, quality risk | Mixed from source primitives | `analytics-alerts.md`, `decisioning.md` |
+| Listing-date state | combined date-level state, pace gap, comp index, restriction choke, quality risk, calendar action candidates | Mixed from source primitives | `analytics-alerts.md`, `decisioning.md`, `schema-performance.md` |
+| Decision-gate state | market decisions, comp grades, maturity grades, opportunity snapshots, conversion diagnoses, operations risks, channel strategy | Derived from collected primitives | `scripts/decision_gates.py`, schema files |
 
 ## Public Airbnb primitives
 
 | Primitive family | Examples | Capture method | Backend |
 |---|---|---|---|
 | Search context | destination, map bounds, dates, guests, filters, currency, device, login state | Public search URL + screenshot/text | Lightpanda only if Airbnb cards render with field parity; otherwise headful |
+| Search-result inventory counts | undated/flexible visible count, dated visible count, cap-hit state, selected filters, map boundary and bounds | Public search text/screenshot/deferred state | Backend with visible count and card-field parity |
 | Search-card visibility | rank, page/scroll depth, title, location label, badge, rating, review count, price | Public search text/DOM/screenshot | Lightpanda only if card order and fields match headful |
 | Public listing facts | room ID, property type, capacity, bedrooms, beds, bathrooms, location text | Listing page text/DOM | Lightpanda only after listing-fact field contract passes |
 | Public price/availability | total guest price, nightly component, minimum-stay message, unavailable message | Search results first; listing page second | Backend with total-price field parity |
@@ -75,6 +78,7 @@ and price context. Public data from this workflow belongs in
 | Insights conversion | impressions, search-to-listing, listing-to-booking, views, wishlists, lead time | Authenticated `ListOfMetricsQuery` and `ChartQuery` with `filters.listingIds` | Headful bootstrap plus browser-context API fetch |
 | Insights occupancy/rates | occupancy, booked/blocked/unbooked nights, check-ins, cancellations, ADR | Authenticated `ListOfMetricsQuery` and `ChartQuery` with `filters.listingIds` | Headful bootstrap plus browser-context API fetch |
 | Insights quality | overall/category 5-star performance and similar-listing comparison | Authenticated Performance API plus UI review sections where needed | Headful bootstrap plus browser-context API fetch |
+| Host reviews | review date, stay month, review text, overall/category ratings, host response, theme tags | `scripts/collect_host_reviews.py`; API/template or discovered review API resources, rendered text fallback | Headful authenticated host profile; complete only when rows reconcile to host-visible/API review total |
 | Messages/quick replies | templates, triggers, placeholders, sent/skipped timeline | Auth UI | Headful profile |
 | Tasks/teams | task type, due date, assignment, checklist, completion | Auth UI | Headful profile |
 | Regulations/tax | registration/permit fields, declaration status, tax/levy fields | Auth UI/help docs | Headful profile |
@@ -128,6 +132,10 @@ be monthly or weekly rather than daily.
 | Raise price for a weekend | calendar availability + booking pace + comp total price + event signal + quality/trust premium |
 | Discount an orphan night | gap length + minimum stay rules + cleaning cost + comp availability + margin floor |
 | Change hero photo | search-card conversion + hero subject + comp hero subjects + content action history |
+| Pursue/watch/reject a candidate property | absorption scan + stay-length gap + capacity curve + comp thesis/counterexamples + channel fit + underwriting |
+| Build a listing opportunity snapshot | own public appearance + A-comp prices + review maturity + conversion diagnosis |
+| Generate date-level calendar action | calendar status + booking pace + comp price index + demand context + margin floor |
+| Predict operations risk | review themes + message workflow gaps + task recurrence + turnover load |
 | Fix check-in process | check-in rating trend + review themes + message timeline + task completion |
 | Owner statement | earnings export + reservation economics + actual costs + owner contract |
 | Compliance review | listing jurisdiction + Airbnb regulation fields + official source signal + calendar block reason |

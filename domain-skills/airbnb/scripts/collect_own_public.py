@@ -1,5 +1,33 @@
 """Collect logged-out guest-visible audits for the host's own Airbnb listings.
 
+Role: collector (public, logged out). Captures how the host's listings appear
+to a guest in public search and on public listing pages. Must not use the host
+auth bundle.
+
+Reads:
+    - Latest complete `airbnb-live-listings-*.json` under
+      `.private-data/listing-collections/` (override with
+      `AIRBNB_LISTINGS_FILE`).
+
+Produces:
+    - Public listing-page content audits, review summaries, individual
+      review snapshots, and search-appearance rows under
+      `.private-data/own-public-collections/`.
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
+
+Requires (env, optional unless noted):
+    - `AIRBNB_OWN_PUBLIC_CHECKIN_DATES`, `AIRBNB_OWN_PUBLIC_CHECKIN_OFFSETS`,
+      `AIRBNB_OWN_PUBLIC_NIGHTS`, `AIRBNB_OWN_PUBLIC_TOP_RESULTS`,
+      `AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS`,
+      `AIRBNB_OWN_PUBLIC_LISTING_SCOPE`, `AIRBNB_OWN_PUBLIC_NAV_DELAY_SEC`,
+      `AIRBNB_OWN_PUBLIC_LIMIT_LISTINGS` — see public-market.md.
+
+Refuses to run if:
+    - Known Airbnb authenticated-session cookies are present (own-listing
+      rank must not be observed from the owner's account).
+    - The selected listing inventory is `partial_run: true`. Override with
+      `AIRBNB_LISTINGS_FILE` only for an intentionally bounded smoke test.
+
 Run from the browser-harness repo against a fresh logged-out agent Chrome
 profile:
 
@@ -10,14 +38,13 @@ profile:
       python3 run.py < domain-skills/airbnb/scripts/collect_own_public.py
 
 Private outputs are written under ignored domain-skills/airbnb/.private-data/.
-This collector must not use the host auth bundle. It captures how the host's
-listings appear to a guest in public search and on public listing pages.
 """
 
 from __future__ import annotations
 
 import csv
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -47,6 +74,21 @@ AUTH_COOKIE_NAMES = {
     "li",
     "rclu",
 }
+
+
+def _load_local_module(module_filename, module_name):
+    path = Path("domain-skills/airbnb/scripts") / module_filename
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_listing_scope = _load_local_module("listing_scope.py", "airbnb_listing_scope")
+_public_scan_planner = _load_local_module("public_scan_planner.py", "airbnb_public_scan_planner")
+_surfaces = _load_local_module("surface_capabilities.py", "airbnb_surface_capabilities")
+_integrity = _load_local_module("run_integrity.py", "airbnb_run_integrity")
+_photo_product = _load_local_module("photo_product_evidence.py", "airbnb_photo_product_evidence")
 
 
 def utc_now():
@@ -114,16 +156,17 @@ def latest_live_listing_file() -> Path:
 
 
 def parse_csv_ints(value, default):
-    raw = value or default
-    return [int(part.strip()) for part in raw.split(",") if part.strip()]
+    return _public_scan_planner.parse_csv_ints(value, default)
 
 
 def checkin_dates():
-    explicit = os.environ.get("AIRBNB_OWN_PUBLIC_CHECKIN_DATES")
-    if explicit:
-        return [part.strip() for part in explicit.split(",") if part.strip()]
-    today = date.today()
-    return [(today + timedelta(days=offset)).isoformat() for offset in parse_csv_ints(os.environ.get("AIRBNB_OWN_PUBLIC_CHECKIN_OFFSETS"), DEFAULT_CHECKIN_OFFSETS)]
+    return _public_scan_planner.resolve_checkin_dates(
+        explicit=os.environ.get("AIRBNB_OWN_PUBLIC_CHECKIN_DATES"),
+        offsets=os.environ.get("AIRBNB_OWN_PUBLIC_CHECKIN_OFFSETS"),
+        default_offsets=DEFAULT_CHECKIN_OFFSETS,
+        checkin_range=os.environ.get("AIRBNB_OWN_PUBLIC_CHECKIN_RANGE"),
+        step_days=int(os.environ.get("AIRBNB_OWN_PUBLIC_CHECKIN_STEP_DAYS", "1")),
+    )
 
 
 def checkout_date(checkin, nights):
@@ -170,7 +213,7 @@ def is_search_card_date_line(line):
     )
 
 
-def parse_card_text(text):
+def parse_card_text(text, photo_items=None):
     text = re.sub(r"\n{2,}", "\n", (text or "").strip())
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     total = first_match(r"\$([0-9][0-9,]*)\s*AUD\s+total", text, money_to_int)
@@ -196,6 +239,16 @@ def parse_card_text(text):
             continue
         title_candidates.append(line)
     title = title_candidates[0] if title_candidates else None
+    photo_evidence = _photo_product.normalize_photo_product_evidence(
+        raw_listing_text=text,
+        raw_photo_data=photo_items,
+        hero_text=(photo_items or [None])[0] if photo_items else title,
+    )
+    differentiators = [
+        value
+        for value in photo_evidence.get("amenity_claims_proven_in_photos", [])
+        if value in {"parking", "pool_or_spa", "view", "workspace", "family", "pet"}
+    ]
     return {
         "visible_title_short": title,
         "visible_location_label": location,
@@ -205,6 +258,9 @@ def parse_card_text(text):
         "visible_review_count": review_count,
         "visible_badge": "Guest favourite" if re.search(r"guest favourite", text, re.I) else None,
         "top_home_highlight_visible": bool(re.search(r"top\s+\d+%|top home", text, re.I)),
+        "hero_photo_subject_tag": photo_evidence.get("hero_photo_subject_tag"),
+        "first_five_photo_subjects": photo_evidence.get("first_five_photo_subjects"),
+        "obvious_differentiator_tags": differentiators,
         "raw_text": text[:3000],
     }
 
@@ -320,11 +376,14 @@ def listing_review_scope(text):
 
 
 def parse_listing_review_count(scope):
+    for line in (scope or "").splitlines():
+        if re.search(r"\bhost\b|other places to stay|years of hosting", line, re.I):
+            continue
+        match = re.search(r"\b([0-9][0-9,]*)\s+reviews?\b", line, re.I)
+        if match:
+            return int(match.group(1).replace(",", ""))
     if re.search(r"\bNo reviews(?:\s*\(yet\)| yet)\b|\bNew listing\b", scope or "", re.I):
         return 0
-    matches = re.findall(r"\b([0-9][0-9,]*)\s+reviews?\b", scope or "", re.I)
-    if matches:
-        return int(matches[0].replace(",", ""))
     return None
 
 
@@ -391,7 +450,7 @@ def rating_category_source(category_ratings):
     return "not_visible"
 
 
-def parse_listing_text(text):
+def parse_listing_text(text, photo_items=None):
     text = re.sub(r"\n{2,}", "\n", (text or "").strip())
     review_scope = listing_review_scope(text)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -403,9 +462,9 @@ def parse_listing_text(text):
             title = line
             break
     capacity_line = next((line for line in lines if re.search(r"\d+\s+guests?", line, re.I) and re.search(r"bedrooms?|beds?|baths?", line, re.I)), "")
-    rating = first_match(r"Rated\s+([0-5](?:\.\d+)?)\s+out of 5 stars", review_scope, float)
+    rating = first_match(r"Rated\s+([0-5](?:\.\d+)?)\s+out of 5(?:\s+stars)?", review_scope, float)
     if rating is None:
-        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 stars from", review_scope, float)
+        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5(?:\s+stars)?\s+from", review_scope, float)
     if rating is None:
         rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 average rating", review_scope, float)
     review_count = parse_listing_review_count(review_scope)
@@ -422,6 +481,11 @@ def parse_listing_text(text):
     cancellation = first_match(r"(Flexible|Moderate|Firm|Strict|Non-refundable)[^\n]*(?:cancellation|refund)?", text)
     checkin = first_match(r"(Check-in after[^\n]+)", text)
     checkout = first_match(r"(Checkout before[^\n]+)", text)
+    photo_evidence = _photo_product.normalize_photo_product_evidence(
+        raw_listing_text=text,
+        raw_photo_data=photo_items,
+        hero_text=(photo_items or [None])[0] if photo_items else title,
+    )
     return {
         "title_text": title,
         "title_length": len(title or ""),
@@ -445,6 +509,7 @@ def parse_listing_text(text):
         "family_amenities_flag": bool(re.search(r"cot|high chair|children|baby|family", amenities_text)),
         "accessible_features_flag": bool(re.search(r"step-free|accessible|wheelchair", amenities_text)),
         "photo_count": first_match(r"([0-9]+)\s+photos?", text, int),
+        **photo_evidence,
         "visible_amenities_core": sorted(set(re.findall(r"\b(pool|spa|sauna|gym|parking|wifi|washer|dryer|kitchen|balcony|lift|air conditioning)\b", amenities_text))),
         "house_rules_summary_flags": [value for value in [checkin, checkout] if value],
         "cancellation_policy_visible": cancellation,
@@ -471,6 +536,7 @@ def search_url(listing, checkin, nights):
         "checkin": checkin,
         "checkout": checkout,
         "adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
+        "room_types[]": "Entire home/apt",
     }
     bedrooms = listing.get("bedrooms")
     if bedrooms:
@@ -527,9 +593,33 @@ def extract_search_cards_from_page():
         break;
       }
     }
-    cards.push({href, room_id: match[1], text: best});
+    const photoAltTexts = Array.from((node || anchor).querySelectorAll('img'))
+      .map((img) => img.getAttribute('alt') || img.getAttribute('aria-label') || img.getAttribute('title') || '')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    cards.push({href, room_id: match[1], text: best, photo_alt_texts: photoAltTexts});
   }
   return cards;
+})()
+"""
+    ) or []
+
+
+def extract_listing_photo_labels_from_page():
+    return js(
+        r"""
+(() => {
+  const labels = [];
+  const seen = new Set();
+  for (const img of Array.from(document.querySelectorAll('img'))) {
+    const label = (img.getAttribute('alt') || img.getAttribute('aria-label') || img.getAttribute('title') || '').trim();
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    labels.push({alt: label});
+    if (labels.length >= 20) break;
+  }
+  return labels;
 })()
 """
     ) or []
@@ -624,19 +714,52 @@ def search_run_id(listing_id, checkin, nights):
     return f"airbnb-own-public-search-{listing_id}-{checkin}-{nights}n"
 
 
+def record_own_public_capability(records, resource_urls, source_url, observed_at, evidence):
+    record = _surfaces.capability_record(
+        "own_public_audit",
+        observed_at=observed_at,
+        auth_context="logged_out_public_guest_visible",
+        source_url=source_url,
+        resource_urls=resource_urls,
+        evidence=evidence,
+    )
+    _surfaces.upsert_best_capability(records, record)
+
+
 def main():
     observed_at = utc_now()
     run_id = os.environ.get("AIRBNB_OWN_PUBLIC_RUN_ID") or "airbnb-own-public-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     logged_out_guard = assert_logged_out_public_session()
     listing_file = latest_live_listing_file()
     listing_run = json.loads(listing_file.read_text())
-    listings = [row for row in listing_run.get("records") or [] if row.get("status") == "ACTIVE"]
+    all_listings = listing_run.get("records") or []
+    listings, listing_scope = _listing_scope.select_listings(
+        all_listings,
+        os.environ.get("AIRBNB_OWN_PUBLIC_LISTING_SCOPE"),
+    )
+    total_scope_listings = len(listings)
+    if not listings:
+        raise SystemExit(
+            f"Listing source file {listing_file} produced zero listings for scope {listing_scope['label']}"
+        )
     if os.environ.get("AIRBNB_OWN_PUBLIC_LIMIT_LISTINGS"):
         listings = listings[: int(os.environ["AIRBNB_OWN_PUBLIC_LIMIT_LISTINGS"])]
     dates = checkin_dates()
-    nights_values = parse_csv_ints(os.environ.get("AIRBNB_OWN_PUBLIC_NIGHTS"), DEFAULT_NIGHTS)
+    nights_values = _public_scan_planner.resolve_nights_values(
+        explicit=os.environ.get("AIRBNB_OWN_PUBLIC_NIGHTS"),
+        night_range=os.environ.get("AIRBNB_OWN_PUBLIC_STAY_LENGTH_RANGE"),
+        default=DEFAULT_NIGHTS,
+    )
     top_results = int(os.environ.get("AIRBNB_OWN_PUBLIC_TOP_RESULTS", DEFAULT_TOP_RESULTS))
     max_search_scrolls = int(os.environ.get("AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS", DEFAULT_MAX_SEARCH_SCROLLS))
+    validation = _public_scan_planner.validate_public_market_options(
+        checkin_dates=dates,
+        nights_values=nights_values,
+        price_bands=None,
+        top_results=top_results,
+        max_search_scrolls=max_search_scrolls,
+        currency="AUD",
+    )
     pause = float(os.environ.get("AIRBNB_OWN_PUBLIC_NAV_DELAY_SEC", "2.0"))
 
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
@@ -647,6 +770,7 @@ def main():
     visible_review_snapshots = []
     search_runs = []
     search_appearance = []
+    surface_capabilities = []
     failures = []
     raw_listing_path = OUTPUT_PATH / f"{run_id}-listing-raw.jsonl"
     raw_search_path = OUTPUT_PATH / f"{run_id}-search-raw.jsonl"
@@ -660,17 +784,28 @@ def main():
         wait(pause)
         scroll_public_listing()
         status = page_content_status(text_limit=45000, html_limit=4000)
+        record_own_public_capability(
+            surface_capabilities,
+            _surfaces.page_api_resource_urls(js),
+            url,
+            observed_at,
+            {"listing_id": listing_id, "phase": "public_listing_page"},
+        )
         failure_kind = page_failure(status)
         if failure_kind:
             failures.append({"listing_id": listing_id, "source_url": url, "source": "public_listing_page", "error": failure_kind, "title": status.get("title")})
             continue
         text = status.get("text") or ""
-        parsed = parse_listing_text(text)
+        photo_labels = extract_listing_photo_labels_from_page()
+        parsed = parse_listing_text(text, photo_labels)
         with raw_listing_path.open("a") as handle:
-            handle.write(json.dumps({"listing_id": listing_id, "observed_at": utc_now(), "url": url, "text": text}, ensure_ascii=False) + "\n")
+            handle.write(json.dumps({"listing_id": listing_id, "observed_at": utc_now(), "url": url, "text": text, "photo_labels": photo_labels}, ensure_ascii=False) + "\n")
         content_audits.append({
             "listing_id": listing_id,
             "observed_at": utc_now(),
+            "source_family": "own_public",
+            "surface_class": "own_public",
+            "auth_context": "logged_out_public_guest_visible",
             "logged_in_flag": False,
             "source_url": url,
             "public_listing_url": clean_room_url(url),
@@ -682,6 +817,25 @@ def main():
             "beds": parsed.get("beds"),
             "bathrooms": parsed.get("bathrooms"),
             "photo_count": parsed.get("photo_count"),
+            "hero_photo_subject": parsed.get("hero_photo_subject"),
+            "first_five_photo_subjects": parsed.get("first_five_photo_subjects"),
+            "bedroom_proof_flag": parsed.get("bedroom_proof_flag"),
+            "bathroom_proof_flag": parsed.get("bathroom_proof_flag"),
+            "kitchen_proof_flag": parsed.get("kitchen_proof_flag"),
+            "living_area_proof_flag": parsed.get("living_area_proof_flag"),
+            "workspace_proof_flag": parsed.get("workspace_proof_flag"),
+            "parking_proof_flag": parsed.get("parking_proof_flag"),
+            "pool_or_spa_proof_flag": parsed.get("pool_or_spa_proof_flag"),
+            "view_proof_flag": parsed.get("view_proof_flag"),
+            "family_proof_flag": parsed.get("family_proof_flag"),
+            "pet_proof_flag": parsed.get("pet_proof_flag"),
+            "self_checkin_proof_flag": parsed.get("self_checkin_proof_flag"),
+            "amenity_claims_visible": parsed.get("amenity_claims_visible"),
+            "amenity_claims_proven_in_photos": parsed.get("amenity_claims_proven_in_photos"),
+            "missing_photo_proof": parsed.get("missing_photo_proof"),
+            "design_gap_flags": parsed.get("design_gap_flags"),
+            "photo_product_score": parsed.get("photo_product_score"),
+            "photo_product_evidence_source": parsed.get("photo_product_evidence_source"),
             "visible_amenities_core": parsed.get("visible_amenities_core"),
             "parking_flag": parsed.get("parking_flag"),
             "pool_spa_flag": parsed.get("pool_spa_flag"),
@@ -699,6 +853,9 @@ def main():
         review_summaries.append({
             "listing_id": listing_id,
             "observed_at": utc_now(),
+            "source_family": "own_public",
+            "surface_class": "own_public",
+            "auth_context": "logged_out_public_guest_visible",
             "logged_in_flag": False,
             "source_url": url,
             "overall_rating": parsed.get("overall_rating"),
@@ -732,6 +889,9 @@ def main():
                 "public_review_row_id": visible_review_id(listing_id, review_row),
                 "listing_id": listing_id,
                 "observed_at": utc_now(),
+                "source_family": "own_public",
+                "surface_class": "own_public",
+                "auth_context": "logged_out_public_guest_visible",
                 "logged_in_flag": False,
                 "source_url": url,
                 **review_row,
@@ -748,10 +908,28 @@ def main():
             for nights in nights_values:
                 run_key = search_run_id(listing_id, checkin, nights)
                 url = search_url(listing, checkin, nights)
+                filters_applied = [
+                    f"query={target_query(listing)}",
+                    "room_types[]=Entire home/apt",
+                    f"min_bedrooms={listing.get('bedrooms')}",
+                ]
+                context_validation = _public_scan_planner.validate_public_search_context(
+                    destination=destination_from_listing(listing),
+                    checkin=checkin,
+                    checkout=checkout_date(checkin, nights),
+                    nights=nights,
+                    adults=min(max(int(listing.get("max_guests") or 2), 1), 8),
+                    currency="AUD",
+                    filters=filters_applied,
+                    url=url,
+                )
                 context = {
                     "search_run_id": run_key,
                     "listing_id": listing_id,
                     "observed_at": observed_at,
+                    "source_family": "own_public",
+                    "surface_class": "own_public",
+                    "auth_context": "logged_out_public_guest_visible",
                     "observer_location_country": "AU",
                     "device_type": "desktop",
                     "logged_in_flag": False,
@@ -763,7 +941,8 @@ def main():
                     "guest_count_adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
                     "guest_count_children": 0,
                     "guest_count_pets": 0,
-                    "filters_applied": [f"query={target_query(listing)}", f"min_bedrooms={listing.get('bedrooms')}"],
+                    "filters_applied": filters_applied,
+                    "search_context_validation": context_validation,
                     "source_url": url,
                     "results_limit_requested": top_results,
                     "max_search_scrolls_requested": max_search_scrolls,
@@ -773,6 +952,13 @@ def main():
                 wait_for_load()
                 wait(pause)
                 status = page_content_status(text_limit=25000, html_limit=4000)
+                record_own_public_capability(
+                    surface_capabilities,
+                    _surfaces.page_api_resource_urls(js),
+                    url,
+                    observed_at,
+                    {"listing_id": listing_id, "search_run_id": run_key, "phase": "public_search"},
+                )
                 failure_kind = page_failure(status)
                 if failure_kind:
                     failures.append({**context, "source": "public_search", "error": failure_kind, "title": status.get("title")})
@@ -788,7 +974,7 @@ def main():
                 for position, card in enumerate(cards[:top_results], start=1):
                     room_url = clean_room_url(card.get("href"))
                     room_id = room_id_from_url(room_url)
-                    parsed = parse_card_text(card.get("text") or "")
+                    parsed = parse_card_text(card.get("text") or "", card.get("photo_alt_texts"))
                     row = {
                         **parsed,
                         "listing_url": room_url,
@@ -815,6 +1001,9 @@ def main():
                     "visible_review_count": own_card.get("visible_review_count") if own_card else None,
                     "visible_badge": own_card.get("visible_badge") if own_card else None,
                     "top_home_highlight_visible": own_card.get("top_home_highlight_visible") if own_card else None,
+                    "hero_photo_subject_tag": own_card.get("hero_photo_subject_tag") if own_card else None,
+                    "first_five_photo_subjects": own_card.get("first_five_photo_subjects") if own_card else None,
+                    "obvious_differentiator_tags": own_card.get("obvious_differentiator_tags") if own_card else [],
                     "available_flag": bool(own_card and own_card.get("visible_price_total")),
                     "rank_observation_confidence": rank_observation_confidence(own_card),
                 })
@@ -826,20 +1015,76 @@ def main():
     search_runs_csv = OUTPUT_PATH / f"{run_id}-search-runs.csv"
     search_appearance_csv = OUTPUT_PATH / f"{run_id}-search-appearance.csv"
     receipt_path = SESSION_PATH / f"{run_id}-receipt.json"
-    output = {
+    prior_counts = _integrity.latest_prior_count(
+        OUTPUT_PATH,
+        count_keys=("review_summary_count",),
+        current_run_id=run_id,
+    )
+    last_good_guard = _integrity.last_good_guard(
+        subject="own_public_review_summaries",
+        current_count=len(review_summaries),
+        prior_positive_count=prior_counts["prior_positive_count"],
+        allow_empty=os.environ.get("AIRBNB_OWN_PUBLIC_ALLOW_EMPTY_REVIEWS") == "1",
+    )
+    warehouse_exports = _integrity.warehouse_manifest([
+        {
+            "table": "airbnb_own_public_listing_audit",
+            "path": str(content_csv),
+            "row_count": len(content_audits),
+            "grain": "listing_id + observed_at",
+            "source_family": "own_public",
+            "surface_class": "own_public",
+            "auth_context": "logged_out_public_guest_visible",
+        },
+        {
+            "table": "airbnb_own_public_review_summary",
+            "path": str(reviews_csv),
+            "row_count": len(review_summaries),
+            "grain": "listing_id + observed_at",
+            "source_family": "own_public",
+            "surface_class": "own_public",
+            "auth_context": "logged_out_public_guest_visible",
+        },
+        {
+            "table": "airbnb_own_public_search_appearance",
+            "path": str(search_appearance_csv),
+            "row_count": len(search_appearance),
+            "grain": "listing_id + search_run_id",
+            "source_family": "own_public",
+            "surface_class": "own_public",
+            "auth_context": "logged_out_public_guest_visible",
+        },
+    ])
+    output = _integrity.stamp_collection_contract({
         "run_id": run_id,
         "observed_at": observed_at,
         "auth_context": "logged_out_public_guest_visible",
+        "source_family": "own_public",
+        "surface_class": "own_public",
+        "collection_status": _integrity.collection_status(
+            last_good_guard_record=last_good_guard,
+            failures_count=len(failures),
+            complete=len(content_audits) == len(listings),
+        ),
         "source": {
             "listing_scope": str(listing_file),
             "backend": "headful_chrome_logged_out",
             "collection_strategy": "public room-page content/review audit plus own-listing search appearance",
             "logged_out_guard": logged_out_guard,
             "max_search_scrolls": max_search_scrolls,
+            "validation": validation,
+            "surface_capabilities": surface_capabilities,
         },
+        "last_good_guard": last_good_guard,
+        "warehouse_exports": warehouse_exports,
         "target_listing_count": len(listings),
+        "listing_status_scope": listing_scope["label"],
+        "total_source_listings": len(all_listings),
+        "total_scope_listings": total_scope_listings,
+        "listing_scope_complete": len(listings) == total_scope_listings,
         "checkin_dates": dates,
         "nights_values": nights_values,
+        "public_input_validation": validation,
         "top_results": top_results,
         "max_search_scrolls": max_search_scrolls,
         "content_audit_count": len(content_audits),
@@ -854,22 +1099,43 @@ def main():
         "search_runs": search_runs,
         "search_appearance": search_appearance,
         "failures": failures[:100],
-    }
-    json_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
+    },
+        source_family="own_public",
+        surface_class="own_public",
+        auth_context="logged_out_public_guest_visible",
+        collection_status=_integrity.collection_status(
+            last_good_guard_record=last_good_guard,
+            failures_count=len(failures),
+            complete=len(content_audits) == len(listings),
+        ),
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+    )
+    _integrity.write_collection_json(json_path, output)
     write_csv(content_csv, content_audits)
     write_csv(reviews_csv, review_summaries)
     write_csv(visible_reviews_csv, visible_review_snapshots)
     write_csv(search_runs_csv, search_runs)
     write_csv(search_appearance_csv, search_appearance)
     expected_search_runs = len(listings) * len(dates) * len(nights_values)
-    receipt = {
+    receipt = _integrity.stamp_collection_contract({
         "run_id": run_id,
         "observed_at": observed_at,
         "auth_context": output["auth_context"],
+        "source_family": output["source_family"],
+        "surface_class": output["surface_class"],
+        "collection_status": output["collection_status"],
+        "last_good_guard": last_good_guard,
+        "warehouse_exports": warehouse_exports,
         "logged_out_guard": logged_out_guard,
         "target_listing_count": len(listings),
+        "listing_status_scope": listing_scope["label"],
+        "total_source_listings": len(all_listings),
+        "total_scope_listings": total_scope_listings,
+        "listing_scope_complete": len(listings) == total_scope_listings,
         "checkin_dates": dates,
         "nights_values": nights_values,
+        "public_input_validation": validation,
         "top_results": top_results,
         "max_search_scrolls": max_search_scrolls,
         "content_audit_count": len(content_audits),
@@ -904,9 +1170,17 @@ def main():
         "visible_reviews_csv": str(visible_reviews_csv),
         "search_runs_csv": str(search_runs_csv),
         "search_appearance_csv": str(search_appearance_csv),
+        "surface_capabilities": surface_capabilities,
         "failure_sample": failures[:10],
-    }
-    receipt_path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False))
+    },
+        source_family="own_public",
+        surface_class="own_public",
+        auth_context=output["auth_context"],
+        collection_status=output["collection_status"],
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+    )
+    _integrity.write_receipt_json(receipt_path, receipt)
     print(json.dumps(receipt, indent=2, ensure_ascii=False), flush=True)
 
 

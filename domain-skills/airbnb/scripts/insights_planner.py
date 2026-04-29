@@ -123,6 +123,9 @@ def plan_requests(
     chart_requests = []
     summary_requests = []
     today = _parse_ds(today) if not isinstance(today, date) else today
+    weekly_window_days = int(weekly_window_days)
+    if weekly_window_days < 2:
+        raise ValueError("weekly_window_days must be at least 2")
 
     daily_start = today - timedelta(days=daily_horizon_days)
     # Airbnb daily data lags by at least one day; relative_ds_end=0 maps to today
@@ -133,7 +136,14 @@ def plan_requests(
 
     # One-time O(n) bucketing of the ledger by (listing, route, series); each
     # subsequent in-range slice is O(log n + k) instead of O(n).
-    buckets = _ledger.build_latest_ds_index(ledger_index)
+    # Pass today so sentinel tiered-expiry is evaluated relative to the run date
+    # rather than the wall clock (important for deterministic tests).
+    buckets = _ledger.build_latest_ds_index(ledger_index, today=today)
+    daily_buckets = _ledger.build_latest_ds_index(
+        ledger_index,
+        today=today,
+        include_granularities={"DAY"},
+    )
 
     for listing in listings:
         listing_id = str(listing["listing_id"])
@@ -155,7 +165,7 @@ def plan_requests(
                 )
 
             covered_daily = _bucket_dates_in_range(
-                buckets, listing_id, route_subroute, 0, daily_start, daily_end
+                daily_buckets, listing_id, route_subroute, 0, daily_start, daily_end
             )
             for missing_start, missing_end in _missing_date_ranges_from_dates(daily_start, daily_end, covered_daily):
                 for start_ds, end_ds in _rolling_daily_windows(missing_start, missing_end, window_days=7):

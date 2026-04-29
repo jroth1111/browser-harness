@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -169,6 +170,43 @@ def test_parse_listing_text_tracks_partial_visible_individual_review_stars(loade
     assert parsed.get("5_star_pct") is None
 
 
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_listing_review_count_prefers_numeric_count_over_stray_no_review_copy(loader):
+    module = loader()
+    parsed = module.parse_listing_text(
+        """
+        Melbourne CBD Stay
+        4 reviews
+        Rated 5.0 out of 5 from 4 reviews.
+        No reviews yet
+        Julia
+        Rating, 5 stars
+        March 2026
+        Great stay.
+        Tom
+        Rating, 5 stars
+        February 2026
+        Good location.
+        Sue
+        Rating, 5 stars
+        January 2026
+        Spotless.
+        Lee
+        Rating, 5 stars
+        December 2025
+        Easy check-in.
+        Meet your host
+        Msa
+        Host
+        1,039 reviews
+        """
+    )
+
+    assert parsed["review_count"] == 4
+    assert parsed["rating_display_state"] == "average_visible"
+    assert parsed["visible_individual_review_star_count"] == 4
+
+
 def test_own_public_parse_listing_text_extracts_visible_review_rows():
     module = load_own_public_module()
     parsed = module.parse_listing_text(
@@ -230,7 +268,12 @@ def test_parse_card_text_extracts_target_search_card_fields():
         $738 AUD total
         4.91 out of 5 average rating, 44 reviews
         Guest favourite
-        """
+        """,
+        photo_items=[
+            "Photo of secure parking bay",
+            "Photo of city view bedroom",
+            "Photo of kitchen",
+        ],
     )
 
     assert parsed["visible_location_label"] == "Apartment in Southbank"
@@ -239,6 +282,9 @@ def test_parse_card_text_extracts_target_search_card_fields():
     assert parsed["visible_rating"] == 4.91
     assert parsed["visible_review_count"] == 44
     assert parsed["visible_badge"] == "Guest favourite"
+    assert parsed["hero_photo_subject_tag"] == "parking"
+    assert parsed["first_five_photo_subjects"] == ["parking", "view", "kitchen"]
+    assert parsed["obvious_differentiator_tags"] == ["parking", "view"]
 
 
 def test_competitor_card_parser_skips_airbnb_date_lines():
@@ -288,6 +334,34 @@ def test_competitor_listing_parser_does_not_confuse_host_reviews():
     assert parsed["rating"] is None
     assert parsed["rating_display_state"] == "hidden_until_minimum_reviews"
     assert parsed["5_star_pct"] == 100
+
+
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_listing_parser_adds_photo_product_evidence(loader):
+    module = loader()
+    parsed = module.parse_listing_text(
+        """
+        Family apartment with parking and pool
+        Entire rental unit in Melbourne, Australia
+        6 guests \u00b7 3 bedrooms \u00b7 4 beds \u00b7 2 baths
+        24 photos
+        Free parking, pool, kitchen, dedicated workspace.
+        """,
+        photo_items=[
+            {"alt": "Secure garage parking"},
+            {"alt": "Primary bedroom with queen bed"},
+            {"alt": "Bathroom with walk-in shower"},
+            {"alt": "Kitchen with full oven"},
+            {"alt": "Dedicated workspace by the window"},
+        ],
+    )
+
+    assert parsed["hero_photo_subject"] == "parking"
+    assert parsed["first_five_photo_subjects"] == ["parking", "bedroom", "bathroom", "kitchen", "workspace"]
+    assert parsed["bedroom_proof_flag"] is True
+    assert parsed["bathroom_proof_flag"] is True
+    assert parsed["parking_proof_flag"] is True
+    assert "pool_or_spa" in parsed["missing_photo_proof"]
 
 
 @pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
@@ -374,3 +448,41 @@ def test_public_ranking_collectors_refuse_logged_in_airbnb_cookie_names(loader):
 
     assert "Refusing" in str(exc.value)
     assert "logged-in Airbnb session" in str(exc.value)
+
+
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_public_search_url_defaults_to_entire_home(loader):
+    module = loader()
+    listing = {
+        "address": "500 Elizabeth St, Melbourne VIC 3000, Australia",
+        "location_label": "Melbourne, Victoria, Australia",
+        "max_guests": 8,
+        "bedrooms": 3,
+    }
+
+    query = parse_qs(urlsplit(module.search_url(listing, "2026-05-29", 3)).query)
+
+    assert query["room_types[]"] == ["Entire home/apt"]
+    assert query["min_bedrooms"] == ["3"]
+    assert query["adults"] == ["8"]
+
+
+def test_competitor_search_url_applies_optional_price_band():
+    module = load_competitors_module()
+    listing = {
+        "address": "500 Elizabeth St, Melbourne VIC 3000, Australia",
+        "location_label": "Melbourne, Victoria, Australia",
+        "max_guests": 4,
+        "bedrooms": 2,
+    }
+
+    query = parse_qs(urlsplit(module.search_url(
+        listing,
+        "2026-05-29",
+        3,
+        price_band={"price_min": 251, "price_max": 500, "label": "251-500"},
+    )).query)
+
+    assert query["price_min"] == ["251"]
+    assert query["price_max"] == ["500"]
+    assert module.search_run_id("100", "2026-05-29", 3, "251-500").endswith("-price-251-500")

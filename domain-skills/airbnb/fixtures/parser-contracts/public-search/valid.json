@@ -1,0 +1,22 @@
+{
+  "search_runs": [
+    {
+      "search_run_id": "search-1",
+      "partition_key": "100|2026-05-10|3|0-499|d1",
+      "target_listing_id": "100",
+      "check_in_date": "2026-05-10",
+      "nights": 3,
+      "price_band_label": "0-499",
+      "partition_depth": 1,
+      "results_count_visible": 12,
+      "partition_triggered": true,
+      "partition_child_labels": ["0-249", "250-499"],
+      "status": "ok"
+    }
+  ],
+  "search_results": [
+    {"listing_id_if_extractable": "200"},
+    {"listing_id_if_extractable": "200"},
+    {"listing_id_if_extractable": "300"}
+  ]
+}

@@ -123,6 +123,8 @@ def _build_dataset(spec, index, used_ids, default_view=None, display=None, priva
     dataset_key = spec.get("key") or effective_display.get("key")
     schema = _apply_display_overrides(_introspect(all_records), effective_display)
     hidden_fields = _hidden_field_names(schema)
+    if dataset_key and str(dataset_key) in hidden_fields:
+        dataset_key = ""
     visible_schema = _schema_without_hidden_fields(schema)
     records = _records_without_fields(records, hidden_fields)
     aggregate_records = _records_without_fields(all_records, hidden_fields)
@@ -306,16 +308,26 @@ def _has_leading_zero_digits(value):
 
 def _load_jsonl(path):
     rows = []
+    skipped_lines = 0
+    non_empty_lines = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
+        non_empty_lines += 1
         try:
             obj = json.loads(line)
         except json.JSONDecodeError:
+            skipped_lines += 1
             continue
         rows.append(obj if isinstance(obj, dict) else {"value": obj})
-    meta = {"source_file": str(path), "row_count": len(rows), "format": "jsonl"}
+    meta = {
+        "source_file": str(path),
+        "row_count": len(rows),
+        "format": "jsonl",
+        "jsonl_non_empty_lines": non_empty_lines,
+        "jsonl_skipped_lines": skipped_lines,
+    }
     return rows, meta
 
 
@@ -795,7 +807,7 @@ def _aggregate_line(records, schema):
                 if not buckets:
                     continue
 
-                xs = sorted(buckets.keys())
+                xs = sorted(buckets.keys(), key=_line_x_sort_key)
                 all_series = set()
                 for x in xs:
                     all_series.update(buckets[x].keys())
@@ -844,6 +856,18 @@ def _percentile(sorted_values, fraction):
 
 def _line_key(x_field, y_field, series_field):
     return f"{x_field}||{y_field}||{series_field or ''}"
+
+
+def _line_x_sort_key(value):
+    text = str(value)
+    if _ISO_DATE_RE.match(text):
+        normalized = text.replace("/", "-")
+        return (0, normalized)
+    try:
+        numeric = float(text)
+    except ValueError:
+        return (2, text)
+    return (1, numeric)
 
 
 def _stringify_key(value):
@@ -945,6 +969,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .app-sidebar { border-right: 1px solid rgba(127,127,127,.18); min-height: calc(100vh - var(--header-h, 5rem)); background: rgba(255,255,255,.72); }
   .dark .app-sidebar { background: rgba(9,9,11,.72); }
   .mobile-bar { display: none; }
+  .mobile-disabled-reason { display: none; }
   .mobile-menu-button { display: none; }
   .facet-panel { padding: .75rem .5rem 1rem; border-top: 1px solid rgba(127,127,127,.16); }
   .facet-card { border: 1px solid rgba(127,127,127,.18); border-radius: 6px; padding: .55rem; margin-bottom: .5rem; background: rgba(127,127,127,.04); }
@@ -954,6 +979,16 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .facet-value-button.active { color: rgb(129 140 248); background: rgba(99,102,241,.16); }
   .filter-chip { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .45rem; border: 1px solid rgba(99,102,241,.35); border-radius: 999px; background: rgba(99,102,241,.11); font-size: 11px; }
   .relationship-map { padding: .65rem .5rem .8rem; border-bottom: 1px solid rgba(127,127,127,.16); }
+  .source-graph { display: grid; gap: .35rem; margin-bottom: .55rem; }
+  .source-graph-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 2.5rem minmax(0, 1fr); align-items: center; gap: .25rem; padding: .25rem; border-radius: 6px; }
+  .source-graph-row:hover { background: rgba(99,102,241,.08); }
+  .source-graph-node { min-width: 0; border: 1px solid rgba(127,127,127,.22); border-radius: 999px; padding: .25rem .4rem; font-size: 11px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(255,255,255,.45); }
+  .dark .source-graph-node { background: rgba(9,9,11,.45); }
+  .source-graph-node.active { border-color: rgba(99,102,241,.55); background: rgba(99,102,241,.14); color: rgb(129 140 248); }
+  .source-graph-line { position: relative; display: flex; justify-content: center; color: rgb(113 113 122); font-size: 9px; line-height: 1; }
+  .source-graph-line::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid rgba(99,102,241,.42); }
+  .source-graph-line span { position: relative; z-index: 1; max-width: 2.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 .15rem; background: white; }
+  .dark .source-graph-line span { background: rgb(9 9 11); }
   .source-node { border: 1px solid rgba(127,127,127,.2); border-radius: 6px; padding: .45rem .55rem; font-size: 12px; }
   .source-node.active { border-color: rgba(99,102,241,.45); background: rgba(99,102,241,.14); color: rgb(129 140 248); }
   .source-edge { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .35rem .45rem; border-radius: 5px; font-size: 11px; color: rgb(113 113 122); }
@@ -970,6 +1005,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .table-wrap .wrap-cell { white-space: normal; word-break: break-word; }
   .table-compact td { padding-top: .22rem; padding-bottom: .22rem; }
   .table-comfortable td { padding-top: .45rem; padding-bottom: .45rem; }
+  .table-scroll-hint { display: inline-flex; align-items: center; gap: .35rem; font-size: 11px; color: rgb(113 113 122); }
   .sticky-col { position: sticky; left: 0; z-index: 2; background: rgb(250 250 250); box-shadow: 1px 0 0 rgba(127,127,127,.16); }
   .dark .sticky-col { background: rgb(9 9 11); }
   .chart-presets { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
@@ -983,6 +1019,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
     .mobile-overlay { display: block; position: fixed; z-index: 44; inset: 0; background: rgba(0,0,0,.45); }
     .mobile-bar { display: flex; gap: .4rem; overflow-x: auto; padding: .6rem .75rem; border-bottom: 1px solid rgba(127,127,127,.16); background: rgba(250,250,250,.92); position: sticky; top: var(--header-h, 4rem); z-index: 25; }
     .dark .mobile-bar { background: rgba(9,9,11,.92); }
+    .mobile-disabled-reason { display: inline-flex; align-items: center; min-width: 12rem; color: rgb(113 113 122); font-size: 11px; }
     .mobile-menu-button { display: inline-flex; }
     .desktop-nav-hint { display: none; }
     header .meta-wide { display: none; }
@@ -1036,12 +1073,13 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <div class="mobile-bar">
   <button @click="mobileNavOpen = true" class="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 text-sm">☰</button>
   <template x-for="v in views" :key="v.id">
-    <button @click="setView(v.id)" :disabled="!isEligible(v.id)"
+    <button @click="selectMobileView(v)" :aria-disabled="!isEligible(v.id)"
             :class="[view === v.id ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' : 'border-zinc-200 dark:border-zinc-800', isEligible(v.id) ? '' : 'opacity-30', 'px-2 py-1 rounded border text-xs whitespace-nowrap']"
             :title="viewReason(v.id)">
       <span x-text="v.label"></span>
     </button>
   </template>
+  <span x-show="mobileDisabledReason" class="mobile-disabled-reason" x-text="mobileDisabledReason"></span>
 </div>
 
 <main class="app-shell">
@@ -1055,6 +1093,15 @@ _TEMPLATE = r"""<!DOCTYPE html>
         <div class="px-1 pb-2 text-[10px] uppercase tracking-wide font-semibold text-zinc-500 flex items-center justify-between">
           <span>Source map</span>
           <span class="num" x-text="relationshipEdges.length + ' links'"></span>
+        </div>
+        <div class="source-graph" x-show="relationshipEdges.length">
+          <template x-for="edge in relationshipEdges" :key="'graph-' + edge.id">
+            <button @click="openRelationship(edge)" class="source-graph-row" :title="edge.reason">
+              <span :class="activeId === edge.from ? 'source-graph-node active' : 'source-graph-node'" x-text="edge.fromLabel"></span>
+              <span class="source-graph-line"><span x-text="edge.key"></span></span>
+              <span :class="activeId === edge.to ? 'source-graph-node active' : 'source-graph-node'" x-text="edge.toLabel"></span>
+            </button>
+          </template>
         </div>
         <div class="grid gap-1 mb-2">
           <template x-for="ds in datasets" :key="ds.id">
@@ -1105,21 +1152,23 @@ _TEMPLATE = r"""<!DOCTYPE html>
       <!-- Views section -->
       <div x-show="hasMultiple" class="px-3 text-[10px] uppercase tracking-wide font-semibold text-zinc-500 pb-1">Views</div>
       <template x-for="v in views" :key="v.id">
-        <button @click="setView(v.id)"
-                :disabled="!isEligible(v.id)"
-                :title="viewReason(v.id)"
-                :class="[
-                  view === v.id ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' : 'text-zinc-700 dark:text-zinc-300 border-transparent hover:bg-zinc-100 dark:hover:bg-zinc-900',
-                  isEligible(v.id) ? '' : 'opacity-30 cursor-not-allowed',
-                  'w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition'
-                ]">
-          <span class="flex items-center gap-2">
-            <span class="opacity-80" x-html="iconFor(v.id)"></span>
-            <span x-text="v.label"></span>
-          </span>
-          <span class="kbd" x-text="v.key"></span>
-        </button>
-        <span x-show="!isEligible(v.id)" class="disabled-reason" x-text="viewReason(v.id)"></span>
+        <div>
+          <button @click="setView(v.id)"
+                  :disabled="!isEligible(v.id)"
+                  :title="viewReason(v.id)"
+                  :class="[
+                    view === v.id ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' : 'text-zinc-700 dark:text-zinc-300 border-transparent hover:bg-zinc-100 dark:hover:bg-zinc-900',
+                    isEligible(v.id) ? '' : 'opacity-30 cursor-not-allowed',
+                    'w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition'
+                  ]">
+            <span class="flex items-center gap-2">
+              <span class="opacity-80" x-html="iconFor(v.id)"></span>
+              <span x-text="v.label"></span>
+            </span>
+            <span class="kbd" x-text="v.key"></span>
+          </button>
+          <span x-show="!isEligible(v.id)" class="disabled-reason" x-text="viewReason(v.id)"></span>
+        </div>
       </template>
       <div class="facet-panel" x-show="facetFields.length">
         <div class="flex items-center justify-between gap-2 mb-2">
@@ -1202,7 +1251,10 @@ _TEMPLATE = r"""<!DOCTYPE html>
           <button @click="setPage(Math.min(totalPages-1, page+1))" class="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-sm">→</button>
         </div>
       </div>
-      <div class="text-[11px] text-zinc-500 mb-2">Column menus provide sort, filter, pin, hide, profile, copy, format, and resize controls. Drag the small handle beside a header to resize.</div>
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div class="text-[11px] text-zinc-500">Column menus provide sort, filter, pin, hide, profile, copy, format, and resize controls. Drag the small handle beside a header to resize.</div>
+        <div class="table-scroll-hint shrink-0"><span>←</span><span>scroll</span><span>→</span></div>
+      </div>
       <div x-show="hiddenColumnList.length" class="flex flex-wrap gap-1 mb-2 text-xs">
         <span class="text-zinc-500">hidden</span>
         <template x-for="f in hiddenColumnList" :key="f.name">
@@ -1233,20 +1285,20 @@ _TEMPLATE = r"""<!DOCTYPE html>
                   <div x-show="openColumnMenu === f.name" @click.outside="openColumnMenu = null" class="column-menu">
                     <div class="text-xs font-semibold mb-2 truncate" x-text="fieldLabel(f)"></div>
                     <div class="menu-row">
-                      <button class="menu-action" @click="sortColumn(f.name, 'asc')">Sort ascending</button>
-                      <button class="menu-action" @click="sortColumn(f.name, 'desc')">Sort descending</button>
+                      <button class="menu-action" @click.stop="sortColumn(f.name, 'asc')">Sort ascending</button>
+                      <button class="menu-action" @click.stop="sortColumn(f.name, 'desc')">Sort descending</button>
                     </div>
                     <div class="menu-row">
                       <input x-model="columnMenuFilterValue" placeholder="exact filter value"
                              class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
-                      <button class="menu-action" @click="applyColumnFilter(f)">Apply filter</button>
-                      <button class="menu-action" @click="facetByField(f)">Facet by this</button>
+                      <button class="menu-action" @click.stop="applyColumnFilter(f)">Apply filter</button>
+                      <button class="menu-action" @click.stop="facetByField(f)">Facet by this</button>
                     </div>
                     <div class="menu-row">
-                      <button class="menu-action" @click="togglePinned(f.name)" x-text="isPinned(f.name) ? 'Unpin column' : 'Pin column'"></button>
-                      <button class="menu-action" @click="hideColumn(f.name)">Hide column</button>
-                      <button class="menu-action" @click="profileColumn(f)">Profile column</button>
-                      <button class="menu-action" @click="copyColumnValues(f)">Copy column values</button>
+                      <button class="menu-action" @click.stop="togglePinned(f.name)" x-text="isPinned(f.name) ? 'Unpin column' : 'Pin column'"></button>
+                      <button class="menu-action" @mousedown.prevent.stop="hideColumn(f.name)" @click.prevent.stop>Hide column</button>
+                      <button class="menu-action" @click.stop="profileColumn(f)">Profile column</button>
+                      <button class="menu-action" @click.stop="copyColumnValues(f)" x-text="copiedColumn === f.name ? 'Copied values' : 'Copy column values'"></button>
                     </div>
                     <div class="menu-row">
                       <select :value="formatFor(f)" @change="setFormat(f.name, $event.target.value)"
@@ -1257,8 +1309,8 @@ _TEMPLATE = r"""<!DOCTYPE html>
                         <option value="currency">currency</option>
                       </select>
                       <div class="flex gap-1">
-                        <button class="menu-action" @click="resizeColumn(f.name, -24)">Narrow</button>
-                        <button class="menu-action" @click="resizeColumn(f.name, 24)">Widen</button>
+                        <button class="menu-action" @click.stop="resizeColumn(f.name, -24)">Narrow</button>
+                        <button class="menu-action" @click.stop="resizeColumn(f.name, 24)">Widen</button>
                       </div>
                     </div>
                   </div>
@@ -1568,6 +1620,7 @@ function app() {
     manualFacetFields: [],
     openColumnMenu: null,
     columnMenuFilterValue: '',
+    copiedColumn: '',
     hiddenColumns: {},
     pinnedColumns: [],
     columnWidths: {},
@@ -1575,6 +1628,7 @@ function app() {
     rowDensity: 'comfortable',
     wrapCells: false,
     mobileNavOpen: false,
+    mobileDisabledReason: '',
     sortKey: null,
     sortDir: 'asc',
     page: 0,
@@ -1894,11 +1948,21 @@ function app() {
     },
     setView(v) {
       if (!this.isEligible(v)) return;
+      this.mobileDisabledReason = '';
       this.view = v;
       this.$nextTick(() => {
         this.renderCharts();
         window.setTimeout(() => this.renderCharts(), 50);
       });
+    },
+
+    selectMobileView(v) {
+      if (!v || !v.id) return;
+      if (!this.isEligible(v.id)) {
+        this.mobileDisabledReason = this.viewReason(v.id);
+        return;
+      }
+      this.setView(v.id);
     },
 
     fieldsForRole(role) {
@@ -2096,23 +2160,6 @@ function app() {
       this.pivotMeasureField = roleName(chart.measure, 'line_y') || (measures[0] || {}).name || null;
     },
 
-    setFilter(field, value) {
-      this.filters = { ...(this.filters || {}), [field]: value };
-      this.page = 0;
-      this.writeHash();
-      this.$nextTick(() => this.renderCharts());
-    },
-
-    clearFilter(field) {
-      if (!this.filters || !Object.prototype.hasOwnProperty.call(this.filters, field)) return;
-      const next = { ...this.filters };
-      delete next[field];
-      this.filters = next;
-      this.page = 0;
-      this.writeHash();
-      this.$nextTick(() => this.renderCharts());
-    },
-
     _rowsForFacet(fieldName) {
       const q = this.q.trim().toLowerCase();
       const activeFilters = Object.entries(this.filters || {}).filter(([field, value]) => field !== fieldName && value !== undefined && value !== null && value !== '');
@@ -2177,6 +2224,7 @@ function app() {
         this.manualFacetFields = [...this.manualFacetFields, field.name];
       }
       this.openColumnMenu = null;
+      this.writeHash();
     },
 
     hideColumn(name) {
@@ -2219,7 +2267,9 @@ function app() {
         return value == null ? '' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
       }).join('\n');
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).catch(() => {});
+        navigator.clipboard.writeText(text)
+          .then(() => { this.copiedColumn = field.name; window.setTimeout(() => { if (this.copiedColumn === field.name) this.copiedColumn = ''; }, 1200); })
+          .catch(() => {});
       }
       this.openColumnMenu = null;
     },
@@ -2400,32 +2450,6 @@ function app() {
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .slice(0, 50)
         .map(([value, count]) => ({ value, label: value, count }));
-    },
-
-    visibleFacetValues(field) {
-      const q = String((this.facetSearch || {})[field.name] || '').trim().toLowerCase();
-      const values = this.facetValues(field);
-      if (!q) return values.slice(0, 60);
-      return values.filter(item =>
-        String(item.label || '').toLowerCase().includes(q) ||
-        String(item.value || '').toLowerCase().includes(q)
-      ).slice(0, 60);
-    },
-
-    setFilter(field, value) {
-      this.filters = { ...(this.filters || {}), [field]: value };
-      this.page = 0;
-      this.writeHash();
-      this.$nextTick(() => this.renderCharts());
-    },
-
-    clearFilter(field) {
-      const next = { ...(this.filters || {}) };
-      delete next[field];
-      this.filters = next;
-      this.page = 0;
-      this.writeHash();
-      this.$nextTick(() => this.renderCharts());
     },
 
     clearFilters() {

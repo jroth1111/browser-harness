@@ -3,7 +3,7 @@
 Use this for private Airbnb host work that spans multiple agent sessions.
 
 General session-continuity rules live in
-`interaction-skills/session-continuity.md`. This file keeps Airbnb-specific seed
+`../../interaction-skills/session-continuity.md`. This file keeps Airbnb-specific seed
 URLs, source receipts, and local manifest fields.
 
 ## Local ignored store
@@ -143,7 +143,7 @@ capability receipt under `.session-store/capability/` and recheck before using
 Lightpanda for new private Airbnb source families.
 
 Apply the general backend-invariant rule from
-`interaction-skills/backend-capability.md` to private data too. For Airbnb, a
+`../../interaction-skills/backend-capability.md` to private data too. For Airbnb, a
 restored Lightpanda session is usable only for private host fields it exposes
 equivalently to headful Chrome or to an Airbnb export. If a private host page
 loads but omits required Airbnb tables, filters, downloads, or date-level fields,

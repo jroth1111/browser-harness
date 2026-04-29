@@ -10,16 +10,19 @@ learning system.
 |---:|---|---|---|
 | 1 | Data quality and provenance layer | Prevents stale, partial, or ambiguous scraped data from driving bad decisions | `data-quality.md` |
 | 2 | Internal finance layer | Airbnb payout is not owner profit; true margin needs cleaning, linen, utilities, management, maintenance, owner splits, and capex | `schema-finance.md` |
-| 3 | Demand-context layer | Pricing needs event, holiday, weather, transport, regulation, and market-shock context, not only Airbnb comps | `schema-demand-context.md` |
-| 4 | Recommendation and outcome tracking | Records what the system advised, what the host changed, and whether it worked | `decisioning.md` |
-| 5 | Promotion and discount governance | Prevents search-rank promotions and discounts from leaking into peak dates or eroding margin | `schema-performance.md`, `analytics-alerts.md` |
-| 6 | Content quality scoring | Turns photos, photo tours, amenities, badges, and review themes into conversion levers | `schema-core.md`, `public-market.md` |
-| 7 | Market-relative comp scoring | Combines Airbnb similar listings, manual comps, and public search observations with confidence | `schema-public-market.md`, `analytics-alerts.md` |
-| 8 | Operations risk prediction | Links turnover load, message gaps, cleaner capacity, maintenance recurrence, and reviews | `schema-operations.md`, `analytics-alerts.md` |
+| 3 | Market research decision engine | Turns public-search demand, absorption, capacity gaps, comp theses, channel fit, and underwriting into pursue/watch/reject dealflow decisions | `market-research-playbook.md`, `schema-market-research.md` |
+| 4 | Demand-context layer | Pricing needs event, holiday, weather, transport, regulation, and market-shock context, not only Airbnb comps | `schema-demand-context.md` |
+| 5 | Recommendation and outcome tracking | Records what the system advised, what the host changed, and whether it worked | `decisioning.md` |
+| 6 | Promotion and discount governance | Prevents search-rank promotions and discounts from leaking into peak dates or eroding margin | `schema-performance.md`, `analytics-alerts.md` |
+| 7 | Content quality scoring | Turns photos, photo tours, amenities, badges, and review themes into conversion levers | `schema-core.md`, `public-market.md` |
+| 8 | Market-relative comp scoring | Combines Airbnb similar listings, manual comps, and public search observations with confidence | `schema-public-market.md`, `analytics-alerts.md` |
+| 9 | Operations risk prediction | Links turnover load, message gaps, cleaner capacity, maintenance recurrence, and reviews | `schema-operations.md`, `analytics-alerts.md` |
 
 ## Enhancement principles
 
 - Do not add a metric unless it changes a decision.
+- Prefer pure decision-gate helpers over browser-dependent recommendation logic.
+  Collectors gather rows; `scripts/decision_gates.py` evaluates them.
 - Track every recommendation as an action candidate with expected impact,
   confidence, owner, deadline, and outcome.
 - Prefer leading indicators over lagging reports: booking pace, search
@@ -54,7 +57,19 @@ learning system.
    - transport/flight/event access signals
    - regulation or supply-change events
 
-4. Decisioning:
+4. Market research:
+   - market research run
+   - absorption snapshots
+   - stay-length gap snapshots
+   - guest-capacity curves
+   - price distribution snapshots
+   - comp theses and counterexamples
+   - channel demand snapshots
+   - midterm viability snapshots
+   - underwriting summaries
+   - pursue/watch/reject decisions
+
+5. Decisioning:
    - recommendation
    - action log
    - experiment
@@ -81,7 +96,14 @@ Phase C - understand demand:
 2. Add demand-window tags to future dates.
 3. Explain booking pace and price recommendations using context.
 
-Phase D - learn from actions:
+Phase D - evaluate markets and deals:
+
+1. Add market-research runs and public absorption snapshots.
+2. Add stay-length and guest-capacity gap scans.
+3. Add comp thesis, counterexample, channel, midterm, and underwriting records.
+4. Produce pursue/watch/reject decisions with explicit confidence.
+
+Phase E - learn from actions:
 
 1. Create recommendation and action logs.
 2. Track pre/post metrics and control windows.
@@ -96,4 +118,6 @@ Phase D - learn from actions:
 - "Did changing the hero photo improve search-to-listing conversion after
   controlling for demand period?"
 - "Are we underpricing because the comp set ignores a local event?"
+- "Should we pursue, watch, or reject this building after absorption, capacity,
+  comp-thesis, channel, and underwriting checks?"
 - "Which recommendations repeatedly fail and should stop being suggested?"

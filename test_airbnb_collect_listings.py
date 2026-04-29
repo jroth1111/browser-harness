@@ -64,3 +64,14 @@ def test_detail_fields_from_text_extracts_required_private_fields():
     assert fields["max_guests"] == 5
     assert fields["guest_label"] == "5 guests"
     assert fields["photo_count"] == 29
+
+
+def test_discover_query_hash_honors_env_override(monkeypatch):
+    module = load_module()
+    monkeypatch.setenv("AIRBNB_LISTINGS_QUERY_HASH", "f" * 64)
+
+    assert module.discover_query_hash() == {
+        "hash": "f" * 64,
+        "source": "AIRBNB_LISTINGS_QUERY_HASH",
+        "discovery": None,
+    }

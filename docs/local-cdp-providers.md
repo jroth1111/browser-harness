@@ -1,8 +1,17 @@
-# Local CDP Providers
+# Local Browser Options And CDP Providers
 
-Browser Harness is a local CDP client. It does not manage provider accounts, browser fleets, queues, dashboards, captcha solving, or proxy rotation. Every provider below is used the same way: start a browser endpoint yourself, bind it to loopback when it runs on this machine, set `BH_CDP_WS`, and let browser-harness attach.
+Browser Harness is a local CDP client. It does not manage provider accounts,
+browser fleets, queues, dashboards, captcha solving, or proxy rotation. Every
+CDP provider below is used the same way: start a browser endpoint yourself,
+bind it to loopback when it runs on this machine, set `BH_CDP_WS`, and let
+browser-harness attach.
 
 Remote CDP is browser control. Use `BH_CDP_ALLOW_REMOTE=1` only for a user-owned self-hosted endpoint that you intentionally expose on a private network.
+
+Codex Browser Use is the exception in this document: it is a Codex MCP /
+Node REPL browser surface, not a CDP endpoint. Use it from Codex when you want
+the in-app browser or the current in-app tab; use the CDP providers below when
+you want the `browser-harness` Python helpers and `BH_CDP_WS`.
 
 ## Common Connect Pattern
 
@@ -14,10 +23,76 @@ browser-harness -c "print(page_info())"
 
 `BH_CDP_WS` accepts either a browser websocket URL such as `ws://127.0.0.1:9222/devtools/browser/<id>` or a DevTools HTTP base URL such as `http://127.0.0.1:9222`. HTTP bases are resolved through `/json/version`. `wss://` and `https://` endpoints are accepted for self-hosted TLS setups and follow the same loopback/remote-allow rules, but local loopback endpoints normally use `ws://` or `http://`.
 
+## Provider Availability
+
+Choose from what is actually available before acquiring a new backend:
+
+| Backend | Availability expectation | Selection rule |
+|---|---|---|
+| Local Chrome/Edge | Usually already installed on developer machines | Default CDP backend for browser-harness helpers |
+| Codex Browser Use | Only available inside Codex sessions with the Browser plugin and Node REPL `js` tool | Use for Codex in-app browser/current-tab work, not `BH_CDP_WS` |
+| Lightpanda | Optional; may need a binary from upstream GitHub releases, the official install script, or Docker | Use only after install/serve and field capability proof |
+| Self-hosted CDP services | User-provided local or explicitly allowed remote endpoint | Consume endpoint only; browser-harness does not manage provider lifecycle |
+
+Do not install, download, or start an optional provider just because it is listed
+here. If Chrome can answer the task, use Chrome. Acquire Lightpanda or another
+provider only when the user requested that backend, Chrome is insufficient for a
+declared reason, or the task is explicitly a backend comparison.
+
+## Codex Browser Use / In-App Browser
+
+Fit:
+Codex's built-in browser surface. Use this when the task is specifically about
+the Codex in-app browser, the current in-app tab, or local targets such as
+`localhost`, `127.0.0.1`, `::1`, and `file://` URLs. It is also the right
+surface when the user asks for `browser-use`.
+
+Start locally:
+No `BH_CDP_WS` endpoint is involved. Browser Use is exposed by the Codex MCP
+runtime through the Node REPL `js` tool and the plugin's `browser-client.mjs`.
+It may be unavailable outside Codex, or in Codex sessions where the Browser
+plugin or Node REPL `js` tool is not exposed.
+
+Connect from Codex:
+
+```js
+const { setupAtlasRuntime } =
+  await import("<absolute browser-use plugin root>/scripts/browser-client.mjs");
+
+await setupAtlasRuntime({ globals: globalThis, backend: "iab" });
+await agent.browser.nameSession("🔎 browser task");
+globalThis.tab = await agent.browser.tabs.selected() ?? await agent.browser.tabs.new();
+```
+
+Use the absolute path to the installed Browser Use plugin root; in Codex this is
+the directory that contains `scripts/browser-client.mjs`.
+
+Then use the installed surface:
+
+```js
+await tab.goto("http://localhost:3000");
+console.log(await tab.playwright.domSnapshot());
+await display(await tab.playwright.screenshot({ fullPage: false }));
+```
+
+Notes:
+
+- Browser Use owns the Codex in-app browser connection and permission flow.
+- `browser-harness` owns only CDP control through `BH_CDP_WS`; it cannot attach
+  to Browser Use as a DevTools endpoint.
+- If Browser Use is unavailable, use local Chrome/Edge through browser-harness
+  for CDP tasks instead of trying to emulate the in-app-browser API.
+- The useful API surface is `agent.browser.tabs.*`, `tab.goto/reload/back`,
+  `tab.playwright.*` for DOM/locator work, `tab.cua.*` for coordinate actions,
+  `tab.clipboard.*`, and `tab.dev.logs()`.
+- Despite the runtime function name `setupAtlasRuntime`, this is the Codex
+  in-app browser backend, not a direct controller for the desktop
+  `/Applications/ChatGPT Atlas.app`.
+
 ## Local Chrome Or Edge
 
 Fit:
-The default local browser. Use this for normal authenticated browsing, local testing, and tasks where your real profile is the desired state. This is not a stealth browser.
+The default local browser. Use this for normal authenticated browsing, local testing, and tasks where your real profile is the desired state. Chrome is the likely installed baseline on macOS and many developer machines. This is not a stealth browser.
 
 Start locally:
 Use `browser-harness --setup` and follow the Chrome/Edge remote-debugging prompt if it appears. If you launch Chrome yourself, keep the debugging port loopback-only:
@@ -116,6 +191,13 @@ Notes:
 Fit:
 Fast DOM and JavaScript extraction for sites that do not require Chrome's full rendering/fingerprint surface. Lightpanda is built from scratch for headless automation and has no graphical rendering engine, which is the source of its performance and also an important capability boundary.
 
+Availability:
+Lightpanda is optional. Check `command -v lightpanda` or use a known absolute
+binary path before selecting it. If it is absent, obtain it intentionally from
+the upstream Lightpanda GitHub releases/nightly builds, the official install
+script, or Docker image; do not add Lightpanda as a hidden browser-harness
+dependency.
+
 Start locally:
 
 ```bash
@@ -152,6 +234,8 @@ and `Network.*` through that target session, and leaves `Browser.*`,
 Notes:
 
 - Lightpanda is useful when the task needs HTML, DOM queries, and JavaScript execution without Chrome's memory cost.
+- If Lightpanda is not installed and Chrome can satisfy the task, use Chrome
+  and record Lightpanda as unavailable instead of downloading it mid-task.
 - It is not a headful Chrome replacement for heavily protected sites. Domains that depend on GPU/WebGL/canvas/font/layout/plugin/profile signals can serve challenge shells even though CDP is connected successfully.
 - Some cookie bulk APIs may be absent or return `NotImplemented`.
   `login_session.restore_cookies()` falls back from bulk setters to per-cookie

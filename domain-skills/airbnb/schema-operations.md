@@ -26,6 +26,7 @@ Fields:
 - `theme_value`
 - `host_response_present`
 - `host_response_date`
+- `host_response_text`
 
 Refresh: after reviews post.
 
@@ -87,6 +88,44 @@ Fields:
 - `photo_evidence_flag`
 
 Refresh: on reservation/change and task update.
+
+## `airbnb_operations_risk_snapshot`
+
+Derived operations-risk output from reviews, messages, tasks, maintenance,
+cleaning, and turnover-load primitives.
+
+Fields:
+
+- `operations_risk_snapshot_id`
+- `listing_id`
+- `risk_class`
+- `severity`
+- `recent_examples`
+- `recommended_intervention`
+- `next_review_window`
+- `decision`
+- `confidence`
+- `evidence_refs`
+- `missing_required_evidence`
+- `do_not_use_reason`
+- `recommended_next_action`
+- `observed_at`
+
+Allowed `risk_class` values:
+
+- `cleaning_quality_risk`
+- `checkin_risk`
+- `message_gap_risk`
+- `maintenance_recurrence`
+- `fee_complaint_risk`
+- `turnover_overload`
+- `review_theme_regression`
+
+Allowed `severity` values:
+
+- `low`
+- `medium`
+- `high`
 
 ## Operations joins
 

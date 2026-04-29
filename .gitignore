@@ -6,7 +6,9 @@ uv.lock
 *.egg-info/
 .venv/
 .pytest_cache/
+.cursor/
 .beads/
 .claude/
 domain-skills/*/.session-store/
 domain-skills/*/.private-data/
+outputs/

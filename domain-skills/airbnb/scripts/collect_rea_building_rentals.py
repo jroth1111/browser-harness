@@ -10,6 +10,9 @@ Reads:
     - Latest complete `airbnb-live-listings-*.json` under
       `.private-data/listing-collections/` (override with
       `REA_BUILDING_RENTALS_LISTINGS_FILE`).
+    - Optional building watchlist JSON/CSV from
+      `REA_BUILDING_RENTALS_BUILDING_WATCHLIST_FILE` or the default private
+      `realestate-rental-collections/rea-building-watchlist.json` file.
     - Prior REA rental observation ledger under
       `.private-data/realestate-rental-collections/` when present.
 
@@ -32,6 +35,9 @@ Run from the browser-harness repo:
 
 Useful env:
     - `REA_BUILDING_RENTALS_LISTING_SCOPE` default `active`
+    - `REA_BUILDING_RENTALS_BUILDING_WATCHLIST_FILE` optional JSON/CSV file of
+      extra buildings to monitor even when the Airbnb portfolio has no current
+      listing in that building
     - `REA_BUILDING_RENTALS_LIMIT_BUILDINGS` for smoke tests
     - `REA_BUILDING_RENTALS_MAX_SEARCH_PAGES` optional smoke-test cap; default
       is every result page reported by REA
@@ -69,6 +75,7 @@ SESSION_PATH = AIRBNB_DIR / ".session-store" / "capability"
 OBSERVATION_LEDGER = OUTPUT_PATH / "rea-building-rental-observations.jsonl"
 EVENT_LEDGER = OUTPUT_PATH / "rea-building-rental-events.jsonl"
 BUILDING_PRICE_LEDGER = OUTPUT_PATH / "rea-building-rental-building-prices.jsonl"
+DEFAULT_BUILDING_WATCHLIST_FILE = OUTPUT_PATH / "rea-building-watchlist.json"
 RUN_STATE_PATH = OUTPUT_PATH / ".run-state"
 
 REA_BASE = "https://www.realestate.com.au"
@@ -205,6 +212,10 @@ UNRELATED_UNAVAILABLE_CONTEXT_PATTERNS = [
 
 BUILDING_PRICE_CONTENT_FIELDS = [
     "building_key",
+    "target_sources",
+    "source_watchlist_ids",
+    "source_watchlist_labels",
+    "source_watchlist_count",
     "observed_listing_count",
     "active_listing_count",
     "unavailable_listing_count",
@@ -517,6 +528,73 @@ def latest_live_listing_file() -> Path:
     return complete[-1]
 
 
+def append_unique(values, value):
+    if value is None:
+        return
+    normalized = normalize_space(value)
+    if normalized and normalized not in values:
+        values.append(normalized)
+
+
+def append_many_unique(values, incoming):
+    if incoming is None:
+        return
+    if isinstance(incoming, (list, tuple, set)):
+        raw_values = incoming
+    else:
+        raw_values = re.split(r"[,;\n|]+", str(incoming))
+    for value in raw_values:
+        append_unique(values, value)
+
+
+def parse_int_list(value):
+    out = []
+    if value is None:
+        return out
+    raw_values = value if isinstance(value, (list, tuple, set)) else re.split(r"[,;\n|]+", str(value))
+    for raw in raw_values:
+        if raw is None or normalize_space(raw) == "":
+            continue
+        try:
+            number = int(float(str(raw).strip()))
+        except ValueError:
+            continue
+        if number not in out:
+            out.append(number)
+    return out
+
+
+def empty_building_target(parsed):
+    return {
+        "building_key": parsed["building_key"],
+        "building_address": parsed["building_address"],
+        "street_address": parsed["street_address"],
+        "street_key": parsed["street_key"],
+        "suburb": parsed["suburb"],
+        "state": parsed["state"],
+        "postcode": parsed["postcode"],
+        "target_sources": [],
+        "target_priority": 100,
+        "source_airbnb_listing_ids": [],
+        "source_airbnb_nicknames": [],
+        "source_airbnb_addresses": [],
+        "source_airbnb_bedrooms": [],
+        "source_airbnb_listing_count": 0,
+        "source_watchlist_ids": [],
+        "source_watchlist_labels": [],
+        "source_watchlist_addresses": [],
+        "source_watchlist_reasons": [],
+        "source_watchlist_tags": [],
+        "source_watchlist_target_bedrooms": [],
+        "source_watchlist_priorities": [],
+        "source_watchlist_count": 0,
+    }
+
+
+def sort_building_targets(targets):
+    return sorted(targets, key=lambda row: (int(row.get("target_priority") or 100), row["building_address"]))
+
+
 def building_targets_from_airbnb_records(records):
     targets = {}
     dropped = []
@@ -525,22 +603,8 @@ def building_targets_from_airbnb_records(records):
         if not parsed:
             dropped.append(record)
             continue
-        target = targets.setdefault(
-            parsed["building_key"],
-            {
-                "building_key": parsed["building_key"],
-                "building_address": parsed["building_address"],
-                "street_address": parsed["street_address"],
-                "street_key": parsed["street_key"],
-                "suburb": parsed["suburb"],
-                "state": parsed["state"],
-                "postcode": parsed["postcode"],
-                "source_airbnb_listing_ids": [],
-                "source_airbnb_nicknames": [],
-                "source_airbnb_addresses": [],
-                "source_airbnb_bedrooms": [],
-            },
-        )
+        target = targets.setdefault(parsed["building_key"], empty_building_target(parsed))
+        append_unique(target["target_sources"], "airbnb_inventory")
         listing_id = str(record.get("listing_id") or "")
         if listing_id and listing_id not in target["source_airbnb_listing_ids"]:
             target["source_airbnb_listing_ids"].append(listing_id)
@@ -563,7 +627,94 @@ def building_targets_from_airbnb_records(records):
             "total_records": len(records or []),
             "sample_addresses": [r.get("address") for r in dropped[:5]],
         }), flush=True)
-    return sorted(targets.values(), key=lambda row: row["building_address"])
+    return sort_building_targets(targets.values())
+
+
+def building_watchlist_file_from_env():
+    explicit = os.environ.get("REA_BUILDING_RENTALS_BUILDING_WATCHLIST_FILE")
+    if explicit:
+        return Path(explicit)
+    return DEFAULT_BUILDING_WATCHLIST_FILE if DEFAULT_BUILDING_WATCHLIST_FILE.exists() else None
+
+
+def building_watchlist_records_from_file(path):
+    if not path:
+        return []
+    path = Path(path)
+    if not path.exists():
+        raise SystemExit(f"Building watchlist file does not exist: {path}")
+    if path.suffix.lower() == ".csv":
+        with path.open(newline="", encoding="utf-8") as handle:
+            return [dict(row) for row in csv.DictReader(handle)]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        records = data.get("buildings") or data.get("records") or []
+        if isinstance(records, list):
+            return records
+    raise SystemExit(f"Building watchlist must be a JSON array, a JSON object with buildings/records, or CSV: {path}")
+
+
+def merge_building_watchlist_targets(targets, watchlist_records):
+    by_key = {target["building_key"]: dict(target) for target in targets or []}
+    dropped = []
+    for index, record in enumerate(watchlist_records or [], start=1):
+        address = record.get("address") or record.get("building_address")
+        parsed = parse_australian_address(address)
+        if not parsed:
+            dropped.append(record)
+            continue
+        target = by_key.setdefault(parsed["building_key"], empty_building_target(parsed))
+        append_unique(target["target_sources"], "building_watchlist")
+        append_unique(target["source_watchlist_ids"], record.get("id") or record.get("building_id") or f"watchlist-{index}")
+        append_unique(target["source_watchlist_labels"], record.get("label") or record.get("name"))
+        append_unique(target["source_watchlist_addresses"], normalize_space(address))
+        append_unique(target["source_watchlist_reasons"], record.get("reason") or record.get("notes"))
+        append_many_unique(target["source_watchlist_tags"], record.get("tags"))
+        for bedrooms in parse_int_list(record.get("target_bedrooms") or record.get("bedrooms")):
+            if bedrooms not in target["source_watchlist_target_bedrooms"]:
+                target["source_watchlist_target_bedrooms"].append(bedrooms)
+        priority = record.get("priority")
+        if priority is not None and normalize_space(priority) != "":
+            try:
+                priority_int = int(float(str(priority)))
+            except ValueError:
+                priority_int = None
+            if priority_int is not None:
+                target["target_priority"] = min(int(target.get("target_priority") or 100), priority_int)
+                if priority_int not in target["source_watchlist_priorities"]:
+                    target["source_watchlist_priorities"].append(priority_int)
+    for target in by_key.values():
+        target["source_airbnb_listing_count"] = len(target.get("source_airbnb_listing_ids") or [])
+        target["source_airbnb_bedrooms"] = sorted(target.get("source_airbnb_bedrooms") or [])
+        target["source_watchlist_count"] = len(target.get("source_watchlist_ids") or [])
+        target["source_watchlist_target_bedrooms"] = sorted(target.get("source_watchlist_target_bedrooms") or [])
+        target["source_watchlist_priorities"] = sorted(target.get("source_watchlist_priorities") or [])
+    if dropped:
+        print(json.dumps({
+            "warning": "watchlist_buildings_dropped_unparseable_address",
+            "dropped_count": len(dropped),
+            "total_records": len(watchlist_records or []),
+            "sample_addresses": [(r.get("address") or r.get("building_address")) for r in dropped[:5]],
+        }), flush=True)
+    return sort_building_targets(by_key.values())
+
+
+def target_source_fields(target):
+    return {
+        "target_sources": target.get("target_sources") or [],
+        "target_priority": target.get("target_priority"),
+        "source_airbnb_listing_ids": target.get("source_airbnb_listing_ids") or [],
+        "source_airbnb_nicknames": target.get("source_airbnb_nicknames") or [],
+        "source_airbnb_listing_count": target.get("source_airbnb_listing_count") or 0,
+        "source_watchlist_ids": target.get("source_watchlist_ids") or [],
+        "source_watchlist_labels": target.get("source_watchlist_labels") or [],
+        "source_watchlist_reasons": target.get("source_watchlist_reasons") or [],
+        "source_watchlist_tags": target.get("source_watchlist_tags") or [],
+        "source_watchlist_target_bedrooms": target.get("source_watchlist_target_bedrooms") or [],
+        "source_watchlist_count": target.get("source_watchlist_count") or 0,
+    }
 
 
 def rea_listing_id_from_url(url):
@@ -1162,9 +1313,7 @@ def removed_observation_from_previous(target, previous, observed_at, run_id, can
         "suburb": target["suburb"],
         "state": target["state"],
         "postcode": target["postcode"],
-        "source_airbnb_listing_ids": target["source_airbnb_listing_ids"],
-        "source_airbnb_nicknames": target["source_airbnb_nicknames"],
-        "source_airbnb_listing_count": target["source_airbnb_listing_count"],
+        **target_source_fields(target),
         "rea_listing_url": candidate["url"],
         "discovery_source": "known_previous_listing_removed_revisit",
         "discovery_query": candidate.get("query"),
@@ -1275,9 +1424,7 @@ def observation_from_page(target, url, observed_at, run_id, discovery_source, di
         "suburb": target["suburb"],
         "state": target["state"],
         "postcode": target["postcode"],
-        "source_airbnb_listing_ids": target["source_airbnb_listing_ids"],
-        "source_airbnb_nicknames": target["source_airbnb_nicknames"],
-        "source_airbnb_listing_count": target["source_airbnb_listing_count"],
+        **target_source_fields(target),
         "rea_listing_url": url,
         "discovery_source": discovery_source,
         "discovery_query": discovery_query,
@@ -1329,6 +1476,8 @@ def dedupe_observations(rows):
 
 def filter_detail_rejected_observations(observations, failures):
     rejected = set()
+    rejected_by_url = {}
+    rejected_by_listing_key = {}
     for failure in failures:
         if failure.get("failure_kind") != "listing_address_not_in_target_building":
             continue
@@ -1337,17 +1486,28 @@ def filter_detail_rejected_observations(observations, failures):
             continue
         url = clean_rea_candidate_url(failure.get("rea_listing_url"))
         building_key = failure.get("building_key")
+        if url:
+            rejected_by_url[url] = parsed_key
+            listing_id = rea_listing_id_from_url(url)
+            if listing_id:
+                rejected_by_listing_key[f"rea:{listing_id}"] = parsed_key
         if url and building_key:
             rejected.add((url, building_key))
             listing_id = rea_listing_id_from_url(url)
             if listing_id:
                 rejected.add((f"rea:{listing_id}", building_key))
-    return [
-        row
-        for row in observations
-        if (row.get("rea_listing_url"), row.get("building_key")) not in rejected
-        and (row.get("listing_key"), row.get("building_key")) not in rejected
-    ]
+    out = []
+    for row in observations:
+        row_url = clean_rea_candidate_url(row.get("rea_listing_url"))
+        row_key = row.get("listing_key")
+        row_building_key = row.get("building_key")
+        if (row_url, row_building_key) in rejected or (row_key, row_building_key) in rejected:
+            continue
+        parsed_key = rejected_by_url.get(row_url) or rejected_by_listing_key.get(row_key)
+        if parsed_key and row_building_key and parsed_key != row_building_key:
+            continue
+        out.append(row)
+    return out
 
 
 def unavailable_event_type(row):
@@ -1565,9 +1725,7 @@ def building_price_snapshot_rows(targets, observations, observed_at, run_id):
             "suburb": target["suburb"],
             "state": target["state"],
             "postcode": target["postcode"],
-            "source_airbnb_listing_ids": target["source_airbnb_listing_ids"],
-            "source_airbnb_nicknames": target["source_airbnb_nicknames"],
-            "source_airbnb_listing_count": target["source_airbnb_listing_count"],
+            **target_source_fields(target),
             "observed_listing_count": len(rows),
             "active_listing_count": len(active_rows),
             "unavailable_listing_count": len(unavailable_rows),
@@ -1620,9 +1778,7 @@ def observation_from_search_card(target, card, observed_at, run_id, search_url, 
         "suburb": target["suburb"],
         "state": target["state"],
         "postcode": target["postcode"],
-        "source_airbnb_listing_ids": target["source_airbnb_listing_ids"],
-        "source_airbnb_nicknames": target["source_airbnb_nicknames"],
-        "source_airbnb_listing_count": target["source_airbnb_listing_count"],
+        **target_source_fields(target),
         "rea_listing_url": url,
         "discovery_source": "rea_search_page",
         "discovery_query": rea_search_location_query(target),
@@ -1787,10 +1943,13 @@ def main():
     if not records:
         raise SystemExit(f"Listing source file {listing_file} produced zero records for scope {listing_scope['label']}")
     targets = building_targets_from_airbnb_records(records)
+    watchlist_file = building_watchlist_file_from_env()
+    watchlist_records = building_watchlist_records_from_file(watchlist_file)
+    targets = merge_building_watchlist_targets(targets, watchlist_records)
     if os.environ.get("REA_BUILDING_RENTALS_LIMIT_BUILDINGS"):
         targets = targets[: int(os.environ["REA_BUILDING_RENTALS_LIMIT_BUILDINGS"])]
     if not targets:
-        raise SystemExit("No parseable building addresses found in selected Airbnb listing records")
+        raise SystemExit("No parseable building addresses found in selected Airbnb listing records or building watchlist")
 
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     SESSION_PATH.mkdir(parents=True, exist_ok=True)
@@ -1999,6 +2158,8 @@ def main():
         "source": {
             "airbnb_listing_file": str(listing_file),
             "listing_scope": listing_scope["label"],
+            "building_watchlist_file": str(watchlist_file) if watchlist_file else None,
+            "building_watchlist_record_count": len(watchlist_records),
             "backend": "persistent_headful_chrome",
             "discovery_strategy": "realestate.com.au suburb rental search pages with full pagination, strict building-address post-filtering, plus known REA listing URL revisits",
             "observation_ledger": str(OBSERVATION_LEDGER),
@@ -2017,6 +2178,8 @@ def main():
             },
         },
         "selected_airbnb_listing_count": len(records),
+        "building_watchlist_record_count": len(watchlist_records),
+        "watchlist_building_count": len([target for target in targets if "building_watchlist" in (target.get("target_sources") or [])]),
         "building_count": len(targets),
         "run_complete": run_complete,
         "stop_reason": stop_reason,
@@ -2061,7 +2224,10 @@ def main():
         "observed_at": observed_at,
         "airbnb_listing_file": str(listing_file),
         "listing_scope": listing_scope["label"],
+        "building_watchlist_file": str(watchlist_file) if watchlist_file else None,
+        "building_watchlist_record_count": len(watchlist_records),
         "selected_airbnb_listing_count": len(records),
+        "watchlist_building_count": len([target for target in targets if "building_watchlist" in (target.get("target_sources") or [])]),
         "building_count": len(targets),
         "run_complete": run_complete,
         "collection_status": output["collection_status"],

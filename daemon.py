@@ -13,7 +13,10 @@ from collections import deque
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
-from cdp_use.client import CDPClient
+try:
+    from cdp_use.client import CDPClient
+except ModuleNotFoundError:  # optional dependency; tests import daemon without CDP runtime
+    CDPClient = None
 
 
 def _load_env():
@@ -59,6 +62,7 @@ PROFILES = [
     Path.home() / "AppData/Local/Microsoft/Edge SxS/User Data",
 ]
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
+BROWSER_SCOPED_PREFIXES = ("Browser.", "Target.", "Storage.")
 
 
 def log(msg):
@@ -257,6 +261,11 @@ class Daemon:
         self.stop = asyncio.Event()
         url, self.endpoint_info = resolve_cdp_endpoint()
         log(f"connecting to {_redact_url(url)}")
+        if CDPClient is None:
+            raise RuntimeError(
+                "cdp_use is not installed. Install it (or run in an environment that includes it) "
+                "to use the browser-harness daemon."
+            )
         self.cdp = CDPClient(url)
         try:
             await self.cdp.start()
@@ -290,9 +299,9 @@ class Daemon:
 
         method = req["method"]
         params = req.get("params") or {}
-        # Browser-level Target.* calls must not use a session (stale or otherwise).
+        # Browser-level calls must not use a page session (stale or otherwise).
         # For everything else, explicit session in req wins; else default.
-        sid = None if method.startswith("Target.") else (req.get("session_id") or self.session)
+        sid = None if method.startswith(BROWSER_SCOPED_PREFIXES) else (req.get("session_id") or self.session)
         try:
             return {"result": await self.cdp.send_raw(method, params, session_id=sid)}
         except Exception as e:

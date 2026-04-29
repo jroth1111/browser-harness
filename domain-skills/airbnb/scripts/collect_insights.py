@@ -1,17 +1,47 @@
 """Collect per-listing Airbnb Performance/Insights metrics.
 
+Role: collector (private). Prefer the runner `sync_insights_year_view.py` for
+the standard year-view workflow — it adds preflight cookie checks, optional
+granularity probe, family extracts, and HTML rendering. Use this script
+directly only for ad-hoc/bounded captures.
+
+Reads:
+    - Latest complete `airbnb-live-listings-*.json` under
+      `.private-data/listing-collections/` (override with
+      `AIRBNB_LISTINGS_FILE`).
+    - Cross-run ledger at `.private-data/insights-collections/.ledger.jsonl`
+      (override with `AIRBNB_INSIGHTS_LEDGER_PATH`). Sentinel rows mark windows
+      Airbnb has confirmed empty so they are not re-requested.
+    - Authenticated `/api/v3/ListOfMetricsQuery/<hash>` and
+      `/api/v3/ChartQuery/<hash>` from inside the browser context.
+
+Produces:
+    - `domain-skills/airbnb/.private-data/insights-collections/<run_id>.json`
+      (summary + daily rows + sentinels).
+    - Ledger appends in the same directory.
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
+
+Requires (env, optional unless noted):
+    - `AIRBNB_INSIGHTS_RUN_ID`, `AIRBNB_INSIGHTS_PATIENT_MODE`,
+      `AIRBNB_INSIGHTS_LIMIT_LISTINGS`, `AIRBNB_INSIGHTS_LIMIT_ROUTES`,
+      `AIRBNB_INSIGHTS_LIMIT_PERIODS`, `AIRBNB_INSIGHTS_HISTORY_DAYS`,
+      `AIRBNB_INSIGHTS_CHART_MODE` — see host-sources.md.
+    - `AIRBNB_LISTINGS_FILE` — point at an alternative listing artifact (smoke
+      runs only; production scope is the newest complete inventory).
+
+Refuses to run if:
+    - No complete `airbnb-live-listings-*.json` artifact exists and
+      `AIRBNB_LISTINGS_FILE` is not set.
+    - Authenticated Airbnb host cookies are missing from the browser context.
+
+The tiered planner uses rolling 7-day windows for recent daily primitives and
+larger single-window chunks for older history while preserving Airbnb's
+returned granularity (`DAY`/`WEEK`/`MONTH`).
+
 Run from the browser-harness repo with an authenticated browser context:
 
     BH_NAME=airbnb-insights BH_CDP_WS=http://127.0.0.1:52862 \
       python3 run.py < domain-skills/airbnb/scripts/collect_insights.py
-
-The collector uses Airbnb's authenticated Performance API from inside the
-browser context:
-
-- ListOfMetricsQuery: period summary metrics
-- ChartQuery: chart/history points. The tiered planner uses rolling 7-day
-  windows for recent daily primitives and larger single-window chunks for older
-  history while preserving Airbnb's returned granularity.
 
 Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 """
@@ -82,6 +112,11 @@ def _load_local_module(module_filename, module_name):
 _planner = _load_local_module("insights_planner.py", "airbnb_insights_planner")
 _ledger = _load_local_module("insights_ledger.py", "airbnb_insights_ledger")
 _listing_scope = _load_local_module("listing_scope.py", "airbnb_listing_scope")
+_operation_hashes = _load_local_module("operation_hashes.py", "airbnb_operation_hashes")
+_integrity = _load_local_module("run_integrity.py", "airbnb_run_integrity")
+_surfaces = _load_local_module("surface_capabilities.py", "airbnb_surface_capabilities")
+
+CAPABILITY_REGISTRY_PATH = SESSION_PATH / "capability-registry.json"
 
 
 def latest_live_listing_file() -> Path:
@@ -194,7 +229,51 @@ def apply_patient_mode():
     os.environ.setdefault("AIRBNB_INSIGHTS_STOP_AFTER_429_BATCHES", "1")
 
 
-def performance_request(operation_name, route, listing_id, ds_start, ds_end):
+def fetch_text(url, headers=None, timeout=20.0):
+    request = Request(url, headers=headers or {})
+    with urlopen(request, timeout=timeout) as response:
+        return read_response_text(response)
+
+
+def discover_operation_hashes_from_page(base_headers):
+    context = js(
+        """(() => ({
+            html: document.documentElement.outerHTML,
+            scripts: Array.from(document.scripts).map(script => script.src).filter(Boolean),
+            resources: performance.getEntriesByType('resource').map(entry => entry.name)
+        }))()"""
+    ) or {}
+    seed_texts = [context.get("html") or ""]
+    seed_urls = []
+    for value in [*(context.get("scripts") or []), *(context.get("resources") or [])]:
+        if isinstance(value, str) and "/airbnb/static/packages/web/" in value and value.endswith(".js"):
+            seed_urls.append(value)
+    seen = set()
+    seed_urls = [url for url in seed_urls if not (url in seen or seen.add(url))]
+    headers = {
+        **(base_headers or {}),
+        "Accept": "application/javascript,text/javascript,*/*",
+        "Accept-Encoding": "identity",
+    }
+
+    def fetcher(url):
+        return fetch_text(
+            url,
+            headers=headers,
+            timeout=float(os.environ.get("AIRBNB_INSIGHTS_HASH_FETCH_TIMEOUT_SEC", "20")),
+        )
+
+    return _operation_hashes.discover_operation_hashes(
+        fetcher,
+        operation_names=tuple(OPERATION_HASHES),
+        seed_texts=seed_texts,
+        seed_urls=seed_urls,
+        max_fetches=int(os.environ.get("AIRBNB_INSIGHTS_HASH_DISCOVERY_MAX_FETCHES", "80")),
+    )
+
+
+def performance_request(operation_name, route, listing_id, ds_start, ds_end, operation_hashes=None):
+    operation_hashes = operation_hashes or OPERATION_HASHES
     client = "web-performance-dash-chart" if operation_name == "ChartQuery" else "web-performance-dash-metrics"
     variables = {
         "request": {
@@ -212,7 +291,7 @@ def performance_request(operation_name, route, listing_id, ds_start, ds_end):
     }
     return {
         "operationName": operation_name,
-        "hash": OPERATION_HASHES[operation_name],
+        "hash": operation_hashes[operation_name],
         "variables": variables,
     }
 
@@ -220,6 +299,23 @@ def performance_request(operation_name, route, listing_id, ds_start, ds_end):
 def read_response_text(response):
     data = response.read()
     return data.decode("utf-8", errors="replace")
+
+
+def graphql_error_summary(payload):
+    if not isinstance(payload, dict):
+        return None
+    errors = payload.get("errors")
+    if not errors:
+        return None
+    first = errors[0] if isinstance(errors, list) and errors else errors
+    if not isinstance(first, dict):
+        return str(first)[:500]
+    message = first.get("message") or "GraphQL error"
+    extensions = first.get("extensions") or {}
+    error_class = extensions.get("errorClass") or extensions.get("errorType") or extensions.get("code")
+    if error_class:
+        return f"{message} ({error_class})"[:500]
+    return str(message)[:500]
 
 
 def fetch_performance_one(item, api_key, base_headers):
@@ -246,7 +342,17 @@ def fetch_performance_one(item, api_key, base_headers):
     try:
         with urlopen(request, timeout=float(os.environ.get("AIRBNB_INSIGHTS_FETCH_TIMEOUT_SEC", "20"))) as response:
             text = read_response_text(response)
-            return {**item["meta"], "ok": 200 <= response.status < 300, "status": response.status, "data": json.loads(text)}
+            payload = json.loads(text)
+            error = graphql_error_summary(payload)
+            result = {
+                **item["meta"],
+                "ok": 200 <= response.status < 300 and error is None,
+                "status": response.status,
+                "data": payload,
+            }
+            if error is not None:
+                result["error"] = error
+            return result
     except HTTPError as error:
         text = read_response_text(error)
         try:
@@ -466,7 +572,7 @@ def is_confirmed_empty_chart(result):
     return True
 
 
-def build_requests_from_plan(plan_items, listings_by_id, routes_by_subroute, operation_name):
+def build_requests_from_plan(plan_items, listings_by_id, routes_by_subroute, operation_name, operation_hashes=None):
     requests = []
     for item in plan_items:
         listing_id = str(item["listing_id"])
@@ -477,6 +583,7 @@ def build_requests_from_plan(plan_items, listings_by_id, routes_by_subroute, ope
             listing_id,
             int(item["relative_ds_start"]),
             int(item["relative_ds_end"]),
+            operation_hashes=operation_hashes,
         )
         label = item.get("period_label")
         if not label:
@@ -572,6 +679,49 @@ def main():
         if not api_key:
             api_key = "forced-bootstrap-skip"
         base_headers = {}
+    registry_hashes, registry_sources = _operation_hashes.operation_hashes_from_registry(
+        _surfaces.load_capability_registry(CAPABILITY_REGISTRY_PATH),
+        tuple(OPERATION_HASHES),
+        surface_id="host_reviews",
+    )
+    discovery = {"hashes": {}, "sources": {}, "visited_count": 0, "remaining_queue_count": 0}
+    if os.environ.get("AIRBNB_INSIGHTS_SKIP_BOOTSTRAP") != "1" and os.environ.get("AIRBNB_INSIGHTS_DISABLE_HASH_DISCOVERY") != "1":
+        try:
+            discovery = discover_operation_hashes_from_page(base_headers)
+        except Exception as error:
+            discovery = {
+                "hashes": {},
+                "sources": {},
+                "visited_count": 0,
+                "remaining_queue_count": 0,
+                "error": str(error)[:500],
+            }
+    merged_discovered_hashes = {**registry_hashes, **(discovery.get("hashes") or {})}
+    operation_hashes, operation_hash_sources = _operation_hashes.resolve_operation_hashes(
+        OPERATION_HASHES,
+        discovered=merged_discovered_hashes,
+    )
+    for operation, hash_value in registry_hashes.items():
+        if operation_hashes.get(operation) == hash_value and operation_hash_sources.get(operation) == "discovered":
+            operation_hash_sources[operation] = registry_sources.get(operation) or "capability_registry"
+    capability_registry_entries = _surfaces.load_capability_registry(CAPABILITY_REGISTRY_PATH)
+    capability_registry_refs = []
+    for operation, hash_value in operation_hashes.items():
+        entry = _surfaces.capability_registry_entry(
+            "host_reviews",
+            observed_at=observed_at,
+            endpoint_url=f"{BASE}/performance/quality/overall",
+            operation_name=operation,
+            operation_hash=hash_value,
+            provenance={"source": operation_hash_sources.get(operation)},
+        )
+        capability_registry_entries = _surfaces.upsert_capability_registry(capability_registry_entries, entry)
+        capability_registry_refs.append(_surfaces.registry_ref(entry))
+    _surfaces.save_capability_registry(CAPABILITY_REGISTRY_PATH, capability_registry_entries)
+    capability_registry_ref = {
+        "registry_path": str(CAPABILITY_REGISTRY_PATH),
+        "entries": capability_registry_refs,
+    }
 
     listings_by_id = {str(listing["listing_id"]): listing for listing in listings}
     routes_by_subroute = {route["subroute"]: route for route in routes}
@@ -592,12 +742,14 @@ def main():
         listings_by_id=listings_by_id,
         routes_by_subroute=routes_by_subroute,
         operation_name="ListOfMetricsQuery",
+        operation_hashes=operation_hashes,
     )
     chart_requests = build_requests_from_plan(
         planner_output.chart_requests,
         listings_by_id=listings_by_id,
         routes_by_subroute=routes_by_subroute,
         operation_name="ChartQuery",
+        operation_hashes=operation_hashes,
     )
 
     summary_raw_path = OUTPUT_PATH / f"{run_id}-summary-raw.jsonl"
@@ -626,7 +778,13 @@ def main():
         if not parsed:
             failures.append({**result, "ok": False, "error": "no_summary_metrics"})
         for row in parsed:
-            summary_rows.append({**{k: v for k, v in result.items() if k not in {"data"}}, **row})
+            summary_rows.append({
+                **{k: v for k, v in result.items() if k not in {"data"}},
+                "source_family": "host_private",
+                "surface_class": "host_private",
+                "auth_context": auth_context,
+                **row,
+            })
 
     daily_rows = []
     sentinel_rows = []
@@ -656,11 +814,20 @@ def main():
                     "observed_at": observed_at,
                     "run_id": run_id,
                     "source_url": result.get("source_url"),
+                    "source_family": "host_private",
+                    "surface_class": "host_private",
+                    "auth_context": auth_context,
                 })
             else:
                 failures.append({**result, "ok": False, "error": "no_chart_points"})
         for row in parsed:
-            daily_rows.append({**{k: v for k, v in result.items() if k not in {"data"}}, **row})
+            daily_rows.append({
+                **{k: v for k, v in result.items() if k not in {"data"}},
+                "source_family": "host_private",
+                "surface_class": "host_private",
+                "auth_context": auth_context,
+                **row,
+            })
 
     # De-duplicate sentinel rows by (listing, route, ds). If multiple empty
     # windows start on the same day, keep the one with the broadest span so we
@@ -728,21 +895,69 @@ def main():
     _ledger.append_ledger_rows(LEDGER_PATH, ledger_rows)
     _ledger.append_ledger_rows(LEDGER_PATH, sentinel_rows)
 
-    output = {
+    json_path = OUTPUT_PATH / f"{run_id}.json"
+    summary_csv_path = OUTPUT_PATH / f"{run_id}-summary-rows.csv"
+    daily_csv_path = OUTPUT_PATH / f"{run_id}-daily-rows.csv"
+    receipt_path = SESSION_PATH / f"{run_id}-receipt.json"
+    prior_counts = _integrity.latest_prior_count(
+        OUTPUT_PATH,
+        count_keys=("summary_rows_count", "daily_rows_count", "sentinel_rows_count"),
+        current_run_id=run_id,
+    )
+    current_metric_count = len(summary_rows) + len(daily_rows) + len(sentinel_rows)
+    last_good_guard = _integrity.last_good_guard(
+        subject="host_private_insights_metric_rows",
+        current_count=current_metric_count,
+        prior_positive_count=prior_counts["prior_positive_count"],
+        allow_empty=os.environ.get("AIRBNB_INSIGHTS_ALLOW_EMPTY") == "1",
+    )
+    warehouse_exports = _integrity.warehouse_manifest([
+        {
+            "table": "airbnb_insights_metric_snapshot",
+            "path": str(summary_csv_path),
+            "row_count": len(summary_rows),
+            "grain": "listing_id + route_subroute + period_label + observed_at",
+            "source_family": "host_private",
+            "surface_class": "host_private",
+            "auth_context": auth_context,
+        },
+        {
+            "table": "airbnb_insights_chart_point",
+            "path": str(daily_csv_path),
+            "row_count": len(daily_rows),
+            "grain": "listing_id + route_subroute + series_index + ds",
+            "source_family": "host_private",
+            "surface_class": "host_private",
+            "auth_context": auth_context,
+        },
+    ])
+    output = _integrity.stamp_collection_contract({
         "run_id": run_id,
         "observed_at": observed_at,
         "auth_context": auth_context,
+        "source_family": "host_private",
+        "surface_class": "host_private",
+        "collection_status": _integrity.collection_status(
+            last_good_guard_record=last_good_guard,
+            failures_count=len(failures),
+            complete=len(failures) == 0,
+        ),
         "source": {
             "listing_scope": str(listing_file),
             "summary_api": "ListOfMetricsQuery",
             "daily_chart_api": "ChartQuery",
             "transport": "Python HTTP replay with browser-session cookies and Airbnb bootstrap API key",
-            "operation_hashes": OPERATION_HASHES,
+            "operation_hashes": operation_hashes,
+            "operation_hash_sources": operation_hash_sources,
+            "operation_hash_discovery": discovery,
+            "capability_registry_ref": capability_registry_ref,
             "granularity_strategy": "tiered planner: rolling_daily for recent window + single_window chunks for older window; preserve returned series_granularity",
             "chart_mode": "tiered_gap_sync",
             "checkpoint_strategy": "successful raw API responses are appended to JSONL after each batch and skipped on rerun when AIRBNB_INSIGHTS_RUN_ID is reused",
             "ledger_path": str(LEDGER_PATH),
         },
+        "last_good_guard": last_good_guard,
+        "warehouse_exports": warehouse_exports,
         "listing_count": len(listings),
         "listing_status_scope": listing_scope["label"],
         "total_source_listings": len(all_listings),
@@ -768,21 +983,35 @@ def main():
         "summary_rows": summary_rows,
         "daily_rows": daily_rows,
         "failures": failures[:100],
-    }
+    },
+        source_family="host_private",
+        surface_class="host_private",
+        auth_context=auth_context,
+        collection_status=_integrity.collection_status(
+            last_good_guard_record=last_good_guard,
+            failures_count=len(failures),
+            complete=len(failures) == 0,
+        ),
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+        capability_registry_ref=capability_registry_ref,
+    )
 
-    json_path = OUTPUT_PATH / f"{run_id}.json"
-    summary_csv_path = OUTPUT_PATH / f"{run_id}-summary-rows.csv"
-    daily_csv_path = OUTPUT_PATH / f"{run_id}-daily-rows.csv"
-    receipt_path = SESSION_PATH / f"{run_id}-receipt.json"
-    json_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
+    _integrity.write_collection_json(json_path, output)
     write_csv(summary_csv_path, summary_rows)
     write_csv(daily_csv_path, daily_rows)
 
     expected_summary = len(listings) * len(routes) * len(summary_periods)
     expected_charts = len(chart_requests)
-    receipt = {
+    receipt = _integrity.stamp_collection_contract({
         "run_id": run_id,
         "observed_at": observed_at,
+        "auth_context": output["auth_context"],
+        "source_family": output["source_family"],
+        "surface_class": output["surface_class"],
+        "collection_status": output["collection_status"],
+        "last_good_guard": last_good_guard,
+        "warehouse_exports": warehouse_exports,
         "listing_count": len(listings),
         "listing_status_scope": listing_scope["label"],
         "total_source_listings": len(all_listings),
@@ -805,6 +1034,10 @@ def main():
         "daily_rows_count": len(daily_rows),
         "sentinel_rows_count": len(sentinel_rows),
         "failures_count": len(failures),
+        "operation_hashes": operation_hashes,
+        "operation_hash_sources": operation_hash_sources,
+        "operation_hash_discovery": discovery,
+        "capability_registry_ref": capability_registry_ref,
         "all_api_requests_ok": not [f for f in failures if f.get("status") != 200],
         "all_parsers_found_rows": len(failures) == 0,
         "summary_raw_path": str(summary_raw_path),
@@ -823,8 +1056,16 @@ def main():
             }
             for f in failures[:10]
         ],
-    }
-    receipt_path.write_text(json.dumps(receipt, indent=2))
+    },
+        source_family="host_private",
+        surface_class="host_private",
+        auth_context=output["auth_context"],
+        collection_status=output["collection_status"],
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+        capability_registry_ref=capability_registry_ref,
+    )
+    _integrity.write_receipt_json(receipt_path, receipt)
     print(json.dumps(receipt, indent=2), flush=True)
 
 

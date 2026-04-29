@@ -25,32 +25,69 @@ PY
 Available interaction skills:
 - interaction-skills/connection.md — startup sequence, tab visibility, omnibox popup fix
 - interaction-skills/backend-capability.md — diagnose loaded-but-empty pages and backend capability
+- interaction-skills/cross-domain-control-flow.md — choose source, auth state, and backend across domains
 - interaction-skills/data-source-exploration.md — discover public/private data primitives before designing extraction
-- interaction-skills/data-display.md — render scraped datasets as self-contained HTML with tables, charts, and tree views
+- interaction-skills/data-display.md — render scraped datasets as self-contained HTML with tables, charts, and tree views (file-based report output, not live CDP tab inspection)
+- interaction-skills/empirical-learning-gate.md — promote browser observations into skill updates only after source-context, redaction, canonical-artifact, positive-probe, and negative-probe checks
 - interaction-skills/session-continuity.md — persist auth/session continuity metadata safely
 
 Available domain skills:
-- airbnb/overview.md
-- airbnb/enhancement-roadmap.md
+- airbnb/README.md (folder landing page and fast path)
+- airbnb/overview.md (start here — file map, executable scripts, schema index)
+- airbnb/scripts/README.md (executable runners, collectors, probes, helpers)
 - airbnb/exploration-protocol.md
 - airbnb/workflows-current-state.md
+- airbnb/market-research-playbook.md
 - airbnb/data-inventory.md
 - airbnb/session-continuity.md
 - airbnb/host-sources.md
 - airbnb/public-market.md
+- airbnb/operator-insight-workflows.md
+- airbnb/content-optimization-playbook.md
+- airbnb/visual-revenue-workflows.md
 - airbnb/schema-core.md
 - airbnb/schema-performance.md
 - airbnb/schema-operations.md
 - airbnb/schema-public-market.md
+- airbnb/schema-market-research.md
 - airbnb/schema-finance.md
 - airbnb/schema-demand-context.md
 - airbnb/analytics-alerts.md
 - airbnb/decisioning.md
 - airbnb/data-quality.md
+- airbnb/pipeline-fulfilment.md (status)
+- airbnb/enhancement-roadmap.md (plan)
+- airbnb/e2e-insights-data-display-plan.md (plan)
+- airbnb/insights-granularity-map.md (fact table)
 - realestate-com-au/scraping.md
 - tiktok/upload.md
 - polymarket/scraping.md
 - youtube/scraping.md
+- youtube/surface-map.json
+- youtube/search.md
+- youtube/video-detail.md
+- youtube/fallbacks-and-verification.md
+- surface-map-pattern.md
+- surface-map.schema.json
+
+### Airbnb cold-read path
+
+When the task is about Airbnb host intelligence and you have no prior context,
+read progressively:
+
+1. `domain-skills/airbnb/overview.md` — first stop. Use its 90-second cold
+   start, source-family route, and task router before opening scripts.
+2. `domain-skills/airbnb/scripts/README.md` — only after you know data must be
+   collected, probed, validated, or exported.
+3. `domain-skills/airbnb/host-sources.md` — logged-in host inventory,
+   Insights, reviews, calendar, and export-first workflows.
+4. `domain-skills/airbnb/public-market.md` — logged-out guest-visible comps,
+   search rank, public listing pages, and deterministic search partitions.
+5. `domain-skills/airbnb/data-quality.md` — receipts, source classes,
+   quarantine/last-good behavior, redaction, and warehouse provenance.
+
+Do not start from collector code unless the routing docs name a specific script
+and you need implementation details.
 
 ## Tool call shape
 
@@ -68,6 +105,7 @@ Search domain-skills/ first for the domain you are working on before inventing a
 
 Only if you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. The available interaction skills are:
 - backend-capability.md
+- cross-domain-control-flow.md
 - cookies.md
 - data-display.md
 - data-source-exploration.md
@@ -97,6 +135,24 @@ rg -n "tiktok|upload" domain-skills
 ## Always contribute back
 
 If you learned anything non-obvious about how a site works, open a PR to domain-skills/<site>/ before you finish. Default to contributing. The harness gets better only because agents file what they learn. If figuring something out cost you a few steps, the next run should not pay the same tax.
+
+For browser-backed workflows, follow the empirical skill update rule in
+`interaction-skills/cross-domain-control-flow.md`: run against the real site
+surface and source context the workflow depends on, then preserve durable
+findings in the relevant domain skill. Logged-in, logged-out, fresh-profile,
+persistent-profile, and mixed-state runs are workflow- and site-dependent source
+contexts, not universal defaults.
+
+For non-trivial or cross-domain learning, use
+`interaction-skills/empirical-learning-gate.md` before promoting the observation
+into a shared skill. The gate requires source context, evidence references,
+redaction checks, canonical final-state wording, and positive/negative probes.
+
+Shared skill artifacts are canonical final-state manuals. Put durable rules,
+source context, confidence caveats, selectors, routes, waits, and traps in the
+skill. Keep edit chronology, update notes, preservation markers, replacement
+instructions, and task narration in the chat, patch envelope, PR description, or
+an explicit history/audit artifact.
 
 Examples of what's worth a PR:
 
@@ -134,7 +190,10 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 - Loaded-but-empty pages: use wait_for_content() when a site may serve a bot/WAF challenge shell. It returns `ok`, `reason`, `text`, `html`, and `block` so you can distinguish real blank content from `kasada_kpsdk` / access-denied pages.
 - Browser-session HTTP: after a real browser profile has passed a site challenge, `http_get_browser_session(url)` fetches same-domain pages with that browser's user agent and matching cookies; pair it with the domain's parser or embedded-data extractor.
 - Robust solved sessions: `seed_browser_session(url)` verifies a headful/profile session; `fetch_with_browser_session(url, seed_url=...)` retries stale-cookie HTTP fetches by re-seeding in the browser.
+- Cross-domain control flow: read `interaction-skills/cross-domain-control-flow.md` before mixing domains, auth states, source families, or browser backends. Backend choice is diagnostic until required fields match the source context.
 - Generic login/session module: use `login_session.py` when you need the same user-login/session primitives with another CDP client. It never types credentials; it opens login pages, waits for the user, builds redacted manifests, and reuses browser cookies for same-domain HTTP.
+- Provider availability: Chrome/Edge is the likely installed CDP baseline. Browser Use exists only inside Codex sessions with the Browser plugin and Node REPL `js`; Lightpanda is optional and may need intentional installation from upstream before use. Do not download optional providers unless the task explicitly needs that backend.
+- Codex Browser Use / in-app browser: when the user explicitly asks for `browser-use`, Atlas runtime, or the Codex in-app browser and the Browser plugin is available, use the Browser plugin's Node REPL surface (`setupAtlasRuntime({ backend: "iab" })`) instead of `BH_CDP_WS`. See docs/local-cdp-providers.md.
 - Lightpanda control: use `lightpanda_control.py` when testing Lightpanda directly. It launches/connects to Lightpanda, creates and attaches a page target, and routes page-scoped CDP calls through the target session while keeping browser/storage calls at browser scope.
 - Lightpanda field gates: `evaluate_field_contract()` and `wait_for_field_contract()` verify named workflow fields so a loaded page is not mistaken for usable data.
 - Headless/backend triage: `diagnose_url_capability(url)` reports backend kind, challenge block state, and recommendation. Use it before spending time on selectors when Lightpanda/headless returns blank content.

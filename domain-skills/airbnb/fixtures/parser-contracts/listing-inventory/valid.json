@@ -1,0 +1,14 @@
+{
+  "run_id": "fixture-listings",
+  "observed_at": "2026-04-29T00:00:00Z",
+  "collection_status": "complete",
+  "source_family": "host_private",
+  "surface_class": "host_private",
+  "auth_context": "fixture",
+  "last_good_guard": {"checked": true, "status": "accepted"},
+  "warehouse_exports": [],
+  "records_count": 1,
+  "records": [
+    {"listing_id": "100", "status": "ACTIVE", "address": "1 Example St, Melbourne VIC 3000"}
+  ]
+}

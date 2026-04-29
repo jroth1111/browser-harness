@@ -8,6 +8,18 @@ read `schema-public-market.md`. For decisions and alerts, read
 `analytics-alerts.md`. For discovery order and backend choice, read
 `exploration-protocol.md`.
 
+## Ownership
+
+- Use this when: the user needs logged-out Airbnb search, comp, rank, guest-price,
+  public listing, own-public, or guest-visible review evidence.
+- Owns: public Airbnb extraction mechanics, logged-out guards, similarity
+  filters, search/listing traps, public collector usage, and comp processing.
+- Does not own: host-private collection, durable row contracts, final
+  recommendations, or market pursue/watch/reject decisions.
+- Next hop: `schema-public-market.md` for row contracts, `scripts/README.md` for
+  runnable collectors, `market-research-playbook.md` for underwriting, and
+  `decisioning.md` when evidence becomes an action.
+
 ## Quick summary
 
 - Use browser navigation, not `http_get()`, for Airbnb pages.
@@ -17,7 +29,7 @@ read `schema-public-market.md`. For decisions and alerts, read
 - Use Lightpanda first for public pages only after `diagnose_url_capability()`
   proves the expected text and fields are present.
 - Apply the general backend-invariant extraction rule from
-  `interaction-skills/backend-capability.md`: public market records must have the
+  `../../interaction-skills/backend-capability.md`: public market records must have the
   same canonical search/listing fields regardless of backend. If Lightpanda
   cannot produce Airbnb search/listing fields for the same context, use a fresh
   logged-out headful Chrome profile and keep the Lightpanda output only as a
@@ -29,6 +41,16 @@ read `schema-public-market.md`. For decisions and alerts, read
 - For host intelligence, public comp data must be normalized with the exact
   search context: dates, nights, guests, filters, map area, device, logged-in
   state, currency, and observation time.
+- For property-specific comp research, exact address text is only the starting
+  point. Zoom the map or pass map bounds with `search_by_map=true`, then verify
+  the page title is `homes within map area` before using counts.
+- Use `Entire home` as the default Airbnb public-search room type. Remove that
+  filter only when the task explicitly studies private-room or shared-room
+  competition.
+- Similar-comp filters must be explicit. Common apartment filters are
+  `room_types[]=Entire home/apt`, `min_bedrooms`, optional `min_bathrooms`,
+  `amenities[]=9` for free parking, target guest count, and any bounded price
+  range used in the comp thesis.
 - For normal comp intelligence, `logged_in_flag` should be `False`. If it is
   `True`, treat the run as a separate logged-in/personalized observation and do
   not mix it with logged-out guest-market comps.
@@ -41,8 +63,30 @@ read `schema-public-market.md`. For decisions and alerts, read
 Search with dates, adults, and minimum bedrooms:
 
 ```text
-https://www.airbnb.com.au/s/Melbourne--Victoria--Australia/homes?query=500%20Elizabeth%20Street%20Melbourne&checkin=2026-05-15&checkout=2026-05-18&adults=4&min_bedrooms=3
+https://www.airbnb.com.au/s/Melbourne--Victoria--Australia/homes?query=500%20Elizabeth%20Street%20Melbourne&checkin=2026-05-15&checkout=2026-05-18&adults=4&room_types%5B%5D=Entire%20home%2Fapt&min_bedrooms=3
 ```
+
+Zoomed map-bounds search with similar-comp filters:
+
+```text
+https://www.airbnb.com.au/s/Melbourne--Victoria--Australia/homes?query=500%20Elizabeth%20Street%20Melbourne&checkin=2026-05-29&checkout=2026-06-01&adults=8&min_bedrooms=3&room_types%5B%5D=Entire%20home%2Fapt&amenities%5B%5D=9&price_min=1037&price_max=2425&search_by_map=true&sw_lat=-37.835&sw_lng=144.935&ne_lat=-37.785&ne_lng=144.995
+```
+
+Useful filter query parameters:
+
+| Filter | Query parameter |
+|---|---|
+| Entire home | `room_types[]=Entire home/apt` |
+| Bedrooms | `min_bedrooms=<count>` |
+| Bathrooms | `min_bathrooms=<count>` |
+| Free parking | `amenities[]=9` |
+| Air conditioning | `amenities[]=5` |
+| Wi-Fi | `amenities[]=4` |
+| Kitchen | `amenities[]=8` |
+| Pool | `amenities[]=7` |
+| Dryer | `amenities[]=34` |
+| Instant Book | `ib=true` |
+| Allows pets | `pets=1` |
 
 Direct listing with dates and guests:
 
@@ -64,13 +108,51 @@ url = (
     "https://www.airbnb.com.au/s/Melbourne--Victoria--Australia/homes"
     "?query=500%20Elizabeth%20Street%20Melbourne"
     "&checkin=2026-05-15&checkout=2026-05-18"
-    "&adults=4&min_bedrooms=3"
+    "&adults=4&room_types%5B%5D=Entire%20home%2Fapt&min_bedrooms=3"
 )
 new_tab(url)
 wait_for_load()
 text = js("document.body.innerText")
 print(text[:10000])
 ```
+
+Prefer Airbnb's structured deferred state for repeatable card extraction when
+it is present:
+
+```python
+data = js("""
+(() => {
+  const state = JSON.parse(
+    document.querySelector('#data-deferred-state-0')?.textContent || '{}'
+  );
+  const results =
+    state.niobeClientData?.[0]?.[1]?.data?.presentation?.staysSearch?.results;
+  const title =
+    results?.sectionConfiguration?.pageTitleSections?.sections?.[0]?.sectionData;
+  const cards = results?.searchResults || [];
+  return {
+    structuredTitle: title?.structuredTitle,
+    pageDisplayText: title?.pageDisplayText,
+    cards: cards.map((card, index) => ({
+      result_position: index + 1,
+      listing_id: atob(card.demandStayListing?.id || '').split(':').pop(),
+      visible_location_label: card.title,
+      visible_title_short: card.subtitle,
+      visible_rating: card.avgRatingA11yLabel || card.avgRatingLocalized,
+      structured_price: card.structuredDisplayPrice,
+      lat: card.demandStayListing?.location?.coordinate?.latitude,
+      lng: card.demandStayListing?.location?.coordinate?.longitude,
+    })),
+  };
+})()
+""")
+```
+
+The same state also exposes the selected filters and the price histogram under
+`results.filters.filterPanel.filterPanelSections.sections`. Preserve selected
+filter chips with every comp run. The price-range section normally has
+`sectionId == "FILTER_SECTION_CONTAINER:PRICE_RANGE"` and a
+`priceHistogram` array.
 
 Search result text commonly has repeated blocks in this shape:
 
@@ -104,7 +186,7 @@ search_run = {
     "check_out_date": "2026-05-18",
     "nights": 3,
     "guest_count_adults": 4,
-    "filters_applied": ["min_bedrooms=3"],
+    "filters_applied": ["room_types[]=Entire home/apt", "min_bedrooms=3"],
 }
 ```
 
@@ -122,6 +204,27 @@ is not a valid comp source. For a price/rank search run, require:
 - enough visible card text to associate title/location/property facts with
   price and rank
 - the exact search context that produced the card set
+- selected filter chips when filters are part of the comp definition
+- map bounds and a `homes within map area` title when map zoom defines the comp
+  boundary
+
+Match validation to the Airbnb website contract before the browser run starts:
+
+- check-in and check-out must be real ISO dates, and check-out must be after
+  check-in
+- stay length must equal the check-in/check-out span
+- guest counts must fit Airbnb-style bounds (`adults` 1-16, adult + child
+  total <= 16)
+- public scans default to `room_types[]=Entire home/apt`; private-room or
+  shared-room studies require explicit scope
+- generated URLs must be Airbnb `/s/<destination>/homes` URLs with `checkin`,
+  `checkout`, and `adults` query parameters
+- price bands must be non-negative and ordered
+
+If a public search bucket hits the requested result cap, split deterministic
+bounded price bands, record the parent/child partition keys, and dedupe by
+listing ID after collection. Do not use recursive partitioning for
+host-private flows.
 
 The search card fields to preserve are:
 
@@ -160,6 +263,7 @@ Listing text commonly includes:
 | Description | Often includes building name, floor level, exact tower, amenities |
 | Sleeping arrangement | Bedroom and living-room bed inventory |
 | Amenities | Pool, gym, spa, sauna, lift, washer, air conditioning, etc. |
+| Photo/product evidence | Hero subject, first five photo subjects, room proof, amenity proof, and design gap flags when image labels or captions are visible |
 | House rules | Check-in, checkout, guest maximum |
 | Fees/rules notes | Cleaning, lost keys, party restrictions when host discloses them |
 
@@ -170,6 +274,13 @@ For comp listing snapshots, add:
   workspace/Wi-Fi, family amenities, and accessible features.
 - cancellation policy where visible.
 - photo count and hero-photo subject.
+- first-five photo subjects when Airbnb exposes image labels, captions, or
+  equivalent visible labels.
+- room proof flags for bedroom, bathroom, kitchen, living area, and workspace.
+- amenity proof flags for parking, pool/spa, view, family, pet, self-check-in,
+  laundry, and air conditioning.
+- visible amenity claims, amenity claims proven in photos, missing photo proof,
+  design gap flags, and the normalized photo/product score.
 - top-home, Guest Favourite, and top-percent highlight visibility.
 - public review star distribution where visible. Airbnb exposes percentages on
   some listing pages; store the percentage and an estimated count derived from
@@ -180,6 +291,17 @@ For comp listing snapshots, add:
 
 - Price widgets on individual listing pages can stay at `loading`; use search result totals for pricing evidence.
 - Airbnb search may return nearby suburbs and broader Melbourne results even when the query is a specific address. Keep only comps matching the target building or a defensible CBD substitute.
+- An address query can still produce a broad `Homes in Melbourne` result set.
+  Do not use that count for building validation. Zoom the map or use
+  `search_by_map=true` with explicit bounds, then confirm the title says
+  `homes within map area`.
+- URL `price_min` and `price_max` parameters must be validated against the
+  visible selected chips and card totals. Airbnb's selected price chip and card
+  total semantics can diverge across contexts; record both instead of assuming
+  the URL parameter alone proves the price tier.
+- Similar-comp filters should be part of the observation key. A 3-bedroom,
+  free-parking, entire-home search is a different market slice from a broad
+  3-bedroom search.
 - Listing pages may provide the exact building address in description text, but the map section still says exact location is provided after booking.
 - Search result totals exclude taxes. They are guest-facing gross before tax, not platform-adjusted host payout and not net income.
 - A minimum-bedroom search can still include non-target locations. Filter by title, suburb, property type, bedroom/bath count, and whether the listing text mentions the building/address.
@@ -209,15 +331,67 @@ For comp listing snapshots, add:
 
 ## Public comp workflow
 
-1. Search exact building/address terms in Airbnb and Google to identify in-building listings.
-2. Open listing pages and extract capacity, bedrooms, baths, floor level, amenities, rating, reviews, and host maturity.
-3. Search the broader suburb/CBD with the same dates, guests, and bedroom count to collect price totals.
-4. Normalize stay totals by nights to produce guest-facing nightly gross.
-5. Build a comp price index: target total guest price / median comp total guest
+Choose the public comp workflow by research mode.
+
+### Property-validation workflow
+
+Use this when the user has a specific building, address, lease, purchase, or
+co-host target.
+
+1. Start from a logged-out browser profile.
+2. Search exact building/address terms in Airbnb and Google to identify
+   in-building listings.
+3. Apply `Entire home` by default. Remove it only when the task explicitly
+   studies rooms or shared-room competition.
+4. Apply the similarity filter pack before accepting comps: bedrooms, bathrooms
+   when material, target guest count, core amenities, and bounded price range
+   when the thesis depends on price tier.
+5. Zoom or pass map bounds with `search_by_map=true` until the result title and
+   visible map support a defensible boundary. Save selected filter chips, title,
+   map bounds, and screenshot/text receipt.
+6. Record map friction: rivers, highways, rail lines, unsafe walks, parking
+   gaps, transit gaps, same-side requirements, walk/drive/transit times, and the
+   anchor the guest segment cares about.
+7. Open listing pages and extract capacity, bedrooms, baths, floor level,
+   amenities, rating, reviews, latest review signal, host maturity, and future
+   availability clues.
+8. Prefer same-building comps. If none exist, use same-block or same-friction
+   boundary comps. Search specifically for equal-or-worse properties that still
+   appear to book or price profitably.
+9. Quarantine beautiful, premium, or unreproducible listings as `inspiration`
+   unless the candidate can reproduce the winning variable.
+10. Apply listing-maturity filters before using any comp in base-case revenue.
+
+### Opportunity-discovery workflow
+
+Use this when the host can still choose the market, property type, or product.
+
+1. Search broader markets and submarkets logged out.
+2. Run multiple guest counts, stay lengths, and seasons.
+3. Cluster repeated winners by product type, capacity, amenity, anchor, location
+   type, channel, and rule set.
+4. Identify the winning variable for each repeated cluster.
+5. Search for loser and counterexample listings with and without that variable.
+6. Recommend a product profile only when repeated winners and reproducibility
+   are both present.
+
+### Shared comp processing
+
+1. Normalize stay totals by nights to produce guest-facing nightly gross.
+2. Grade each comp before using it: `A` for same boundary, room type, capacity,
+   season, stay length, and core amenities; `B` for one named material
+   difference; `C` for inspiration only; `reject` for excluded comps.
+3. Build a comp price index: target total guest price / median `A` comp total guest
    price for the same dates, guests, filters, and stay length.
-6. Compare against host economics only after accounting for taxes/levies,
+4. Compare against host economics only after accounting for taxes/levies,
    platform fees, management, cleaning, utilities, consumables, linen,
    insurance, vacancy, and wear.
+
+For acquisition, expansion, arbitrage, co-hosting, or property-validation work,
+continue from raw public comp observations into `market-research-playbook.md`.
+That playbook adds absorption scans, stay-length gaps, guest-capacity curves,
+strict comp grading, comp-thesis counterexamples, slow-season survival, channel
+demand, midterm viability, underwriting, and pursue/watch/reject decisions.
 
 ## Executable competitor collection
 
@@ -230,17 +404,32 @@ Default behavior:
   `scripts/collect_listings.py`
 - uses only `status == ACTIVE` listings as targets
 - searches Airbnb logged out by target address/building, check-in date,
-  3-night stay, adult count, and minimum bedroom count
+  3-night stay, adult count, `Entire home`, and minimum bedroom count
 - refuses to run if known Airbnb authenticated-session cookies are present,
   because owner-login state biases public ranking
 - records date-specific public search runs, search-card result rows, price
   matrix rows, target-to-comp links, and deduplicated public comp listing
   snapshots
+- optionally partitions logged-out public searches by URL price bands via
+  `AIRBNB_COMP_PRICE_BANDS` (for example `0-250,251-500,501-`) so high-volume
+  markets can be scanned without relying on one broad result page
+- includes planner helpers for research-mode gates, `Entire home` similarity
+  filter validation, and listing-maturity grading so property-validation scans
+  do not silently treat broad winners or boosted low-review listings as
+  base-case comps
+- can recursively split bounded price bands when a visible result bucket hits
+  the requested result cap. Use this only for logged-out public market scans,
+  not host-private flows.
+- validates check-in/check-out spans, stay lengths, guest counts, room-type
+  filters, result limits, scroll limits, price bands, currency, generated
+  Airbnb search URLs, and Airbnb room URL shapes before producing receipts
 - scrolls the lazy-loaded search result window up to
   `AIRBNB_COMP_MAX_SEARCH_SCROLLS` while preserving first-seen card order as
   the bounded rank window
 - writes raw search/listing JSONL checkpoints plus JSON/CSV outputs under
   ignored `.private-data/public-market-collections/`
+- marks suspicious zero-result runs as quarantined when a prior non-empty run
+  exists, instead of letting an empty scrape silently replace last-good evidence
 - stores a receipt under ignored `.session-store/capability/`
 - refuses partial listing inventories by default. Use `AIRBNB_LISTINGS_FILE`
   only when intentionally testing against a partial scope.
@@ -250,11 +439,21 @@ Useful controls:
 ```text
 AIRBNB_COMP_CHECKIN_DATES=2026-05-15,2026-06-12
 AIRBNB_COMP_CHECKIN_OFFSETS=14,30,60,90
+AIRBNB_COMP_CHECKIN_RANGE=2026-05-15..2026-06-12
+AIRBNB_COMP_CHECKIN_STEP_DAYS=7
 AIRBNB_COMP_NIGHTS=3,7
+AIRBNB_COMP_STAY_LENGTH_RANGE=2..7
+AIRBNB_COMP_PRICE_BANDS=0-250,251-500,501-
+AIRBNB_COMP_AUTO_PRICE_PARTITION=1
+AIRBNB_COMP_AUTO_PRICE_MIN=0
+AIRBNB_COMP_AUTO_PRICE_MAX=2000
+AIRBNB_COMP_PARTITION_TRIGGER_VISIBLE_RESULTS=12
+AIRBNB_COMP_PARTITION_MAX_DEPTH=2
 AIRBNB_COMP_TOP_RESULTS=12
 AIRBNB_COMP_TOP_COMPS_PER_CONTEXT=8
 AIRBNB_COMP_MAX_LISTING_SNAPSHOTS=120
 AIRBNB_COMP_MAX_SEARCH_SCROLLS=6
+AIRBNB_COMP_LISTING_SCOPE=active
 AIRBNB_COMP_NAV_DELAY_SEC=4
 AIRBNB_COMP_LIMIT_LISTINGS=1
 AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
@@ -309,7 +508,8 @@ Default behavior:
   reviews, including rendered star label, date label, review text, and theme
   tags
 - runs logged-out public searches for each target listing using target address
-  or location, dates, stay length, adult count, and bedroom filter
+  or location, dates, stay length, adult count, `Entire home`, and bedroom
+  filter
 - refuses to run if known Airbnb authenticated-session cookies are present,
   because own-listing rank must not be observed from the owner's account
 - records whether the host listing appears in the bounded collected result
@@ -331,6 +531,7 @@ AIRBNB_OWN_PUBLIC_CHECKIN_OFFSETS=14,30,60,90
 AIRBNB_OWN_PUBLIC_NIGHTS=3,7
 AIRBNB_OWN_PUBLIC_TOP_RESULTS=30
 AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS=6
+AIRBNB_OWN_PUBLIC_LISTING_SCOPE=active
 AIRBNB_OWN_PUBLIC_NAV_DELAY_SEC=2
 AIRBNB_OWN_PUBLIC_LIMIT_LISTINGS=1
 AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json

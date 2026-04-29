@@ -1,0 +1,53 @@
+{
+  "listing_id": "100",
+  "guest_segment": "family_group",
+  "stay_length": 3,
+  "own_search_card": {
+    "hero_photo_subject_tag": "building exterior",
+    "visible_title_short": "CBD apartment"
+  },
+  "own_public_listing_audit": {
+    "photo_count": 22,
+    "review_count": 41,
+    "overall_rating": 4.91,
+    "first_five_photo_subjects": [
+      "building exterior",
+      "living room",
+      "kitchen",
+      "bedroom",
+      "bathroom"
+    ]
+  },
+  "own_conversion_metrics": {
+    "search_to_listing_rate": 0.01,
+    "listing_to_booking_rate": 0.012
+  },
+  "search_to_listing_benchmark": 0.03,
+  "a_comp_cards": [
+    {
+      "listing_id_if_extractable": "200",
+      "hero_photo_subject_tag": "free parking",
+      "visible_price_total": 1380
+    },
+    {
+      "listing_id_if_extractable": "201",
+      "hero_photo_subject_tag": "free parking",
+      "visible_price_total": 1420
+    }
+  ],
+  "a_comp_listing_snapshots": [
+    {
+      "comp_listing_id": "200",
+      "hero_photo_subject": "free parking",
+      "parking_flag": true,
+      "review_count": 80
+    }
+  ],
+  "own_total_price": 1390,
+  "evidence_refs": [
+    "own-public-search-card",
+    "a-comp-visual-set",
+    "insights-conversion"
+  ],
+  "review_window_days": 14
+}

@@ -1,0 +1,30 @@
+{
+  "research_mode": "property_validation",
+  "target_address_or_building": "500 Elizabeth Street",
+  "map_boundary_receipt": {
+    "title": "Homes within map area"
+  },
+  "selected_filter_chips": [
+    "Entire home",
+    "3+ bedrooms",
+    "Free parking"
+  ],
+  "map_friction_assessment": {
+    "barrier_type": "none",
+    "anchor_name": "Melbourne CBD"
+  },
+  "same_building_or_same_block_comps": [
+    {
+      "listing_id": "same-block-1"
+    }
+  ],
+  "strict_comp_selection": "pass",
+  "counterexample_matrix": "supported",
+  "listing_maturity_filter": "pass",
+  "slow_season_survival_model": "pass",
+  "evidence_refs": [
+    "search-run-building-1",
+    "counterexample-matrix-1",
+    "slow-season-grid-1"
+  ]
+}

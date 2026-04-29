@@ -53,6 +53,8 @@ def test_load_records_jsonl_skips_bad_lines(tmp_path):
     rows, meta = data_display._load_records(p)
     assert rows == [{"a": 1}, {"value": 2}, {"b": "x"}]
     assert meta["format"] == "jsonl"
+    assert meta["jsonl_non_empty_lines"] == 4
+    assert meta["jsonl_skipped_lines"] == 1
 
 
 def test_load_records_json_wrapper_key_precedence(tmp_path):
@@ -189,6 +191,26 @@ def test_series_by_only_exposes_precomputed_low_cardinality_fields():
     assert "series_by" not in segment["eligible_for"]
     assert data_display._line_key("ds", "value", "segment") not in aggs["line"]
     assert data_display._line_key("ds", "value", None) in aggs["line"]
+
+
+def test_aggregate_line_sorts_iso_dates_then_numeric_then_text():
+    rows = [
+        {"x": "9", "value": 1.0},
+        {"x": "10", "value": 1.0},
+        {"x": "2026/04/02", "value": 1.0},
+        {"x": "alpha", "value": 1.0},
+        {"x": "2026-04-01", "value": 1.0},
+    ]
+    schema = {
+        "fields": [
+            {"name": "x", "eligible_for": ["line_x"]},
+            {"name": "value", "eligible_for": ["line_y"]},
+        ]
+    }
+
+    aggs = data_display._aggregate_line(rows, schema)
+    line_key = data_display._line_key("x", "value", None)
+    assert aggs[line_key]["xs"] == ["2026-04-01", "2026/04/02", "9", "10", "alpha"]
 
 
 def _extract_payload(html_path):
@@ -361,15 +383,91 @@ def test_render_dataset_includes_faceted_filtering_controls(tmp_path):
     assert fields["category"]["kind"] == "categorical"
     assert fields["flag"]["kind"] == "bool"
     assert "facetFields" in html
+    assert "facet-panel" in html
+    assert "facetSearch" in html
+    assert "activeFilterChips" in html
     assert "visibleFacetValues(f)" in html
     assert "setFilter(field, value)" in html
     assert "clearFilter(field)" in html
+    assert "clear all" in html
     assert "filters[f.name]" in html
     assert "clearFilters()" in html
+    assert "facetByField(field)" in html
+    assert "facets" in html
     assert "filterKey" in html
     assert "_barCountsFromRows" in html
     assert "_lineBundleFromRows" in html
     assert "f.' + field" in html
+
+
+def test_render_dataset_includes_column_menu_density_and_responsive_controls(tmp_path):
+    p = tmp_path / "rows.json"
+    p.write_text(
+        json.dumps(
+            [
+                {"ds": "2026-04-01", "category": "a", "status": "new", "value": 11},
+                {"ds": "2026-04-02", "category": "b", "status": "done", "value": 12},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    out = pathlib.Path(data_display.render_dataset(str(p)))
+    html = out.read_text(encoding="utf-8")
+
+    assert "column-menu" in html
+    assert "toggleColumnMenu(f)" in html
+    assert "Sort ascending" in html
+    assert "Facet by this" in html
+    assert "hideColumn(f.name)" in html
+    assert "togglePinned(f.name)" in html
+    assert "copyColumnValues(f)" in html
+    assert "Copied values" in html
+    assert "setFormat(f.name" in html
+    assert "startColumnResize($event, f)" in html
+    assert "table-scroll-hint" in html
+    assert "rowDensity" in html
+    assert "wrapCells" in html
+    assert "mobile-bar" in html
+    assert "selectMobileView(v)" in html
+    assert "mobileDisabledReason" in html
+    assert "mobile-disabled-reason" in html
+    assert "mobileNavOpen" in html
+    assert "viewReason(v.id)" in html
+    assert "disabled-reason" in html
+    assert "@media (max-width: 760px)" in html
+
+
+def test_render_dataset_includes_guided_chart_presets(tmp_path):
+    p = tmp_path / "rows.json"
+    p.write_text(
+        json.dumps(
+            [
+                {"ds": "2026-04-01", "category": "a", "score": 11, "price": 101},
+                {"ds": "2026-04-02", "category": "b", "score": 12, "price": 102},
+                {"ds": "2026-04-03", "category": "a", "score": 13, "price": 103},
+                {"ds": "2026-04-04", "category": "b", "score": 14, "price": 104},
+                {"ds": "2026-04-05", "category": "a", "score": 15, "price": 105},
+                {"ds": "2026-04-06", "category": "b", "score": 16, "price": 106},
+                {"ds": "2026-04-07", "category": "a", "score": 17, "price": 107},
+                {"ds": "2026-04-08", "category": "b", "score": 18, "price": 108},
+                {"ds": "2026-04-09", "category": "a", "score": 19, "price": 109},
+                {"ds": "2026-04-10", "category": "b", "score": 20, "price": 110},
+                {"ds": "2026-04-11", "category": "a", "score": 21, "price": 111},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    out = pathlib.Path(data_display.render_dataset(str(p)))
+    html = out.read_text(encoding="utf-8")
+
+    assert "chart-presets" in html
+    assert "chartPresets('line')" in html
+    assert "chartPresets('bar')" in html
+    assert "chartPresets('pivot')" in html
+    assert "applyChartPreset(preset)" in html
+    assert "Rows by ${this.fieldLabel(groups[0])}" in html
 
 
 def test_render_dataset_includes_pivot_view(tmp_path):
@@ -512,9 +610,56 @@ def test_render_dataset_multi_sources_support_relationship_keys_and_compare_view
     assert "comparableDatasets" in html
     assert "relatedLinks" in html
     assert "openRelated" in html
+    assert "Source map" in html
+    assert "source-graph" in html
+    assert "source-graph-node" in html
+    assert "source-graph-line" in html
+    assert "relationshipEdges" in html
+    assert "openRelationship(edge)" in html
+    assert "_relationshipKey(a, b)" in html
     assert "field: ds.key" in html
     assert "this.q = link.key" not in html
     assert "this.filters = field ? { [field]: link.key } : {}" in html
+
+
+def test_render_dataset_hiding_relationship_key_disables_compare_key(tmp_path):
+    listings = tmp_path / "listings.json"
+    listings.write_text(
+        json.dumps(
+            [
+                {"listing_id": "L1", "name": "A"},
+                {"listing_id": "L2", "name": "B"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    insights = tmp_path / "insights.json"
+    insights.write_text(
+        json.dumps(
+            [
+                {"listing_id": "L1", "value": 12},
+                {"listing_id": "L1", "value": 14},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = pathlib.Path(
+        data_display.render_dataset(
+            [
+                {"label": "Listings", "path": str(listings), "key": "listing_id"},
+                {"label": "Insights", "path": str(insights), "key": "listing_id"},
+            ],
+            view="compare",
+            display={"hidden_fields": ["listing_id"]},
+        )
+    )
+    payload = _extract_payload(out_path)
+
+    assert [ds["key"] for ds in payload["datasets"]] == ["", ""]
+    for ds in payload["datasets"]:
+        assert "listing_id" not in {field["name"] for field in ds["schema"]["fields"]}
+        assert all("listing_id" not in row for row in ds["data"])
 
 
 def test_render_dataset_accepts_top_level_dict_spec(tmp_path):

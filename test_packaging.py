@@ -7,6 +7,9 @@ def test_package_config_installs_runtime_modules_and_skill_assets():
     setuptools = config["tool"]["setuptools"]
 
     assert "data_display" in setuptools["py-modules"]
+    assert "skill_learning_gate" in setuptools["py-modules"]
+    assert config["project"]["scripts"]["browser-harness"] == "run:main"
+    assert config["project"]["scripts"]["browser-harness-skill-learning-gate"] == "skill_learning_gate:main"
     assert set(setuptools["packages"]) >= {
         "browser_harness_domain_skills",
         "browser_harness_interaction_skills",

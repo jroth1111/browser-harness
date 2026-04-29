@@ -17,6 +17,14 @@ Fields:
 - `currency`
 - `destination`
 - `map_area_bounds_description`
+- `search_by_map_flag`
+- `map_sw_lat`
+- `map_sw_lng`
+- `map_ne_lat`
+- `map_ne_lng`
+- `structured_result_title`
+- `page_display_text`
+- `selected_filter_chips`
 - `check_in_date`
 - `check_out_date`
 - `nights`
@@ -24,6 +32,8 @@ Fields:
 - `guest_count_children`
 - `guest_count_pets`
 - `filters_applied`
+- `price_range_chip`
+- `price_histogram_bins`
 - `results_count_visible`
 - `results_limit_requested`
 - `max_search_scrolls_requested`
@@ -53,6 +63,7 @@ Fields:
 - `visible_price_per_night`
 - `fees_included_flag`
 - `hero_photo_subject_tag`
+- `first_five_photo_subjects`
 - `available_flag`
 - `instant_book_visible_flag`
 - `obvious_differentiator_tags`
@@ -104,6 +115,24 @@ Fields:
 - `cancellation_policy_visible`
 - `photo_count`
 - `hero_photo_subject`
+- `first_five_photo_subjects`
+- `bedroom_proof_flag`
+- `bathroom_proof_flag`
+- `kitchen_proof_flag`
+- `living_area_proof_flag`
+- `workspace_proof_flag`
+- `parking_proof_flag`
+- `pool_or_spa_proof_flag`
+- `view_proof_flag`
+- `family_proof_flag`
+- `pet_proof_flag`
+- `self_checkin_proof_flag`
+- `amenity_claims_visible`
+- `amenity_claims_proven_in_photos`
+- `missing_photo_proof`
+- `design_gap_flags`
+- `photo_product_score`
+- `photo_product_evidence_source`
 - `review_theme_positive_tags`
 - `review_theme_negative_tags`
 
@@ -166,6 +195,25 @@ Fields:
 - `beds`
 - `bathrooms`
 - `photo_count`
+- `hero_photo_subject`
+- `first_five_photo_subjects`
+- `bedroom_proof_flag`
+- `bathroom_proof_flag`
+- `kitchen_proof_flag`
+- `living_area_proof_flag`
+- `workspace_proof_flag`
+- `parking_proof_flag`
+- `pool_or_spa_proof_flag`
+- `view_proof_flag`
+- `family_proof_flag`
+- `pet_proof_flag`
+- `self_checkin_proof_flag`
+- `amenity_claims_visible`
+- `amenity_claims_proven_in_photos`
+- `missing_photo_proof`
+- `design_gap_flags`
+- `photo_product_score`
+- `photo_product_evidence_source`
 - `visible_amenities_core`
 - `parking_flag`
 - `pool_spa_flag`
@@ -278,6 +326,9 @@ Fields:
 - `visible_review_count`
 - `visible_badge`
 - `top_home_highlight_visible`
+- `hero_photo_subject_tag`
+- `first_five_photo_subjects`
+- `obvious_differentiator_tags`
 - `available_flag`
 - `rank_observation_confidence`
 
@@ -285,6 +336,44 @@ Allowed `rank_observation_confidence` values:
 
 - `matched_in_bounded_result_window`
 - `not_seen_in_bounded_result_window`
+
+## `airbnb_listing_opportunity_snapshot`
+
+Derived join of own guest-visible state, public A-comps, review maturity,
+conversion diagnosis, and optional Insights/cost primitives.
+
+Fields:
+
+- `listing_id`
+- `target_date_or_window`
+- `guest_segment`
+- `stay_length`
+- `own_rank_or_absence`
+- `own_total_price`
+- `median_A_comp_total_price`
+- `comp_price_index`
+- `review_maturity_status`
+- `conversion_issue_type`
+- `top_3_fix_candidates`
+- `decision`
+- `confidence`
+- `evidence_refs`
+- `missing_required_evidence`
+- `do_not_use_reason`
+- `recommended_next_action`
+- `observed_at`
+
+Suggested `conversion_issue_type` values:
+
+- `overpriced_vs_A_comps`
+- `underpriced_vs_A_comps`
+- `weak_search_visibility`
+- `weak_click_appeal`
+- `listing_page_conversion_issue`
+- `amenity_filter_gap`
+- `review_trust_gap`
+- `minimum_stay_choke`
+- `no_clear_issue`
 
 ## Public data quality rules
 

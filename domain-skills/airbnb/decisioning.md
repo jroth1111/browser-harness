@@ -8,10 +8,15 @@ worked.
 
 - Every recommendation states the target metric, expected effect, confidence,
   and downside risk.
+- Every decision-gate output includes `decision`, `confidence`,
+  `evidence_refs`, `missing_required_evidence`, `do_not_use_reason`, and
+  `recommended_next_action`.
 - Every accepted recommendation becomes an action log entry.
 - Every action has a pre-window, post-window, and confounder notes.
 - Do not claim causal lift when demand context, market shocks, or simultaneous
   changes make attribution weak.
+- Missing evidence produces `needs_more_data`, `watch`, or `reject`, not an
+  optimistic recommendation.
 
 ## `airbnb_recommendation`
 
@@ -42,6 +47,8 @@ Examples:
 - reduce orphan-night minimum stay to 1 night
 - disable Smart Pricing for a rule-set period
 - replace hero photo with view or bedroom photo
+- reorder first five photos to prove the title promise
+- rewrite title and above-fold copy for the target guest segment
 - add missing parking or self-check-in amenity
 - send manual check-in clarification after skipped scheduled message
 
@@ -116,8 +123,34 @@ Fields:
 | Restriction change | Search dates unbookable due to min stay/check-in/out rules and enough margin exists |
 | Promotion | Eligible dates, weak pace, margin safety, no peak-demand leakage |
 | Content change | Search-card or listing conversion weak, photo/title/amenity gap visible |
+| Market research decision | Absorption, stay-length gap, capacity curve, comp thesis/counterexamples, channel fit, and downside underwriting support pursue/watch/reject |
 | Operations intervention | Message skip, review theme recurrence, turnover overload, maintenance recurrence |
 | Compliance review | Airbnb-visible field mismatch, regulation signal, missing registration/permit field |
+
+Content-change subtypes:
+
+| Subtype | Evidence to require |
+|---|---|
+| `hero_photo_change` | Search-card click issue or hero gap; own hero subject; A-comp hero pattern; title alignment note |
+| `first_five_reorder` | Photo order gap; current first-five subjects; missing early proof; proposed order |
+| `gallery_reshoot_or_edit` | Photo/design gap; missing shots or edit defects; reshoot/edit brief |
+| `title_above_fold_rewrite` | Search-card click issue or guest-segment mismatch; current title; primary and challenger copy |
+| `full_section_copy_rewrite` | Listing-page conversion issue, guest-segment mismatch, or amenity proof gap; source facts for every claim |
+| `caption_or_amenity_proof_update` | Amenity visibility gap; photo proof and Airbnb amenity-field evidence |
+
+Decision-gate outputs from `scripts/decision_gates.py` can create
+recommendations when `decision == fix` or `decision == pursue`. Outputs with
+`needs_more_data`, `watch`, `monitor`, or `reject` should be stored as decision
+evidence and should not become host actions unless the recommended next action is
+evidence collection or explicit rejection.
+
+When a content-facing decision gate returns `fix`, generate an
+`airbnb_gallery_cro_execution_board` for gallery-only work and an
+`airbnb_listing_content_optimization_brief` for title, caption, and section-copy
+work before creating the action. The board or brief should preserve the prior
+title, above-fold copy, photo order, and captions needed for rollback. Do not
+log a content edit as implemented until the actual Airbnb fields or photo order
+changed.
 
 ## Outcome review cadence
 

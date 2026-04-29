@@ -1,5 +1,40 @@
 """Collect authenticated Airbnb host live-listing inventory.
 
+Role: collector (private). Run this first; every other private and public
+collector reads the newest complete `airbnb-live-listings-*.json` it produces.
+
+Reads:
+    - `BeehiveGetListingsQuery` overview API at `/api/v3/...`, paginated.
+    - Authenticated listing editor pages for private detail fields per active
+      listing.
+    - Optional restorable auth bundle at `AIRBNB_AUTH_STATE_PATH` (loaded into a
+      fresh agent profile to verify cross-process auth restore).
+
+Produces:
+    - `domain-skills/airbnb/.private-data/listing-collections/<run_id>.json`
+    - `domain-skills/airbnb/.private-data/listing-collections/<run_id>.csv`
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`
+
+Requires (env, optional unless noted):
+    - `AIRBNB_AUTH_STATE_PATH` — path to a private auth bundle. Required only
+      when proving auth restore in a fresh profile; otherwise the caller-
+      provided authenticated browser context is used.
+    - `AIRBNB_LISTINGS_RUN_ID`, `AIRBNB_LISTINGS_PAGE_LIMIT`,
+      `AIRBNB_LISTINGS_STATUS_SCOPE`, `AIRBNB_LISTINGS_LIMIT_ACTIVE`,
+      `AIRBNB_LISTINGS_SKIP_DETAILS`, `AIRBNB_LISTINGS_DETAIL_PAUSE_SEC`,
+      `AIRBNB_LISTINGS_QUERY_HASH` — see host-sources.md.
+
+Refuses to run if:
+    - The Airbnb bootstrap API key cannot be read from the loaded
+      `/hosting/listings` page.
+    - `AIRBNB_AUTH_STATE_PATH` is set but the restored session does not load
+      authenticated host content.
+
+Partial runs (`AIRBNB_LISTINGS_LIMIT_ACTIVE` or `AIRBNB_LISTINGS_SKIP_DETAILS`)
+are flagged with `partial_run: true` and downstream collectors refuse them by
+default. Use `AIRBNB_LISTINGS_FILE` only to intentionally point a downstream
+collector at a partial scope.
+
 Run from the browser-harness repo against an authenticated Airbnb host browser
 context:
 
@@ -23,6 +58,7 @@ Receipts are compact and avoid private addresses and cookie values.
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 import os
 import re
@@ -41,6 +77,7 @@ BASE = "https://www.airbnb.com.au"
 HOST_LISTINGS_URL = BASE + "/hosting/listings"
 OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
 SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
+CAPABILITY_REGISTRY_PATH = SESSION_PATH / "capability-registry.json"
 
 OPERATION_NAME = "BeehiveGetListingsQuery"
 OBSERVED_QUERY_HASH = "6a50773b7e0bf1c1c7c54d7b12d12c2db5be0eb4ce1ebfb8df1c3b42a9e2aaca"
@@ -56,6 +93,20 @@ REQUIRED_FIELDS = [
 ]
 
 _NAVIGATED = False
+
+
+def _load_local_module(module_filename, module_name):
+    path = Path("domain-skills/airbnb/scripts") / module_filename
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_listing_scope = _load_local_module("listing_scope.py", "airbnb_listing_scope")
+_operation_hashes = _load_local_module("operation_hashes.py", "airbnb_operation_hashes")
+_surfaces = _load_local_module("surface_capabilities.py", "airbnb_surface_capabilities")
+_integrity = _load_local_module("run_integrity.py", "airbnb_run_integrity")
 
 
 def utc_now():
@@ -230,27 +281,64 @@ def first_total_count(obj):
     return None
 
 
-def discover_query_hash():
+def discover_query_hash(base_headers=None):
     env_hash = os.environ.get("AIRBNB_LISTINGS_QUERY_HASH")
     if env_hash:
-        return {"hash": env_hash, "source": "AIRBNB_LISTINGS_QUERY_HASH"}
-    found = js(r"""(() => {
-  const haystacks = [];
-  for (const script of Array.from(document.scripts || [])) {
-    if (script.src) haystacks.push(script.src);
-    const text = script.textContent || "";
-    if (text.includes("BeehiveGetListingsQuery")) haystacks.push(text);
-  }
-  for (const entry of performance.getEntriesByType("resource") || []) {
-    if (entry.name) haystacks.push(entry.name);
-  }
-  const joined = haystacks.join("\n");
-  const nearby = joined.match(/BeehiveGetListingsQuery[\s\S]{0,500}?([a-f0-9]{64})/i);
-  return nearby ? nearby[1] : null;
-})()""")
-    if found:
-        return {"hash": found, "source": "page_discovery"}
-    return {"hash": OBSERVED_QUERY_HASH, "source": "observed_2026_04_27_fallback"}
+        return {"hash": env_hash, "source": "AIRBNB_LISTINGS_QUERY_HASH", "discovery": None}
+    registry_hashes, registry_sources = _operation_hashes.operation_hashes_from_registry(
+        _surfaces.load_capability_registry(CAPABILITY_REGISTRY_PATH),
+        [OPERATION_NAME],
+        surface_id="host_listing_inventory",
+    )
+    if registry_hashes.get(OPERATION_NAME):
+        return {
+            "hash": registry_hashes[OPERATION_NAME],
+            "source": registry_sources.get(OPERATION_NAME) or "capability_registry",
+            "discovery": {"source": "capability_registry", "path": str(CAPABILITY_REGISTRY_PATH)},
+        }
+
+    context = js(r"""(() => ({
+  html: document.documentElement.outerHTML,
+  scripts: Array.from(document.scripts || []).map(script => script.src).filter(Boolean),
+  resources: Array.from(performance.getEntriesByType("resource") || []).map(entry => entry.name || "").filter(Boolean)
+}))()""") or {}
+    seed_texts = [context.get("html") or ""]
+    seed_urls = [
+        url for url in [*(context.get("scripts") or []), *(context.get("resources") or [])]
+        if isinstance(url, str) and "/airbnb/static/packages/web/" in url and url.endswith(".js")
+    ]
+
+    def fetcher(url):
+        headers = {
+            **(base_headers or {}),
+            "Accept": "application/javascript,text/javascript,text/plain,*/*",
+            "Accept-Encoding": "identity",
+        }
+        try:
+            with urlopen(Request(url, headers=headers), timeout=float(os.environ.get("AIRBNB_LISTINGS_HASH_FETCH_TIMEOUT_SEC", "15"))) as response:
+                return read_response_text(response)
+        except (HTTPError, URLError, TimeoutError):
+            return ""
+
+    discovery = _operation_hashes.discover_operation_hashes(
+        fetcher,
+        [OPERATION_NAME],
+        seed_texts=seed_texts,
+        seed_urls=seed_urls,
+        max_fetches=int(os.environ.get("AIRBNB_LISTINGS_HASH_DISCOVERY_MAX_FETCHES", "80")),
+    )
+    hash_value = discovery.get("hashes", {}).get(OPERATION_NAME)
+    if hash_value:
+        return {
+            "hash": hash_value,
+            "source": discovery.get("sources", {}).get(OPERATION_NAME) or "bundle_discovery",
+            "discovery": discovery,
+        }
+    return {
+        "hash": OBSERVED_QUERY_HASH,
+        "source": "observed_2026_04_27_fallback",
+        "discovery": discovery,
+    }
 
 
 def api_url(query_hash, variables):
@@ -469,7 +557,34 @@ def main():
         BASE + "/api/v3/",
         cookie_urls=[BASE + "/"],
     )
-    hash_info = discover_query_hash()
+    hash_info = discover_query_hash(base_headers)
+    surface_capability = _surfaces.capability_record(
+        "host_listing_inventory",
+        observed_at=observed_at,
+        auth_context=(
+            "restored_private_host_session_in_fresh_agent_chrome_profile"
+            if auth_restore else "caller_provided_authenticated_browser_context"
+        ),
+        source_url=HOST_LISTINGS_URL,
+        resource_urls=_surfaces.page_api_resource_urls(js),
+        operation_hashes={OPERATION_NAME: hash_info["hash"]},
+        operation_hash_sources={OPERATION_NAME: hash_info["source"]},
+        evidence={"hash_discovery": hash_info.get("discovery")},
+    )
+    capability_registry_entry = _surfaces.capability_registry_entry(
+        "host_listing_inventory",
+        observed_at=observed_at,
+        endpoint_url=HOST_LISTINGS_URL,
+        operation_name=OPERATION_NAME,
+        operation_hash=hash_info["hash"],
+        provenance={"source": hash_info["source"]},
+    )
+    capability_registry = _surfaces.upsert_capability_registry(
+        _surfaces.load_capability_registry(CAPABILITY_REGISTRY_PATH),
+        capability_registry_entry,
+    )
+    _surfaces.save_capability_registry(CAPABILITY_REGISTRY_PATH, capability_registry)
+    capability_registry_ref = _surfaces.registry_ref(capability_registry_entry)
 
     pages = []
     overview_records = []
@@ -502,17 +617,21 @@ def main():
 
     overview_records = dedupe_records(overview_records)
     status_counts = Counter(record.get("status") or "UNKNOWN" for record in overview_records)
-    active_records = [record for record in overview_records if (record.get("status") or "").upper() == "ACTIVE"]
+    scoped_records, listing_scope = _listing_scope.select_listings(
+        overview_records,
+        os.environ.get("AIRBNB_LISTINGS_STATUS_SCOPE"),
+    )
+    total_scope_listings = len(scoped_records)
     if detail_limit:
-        active_records = active_records[: int(detail_limit)]
+        scoped_records = scoped_records[: int(detail_limit)]
 
     records = []
     failures = []
-    for index, record in enumerate(active_records, start=1):
+    for index, record in enumerate(scoped_records, start=1):
         if skip_details:
             enriched = {**record, "detail_field_ok": all(record.get(field) not in (None, "", []) for field in REQUIRED_FIELDS)}
         else:
-            print(json.dumps({"phase": "detail", "progress": index, "total": len(active_records), "listing_id": record["listing_id"]}), flush=True)
+            print(json.dumps({"phase": "detail", "progress": index, "total": len(scoped_records), "listing_id": record["listing_id"]}), flush=True)
             try:
                 enriched = collect_detail(record, pause)
             except Exception as error:
@@ -527,24 +646,57 @@ def main():
     json_path = OUTPUT_PATH / f"{run_id}.json"
     csv_path = OUTPUT_PATH / f"{run_id}.csv"
     receipt_path = SESSION_PATH / f"{run_id}-receipt.json"
-    output = {
+    prior_counts = _integrity.latest_prior_count(
+        OUTPUT_PATH,
+        count_keys=("records_count",),
+        current_run_id=run_id,
+    )
+    last_good_guard = _integrity.last_good_guard(
+        subject="host_listing_inventory_records",
+        current_count=len(records),
+        prior_positive_count=prior_counts["prior_positive_count"],
+        allow_empty=os.environ.get("AIRBNB_LISTINGS_ALLOW_EMPTY") == "1",
+    )
+    warehouse_exports = _integrity.warehouse_manifest([
+        {
+            "table": "airbnb_listing_master",
+            "path": str(csv_path),
+            "row_count": len(records),
+            "grain": "listing_id",
+            "source_family": "host_private",
+            "surface_class": "host_private",
+            "auth_context": (
+                "restored_private_host_session_in_fresh_agent_chrome_profile"
+                if auth_restore else "caller_provided_authenticated_browser_context"
+            ),
+        },
+    ])
+    collection_status = _integrity.collection_status(
+        last_good_guard_record=last_good_guard,
+        failures_count=len(failures),
+        complete=not bool(detail_limit or skip_details) and len(records) == total_scope_listings,
+    )
+    output = _integrity.stamp_collection_contract({
         "run_id": run_id,
         "observed_at": observed_at,
         "partial_run": bool(detail_limit or skip_details),
-        "auth_context": (
-            "restored_private_host_session_in_fresh_agent_chrome_profile"
-            if auth_restore else "caller_provided_authenticated_browser_context"
-        ),
         "source": {
             "overview": f"{OPERATION_NAME} /api/v3 persisted query",
             "overview_hash": hash_info["hash"],
             "overview_hash_source": hash_info["source"],
+            "overview_hash_discovery": hash_info.get("discovery"),
             "detail": "authenticated listing editor page text",
+            "surface_capabilities": [surface_capability],
+            "capability_registry_ref": capability_registry_ref,
         },
         "overview_pages": pages,
         "total_listings_seen": len(overview_records),
         "status_counts": dict(status_counts),
-        "active_count": len(records),
+        "active_count": int(status_counts.get("ACTIVE") or 0),
+        "listing_status_scope": listing_scope["label"],
+        "scoped_listing_count": len(records),
+        "total_scope_listings": total_scope_listings,
+        "listing_scope_complete": len(records) == total_scope_listings,
         "records_count": len(records),
         "detail_limit": int(detail_limit) if detail_limit else None,
         "skip_details": skip_details,
@@ -555,30 +707,60 @@ def main():
         },
         "records": records,
         "failures": failures[:100],
-    }
-    json_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
+    },
+        source_family="host_private",
+        surface_class="host_private",
+        auth_context=(
+            "restored_private_host_session_in_fresh_agent_chrome_profile"
+            if auth_restore else "caller_provided_authenticated_browser_context"
+        ),
+        collection_status=collection_status,
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+        capability_registry_ref=capability_registry_ref,
+    )
+    _integrity.write_collection_json(json_path, output)
     write_csv(csv_path, records)
 
-    receipt = {
+    receipt = _integrity.stamp_collection_contract({
         "run_id": run_id,
         "observed_at": observed_at,
         "auth_context": output["auth_context"],
+        "source_family": output["source_family"],
+        "surface_class": output["surface_class"],
+        "collection_status": output["collection_status"],
+        "last_good_guard": last_good_guard,
+        "warehouse_exports": warehouse_exports,
+        "capability_registry_ref": capability_registry_ref,
         "partial_run": output["partial_run"],
         "source": output["source"],
+        "surface_capabilities": [surface_capability],
         "overview_pages": pages,
         "total_listings_seen": len(overview_records),
         "status_counts": dict(status_counts),
-        "active_count": len(records),
+        "active_count": output["active_count"],
+        "listing_status_scope": output["listing_status_scope"],
+        "scoped_listing_count": output["scoped_listing_count"],
+        "total_scope_listings": output["total_scope_listings"],
+        "listing_scope_complete": output["listing_scope_complete"],
         "records_count": len(records),
         "detail_limit": output["detail_limit"],
         "skip_details": output["skip_details"],
         "field_validation": output["field_validation"],
         "json_path": str(json_path),
         "csv_path": str(csv_path),
-    }
+    },
+        source_family="host_private",
+        surface_class="host_private",
+        auth_context=output["auth_context"],
+        collection_status=output["collection_status"],
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+        capability_registry_ref=capability_registry_ref,
+    )
     if auth_restore:
         receipt["auth_restore"] = auth_restore
-    receipt_path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False))
+    _integrity.write_receipt_json(receipt_path, receipt)
     print(json.dumps(receipt, indent=2, ensure_ascii=False), flush=True)
 
 

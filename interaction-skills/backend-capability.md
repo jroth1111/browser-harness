@@ -57,6 +57,10 @@ Treat a backend as unsupported for a source when it loads a page but cannot
 produce the workflow's required fields. Do not silently emit a weaker dataset
 from the cheaper backend.
 
+Capability is scoped to a source context: domain/origin, auth state, account
+scope, date range, filters, currency, device, and observation window. A backend
+that works for one domain or public/auth state is not proven for another.
+
 Use field-level acceptance gates:
 
 - page-level success: load event, title, non-empty `innerText`, HTTP/UI status

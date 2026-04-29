@@ -1,0 +1,17 @@
+{
+  "listing_id": "100",
+  "cleaning_theme_count": 3,
+  "checkin_issue_count": 2,
+  "cleaning_theme_count_examples": [
+    "dust on shelves",
+    "bathroom floor not clean"
+  ],
+  "checkin_issue_count_examples": [
+    "hard to find lockbox",
+    "unclear parking entry"
+  ],
+  "evidence_refs": [
+    "review-themes",
+    "message-log"
+  ]
+}

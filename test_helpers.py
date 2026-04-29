@@ -56,6 +56,27 @@ def test_goto_url_prepares_page_load_events_before_navigation():
     ]
 
 
+def test_goto_url_discovers_packaged_domain_skill_assets(tmp_path):
+    domain_root = tmp_path / "domain-skills"
+    skill_dir = domain_root / "airbnb"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "overview.md").write_text("# Airbnb\n", encoding="utf-8")
+
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        return {"frameId": "frame-1"} if method == "Page.navigate" else {}
+
+    with patch("helpers.cdp", side_effect=fake_cdp), \
+         patch("helpers.drain_events", return_value=[]), \
+         patch("helpers._asset_dir", return_value=domain_root) as asset_dir:
+        result = helpers.goto_url("https://www.airbnb.com/hosting")
+
+    asset_dir.assert_called_once_with("domain-skills", "browser_harness_domain_skills")
+    assert result == {"frameId": "frame-1", "domain_skills": ["overview.md"]}
+
+
 def test_switch_tab_does_not_mutate_title():
     calls = []
 

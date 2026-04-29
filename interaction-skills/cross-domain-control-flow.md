@@ -22,6 +22,56 @@ Classify the requested target before opening a browser:
 When a domain skill exists, read it before choosing the backend. Domain skills
 override generic preferences because backend capability is site-specific.
 
+## Empirical Skill Update Rule
+
+For any browser-backed workflow, treat the documented workflow as a hypothesis
+until it has been exercised against the real site surface it claims to control
+or extract from.
+
+During execution:
+
+- Run the workflow against the live page, backend source family, browser
+  backend, and auth/session context that the workflow actually depends on.
+- Choose logged-in, logged-out, fresh-profile, persistent-profile, or mixed
+  state from the site and workflow requirements. These states are source
+  contexts, not universal defaults.
+- Compare the workflow's assumptions against observed site behavior before
+  relying on extracted fields or actions.
+- Record durable findings in the domain skill, not task narration.
+- Preserve source context: origin, URL pattern, auth/session state, UI surface,
+  backend route, required fields, confidence limits, and failure modes.
+- If a field cannot be observed reliably, document the degraded confidence rule.
+- If a browser/backend path fails but another source works, document source
+  priority and rejection criteria.
+- Do not store secrets, cookies, storage values, auth headers, raw private
+  payloads, or user-specific state in shared skills.
+
+A finding is worth adding when it would save the next agent from rediscovering a
+selector, route, wait condition, source priority, auth-state trap, UI quirk,
+backend limitation, or confidence caveat.
+
+The artifact should describe the final reusable rule, not the history of how it
+was discovered.
+
+## Canonical Skill Artifacts
+
+Shared skill files are final-state operating manuals. Write the reusable rule
+that should guide the next run, with enough source context to apply it safely.
+
+Skill artifacts may include:
+
+- current URL patterns, selectors, backend routes, source priority, and field
+  contracts
+- auth/session context required by the workflow
+- confidence caveats and degraded-evidence rules
+- failure modes, traps, and rejection criteria
+- comments that explain behavior, invariants, or source semantics
+
+Keep edit chronology, update notes, preservation markers, replacement
+instructions, and run narration outside shared skill artifacts. Put those in the
+chat response, patch envelope, PR description, or a file whose purpose is
+history or audit logging.
+
 ## Provider Availability Preflight
 
 Provider choice has two gates: semantic fit and local availability. Do not let

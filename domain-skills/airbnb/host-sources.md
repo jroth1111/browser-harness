@@ -8,11 +8,28 @@ Before collecting private data across sessions, read `session-continuity.md`.
 Before assuming available fields, run `exploration-protocol.md` and update
 `data-inventory.md` with account-specific source availability.
 
+## Ownership
+
+- Use this when: the user needs logged-in host inventory, Insights, reviews,
+  calendar/pricing settings, rule-sets, exports, messages, tasks, or compliance
+  surfaces.
+- Owns: host-private source order, auth posture, export-first rules,
+  authenticated collection workflows, and source-specific refusal guards.
+- Does not own: logged-out public comp extraction, durable row contracts,
+  decision scoring, or action/outcome tracking.
+- Next hop: `scripts/README.md` for runnable collectors, schema files for row
+  contracts, `data-quality.md` for provenance/quarantine, and `decisioning.md`
+  after a recommendation is accepted.
+
 ## Collection posture
 
 - Stop at the login wall if the user has not granted access.
-- Prefer downloads and exports when Airbnb provides them.
-- Use authenticated UI text only when exports are unavailable.
+- Prefer downloads and exports when Airbnb provides them, because they are
+  usually more stable and easier to reconcile.
+- Use authenticated UI text or browser-session API capture when the website has
+  materially richer fields than the export, or when the export omits the source
+  primitive needed for the host decision. Tag that capture as UI/API
+  augmentation rather than replacing the export source.
 - Record `observed_at`, listing scope, date filters, account currency, and the
   visible UI/source used for each capture.
 - Store session continuity receipts in the ignored `.session-store/`; do not
@@ -61,7 +78,9 @@ Extraction order:
 
 1. Download earnings report or CSV from the Airbnb earnings UI.
 2. Parse the downloaded file with a structured CSV/PDF parser.
-3. Use authenticated UI text only when exports are unavailable.
+3. Use authenticated UI/API text only when exports are unavailable or when the
+   website visibly exposes richer fields than the export. Record both sources
+   and reconcile conflicts instead of silently overwriting export values.
 
 Use for net ADR, net RevPAN, owner statements, fee leakage, refunds,
 adjustments, payout timing, and cleaning-fee recovery.
@@ -107,6 +126,22 @@ Use the host calendar UI when you need reasons that iCal cannot express:
 Calendar snapshots should be daily for forward-looking dates. Never overwrite a
 previous snapshot; booking pace depends on history.
 
+Executable collector: `scripts/collect_calendar_export.py`.
+
+- Set `AIRBNB_ICAL_SOURCE` to a consented Airbnb iCal/export HTTPS URL or a
+  local `.ics` file, and set `AIRBNB_ICAL_LISTING_ID` to the listing scope.
+- The collector expands `VEVENT` ranges into daily
+  `airbnb_calendar_snapshot`-style rows under
+  `.private-data/calendar-export-collections/`, writes a compact capability
+  receipt, and tags every row with `source_family = calendar_export`,
+  `surface_class = calendar_export`, and
+  `auth_context = calendar_export_url_or_file`.
+- It hashes event UIDs and omits raw summary/description text by default; use
+  `AIRBNB_ICAL_INCLUDE_RAW_TEXT=1` only for deliberate private debugging.
+- It refuses an empty export after a prior non-empty export for the same listing
+  unless `AIRBNB_ICAL_ALLOW_EMPTY=1`, preserving last-good state when Airbnb or
+  an upstream calendar briefly returns an empty feed.
+
 ## Listing settings and content audit
 
 Capture monthly and after edits:
@@ -148,20 +183,22 @@ Executable collector: `scripts/collect_listings.py`.
    `BeehiveGetListingsQuery`.
 4. Read `layout-init.api_config.key` from `script#data-initializer-bootstrap`
    and send it as `x-airbnb-api-key` for the persisted API request.
-5. Fetch `/api/v3/BeehiveGetListingsQuery/<persisted_query_hash>` in pages,
+5. Resolve the persisted query hash dynamically from the loaded page/static
+   bundles before falling back to the last observed hash.
+6. Fetch `/api/v3/BeehiveGetListingsQuery/<persisted_query_hash>` in pages,
    normally with request variables containing `limit: 30` and offsets of
    `0, 30, 60...` until `metadata.totalCount` is exhausted.
-6. Treat `status == ACTIVE` as the live/listed inventory. Keep other statuses in
+7. Treat `status == ACTIVE` as the live/listed inventory. Keep other statuses in
    the receipt counts, but do not include them in the live-listing output unless
    explicitly requested.
-7. For each active listing, open
+8. For each active listing, open
    `https://www.airbnb.com.au/hosting/listings/<listing_id>`. Airbnb redirects
    to the listing editor, commonly
    `/hosting/listings/editor/<listing_id>/details/photo-tour`.
-8. Extract private detail fields from rendered editor text when the API row does
+9. Extract private detail fields from rendered editor text when the API row does
    not contain enough detail: full address after the `Location` label, `Number
    of guests`, `Property type`, room/photo lines, and photo count.
-9. Save private JSON/CSV under
+10. Save private JSON/CSV under
    `domain-skills/airbnb/.private-data/listing-collections/` and save a compact
    receipt under `.session-store/capability/`.
 
@@ -181,6 +218,7 @@ Useful controls:
 ```text
 AIRBNB_LISTINGS_RUN_ID=airbnb-live-listings-YYYYMMDDTHHMMSSZ
 AIRBNB_LISTINGS_PAGE_LIMIT=30
+AIRBNB_LISTINGS_STATUS_SCOPE=active
 AIRBNB_LISTINGS_LIMIT_ACTIVE=1
 AIRBNB_LISTINGS_SKIP_DETAILS=1
 AIRBNB_LISTINGS_DETAIL_PAUSE_SEC=1.5
@@ -276,7 +314,10 @@ quality metrics.
 3. Open one authenticated Performance route to establish Airbnb bootstrap state,
    for example
    `/performance/conversion/p3_impressions/listing/<listing_id>?ds-start=-1&ds-end=0`.
-4. Use Network events or loaded scripts to discover the persisted query hashes.
+4. Use loaded scripts for normal hash discovery. Use
+   `scripts/probe_network_discovery.py` when Network-resource sniffing is
+   needed to discover changed endpoint families; keep that as probe evidence,
+   not the runtime collection path.
    Empirical hashes observed on 2026-04-27:
    - `ListOfMetricsQuery`:
      `d72f771d4dd59e594aeefbd90d5a5510d72c4c732f596f6d663af00bb27fac3c`
@@ -387,6 +428,17 @@ Capture each rule-set and the dates/listings it affects:
 Rule-sets are high leverage and high risk. They can raise peak yield, fill gaps,
 or accidentally make profitable searches unbookable.
 
+Use `scripts/probe_surfaces.py` before creating or changing collectors for
+calendar availability, pricing rules, earnings, reservations, or payouts. It
+records only redacted reachability/resource-family evidence and operation-hash
+prefixes. Treat it as a capability check, not a data export for sensitive money
+or reservation payloads.
+
+Use `scripts/schedule_surface_refresh.py` to decide which source family is stale
+enough to refresh next. The scheduler reads existing receipts, applies each
+surface cadence and priority, and emits a local task plan without contacting
+Airbnb.
+
 ## Messages and quick replies
 
 Capture monthly and per reservation:
@@ -413,6 +465,25 @@ Capture after review publication:
 - category ratings if visible to host
 - host response
 - recurring themes
+
+Executable private collector: `scripts/collect_host_reviews.py`.
+
+Default scope is `ACTIVE` listings from the latest complete live-listing
+artifact. To deliberately include non-active records, pass an explicit listing
+artifact when needed and set one of:
+
+```text
+AIRBNB_HOST_REVIEWS_LISTING_SCOPE=all
+AIRBNB_HOST_REVIEWS_LISTING_SCOPE=statuses:ACTIVE,UNLISTED
+AIRBNB_HOST_REVIEWS_LISTING_SCOPE=ids:<listing_id>,<listing_id>
+```
+
+The collector writes `airbnb_review`-shaped rows under ignored
+`.private-data/review-collections/` and records per-listing completeness. Treat
+`all_target_listing_reviews_complete: true` as the only collector-level proof
+that every selected listing reconciled to a host-visible/API review total.
+Rows collected from public listing text remain visible samples only; they are
+not a full historical review export.
 
 Recommended theme tags:
 
@@ -460,3 +531,50 @@ Track Airbnb-visible fields and guidance links:
 Do not infer legal compliance from absence of a visible warning. Record what
 Airbnb exposes and tell the user to verify local obligations with a qualified
 advisor or official government source.
+
+### Standard year-view sync workflow
+
+Canonical runner:
+
+- `python3 domain-skills/airbnb/scripts/sync_insights_year_view.py`
+
+This workflow is now tiered and incremental:
+
+- recent tier: `rolling_daily` primitives for the last 90 days.
+- older tier: `single_window` chunks for the older 275 days; preserve Airbnb's
+  returned `series_granularity` (`WEEK`/`MONTH`/`DAY`) without relabeling.
+- summary windows (`last_7_days`, `last_30_days`, `last_365_days`) are always
+  refreshed because ratios/averages shift daily.
+
+Cross-run gap state:
+
+- ledger file: `domain-skills/airbnb/.private-data/insights-collections/.ledger.jsonl`
+- key fields:
+  `listing_id`, `route_family`, `route_subroute`, `series_index`, `ds`,
+  `primary_metric_name`.
+- planner re-requests only missing windows since the newest stored `ds` for
+  each listing/route.
+
+Attempt sentinels:
+
+The ledger also stores sentinel rows (`primary_metric_name: "_attempt_sentinel"`,
+`series_granularity: "ATTEMPT_RANGE"`) for chart windows that returned HTTP 200
+but zero data points. Sentinels carry `_attempt_span_days` so the bucket builder
+can expand them over the full window range, suppressing re-requests for windows
+Airbnb has confirmed empty.
+
+Tiered expiry:
+- Daily-tier sentinels (ds within the last 90 days) expire after 7 days so the
+  planner retries if Airbnb back-fills the data later.
+- Older-tier sentinels (ds more than 90 days ago) never expire because historical
+  records are stable.
+
+After deploying sentinels, a second pass immediately following a full sync will
+emit far fewer chart requests (expected ~80 % reduction) because most older-tier
+gaps become sentinel-covered.
+
+Rate-limit-safe defaults:
+
+- set `AIRBNB_INSIGHTS_PATIENT_MODE=1` to use conservative pacing:
+  small batches, longer delay, larger `429` backoff, and early stop on sustained
+  rate limit.

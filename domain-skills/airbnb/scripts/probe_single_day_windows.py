@@ -18,6 +18,7 @@ Probes for one ACTIVE listing × one route per family across these window shapes
 from __future__ import annotations
 
 import json
+import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -48,6 +49,18 @@ ROUTES = [
 ]
 
 
+def _load_local_module(module_filename, module_name):
+    path = Path("domain-skills/airbnb/scripts") / module_filename
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_operation_hashes = _load_local_module("operation_hashes.py", "airbnb_operation_hashes")
+_integrity = _load_local_module("run_integrity.py", "airbnb_run_integrity")
+
+
 def is_complete_live_listing_file(path):
     try:
         data = json.loads(path.read_text())
@@ -73,10 +86,10 @@ def latest_live_listing_file():
     return complete[-1]
 
 
-def chart_request(route, listing_id, ds_start, ds_end):
+def chart_request(route, listing_id, ds_start, ds_end, hash_value=HASH):
     return {
         "operationName": "ChartQuery",
-        "hash": HASH,
+        "hash": hash_value,
         "variables": {
             "request": {
                 "clientName": "web-performance-dash-chart",
@@ -94,11 +107,11 @@ def chart_request(route, listing_id, ds_start, ds_end):
     }
 
 
-def fetch_one(api_key, base_headers, route, listing_id, ds_start, ds_end):
-    item = chart_request(route, listing_id, ds_start, ds_end)
-    extensions = {"persistedQuery": {"version": 1, "sha256Hash": HASH}}
+def fetch_one(api_key, base_headers, route, listing_id, ds_start, ds_end, hash_value=HASH):
+    item = chart_request(route, listing_id, ds_start, ds_end, hash_value=hash_value)
+    extensions = {"persistedQuery": {"version": 1, "sha256Hash": hash_value}}
     path = (
-        f"/api/v3/ChartQuery/{HASH}?operationName=ChartQuery&locale=en-AU&currency=AUD"
+        f"/api/v3/ChartQuery/{hash_value}?operationName=ChartQuery&locale=en-AU&currency=AUD"
         f"&variables={quote(json.dumps(item['variables'], separators=(',', ':')))}"
         f"&extensions={quote(json.dumps(extensions, separators=(',', ':')))}"
     )
@@ -161,11 +174,13 @@ def main():
     if not api_key:
         raise SystemExit("Could not read Airbnb API key from bootstrap")
     base_headers = login_session.browser_session_headers(cdp, BASE + "/api/v3/", cookie_urls=[BASE + "/"])
+    operation_hashes, _ = _operation_hashes.resolve_operation_hashes({"ChartQuery": HASH})
+    chart_hash = operation_hashes["ChartQuery"]
 
     rows = []
     for route in ROUTES:
         for window in WINDOWS:
-            result = fetch_one(api_key, base_headers, route, listing_id, window["ds_start"], window["ds_end"])
+            result = fetch_one(api_key, base_headers, route, listing_id, window["ds_start"], window["ds_end"], hash_value=chart_hash)
             rows.append(
                 {
                     "route_family": route["family"],
@@ -179,18 +194,21 @@ def main():
             print(json.dumps({**rows[-1]}), flush=True)
 
     OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_JSON.write_text(
-        json.dumps(
-            {
-                "observed_at": observed_at,
-                "listing_id_probe": listing_id,
-                "rows": rows,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
+    payload = _integrity.stamp_collection_contract(
+        {
+            "run_id": "airbnb-insights-single-day-window-probe",
+            "observed_at": observed_at,
+            "listing_id_probe": listing_id,
+            "rows": rows,
+        },
+        source_family="capability",
+        surface_class="capability",
+        auth_context="probe_browser_context",
+        collection_status="complete" if not [row for row in rows if row.get("has_graphql_errors")] else "partial_failed",
     )
+    _integrity.write_collection_json(OUTPUT_JSON, payload)
     print(json.dumps({"summary_path": str(OUTPUT_JSON), "rows_count": len(rows)}))
 
 
-main()
+if __name__ == "__main__":
+    main()

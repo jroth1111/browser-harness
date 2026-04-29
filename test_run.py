@@ -99,3 +99,33 @@ def test_launch_profile_passes_options():
         chrome_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         json_output=True,
     )
+
+
+def test_skill_learning_gate_subcommand_does_not_start_daemon():
+    with patch.object(sys, "argv", ["browser-harness", "--skill-learning-gate", "candidate.json"]), \
+         patch("run.ensure_daemon") as ensure_daemon, \
+         patch("skill_learning_gate.main", return_value=None) as gate:
+        run.main()
+
+    gate.assert_called_once_with(["candidate.json"])
+    ensure_daemon.assert_not_called()
+
+
+def test_skill_learning_gate_subcommand_loads_sibling_runner_when_module_missing(tmp_path):
+    fallback = tmp_path / "skill_learning_gate.py"
+    fallback.write_text(
+        "def main(argv=None):\n"
+        "    print('fallback:' + ','.join(argv or []))\n",
+        encoding="utf-8",
+    )
+    stdout = StringIO()
+
+    with patch.object(sys, "argv", ["browser-harness", "--skill-learning-gate", "candidate.json"]), \
+         patch("run.ensure_daemon") as ensure_daemon, \
+         patch.object(run, "__file__", str(tmp_path / "run.py")), \
+         patch.dict(sys.modules, {"skill_learning_gate": None}), \
+         patch("sys.stdout", stdout):
+        run.main()
+
+    assert stdout.getvalue().strip() == "fallback:candidate.json"
+    ensure_daemon.assert_not_called()

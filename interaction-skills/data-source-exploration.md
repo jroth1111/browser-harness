@@ -8,6 +8,7 @@ is to discover available data primitives first, then compose them into workflows
 Generalizable:
 
 - public/private source discovery order
+- cross-domain/source/backend control flow
 - backend capability testing
 - export-first collection
 - field inventory and provenance
@@ -25,12 +26,15 @@ Site-specific details belong in `domain-skills/<site>/`:
 ## Exploration order
 
 1. Identify the decision or report the user wants.
-2. Inventory public sources without authentication.
-3. Test the cheapest backend first with `diagnose_url_capability()`.
-4. Inventory authenticated/exportable sources in a persistent browser profile.
-5. Prefer structured exports/downloads over UI text.
-6. Inspect network requests only after UI/export behavior is understood.
-7. Register primitives with source, scope, confidence, freshness, privacy class,
+2. Read the domain skill if one exists, then record the source context: domain,
+   origin, auth state, account scope, date/filter/currency/device settings, and
+   required fields.
+3. Inventory public sources without authentication.
+4. Test the cheapest backend first with `diagnose_url_capability()`.
+5. Inventory authenticated/exportable sources in a persistent browser profile.
+6. Prefer structured exports/downloads over UI text.
+7. Inspect network requests only after UI/export behavior is understood.
+8. Register primitives with source, scope, confidence, freshness, privacy class,
    and target schema.
 
 ## Source classification
@@ -90,6 +94,13 @@ For each target field:
    pagination/count evidence, and fallback reason.
 
 Field-level parity decides the canonical source. Page-level success does not.
+
+## Cross-domain routing
+
+Use `interaction-skills/cross-domain-control-flow.md` when a workflow mixes
+domains, auth states, public and private sources, iframes, or different browser
+backends. Do not promote a backend across domains by analogy; prove capability
+for the exact source context and record the fallback reason when it fails.
 
 ## Backend strategy
 

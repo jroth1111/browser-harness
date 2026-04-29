@@ -1,4 +1,5 @@
 import admin
+import sys
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
@@ -94,6 +95,20 @@ def test_launch_headful_profile_builds_loopback_chrome_command(tmp_path):
     assert result["pid"] == 1234
     assert result["http_endpoint"] == "http://127.0.0.1:9333"
     assert Path(result["profile_path"]).exists()
+
+
+def test_ensure_daemon_spawns_with_current_python_interpreter():
+    class Proc:
+        def poll(self):
+            return None
+
+    with patch("admin.daemon_alive", side_effect=[False, True]), \
+         patch("subprocess.Popen", return_value=Proc()) as popen:
+        admin.ensure_daemon(wait=0.1)
+
+    cmd = popen.call_args.args[0]
+    assert cmd[0] == sys.executable
+    assert cmd[1].endswith("daemon.py")
 
 
 def test_doctor_default_does_not_check_latest_release():

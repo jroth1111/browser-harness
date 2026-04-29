@@ -1,0 +1,26 @@
+{
+  "research_mode": "property_validation",
+  "target_address_or_building": "500 Elizabeth Street",
+  "map_boundary_receipt": {
+    "title": "Homes within map area"
+  },
+  "selected_filter_chips": [
+    "Entire home",
+    "3+ bedrooms"
+  ],
+  "map_friction_assessment": {
+    "barrier_type": "none"
+  },
+  "same_building_or_same_block_comps": [
+    {
+      "listing_id": "premium-only"
+    }
+  ],
+  "strict_comp_selection": "pass",
+  "counterexample_matrix": "inconclusive",
+  "listing_maturity_filter": "pass",
+  "slow_season_survival_model": "pass",
+  "evidence_refs": [
+    "premium-only-market-run"
+  ]
+}

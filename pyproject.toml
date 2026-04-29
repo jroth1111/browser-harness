@@ -19,9 +19,10 @@ dev = [
 
 [project.scripts]
 browser-harness = "run:main"
+browser-harness-skill-learning-gate = "skill_learning_gate:main"
 
 [tool.setuptools]
-py-modules = ["run", "helpers", "daemon", "admin", "login_session", "lightpanda_control", "data_display"]
+py-modules = ["run", "helpers", "daemon", "admin", "login_session", "lightpanda_control", "data_display", "skill_learning_gate"]
 packages = ["browser_harness_domain_skills", "browser_harness_interaction_skills", "browser_harness_docs", "browser_harness_assets"]
 
 [tool.setuptools.package-dir]

@@ -82,6 +82,131 @@ Fields:
 
 Refresh: monthly, after edits, and during conversion investigations.
 
+## `airbnb_gallery_cro_execution_board`
+
+Action-ready gallery plan for a listing where public evidence shows a
+photo/order/proof bottleneck or the user explicitly requests gallery work. The
+board selects exact photo candidates and defines the proof-shot queue, captions,
+rollback, and review window before a photo-order change is logged.
+
+Fields:
+
+- `gallery_cro_execution_board_id`
+- `listing_id`
+- `created_at`
+- `source_issue_class`
+- `target_date_or_window`
+- `target_guest_segment`
+- `stay_length`
+- `seasonality`
+- `channel_goal`
+- `why_book`
+- `hero_primary_photo_id_or_subject`
+- `hero_alternate_photo_ids_or_subjects`
+- `hero_crop_safety_score`
+- `hero_score_components`
+- `first_five_order`
+- `first_five_scorecard`
+- `room_coverage_plan`
+- `amenity_proof_plan`
+- `missing_proof_shots`
+- `reshoot_shotlist`
+- `edit_briefs`
+- `caption_copy_pairings`
+- `design_gap_flags`
+- `comp_visual_patterns`
+- `ab_test_plan`
+- `rollback_plan`
+- `action_checklist`
+- `expected_metric`
+- `review_window_days`
+- `decision`
+- `confidence`
+- `evidence_refs`
+- `missing_required_evidence`
+- `do_not_use_reason`
+- `recommended_next_action`
+
+Refresh: after a content-facing decision gate, before implementing gallery
+edits, after new photos are uploaded, and after material A-comp visual evidence
+changes.
+
+Rules:
+
+- Use exact photo IDs, image IDs, filenames, or URLs for ship-ready boards.
+  Subject-only boards remain `needs_more_data`.
+- Preserve current photo order and caption state in `rollback_plan`.
+- Do not create a gallery action from price, trust, or visibility-only issues
+  unless the user explicitly requests gallery work.
+- Treat missing room proof and missing thesis-amenity proof as proof-shot work,
+  not as a reason to lower price.
+
+## `airbnb_listing_content_optimization_brief`
+
+Generated photo, gallery, title, and section-copy brief for a content change.
+Create this only after a user request or a decision gate shows that presentation
+is a likely bottleneck. The brief is not an implemented action; accepted edits
+must be tracked through `airbnb_recommendation`, `airbnb_action_log`, and
+`airbnb_experiment` when tested.
+
+Fields:
+
+- `content_optimization_brief_id`
+- `listing_id`
+- `brief_status`
+- `source_decision_gate`
+- `source_conversion_diagnosis_id`
+- `source_photo_product_gap_audit_id`
+- `source_issue_class`
+- `target_date_or_window`
+- `target_guest_segment`
+- `stay_length`
+- `seasonality`
+- `why_book`
+- `optimization_scope`
+- `current_title_text`
+- `recommended_primary_title`
+- `recommended_challenger_title`
+- `above_fold_primary`
+- `above_fold_challenger`
+- `title_ctr_score`
+- `above_fold_score`
+- `hero_primary_photo_id_or_subject`
+- `hero_alternate_photo_ids_or_subjects`
+- `hero_title_alignment`
+- `first_five_order`
+- `gallery_sequence_notes`
+- `caption_updates`
+- `missing_shots`
+- `reshoot_shotlist`
+- `edit_briefs`
+- `copy_sections`
+- `ab_test_plan`
+- `rollback_plan`
+- `missing_required_facts`
+- `content_risk_flags`
+- `expected_metric`
+- `review_window_days`
+- `evidence_refs`
+- `decision`
+- `confidence`
+- `missing_required_evidence`
+- `do_not_use_reason`
+- `recommended_next_action`
+- `created_at`
+
+Refresh: after a content-facing decision gate, before implementing listing
+content edits, and after material new photo/copy evidence appears.
+
+Rules:
+
+- Do not store invented amenities, fees, distances, view claims, bed sizes, or
+  rules. Put unconfirmed facts in `missing_required_facts`.
+- Preserve the current title, above-fold copy, photo order, and captions needed
+  to roll back accepted changes.
+- Record whether the hero proves the title promise. If it does not, the brief
+  must recommend either a hero change or a title change.
+
 ## `airbnb_calendar_snapshot`
 
 Daily date-level booking and availability state.

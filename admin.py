@@ -102,9 +102,10 @@ def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog
     local = _is_local_chrome_mode(env)
     for attempt in (0, 1):
         e = {**os.environ, **({"BH_NAME": name} if name else {}), **(env or {})}
+        root = os.path.dirname(os.path.abspath(__file__))
         p = subprocess.Popen(
-            ["uv", "run", "daemon.py"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
+            [sys.executable, os.path.join(root, "daemon.py")],
+            cwd=root,
             env=e, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
         )
         deadline = time.time() + wait

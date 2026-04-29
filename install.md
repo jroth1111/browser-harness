@@ -123,6 +123,7 @@ Wait 5 seconds, then reconnect. This resets all CDP state.
 - browser-harness --setup — re-run the full interactive browser-attach flow.
 - browser-harness --setup --accept-remote-debugging-dialog — macOS opt-in keyboard consent automation for the Chrome remote-debugging dialog.
 - browser-harness --launch-profile PATH --port 9222 — launch visible Chrome with a loopback CDP endpoint and an explicit user-data-dir.
+- browser-harness --skill-learning-gate CANDIDATE.json — validate a skill-learning candidate from any current working directory.
 - browser-harness --update -y - explicitly check for an update, pull it, and restart the daemon.
 
 For self-hosted CDP endpoints, see `docs/local-cdp-providers.md`.

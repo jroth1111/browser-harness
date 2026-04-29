@@ -10,9 +10,18 @@ traceable back to source observations, timestamps, confidence, and evidence.
 - Every alert has enough evidence to review or suppress it.
 - Missing data is explicit; never silently treat missing as zero.
 - Apply the general backend-invariant and field-level acceptance rules from
-  `interaction-skills/backend-capability.md` to Airbnb source observations.
+  `../../interaction-skills/backend-capability.md` to Airbnb source observations.
 - Sensitive guest data is minimized, purpose-limited, and not copied into public
   skill files, logs, or screenshots.
+- Exports are preferred when they contain the required primitive; UI/API
+  scraping is justified when the website exposes materially richer fields. Keep
+  both as separate source observations and reconcile conflicts explicitly.
+- Every row family should carry `source_family`, `surface_class`, and
+  `auth_context` so public, host-private, export, and third-party/open-data
+  observations cannot be merged accidentally.
+- Network-resource sniffing is discovery/probe evidence only. Runtime
+  collectors may use the discovered route or hash after validation, but should
+  not depend on raw performance-log sniffing as their normal collection path.
 
 ## `airbnb_data_capture_run`
 
@@ -148,6 +157,34 @@ Fields:
   the user explicitly accepts a thinner comp set.
 - Insights comparisons must preserve Airbnb's selected time window and listing
   scope.
+- Suspicious empty runs after a prior non-empty run are quarantined, not treated
+  as fresh zero-state evidence. This applies to calendar exports, public comps,
+  own-public review summaries, host-private reviews, and Insights metrics.
+- Warehouse/BI outputs should publish stable table names, row counts, grains,
+  source family, surface class, auth context, and artifact paths in each receipt
+  so downstream SQL/dbt imports can reject partial or quarantined collections.
+
+## Canonical Source Taxonomy And Join Policy
+
+Use LLM-facing labels for routing, but preserve the machine `source_family`,
+`surface_class`, and `auth_context` values already written by collectors and
+receipts. Do not rename persisted values without a separate migration.
+
+| LLM-facing evidence family | Persisted value(s) | Examples | Default join posture |
+|---|---|---|---|
+| public Airbnb market | `public_market` | logged-out search cards, comp listing pages, price matrices | Join only to public-market analysis and explicitly reconciled decision rows. |
+| own public listing | `own_public` | the host's public listing pages, own search appearance, public review samples | Join to own-public analysis after listing ID/public URL reconciliation; do not mix with owner-session rank. |
+| host-private Airbnb | `host_private`, `host_private_sensitive` | listing inventory, Insights, host reviews, earnings UI/API, pricing settings | Join to host-private reporting after listing-scope, date-window, and auth-context reconciliation. |
+| calendar/iCal export | `calendar_export`, `calendar` | iCal/export URL rows, host calendar capability checks | Join to calendar snapshots only after listing/date reconciliation and empty-feed quarantine checks. |
+| host export | `host_export` | earnings CSV, reservation detail, personal-data export parses | Prefer as source of truth for included fields; keep UI/API augmentation as separate source observations. |
+| external market / REA | `external_public_market` | REA rent observations, building price snapshots, rental lifecycle events | Join only as external market context or underwriting input with separate freshness/confidence. |
+| demand context | `third_party_open_data` or demand-context schema rows | holidays, events, weather, transport, regulation | Join only as context with cited source, period, geography, and confidence. |
+| local visual evidence | `local_visual_evidence` or visual schema rows | photo manifests, contact sheets, visual observations, image prompts | Join through listing/photo identifiers; preserve source image refs and confidence. |
+| internal/manual facts | internal/manual source rows | costs, owner contracts, action history, host-supplied constraints | Join only with explicit provenance and privacy handling. |
+| capability/quality control | `capability`, `scheduler` | capability probes, network discovery receipts, refresh schedules, redaction scans | Use to validate or schedule source work; do not treat as business evidence rows. |
+
+Cross-source joins require an explicit reconciliation rule and should preserve
+the original source family, surface class, and auth context after the join.
 
 ## Privacy and retention
 

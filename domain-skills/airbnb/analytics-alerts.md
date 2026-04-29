@@ -39,6 +39,39 @@ Use this file after collecting host/account data and public market data.
 | Demand-adjusted price index | Your total guest price / comp median for the same demand-context class |
 | Promotion eligibility gap | Valuable dates ineligible for promotion because of block or median-price rules |
 
+Decision-gate outputs:
+
+- `airbnb_listing_opportunity_snapshot` joins own public state to public A-comps
+  and produces the top conversion or pricing fix candidates.
+- `airbnb_conversion_diagnosis` separates visibility, search-card click,
+  listing-page conversion, price friction, trust, photo/design, amenity, and
+  guest-segment problems.
+- `airbnb_photo_product_gap_audit` compares own guest-visible content against
+  A-comps and produces top photo/product fixes before broad price cuts.
+- `airbnb_gallery_cro_execution_board` turns photo/product evidence into an
+  exact hero, first-five order, proof-shot queue, captions, rollback, and A/B
+  review window before gallery edits are logged.
+- `airbnb_case_study_replay` turns operator-derived rescue/coaching patterns
+  into evidence-backed recommendation experiments.
+- `airbnb_calendar_action_candidate` turns calendar, comp, demand, and cost
+  primitives into date-level actions with rollback criteria.
+- `airbnb_settings_drift_finding` audits pricing settings, rule-sets,
+  discounts, promotions, Smart Pricing, and date restrictions against the
+  intended strategy before date-level actions are trusted.
+
+Canonical year-view artifacts for dashboarding:
+
+- full snapshot JSON:
+  `domain-skills/airbnb/.private-data/insights-collections/<run_id>.json`
+- family extracts:
+  `.../<run_id>-conversion-only.json`,
+  `.../<run_id>-occupancy-only.json`,
+  `.../<run_id>-quality-only.json`
+- rendered family daily trend views:
+  `.../<run_id>-<family>-only-daily.html`
+- rendered family summary views:
+  `.../<run_id>-<family>-only-summary.html`
+
 ## Quality and operations metrics
 
 | Metric | Formula |
@@ -55,6 +88,11 @@ Use this file after collecting host/account data and public market data.
 | Recommendation win rate | Successful recommendations / reviewed recommendations |
 | Evidence freshness score | Fresh source observations / required source observations |
 
+Decision-gate output:
+
+- `airbnb_operations_risk_snapshot` converts recurring review, message, task,
+  cleaning, maintenance, fee, and turnover signals into risk-class alerts.
+
 ## Demand context metrics
 
 | Metric | Formula or source |
@@ -64,7 +102,54 @@ Use this file after collecting host/account data and public market data.
 | Weather sensitivity | Booking or cancellation variance by weather suitability score |
 | Market-shock flag | Regulation, transport, weather, or supply signal active for date |
 
+## Market research metrics
+
+| Metric | Formula or source |
+|---|---|
+| Market absorption pct | `1 - dated_available_count / undated_inventory_count` with cap-hit caveats |
+| Stay-length scarcity score | Availability drop or crowding by 1, 2, 3, 7, 14, and 28-night searches |
+| Guest-capacity gap score | Supply drop as guest count increases, validated by comp demand |
+| Booking velocity proxy | Public calendar unavailable share plus recent review timing, confidence-labeled |
+| Comp thesis confidence | Supporting comps and counterexamples for the claimed winning variable |
+| Archetype fit score | Evidence that a repeatable market archetype applies to the candidate |
+| Channel opportunity score | Channel-specific supply, demand, price, customer fit, and content fit |
+| Downside underwriting pass | Expected low-case net revenue clears required risk threshold |
+
+Decision-gate outputs:
+
+- `airbnb_market_research_decision` is conservative: `pursue` requires strict
+  comp selection, counterexamples, listing maturity, and slow-season survival.
+- `airbnb_channel_strategy_snapshot` recommends additional channels only after
+  market evidence supports the product and operations can handle the channel.
+
 ## Analysis playbooks
+
+### Market research and dealflow
+
+Question: Should I pursue, watch, or reject this market, building, property, or
+repositioning idea?
+
+Required workflow:
+
+- Run `market-research-playbook.md`.
+- Define research mode: opportunity discovery, property validation, or
+  repositioning.
+- Capture public search context logged out before using public rank or counts.
+- Run absorption, stay-length, guest-capacity, comp-thesis, channel, midterm,
+  and underwriting checks.
+- Store derived outputs in `schema-market-research.md`.
+
+Checks:
+
+- research mode and candidate product are explicit
+- absorption scans preserve cap-hit state and map boundary
+- stay-length and guest-capacity gaps use matching search contexts
+- comp thesis has supporting comps and counterexamples
+- winning variables are replicable by the candidate product
+- channel demand and content fit are not assumed from Airbnb alone
+- midterm/monthly is treated as a stay-length segment with opportunity cost
+- underwriting uses internal costs and includes downside case
+- final decision is `pursue`, `watch`, `reject`, or `needs_more_data`
 
 ### Current-state sensing
 
@@ -120,8 +205,41 @@ Checks:
 - overpriced conversion risk above 125-130% of comp median with weak conversion
 - long-stay discount leakage into high-demand periods
 - Smart Pricing min/max or override conflicts
+- pricing-software sync drift before trusting calendar prices
+- stale manual overrides after their review window
+- rule-set overlap, rule-set gaps, and date restrictions that contradict the
+  intended strategy
 - margin safety before discounting or lowering minimum stays
 - prior recommendation outcomes for the same listing/date class
+
+### Rule-set and settings drift audit
+
+Question: Are active Airbnb settings still aligned with the intended strategy
+for each listing/date window?
+
+Required data:
+
+- pricing settings
+- rule-sets and applied date ranges
+- calendar snapshots
+- demand context
+- internal margin floor
+- intended strategy baseline
+- pricing-software sync evidence when an external pricing source is the
+  authority
+
+Checks:
+
+- discount or promotion leakage into peak, event, holiday, or strong-pace dates
+- effective price after discounts below margin floor
+- Smart Pricing active where custom rule-set or manual control should govern
+- Smart Pricing minimum below margin floor
+- overlapping rule-sets or conflicting active controls
+- high-demand date without required rule-set coverage
+- stale manual override beyond its review window
+- pricing-software sync stale or flat when software should be the authority
+- minimum-stay, check-in, or checkout restrictions blocking relevant demand
+- promotion intended but Airbnb eligibility or median-price rules block it
 
 ### Calendar control
 
@@ -205,6 +323,22 @@ Required data:
 - reviews
 - comp listing snapshots
 - photo tour and room-level amenity coverage
+- normalized photo/product evidence from own public and public comp collectors
+
+Checks:
+
+- own hero subject versus repeated A-comp hero subject
+- whether first five photos prove the main guest promise
+- bedroom, bed, bathroom, kitchen, living, and thesis-amenity proof
+- whether amenity claims visible in text are proven by visible image labels or
+  captions when available
+- whether design gap flags explain weak conversion before price changes
+- trust signal gap from review count, rating, badge visibility, or maturity
+- whether content/rules match the intended guest segment
+- whether price is the issue only after content and trust blockers are ruled out
+
+Use `operator-insight-workflows.md` for photo/product gap audits and case-study
+replay experiments derived from operator patterns.
 
 Checks:
 

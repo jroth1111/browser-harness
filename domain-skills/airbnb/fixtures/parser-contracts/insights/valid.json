@@ -1,0 +1,14 @@
+{
+  "run_id": "fixture-insights",
+  "observed_at": "2026-04-29T00:00:00Z",
+  "collection_status": "complete",
+  "source_family": "host_private",
+  "surface_class": "host_private",
+  "auth_context": "fixture",
+  "last_good_guard": {"checked": true, "status": "accepted"},
+  "warehouse_exports": [],
+  "summary_rows_count": 1,
+  "daily_rows_count": 1,
+  "summary_rows": [{"route_family": "conversion", "route_subroute": "p3_impressions", "value": 5}],
+  "daily_rows": [{"route_family": "conversion", "route_subroute": "p3_impressions", "ds": "2026-04-28", "value": 2}]
+}

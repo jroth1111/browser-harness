@@ -1,4 +1,6 @@
+import importlib.util
 import os, sys
+from pathlib import Path
 
 from admin import (
     _version,
@@ -31,9 +33,24 @@ Commands:
                                    interactively attach to your running browser
   browser-harness --launch-profile PATH [--port PORT] [--url URL] [--chrome PATH] [--json]
                                    launch visible Chrome with loopback CDP
+  browser-harness --skill-learning-gate CANDIDATE.json [...]
+                                   validate empirical skill-learning candidates
   browser-harness --update [-y]    pull the latest version (agents: pass -y)
   browser-harness --reload         stop the daemon so next call picks up code changes
 """
+
+
+def _skill_learning_gate_main():
+    try:
+        from skill_learning_gate import main
+
+        return main
+    except ModuleNotFoundError:
+        path = Path(__file__).resolve().with_name("skill_learning_gate.py")
+        spec = importlib.util.spec_from_file_location("skill_learning_gate", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.main
 
 
 def main():
@@ -89,6 +106,9 @@ def main():
                 chrome_path = value
             i += 2
         sys.exit(run_launch_profile(profile_path, port=port, url=url, chrome_path=chrome_path, json_output=json_output))
+    if args and args[0] == "--skill-learning-gate":
+        _skill_learning_gate_main()(args[1:])
+        return
     if args and args[0] == "--update":
         yes = any(a in {"-y", "--yes"} for a in args[1:])
         sys.exit(run_update(yes=yes))

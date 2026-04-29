@@ -1,5 +1,35 @@
 """Collect logged-out Airbnb public competitor snapshots for live host listings.
 
+Role: collector (public, logged out). Captures date-specific search cards
+first, then opens the closest deduplicated comp listing pages for richer
+attributes.
+
+Reads:
+    - Latest complete `airbnb-live-listings-*.json` under
+      `.private-data/listing-collections/` (override with
+      `AIRBNB_LISTINGS_FILE`).
+
+Produces:
+    - Search runs, search-card price rows, target-comp links, comp listing
+      snapshots, and price matrix rows under
+      `.private-data/public-market-collections/`.
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
+
+Requires (env, optional unless noted):
+    - `AIRBNB_COMP_CHECKIN_DATES`, `AIRBNB_COMP_CHECKIN_OFFSETS`,
+      `AIRBNB_COMP_NIGHTS`, `AIRBNB_COMP_TOP_RESULTS`,
+      `AIRBNB_COMP_TOP_COMPS_PER_CONTEXT`,
+      `AIRBNB_COMP_MAX_LISTING_SNAPSHOTS`,
+      `AIRBNB_COMP_MAX_SEARCH_SCROLLS`, `AIRBNB_COMP_LISTING_SCOPE`,
+      `AIRBNB_COMP_NAV_DELAY_SEC`, `AIRBNB_COMP_LIMIT_LISTINGS` — see
+      public-market.md.
+
+Refuses to run if:
+    - Known Airbnb authenticated-session cookies are present (owner login
+      personalizes ranking and invalidates rank/visibility analysis).
+    - The selected listing inventory is `partial_run: true`. Override with
+      `AIRBNB_LISTINGS_FILE` only for an intentionally bounded smoke test.
+
 Run from the browser-harness repo against a fresh logged-out agent Chrome
 profile:
 
@@ -10,13 +40,12 @@ profile:
       python3 run.py < domain-skills/airbnb/scripts/collect_competitors.py
 
 Private outputs are written under ignored domain-skills/airbnb/.private-data/.
-The collector captures date-specific search cards first, then opens the closest
-deduplicated comp listing pages for richer attributes.
 """
 
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 import os
 import re
@@ -49,6 +78,21 @@ AUTH_COOKIE_NAMES = {
     "li",
     "rclu",
 }
+
+
+def _load_local_module(module_filename, module_name):
+    path = Path("domain-skills/airbnb/scripts") / module_filename
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_listing_scope = _load_local_module("listing_scope.py", "airbnb_listing_scope")
+_public_scan_planner = _load_local_module("public_scan_planner.py", "airbnb_public_scan_planner")
+_surfaces = _load_local_module("surface_capabilities.py", "airbnb_surface_capabilities")
+_integrity = _load_local_module("run_integrity.py", "airbnb_run_integrity")
+_photo_product = _load_local_module("photo_product_evidence.py", "airbnb_photo_product_evidence")
 
 
 def utc_now():
@@ -117,16 +161,17 @@ def is_complete_live_listing_file(path: Path) -> bool:
 
 
 def parse_csv_ints(value, default):
-    raw = value or default
-    return [int(part.strip()) for part in raw.split(",") if part.strip()]
+    return _public_scan_planner.parse_csv_ints(value, default)
 
 
 def checkin_dates():
-    explicit = os.environ.get("AIRBNB_COMP_CHECKIN_DATES")
-    if explicit:
-        return [part.strip() for part in explicit.split(",") if part.strip()]
-    today = date.today()
-    return [(today + timedelta(days=offset)).isoformat() for offset in parse_csv_ints(os.environ.get("AIRBNB_COMP_CHECKIN_OFFSETS"), DEFAULT_CHECKIN_OFFSETS)]
+    return _public_scan_planner.resolve_checkin_dates(
+        explicit=os.environ.get("AIRBNB_COMP_CHECKIN_DATES"),
+        offsets=os.environ.get("AIRBNB_COMP_CHECKIN_OFFSETS"),
+        default_offsets=DEFAULT_CHECKIN_OFFSETS,
+        checkin_range=os.environ.get("AIRBNB_COMP_CHECKIN_RANGE"),
+        step_days=int(os.environ.get("AIRBNB_COMP_CHECKIN_STEP_DAYS", "1")),
+    )
 
 
 def checkout_date(checkin, nights):
@@ -176,7 +221,7 @@ def first_match(pattern, text, cast=None):
     return cast(value) if cast else value
 
 
-def parse_card_text(text):
+def parse_card_text(text, photo_items=None):
     text = re.sub(r"\n{2,}", "\n", (text or "").strip())
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     total = first_match(r"\$([0-9][0-9,]*)\s*AUD\s+total", text, lambda v: int(v.replace(",", "")))
@@ -209,6 +254,16 @@ def parse_card_text(text):
             continue
         title_candidates.append(line)
     title = title_candidates[0] if title_candidates else None
+    photo_evidence = _photo_product.normalize_photo_product_evidence(
+        raw_listing_text=text,
+        raw_photo_data=photo_items,
+        hero_text=(photo_items or [None])[0] if photo_items else title,
+    )
+    differentiators = [
+        value
+        for value in photo_evidence.get("amenity_claims_proven_in_photos", [])
+        if value in {"parking", "pool_or_spa", "view", "workspace", "family", "pet"}
+    ]
     return {
         "visible_title_short": title,
         "visible_location_label": location,
@@ -221,6 +276,9 @@ def parse_card_text(text):
         "bathrooms": bathrooms,
         "visible_badge": "Guest favourite" if re.search(r"guest favourite", text, re.I) else None,
         "top_home_highlight_visible": bool(re.search(r"top\s+\d+%|top home", text, re.I)),
+        "hero_photo_subject_tag": photo_evidence.get("hero_photo_subject_tag"),
+        "first_five_photo_subjects": photo_evidence.get("first_five_photo_subjects"),
+        "obvious_differentiator_tags": differentiators,
         "raw_text": text[:3000],
     }
 
@@ -230,11 +288,14 @@ def listing_review_scope(text):
 
 
 def parse_listing_review_count(scope):
+    for line in (scope or "").splitlines():
+        if re.search(r"\bhost\b|other places to stay|years of hosting", line, re.I):
+            continue
+        match = re.search(r"\b([0-9][0-9,]*)\s+reviews?\b", line, re.I)
+        if match:
+            return int(match.group(1).replace(",", ""))
     if re.search(r"\bNo reviews(?:\s*\(yet\)| yet)\b|\bNew listing\b", scope or "", re.I):
         return 0
-    matches = re.findall(r"\b([0-9][0-9,]*)\s+reviews?\b", scope or "", re.I)
-    if matches:
-        return int(matches[0].replace(",", ""))
     return None
 
 
@@ -295,7 +356,7 @@ def rating_display_state(scope, rating, review_count):
     return "not_visible"
 
 
-def parse_listing_text(text):
+def parse_listing_text(text, photo_items=None):
     text = re.sub(r"\n{2,}", "\n", (text or "").strip())
     review_scope = listing_review_scope(text)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -307,14 +368,19 @@ def parse_listing_text(text):
             title = line
             break
     capacity_line = next((line for line in lines if re.search(r"\d+\s+guests?", line, re.I) and re.search(r"bedrooms?|beds?|baths?", line, re.I)), "")
-    rating = first_match(r"Rated\s+([0-5](?:\.\d+)?)\s+out of 5 stars", review_scope, float)
+    rating = first_match(r"Rated\s+([0-5](?:\.\d+)?)\s+out of 5(?:\s+stars)?", review_scope, float)
     if rating is None:
-        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 stars from", review_scope, float)
+        rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5(?:\s+stars)?\s+from", review_scope, float)
     if rating is None:
         rating = first_match(r"([0-5](?:\.\d+)?)\s+out of 5 average rating", review_scope, float)
     review_count = parse_listing_review_count(review_scope)
     star_distribution = parse_review_star_distribution(review_scope, review_count)
     amenities_text = text.lower()
+    photo_evidence = _photo_product.normalize_photo_product_evidence(
+        raw_listing_text=text,
+        raw_photo_data=photo_items,
+        hero_text=(photo_items or [None])[0] if photo_items else title,
+    )
     return {
         "title": title,
         "property_type": first_match(r"(Entire [^\n]+)", text),
@@ -333,6 +399,7 @@ def parse_listing_text(text):
         "family_amenities_flag": bool(re.search(r"cot|high chair|children|baby|family", amenities_text)),
         "accessible_features_flag": bool(re.search(r"step-free|accessible|wheelchair", amenities_text)),
         "photo_count": first_match(r"([0-9]+)\s+photos?", text, int),
+        **photo_evidence,
         "visible_amenities_core": sorted(set(re.findall(r"\b(pool|spa|sauna|gym|parking|wifi|washer|dryer|kitchen|balcony|lift|air conditioning)\b", amenities_text))),
         "raw_text": text[:12000],
         **star_distribution,
@@ -352,7 +419,7 @@ def destination_from_listing(listing):
     return location if location else "Melbourne, Victoria, Australia"
 
 
-def search_url(listing, checkin, nights):
+def search_url(listing, checkin, nights, price_band=None):
     checkout = checkout_date(checkin, nights)
     query = target_query(listing)
     params = {
@@ -360,10 +427,16 @@ def search_url(listing, checkin, nights):
         "checkin": checkin,
         "checkout": checkout,
         "adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
+        "room_types[]": "Entire home/apt",
     }
     bedrooms = listing.get("bedrooms")
     if bedrooms:
         params["min_bedrooms"] = int(float(bedrooms))
+    price_band = price_band or {}
+    if price_band.get("price_min") is not None:
+        params["price_min"] = int(price_band["price_min"])
+    if price_band.get("price_max") is not None:
+        params["price_max"] = int(price_band["price_max"])
     return f"{BASE}/s/{destination_from_listing(listing).replace(' ', '--').replace(',', '')}/homes?{urlencode(params)}"
 
 
@@ -413,9 +486,33 @@ def extract_search_cards_from_page():
         break;
       }
     }
-    cards.push({href, room_id: match[1], text: best});
+    const photoAltTexts = Array.from((node || anchor).querySelectorAll('img'))
+      .map((img) => img.getAttribute('alt') || img.getAttribute('aria-label') || img.getAttribute('title') || '')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    cards.push({href, room_id: match[1], text: best, photo_alt_texts: photoAltTexts});
   }
   return cards;
+})()
+"""
+    ) or []
+
+
+def extract_listing_photo_labels_from_page():
+    return js(
+        r"""
+(() => {
+  const labels = [];
+  const seen = new Set();
+  for (const img of Array.from(document.querySelectorAll('img'))) {
+    const label = (img.getAttribute('alt') || img.getAttribute('aria-label') || img.getAttribute('title') || '').trim();
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    labels.push({alt: label});
+    if (labels.length >= 20) break;
+  }
+  return labels;
 })()
 """
     ) or []
@@ -480,8 +577,22 @@ def collect_search_cards_from_page(max_cards, max_scrolls, pause):
     }
 
 
-def search_run_id(target_listing_id, checkin, nights):
-    return f"airbnb-public-search-{target_listing_id}-{checkin}-{nights}n"
+def search_run_id(target_listing_id, checkin, nights, price_band_label="all_prices"):
+    suffix = "" if price_band_label == "all_prices" else f"-price-{price_band_label}"
+    return f"airbnb-public-search-{target_listing_id}-{checkin}-{nights}n{suffix}"
+
+
+def record_search_surface_capabilities(records, resource_urls, source_url, search_run_id_value, observed_at):
+    for surface_id in ("public_comp_search", "market_research_scan"):
+        record = _surfaces.capability_record(
+            surface_id,
+            observed_at=observed_at,
+            auth_context="logged_out_public_guest_visible",
+            source_url=source_url,
+            resource_urls=resource_urls,
+            evidence={"search_run_id": search_run_id_value},
+        )
+        _surfaces.upsert_best_capability(records, record)
 
 
 def score_comp(target, card, result_position):
@@ -521,15 +632,44 @@ def main():
     logged_out_guard = assert_logged_out_public_session()
     listing_file = latest_live_listing_file()
     listing_run = json.loads(listing_file.read_text())
-    listings = [row for row in listing_run.get("records") or [] if row.get("status") == "ACTIVE"]
+    all_listings = listing_run.get("records") or []
+    listings, listing_scope = _listing_scope.select_listings(
+        all_listings,
+        os.environ.get("AIRBNB_COMP_LISTING_SCOPE"),
+    )
+    total_scope_listings = len(listings)
+    if not listings:
+        raise SystemExit(
+            f"Listing source file {listing_file} produced zero listings for scope {listing_scope['label']}"
+        )
     if os.environ.get("AIRBNB_COMP_LIMIT_LISTINGS"):
         listings = listings[: int(os.environ["AIRBNB_COMP_LIMIT_LISTINGS"])]
-    nights_values = parse_csv_ints(os.environ.get("AIRBNB_COMP_NIGHTS"), DEFAULT_NIGHTS)
+    nights_values = _public_scan_planner.resolve_nights_values(
+        explicit=os.environ.get("AIRBNB_COMP_NIGHTS"),
+        night_range=os.environ.get("AIRBNB_COMP_STAY_LENGTH_RANGE"),
+        default=DEFAULT_NIGHTS,
+    )
     dates = checkin_dates()
+    price_bands = _public_scan_planner.initial_price_bands(
+        os.environ.get("AIRBNB_COMP_PRICE_BANDS"),
+        auto_min=os.environ.get("AIRBNB_COMP_AUTO_PRICE_MIN"),
+        auto_max=os.environ.get("AIRBNB_COMP_AUTO_PRICE_MAX"),
+    )
     top_results = int(os.environ.get("AIRBNB_COMP_TOP_RESULTS", DEFAULT_TOP_RESULTS))
     top_comps_per_context = int(os.environ.get("AIRBNB_COMP_TOP_COMPS_PER_CONTEXT", DEFAULT_TOP_COMPS_PER_CONTEXT))
     max_listing_snapshots = int(os.environ.get("AIRBNB_COMP_MAX_LISTING_SNAPSHOTS", DEFAULT_MAX_LISTING_SNAPSHOTS))
     max_search_scrolls = int(os.environ.get("AIRBNB_COMP_MAX_SEARCH_SCROLLS", DEFAULT_MAX_SEARCH_SCROLLS))
+    validation = _public_scan_planner.validate_public_market_options(
+        checkin_dates=dates,
+        nights_values=nights_values,
+        price_bands=price_bands,
+        top_results=top_results,
+        max_search_scrolls=max_search_scrolls,
+        currency="AUD",
+    )
+    auto_price_partition = _public_scan_planner.parse_bool(os.environ.get("AIRBNB_COMP_AUTO_PRICE_PARTITION"), default=False)
+    partition_threshold = int(os.environ.get("AIRBNB_COMP_PARTITION_TRIGGER_VISIBLE_RESULTS", str(top_results)))
+    max_partition_depth = int(os.environ.get("AIRBNB_COMP_PARTITION_MAX_DEPTH", "0"))
     pause = float(os.environ.get("AIRBNB_COMP_NAV_DELAY_SEC", "2.0"))
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     SESSION_PATH.mkdir(parents=True, exist_ok=True)
@@ -540,6 +680,7 @@ def main():
     price_matrix = []
     target_comp_links = []
     comp_snapshot_queue = {}
+    surface_capabilities = []
     failures = []
     stop_collection = False
     raw_search_path = OUTPUT_PATH / f"{run_id}-search-raw.jsonl"
@@ -555,128 +696,208 @@ def main():
             for nights in nights_values:
                 if stop_collection:
                     break
-                run_key = search_run_id(target_listing_id, checkin, nights)
-                url = search_url(listing, checkin, nights)
-                context = {
-                    "search_run_id": run_key,
-                    "target_listing_id": target_listing_id,
-                    "observed_at": observed_at,
-                    "observer_location_country": "AU",
-                    "device_type": "desktop",
-                    "logged_in_flag": False,
-                    "currency": "AUD",
-                    "destination": destination_from_listing(listing),
-                    "map_area_bounds_description": None,
-                    "check_in_date": checkin,
-                    "check_out_date": checkout_date(checkin, nights),
-                    "nights": nights,
-                    "guest_count_adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
-                    "guest_count_children": 0,
-                    "guest_count_pets": 0,
-                    "filters_applied": [f"query={target_query(listing)}", f"min_bedrooms={listing.get('bedrooms')}"],
-                    "source_url": url,
-                    "results_limit_requested": top_results,
-                    "max_search_scrolls_requested": max_search_scrolls,
-                }
-                print(json.dumps({"phase": "search", "search_run_id": run_key, "url": url}), flush=True)
-                navigate(url)
-                wait_for_load()
-                wait(pause)
-                status = page_content_status(text_limit=20000, html_limit=4000)
-                failure_kind = page_failure(status)
-                if failure_kind:
-                    failures.append({**context, "error": failure_kind, "title": status.get("title"), "text_sample": (status.get("text") or "")[:500]})
-                    search_runs.append({**context, "results_count_visible": 0, "status": "failed", "failure_kind": failure_kind})
-                    if failure_kind in {"http_429_or_too_many_requests", "http_503_or_airbnb_error"}:
-                        stop_collection = True
-                    continue
-                cards, card_collection = collect_search_cards_from_page(top_results, max_search_scrolls, pause)
-                with raw_search_path.open("a") as handle:
-                    handle.write(json.dumps({**context, **card_collection, "cards": cards}, ensure_ascii=False) + "\n")
-                parsed_cards = []
-                for card in cards:
-                    room_url = clean_room_url(card.get("href"))
-                    room_id = room_id_from_url(room_url)
-                    if not room_url or room_id in target_ids:
-                        continue
-                    parsed = parse_card_text(card.get("text") or "")
-                    if not parsed.get("visible_price_total") and not parsed.get("visible_title_short"):
-                        continue
-                    parsed_cards.append({
-                        **parsed,
-                        "listing_url": room_url,
-                        "listing_id_if_extractable": room_id,
-                        "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
-                    })
-                ranked = []
-                for index, card in enumerate(parsed_cards[:top_results], start=1):
-                    score = score_comp(listing, card, index)
-                    ranked.append((score, index, card))
-                ranked.sort(key=lambda item: item[0], reverse=True)
-                search_runs.append({**context, **card_collection, "results_count_visible": len(parsed_cards), "status": "ok"})
-                for score, index, card in ranked[:top_results]:
-                    result_row = {
+                pending_price_bands = list(price_bands)
+                while pending_price_bands:
+                    price_band = pending_price_bands.pop(0)
+                    if stop_collection:
+                        break
+                    price_band_label = price_band.get("label") or "all_prices"
+                    run_key = search_run_id(target_listing_id, checkin, nights, price_band_label)
+                    url = search_url(listing, checkin, nights, price_band=price_band)
+                    filters_applied = [
+                        f"query={target_query(listing)}",
+                        "room_types[]=Entire home/apt",
+                        f"min_bedrooms={listing.get('bedrooms')}",
+                    ]
+                    if price_band.get("price_min") is not None:
+                        filters_applied.append(f"price_min={price_band['price_min']}")
+                    if price_band.get("price_max") is not None:
+                        filters_applied.append(f"price_max={price_band['price_max']}")
+                    context_validation = _public_scan_planner.validate_public_search_context(
+                        destination=destination_from_listing(listing),
+                        checkin=checkin,
+                        checkout=checkout_date(checkin, nights),
+                        nights=nights,
+                        adults=min(max(int(listing.get("max_guests") or 2), 1), 8),
+                        currency="AUD",
+                        filters=filters_applied,
+                        price_band=price_band,
+                        url=url,
+                    )
+                    context = {
                         "search_run_id": run_key,
                         "target_listing_id": target_listing_id,
-                        "result_position": index,
-                        "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
-                        "listing_url": card["listing_url"],
-                        "listing_id_if_extractable": card["listing_id_if_extractable"],
-                        "visible_title_short": card.get("visible_title_short"),
-                        "visible_location_label": card.get("visible_location_label"),
-                        "visible_rating": card.get("visible_rating"),
-                        "visible_review_count": card.get("visible_review_count"),
-                        "visible_badge": card.get("visible_badge"),
-                        "top_home_highlight_visible": card.get("top_home_highlight_visible"),
-                        "top_percent_label": None,
-                        "visible_price_total": card.get("visible_price_total"),
-                        "visible_price_per_night": card.get("visible_price_per_night"),
-                        "fees_included_flag": None,
-                        "hero_photo_subject_tag": None,
-                        "available_flag": bool(card.get("visible_price_total")),
-                        "instant_book_visible_flag": None,
-                        "obvious_differentiator_tags": [],
-                        "competitor_score": score,
-                        "raw_text": card.get("raw_text"),
-                    }
-                    search_results.append(result_row)
-                    price_matrix.append({
-                        "matrix_id": f"{run_key}-{card['listing_id_if_extractable']}",
-                        "comp_listing_id": card["listing_id_if_extractable"],
-                        "target_listing_id": target_listing_id,
-                        "search_run_id": run_key,
+                        "observed_at": observed_at,
+                        "source_family": "public_market",
+                        "surface_class": "public_market",
+                        "auth_context": "logged_out_public_guest_visible",
+                        "observer_location_country": "AU",
+                        "device_type": "desktop",
+                        "logged_in_flag": False,
+                        "currency": "AUD",
+                        "destination": destination_from_listing(listing),
+                        "map_area_bounds_description": None,
                         "check_in_date": checkin,
                         "check_out_date": checkout_date(checkin, nights),
                         "nights": nights,
-                        "guest_count": context["guest_count_adults"],
-                        "available_flag": bool(card.get("visible_price_total")),
-                        "visible_total_guest_price": card.get("visible_price_total"),
-                        "visible_nightly_component": card.get("visible_price_per_night"),
-                        "visible_fees_or_taxes_component": None,
-                        "minimum_stay_observed": None,
-                        "cancellation_policy_visible": None,
-                        "price_observation_confidence": "search_card_total_price" if card.get("visible_price_total") else "missing_price",
-                    })
-                for comp_rank, (score, index, card) in enumerate(ranked[:top_comps_per_context], start=1):
-                    target_comp_links.append({
-                        "target_listing_id": target_listing_id,
-                        "comp_listing_id": card["listing_id_if_extractable"],
-                        "search_run_id": run_key,
-                        "check_in_date": checkin,
-                        "nights": nights,
-                        "comp_rank_for_target": comp_rank,
-                        "search_result_position": index,
-                        "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
-                        "competitor_score": score,
-                        "reason_codes": ["same_search_context", "similar_capacity_filter", "logged_out_guest_visible"],
-                    })
-                    comp_snapshot_queue.setdefault(card["listing_url"], {
-                        "comp_listing_id": card["listing_id_if_extractable"],
-                        "listing_url": card["listing_url"],
-                        "checkin": checkin,
-                        "nights": nights,
-                        "adults": context["guest_count_adults"],
-                    })
+                        "price_band_label": price_band_label,
+                        "price_min": price_band.get("price_min"),
+                        "price_max": price_band.get("price_max"),
+                        "partition_key": _public_scan_planner.partition_key(target_listing_id, checkin, nights, price_band),
+                        "partition_depth": int(price_band.get("partition_depth") or 0),
+                        "parent_price_band_label": price_band.get("parent_price_band_label"),
+                        "guest_count_adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
+                        "guest_count_children": 0,
+                        "guest_count_pets": 0,
+                        "filters_applied": filters_applied,
+                        "search_context_validation": context_validation,
+                        "source_url": url,
+                        "results_limit_requested": top_results,
+                        "max_search_scrolls_requested": max_search_scrolls,
+                    }
+                    print(json.dumps({"phase": "search", "search_run_id": run_key, "url": url}), flush=True)
+                    navigate(url)
+                    wait_for_load()
+                    wait(pause)
+                    status = page_content_status(text_limit=20000, html_limit=4000)
+                    record_search_surface_capabilities(
+                        surface_capabilities,
+                        _surfaces.page_api_resource_urls(js),
+                        url,
+                        run_key,
+                        observed_at,
+                    )
+                    failure_kind = page_failure(status)
+                    if failure_kind:
+                        failures.append({**context, "error": failure_kind, "title": status.get("title"), "text_sample": (status.get("text") or "")[:500]})
+                        search_runs.append({**context, "results_count_visible": 0, "status": "failed", "failure_kind": failure_kind})
+                        if failure_kind in {"http_429_or_too_many_requests", "http_503_or_airbnb_error"}:
+                            stop_collection = True
+                        continue
+                    cards, card_collection = collect_search_cards_from_page(top_results, max_search_scrolls, pause)
+                    with raw_search_path.open("a") as handle:
+                        handle.write(json.dumps({**context, **card_collection, "cards": cards}, ensure_ascii=False) + "\n")
+                    parsed_cards = []
+                    for card in cards:
+                        room_url = clean_room_url(card.get("href"))
+                        room_id = room_id_from_url(room_url)
+                        if not room_url or room_id in target_ids:
+                            continue
+                        parsed = parse_card_text(card.get("text") or "", card.get("photo_alt_texts"))
+                        if not parsed.get("visible_price_total") and not parsed.get("visible_title_short"):
+                            continue
+                        parsed_cards.append({
+                            **parsed,
+                            "listing_url": room_url,
+                            "listing_id_if_extractable": room_id,
+                            "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
+                        })
+                    ranked = []
+                    for index, card in enumerate(parsed_cards[:top_results], start=1):
+                        score = score_comp(listing, card, index)
+                        ranked.append((score, index, card))
+                    ranked.sort(key=lambda item: item[0], reverse=True)
+                    search_run_row = {
+                        **context,
+                        **card_collection,
+                        "results_count_visible": len(parsed_cards),
+                        "status": "ok",
+                    }
+                    if auto_price_partition and _public_scan_planner.should_partition_price_band(
+                        len(parsed_cards),
+                        partition_threshold,
+                        price_band,
+                        max_partition_depth,
+                    ):
+                        child_bands = _public_scan_planner.split_price_band(price_band)
+                        pending_price_bands.extend(child_bands)
+                        search_run_row["partition_triggered"] = True
+                        search_run_row["partition_child_labels"] = [band["label"] for band in child_bands]
+                    else:
+                        search_run_row["partition_triggered"] = False
+                        search_run_row["partition_child_labels"] = []
+                    search_runs.append(search_run_row)
+                    for score, index, card in ranked[:top_results]:
+                        result_row = {
+                            "search_run_id": run_key,
+                            "target_listing_id": target_listing_id,
+                            "result_position": index,
+                            "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
+                            "listing_url": card["listing_url"],
+                            "listing_id_if_extractable": card["listing_id_if_extractable"],
+                            "source_family": "public_market",
+                            "surface_class": "public_market",
+                            "auth_context": "logged_out_public_guest_visible",
+                            "partition_key": context["partition_key"],
+                            "price_band_label": price_band_label,
+                            "visible_title_short": card.get("visible_title_short"),
+                            "visible_location_label": card.get("visible_location_label"),
+                            "visible_rating": card.get("visible_rating"),
+                            "visible_review_count": card.get("visible_review_count"),
+                            "visible_badge": card.get("visible_badge"),
+                            "top_home_highlight_visible": card.get("top_home_highlight_visible"),
+                            "top_percent_label": None,
+                            "visible_price_total": card.get("visible_price_total"),
+                            "visible_price_per_night": card.get("visible_price_per_night"),
+                            "fees_included_flag": None,
+                            "hero_photo_subject_tag": card.get("hero_photo_subject_tag"),
+                            "available_flag": bool(card.get("visible_price_total")),
+                            "instant_book_visible_flag": None,
+                            "first_five_photo_subjects": card.get("first_five_photo_subjects"),
+                            "obvious_differentiator_tags": card.get("obvious_differentiator_tags") or [],
+                            "competitor_score": score,
+                            "raw_text": card.get("raw_text"),
+                        }
+                        search_results.append(result_row)
+                        price_matrix.append({
+                            "matrix_id": f"{run_key}-{card['listing_id_if_extractable']}",
+                            "comp_listing_id": card["listing_id_if_extractable"],
+                            "target_listing_id": target_listing_id,
+                            "search_run_id": run_key,
+                            "source_family": "public_market",
+                            "surface_class": "public_market",
+                            "auth_context": "logged_out_public_guest_visible",
+                            "partition_key": context["partition_key"],
+                            "check_in_date": checkin,
+                            "check_out_date": checkout_date(checkin, nights),
+                            "nights": nights,
+                            "price_band_label": price_band_label,
+                            "price_min": price_band.get("price_min"),
+                            "price_max": price_band.get("price_max"),
+                            "guest_count": context["guest_count_adults"],
+                            "available_flag": bool(card.get("visible_price_total")),
+                            "visible_total_guest_price": card.get("visible_price_total"),
+                            "visible_nightly_component": card.get("visible_price_per_night"),
+                            "visible_fees_or_taxes_component": None,
+                            "minimum_stay_observed": None,
+                            "cancellation_policy_visible": None,
+                            "price_observation_confidence": "search_card_total_price" if card.get("visible_price_total") else "missing_price",
+                        })
+                    for comp_rank, (score, index, card) in enumerate(ranked[:top_comps_per_context], start=1):
+                        target_comp_links.append({
+                            "target_listing_id": target_listing_id,
+                            "comp_listing_id": card["listing_id_if_extractable"],
+                            "search_run_id": run_key,
+                            "source_family": "public_market",
+                            "surface_class": "public_market",
+                            "auth_context": "logged_out_public_guest_visible",
+                            "partition_key": context["partition_key"],
+                            "check_in_date": checkin,
+                            "nights": nights,
+                            "price_band_label": price_band_label,
+                            "comp_rank_for_target": comp_rank,
+                            "search_result_position": index,
+                            "page_number_or_scroll_depth": card.get("page_number_or_scroll_depth"),
+                            "competitor_score": score,
+                            "reason_codes": ["same_search_context", "similar_capacity_filter", "logged_out_guest_visible"],
+                        })
+                        comp_snapshot_queue.setdefault(card["listing_url"], {
+                            "comp_listing_id": card["listing_id_if_extractable"],
+                            "listing_url": card["listing_url"],
+                            "checkin": checkin,
+                            "nights": nights,
+                            "adults": context["guest_count_adults"],
+                        })
 
     comp_listing_snapshots = []
     for item in list(comp_snapshot_queue.values())[:max_listing_snapshots]:
@@ -692,12 +913,16 @@ def main():
             if failure_kind in {"http_429_or_too_many_requests", "http_503_or_airbnb_error"}:
                 break
             continue
-        parsed = parse_listing_text(status.get("text") or "")
+        photo_labels = extract_listing_photo_labels_from_page()
+        parsed = parse_listing_text(status.get("text") or "", photo_labels)
         with raw_listing_path.open("a") as handle:
-            handle.write(json.dumps({**item, "observed_at": utc_now(), "text": status.get("text")}, ensure_ascii=False) + "\n")
+            handle.write(json.dumps({**item, "observed_at": utc_now(), "text": status.get("text"), "photo_labels": photo_labels}, ensure_ascii=False) + "\n")
         comp_listing_snapshots.append({
             "comp_listing_id": item["comp_listing_id"],
             "observed_at": utc_now(),
+            "source_family": "public_market",
+            "surface_class": "public_market",
+            "auth_context": "logged_out_public_guest_visible",
             "listing_url": item["listing_url"],
             "market": None,
             "property_type": parsed.get("property_type"),
@@ -736,29 +961,132 @@ def main():
             "house_rules_summary_flags": [],
             "cancellation_policy_visible": None,
             "photo_count": parsed.get("photo_count"),
-            "hero_photo_subject": None,
+            "hero_photo_subject": parsed.get("hero_photo_subject"),
+            "first_five_photo_subjects": parsed.get("first_five_photo_subjects"),
+            "bedroom_proof_flag": parsed.get("bedroom_proof_flag"),
+            "bathroom_proof_flag": parsed.get("bathroom_proof_flag"),
+            "kitchen_proof_flag": parsed.get("kitchen_proof_flag"),
+            "living_area_proof_flag": parsed.get("living_area_proof_flag"),
+            "workspace_proof_flag": parsed.get("workspace_proof_flag"),
+            "parking_proof_flag": parsed.get("parking_proof_flag"),
+            "pool_or_spa_proof_flag": parsed.get("pool_or_spa_proof_flag"),
+            "view_proof_flag": parsed.get("view_proof_flag"),
+            "family_proof_flag": parsed.get("family_proof_flag"),
+            "pet_proof_flag": parsed.get("pet_proof_flag"),
+            "self_checkin_proof_flag": parsed.get("self_checkin_proof_flag"),
+            "amenity_claims_visible": parsed.get("amenity_claims_visible"),
+            "amenity_claims_proven_in_photos": parsed.get("amenity_claims_proven_in_photos"),
+            "missing_photo_proof": parsed.get("missing_photo_proof"),
+            "design_gap_flags": parsed.get("design_gap_flags"),
+            "photo_product_score": parsed.get("photo_product_score"),
+            "photo_product_evidence_source": parsed.get("photo_product_evidence_source"),
             "review_theme_positive_tags": [],
             "review_theme_negative_tags": [],
             "raw_text": parsed.get("raw_text"),
         })
 
+    prior_counts = _integrity.latest_prior_count(
+        OUTPUT_PATH,
+        count_keys=("search_result_count",),
+        current_run_id=run_id,
+    )
+    last_good_guard = _integrity.last_good_guard(
+        subject="public_comp_search_results",
+        current_count=len(search_results),
+        prior_positive_count=prior_counts["prior_positive_count"],
+        allow_empty=os.environ.get("AIRBNB_COMP_ALLOW_EMPTY") == "1",
+    )
+    deduped_comp_listing_ids = _public_scan_planner.dedupe_listing_ids(search_results)
+    partition_manifest = _public_scan_planner.build_partition_manifest(
+        search_runs,
+        search_results,
+        trigger_threshold=partition_threshold,
+        max_depth=max_partition_depth,
+    )
+    warehouse_exports = _integrity.warehouse_manifest([
+        {
+            "table": "airbnb_public_search_run",
+            "path": f"{OUTPUT_PATH / (run_id + '-search-runs.csv')}",
+            "row_count": len(search_runs),
+            "grain": "search_run_id",
+            "source_family": "public_market",
+            "surface_class": "public_market",
+            "auth_context": "logged_out_public_guest_visible",
+        },
+        {
+            "table": "airbnb_public_search_result_snapshot",
+            "path": f"{OUTPUT_PATH / (run_id + '-search-results.csv')}",
+            "row_count": len(search_results),
+            "grain": "search_run_id + result_position",
+            "source_family": "public_market",
+            "surface_class": "public_market",
+            "auth_context": "logged_out_public_guest_visible",
+        },
+        {
+            "table": "airbnb_public_price_availability_matrix",
+            "path": f"{OUTPUT_PATH / (run_id + '-price-matrix.csv')}",
+            "row_count": len(price_matrix),
+            "grain": "target listing + comp listing + date + stay length + partition",
+            "source_family": "public_market",
+            "surface_class": "public_market",
+            "auth_context": "logged_out_public_guest_visible",
+        },
+        {
+            "table": "airbnb_public_comp_listing_snapshot",
+            "path": f"{OUTPUT_PATH / (run_id + '-comp-listings.csv')}",
+            "row_count": len(comp_listing_snapshots),
+            "grain": "comp_listing_id + observed_at",
+            "source_family": "public_market",
+            "surface_class": "public_market",
+            "auth_context": "logged_out_public_guest_visible",
+        },
+    ])
     output = {
         "run_id": run_id,
         "observed_at": observed_at,
         "auth_context": "logged_out_public_guest_visible",
+        "source_family": "public_market",
+        "surface_class": "public_market",
+        "collection_status": _integrity.collection_status(
+            last_good_guard_record=last_good_guard,
+            failures_count=len(failures),
+            complete=not stop_collection,
+        ),
         "source": {
             "listing_scope": str(listing_file),
             "backend": "headful_chrome_logged_out",
             "collection_strategy": "Airbnb public search cards by target listing/date/stay length, then deduplicated public listing snapshots",
+            "partition_strategy": "optional logged-out price bands via AIRBNB_COMP_PRICE_BANDS",
             "granularity_strategy": "date-specific search contexts; rerun over time to build time series",
             "logged_out_guard": logged_out_guard,
             "max_search_scrolls": max_search_scrolls,
+            "validation": validation,
+            "price_bands": price_bands,
+            "auto_price_partition": {
+                "enabled": auto_price_partition,
+                "trigger_visible_results": partition_threshold,
+                "max_depth": max_partition_depth,
+            },
             "raw_search_path": str(raw_search_path),
             "raw_listing_path": str(raw_listing_path),
+            "surface_capabilities": surface_capabilities,
         },
+        "last_good_guard": last_good_guard,
+        "warehouse_exports": warehouse_exports,
+        "partition_manifest": partition_manifest,
         "target_listing_count": len(listings),
+        "listing_status_scope": listing_scope["label"],
+        "total_source_listings": len(all_listings),
+        "total_scope_listings": total_scope_listings,
+        "listing_scope_complete": len(listings) == total_scope_listings,
         "checkin_dates": dates,
         "nights_values": nights_values,
+        "price_bands": price_bands,
+        "public_input_validation": validation,
+        "auto_price_partition_enabled": auto_price_partition,
+        "partitioned_search_run_count": len([row for row in search_runs if row.get("partition_triggered")]),
+        "deduped_comp_listing_count": len(deduped_comp_listing_ids),
+        "deduped_comp_listing_ids": deduped_comp_listing_ids,
         "top_results": top_results,
         "max_search_scrolls": max_search_scrolls,
         "search_run_count": len(search_runs),
@@ -782,31 +1110,61 @@ def main():
     target_comps_csv = OUTPUT_PATH / f"{run_id}-target-comps.csv"
     comp_snapshots_csv = OUTPUT_PATH / f"{run_id}-comp-listings.csv"
     receipt_path = SESSION_PATH / f"{run_id}-receipt.json"
-    json_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
+    output = _integrity.stamp_collection_contract(
+        output,
+        source_family="public_market",
+        surface_class="public_market",
+        auth_context="logged_out_public_guest_visible",
+        collection_status=output["collection_status"],
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+        partition_manifest=partition_manifest,
+    )
+    _integrity.write_collection_json(json_path, output)
     write_csv(search_runs_csv, search_runs)
     write_csv(search_results_csv, search_results)
     write_csv(price_matrix_csv, price_matrix)
     write_csv(target_comps_csv, target_comp_links)
     write_csv(comp_snapshots_csv, comp_listing_snapshots)
 
-    expected_search_runs = len(listings) * len(dates) * len(nights_values)
+    expected_search_runs = len(listings) * len(dates) * len(nights_values) * len(price_bands)
     receipt = {
         "run_id": run_id,
         "observed_at": observed_at,
         "logged_out_guard": logged_out_guard,
+        "source_family": output["source_family"],
+        "surface_class": output["surface_class"],
+        "auth_context": output["auth_context"],
+        "collection_status": output["collection_status"],
+        "last_good_guard": last_good_guard,
+        "warehouse_exports": warehouse_exports,
+        "partition_manifest": partition_manifest,
         "target_listing_count": len(listings),
+        "listing_status_scope": listing_scope["label"],
+        "total_source_listings": len(all_listings),
+        "total_scope_listings": total_scope_listings,
+        "listing_scope_complete": len(listings) == total_scope_listings,
         "checkin_dates": dates,
         "nights_values": nights_values,
+        "price_bands": price_bands,
+        "public_input_validation": validation,
+        "auto_price_partition": {
+            "enabled": auto_price_partition,
+            "trigger_visible_results": partition_threshold,
+            "max_depth": max_partition_depth,
+        },
         "top_results": top_results,
         "max_search_scrolls": max_search_scrolls,
         "expected_search_runs": expected_search_runs,
         "search_run_count": len(search_runs),
+        "partitioned_search_run_count": len([row for row in search_runs if row.get("partition_triggered")]),
+        "deduped_comp_listing_count": len(deduped_comp_listing_ids),
         "search_result_count": len(search_results),
         "price_matrix_count": len(price_matrix),
         "target_comp_link_count": len(target_comp_links),
         "comp_listing_snapshot_count": len(comp_listing_snapshots),
         "failures_count": len(failures),
-        "all_search_contexts_attempted": len(search_runs) == expected_search_runs,
+        "all_search_contexts_attempted": len(search_runs) >= expected_search_runs if auto_price_partition else len(search_runs) == expected_search_runs,
         "all_search_contexts_have_cards": bool(search_runs) and all(row.get("results_count_visible", 0) > 0 for row in search_runs),
         "all_targets_have_comp_links": all(any(link["target_listing_id"] == str(row["listing_id"]) for link in target_comp_links) for row in listings),
         "json_path": str(json_path),
@@ -815,9 +1173,20 @@ def main():
         "price_matrix_csv": str(price_matrix_csv),
         "target_comps_csv": str(target_comps_csv),
         "comp_snapshots_csv": str(comp_snapshots_csv),
+        "surface_capabilities": surface_capabilities,
         "failure_sample": failures[:10],
     }
-    receipt_path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False))
+    receipt = _integrity.stamp_collection_contract(
+        receipt,
+        source_family="public_market",
+        surface_class="public_market",
+        auth_context="logged_out_public_guest_visible",
+        collection_status=output["collection_status"],
+        last_good_guard_record=last_good_guard,
+        warehouse_exports=warehouse_exports,
+        partition_manifest=partition_manifest,
+    )
+    _integrity.write_receipt_json(receipt_path, receipt)
     print(json.dumps(receipt, indent=2, ensure_ascii=False), flush=True)
 
 

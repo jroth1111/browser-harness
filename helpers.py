@@ -1,5 +1,6 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
 import base64, json, os, socket, time, urllib.request
+from importlib.resources import files
 from pathlib import Path
 from urllib.parse import urlparse
 import login_session
@@ -22,6 +23,16 @@ _load_env()
 NAME = os.environ.get("BH_NAME", "default")
 SOCK = f"/tmp/bh-{NAME}.sock"
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
+
+
+def _asset_dir(local_name, package_name):
+    local = Path(__file__).parent / local_name
+    if local.is_dir():
+        return local
+    try:
+        return Path(str(files(package_name)))
+    except Exception:
+        return local
 
 
 def _send(req):
@@ -58,7 +69,7 @@ def goto_url(url):
     cdp("Page.enable")
     drain_events()
     r = cdp("Page.navigate", url=url)
-    d = (Path(__file__).parent / "domain-skills" / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
+    d = (_asset_dir("domain-skills", "browser_harness_domain_skills") / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
     return {**r, "domain_skills": sorted(p.name for p in d.rglob("*.md"))[:10]} if d.is_dir() else r
 
 def page_info():

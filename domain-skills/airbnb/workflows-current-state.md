@@ -6,6 +6,36 @@ closed-loop revenue system. They capture state; they do not apply price changes.
 
 For public guest-visible data, stay logged out by default. For private host-only
 data, use the authenticated host flow in `session-continuity.md`.
+For Airbnb public search, default to `Entire home`; remove that filter only when
+the task explicitly studies private-room or shared-room competition.
+
+## Ownership
+
+- Use this when: the user asks for current market, competitor, own-public, or
+  private listing state before a decision.
+- Owns: sensing workflow order, state-run scope, least-privileged source choice,
+  source acceptance gates, listing-date derived-state rules, and cadence.
+- Does not own: public extraction mechanics, host-private source details,
+  durable row contracts, final recommendation tracking, or market underwriting.
+- Next hop: `public-market.md` or `host-sources.md` for collection details,
+  `scripts/README.md` for runnable collectors, schema files for row contracts,
+  and `decisioning.md` if a decision becomes an action.
+
+## Contents
+
+| Workflow | Goal | Auth | Executable |
+|---|---|---|---|
+| [Workflow 0](#workflow-0---define-the-state-run) | Define the state run (scope, dates, guests, backend) | n/a | none |
+| [Workflow 1](#workflow-1---market-demand-state) | Market demand state (events, holidays, weather, regulation) | public/external | none |
+| [Workflow 2](#workflow-2---public-competitor-market-state) | Public competitor market state | logged out | `scripts/collect_competitors.py` |
+| [Workflow 3](#workflow-3---competitor-listing-state) | Competitor listing state (per comp page) | logged out | none (uses comp output from Workflow 2) |
+| [Workflow 4](#workflow-4---own-listing-guest-visible-state) | Own listing guest-visible state | logged out | `scripts/collect_own_public.py` |
+| [Workflow 5](#workflow-5---own-listing-private-host-state) | Own listing private host state (calendar, pricing, Insights, reviews) | logged in | `scripts/collect_listings.py`, `scripts/sync_insights_year_view.py`, `scripts/collect_host_reviews.py` |
+| [Workflow 6](#workflow-6---build-listing-date-state) | Combine observations into listing-date state rows | derived | none |
+| [Workflow 7](#workflow-7---cadence) | Refresh cadence (event/daily/weekly/monthly/post-stay loops) | n/a | none |
+
+For role/prerequisites/refusal rules per script, read
+`scripts/README.md`.
 
 ## Operating rule
 
@@ -23,14 +53,22 @@ Use the least-privileged source that answers the question.
 Do not mix logged-out guest-market observations with logged-in personalized
 observations in the same comp set.
 
-General backend parity rules live in `interaction-skills/backend-capability.md`.
+General backend parity rules live in `../../interaction-skills/backend-capability.md`.
 For Airbnb, apply those rules to Airbnb-specific search contexts, listing URLs,
 host pages, and required fields below.
 
 ## Workflow 0 - Define The State Run
 
+Executable: none — this workflow is metadata only.
+
 Create a state run before collecting data. This keeps every observation
 comparable.
+
+If a prior host listing collection exists, inspect the latest complete
+`airbnb-live-listings-*.json` under `.private-data/listing-collections/` before
+choosing public search targets. Use the active listing addresses, public URLs,
+bedroom/bathroom/bed/guest counts, and building clusters to define the public
+search matrix.
 
 Required inputs:
 
@@ -82,7 +120,16 @@ Acceptance rules:
 
 ## Workflow 1 - Market Demand State
 
+Executable: none — sourced from external public calendars and manual notes.
+
 Goal: explain demand pressure before looking only at competitor prices.
+
+For market selection, dealflow, acquisition, arbitrage, co-hosting, or
+property-validation work, do not stop at demand context. After collecting the
+current-state primitives in this file, use `market-research-playbook.md` to
+derive absorption, stay-length, capacity, strict comp grading, counterexample
+matrices, slow-season survival, channel, midterm, underwriting, and
+pursue/watch/reject outputs.
 
 Sources:
 
@@ -136,6 +183,10 @@ source URL, observed timestamp, and confidence for each extracted flag.
 
 ## Workflow 2 - Public Competitor Market State
 
+Executable: `scripts/collect_competitors.py` (logged-out fresh profile).
+Refuses to run if owner cookies are present or the listing inventory is
+`partial_run: true`.
+
 Goal: find what guest-visible substitutes are available, bookable, and priced at
 right now.
 
@@ -150,7 +201,7 @@ Auth/backend:
   Airbnb authenticated-session cookies are present, stop and relaunch a fresh
   logged-out profile before collecting multi-page search rank.
 - Require the general backend-invariant output rule from
-  `interaction-skills/backend-capability.md`: a Lightpanda run and a headful
+  `../../interaction-skills/backend-capability.md`: a Lightpanda run and a headful
   Chrome run for the same Airbnb search context should normalize to matching
   search-result records. If they do not, keep the headful data for host
   intelligence and store the Lightpanda result only as a capability receipt.
@@ -166,6 +217,8 @@ For each market run, sample the same search context across:
 - bedrooms or other filters
 - flexible versus exact dates when relevant
 - desktop and mobile only when device comparison matters
+- `Entire home` as the default room type unless the task explicitly requires a
+  different room type
 
 Capture from each search:
 
@@ -243,9 +296,20 @@ Competitor inclusion rules:
 - Similar capacity, bedrooms, beds, bathrooms, and guest segment.
 - Same date/stay/guest search context.
 - Same currency and logged-in state.
+- Default `Entire home` room type unless the task explicitly studies
+  private-room or shared-room substitutes.
 - Exclude irrelevant suburbs unless the host explicitly wants broader market
   substitution.
 - Keep outliers, but tag them instead of silently deleting them.
+- Grade each comp before using it for market research: `A` comps match
+  boundary, season, stay length, room type, capacity, and core amenities; `B`
+  comps have one named material difference; `C` comps are inspiration only;
+  `reject` comps are excluded from underwriting.
+- Do not let a beautiful or high-revenue comp support a market decision when
+  the host cannot reproduce the feature that makes it win.
+- When a market thesis depends on a feature such as parking, view, pool, design,
+  capacity, or exact location, collect counterexamples with and without that
+  feature before making a pursue/watch/reject decision.
 
 Outputs:
 
@@ -269,6 +333,10 @@ Executable workflow:
 - Store raw search/listing checkpoints and receipts under ignored private paths.
 
 ## Workflow 3 - Competitor Listing State
+
+Executable: none direct — comp listing snapshots are produced by
+`scripts/collect_competitors.py` (Workflow 2). Open ad-hoc comp room pages by
+hand only when the host curates a comp set the collector did not pick up.
 
 Goal: understand why competitors can charge more, rank better, or convert better.
 
@@ -350,6 +418,9 @@ Outputs:
 - quality-adjusted comp set
 
 ## Workflow 4 - Own Listing Guest-Visible State
+
+Executable: `scripts/collect_own_public.py` (logged-out fresh profile). Same
+owner-cookie and partial-inventory refusals as Workflow 2.
 
 Goal: see the host's listing exactly as a guest sees it before using private
 host data.
@@ -451,6 +522,19 @@ Executable workflow:
   unavailable or invisible globally.
 
 ## Workflow 5 - Own Listing Private Host State
+
+Executable, in order:
+
+1. `scripts/collect_listings.py` — refresh the live private listing inventory.
+   Every other private and public collector consumes its newest complete
+   `airbnb-live-listings-*.json`.
+2. `scripts/sync_insights_year_view.py` — canonical Insights workflow
+   (preflight cookies → optional granularity probe → `collect_insights.py` in
+   patient mode → family extracts → HTML render → year-view receipt).
+3. `scripts/collect_host_reviews.py` — authenticated host review rows.
+
+Calendar/iCal, pricing settings, and rule-sets are still manual exports/UI
+work — no executable collector yet.
 
 Goal: capture the host-only state that explains performance, economics, and
 bookability.
@@ -673,6 +757,8 @@ Outputs:
 
 ## Workflow 6 - Build Listing-Date State
 
+Executable: none — derived from the artifacts produced by Workflows 1–5.
+
 Goal: combine all observations into one date-level state object for control and
 diagnosis.
 
@@ -754,6 +840,8 @@ own public listing state and host calendar/iCal state were missing. Preserve
 that distinction: comp evidence alone is not enough for host pricing action.
 
 ## Workflow 7 - Cadence
+
+Executable: schedule the relevant Workflow 1–5 scripts at the cadences below.
 
 Event-driven loop:
 

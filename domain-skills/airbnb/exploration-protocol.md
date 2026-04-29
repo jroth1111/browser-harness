@@ -4,7 +4,7 @@ Use this before building an Airbnb host report or adding new schema. Airbnb data
 should be explored as primitives first, then composed into host decisions.
 
 General source-exploration rules live in
-`interaction-skills/data-source-exploration.md`. This file keeps the
+`../../interaction-skills/data-source-exploration.md`. This file keeps the
 Airbnb-specific source families, examples, and acceptance notes.
 
 For market, competitor, or own-listing current-state capture, use
@@ -134,7 +134,7 @@ For each surface, record:
 ### 4. Network/API observation pass
 
 Only after UI/export behavior is understood, inspect network requests for
-structured payloads. Use `interaction-skills/network-requests.md` if needed.
+structured payloads. Use `../../interaction-skills/network-requests.md` if needed.
 
 Record request shape, endpoint path, response field names, auth requirements, and
 whether the data is more reliable than UI text. Do not commit tokens, cookies,
@@ -158,7 +158,7 @@ Use `data-inventory.md` as the canonical registry.
 ## Airbnb-specific Lightpanda acceptance criteria
 
 General backend-invariant extraction rules live in
-`interaction-skills/backend-capability.md`. This section only adds
+`../../interaction-skills/backend-capability.md`. This section only adds
 Airbnb-specific fields, URL families, and empirical findings.
 
 Lightpanda is acceptable for a source only when:
@@ -199,7 +199,7 @@ for a backend capability comparison rather than host intelligence.
 
 ## Airbnb private-session continuity
 
-Before private exploration, read both `interaction-skills/session-continuity.md`
+Before private exploration, read both `../../interaction-skills/session-continuity.md`
 and `domain-skills/airbnb/session-continuity.md`. Store only session metadata and
 capability receipts in the local ignored session store. The normal auth
 continuity mechanism is the user's persistent browser profile, not checked-in

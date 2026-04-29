@@ -215,6 +215,24 @@ def test_set_session_does_not_enable_domains_or_evaluate_js():
     assert d.cdp.calls == []
 
 
+def test_browser_scoped_cdp_methods_do_not_use_page_session():
+    d = daemon.Daemon()
+    d.session = "page-session"
+    d.cdp = FakeCDP()
+
+    asyncio.run(d.handle({"method": "Browser.getVersion"}))
+    asyncio.run(d.handle({"method": "Storage.getCookies"}))
+    asyncio.run(d.handle({"method": "Target.getTargets"}))
+    asyncio.run(d.handle({"method": "Runtime.evaluate"}))
+
+    assert d.cdp.calls == [
+        ("Browser.getVersion", {}, None),
+        ("Storage.getCookies", {}, None),
+        ("Target.getTargets", {}, None),
+        ("Runtime.evaluate", {}, "page-session"),
+    ]
+
+
 def test_dns_hostname_rejects_without_remote_allow():
     with patch.dict(os.environ, {"BH_CDP_WS": "ws://my-browser.local:9222/devtools/browser/abc"}, clear=True):
         try:
