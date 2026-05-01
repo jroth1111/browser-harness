@@ -4,16 +4,105 @@ Field-tested against aliexpress.com on 2026-05-02 using Chrome DevTools MCP (CDP
 Tested across 10 GPU/workstation product categories with detail-page verification.
 Browser CDP required. `http_get` returns error pages.
 
-## Complete Workflow
+## Search Strategy
+
+### The core problem
+
+AliExpress search returns 60 items per page. For any product category with
+active gray-market or counterfeit risk:
+- ~70% of results are completely unrelated (noise)
+- Of the remaining ~30%, 60-80% are scams or variant traps
+- Traps exist at **every price point**, not just cheap listings
+
+No single filter solves this. A cascade of progressively tighter filters is
+required, with detail-page verification as the final gate.
+
+### Filter cascade
 
 ```
-1. Search  →  extract JSON, filter by title + price floor
-2. Verify  →  open top N detail pages, check variants for traps
-3. Report  →  only include verified clean listings
+Step 1: Query specificity    — right query reduces noise at the source
+Step 2: Price floor          — one number eliminates noise + most scams
+Step 3: Title keywords       — catches remaining irrelevant results
+Step 4: Detail-page verify   — the only reliable trap detector
 ```
 
-Every product needs Step 2. Across 10 GPU categories, 60-80% of search results
-were scams or variant traps that only the detail page extractor could detect.
+### Step 1: Query specificity (most leverage)
+
+The search query itself is the first and most powerful filter. More specific
+queries dramatically reduce noise and traps.
+
+| Query | Relevant results | Traps |
+|-------|-----------------|-------|
+| "RTX 3090" | 15+ | 6+ variant traps |
+| "RTX 3090 24GB" | 8 | 2 variant traps |
+
+Include distinguishing specs in the query: model number, memory size,
+form factor. Don't rely on post-extraction filtering to compensate for a
+vague query.
+
+**SortType choice:** `price_asc` puts scam listings first (they're always
+cheapest). For finding legitimate sellers, default sort (best match) or
+`total_volume` (most orders) surfaces established sellers higher.
+
+### Step 2: Price floor (eliminates noise + scams)
+
+A single `priceFloor` parameter value removes both noise AND the majority of
+scams. Set it to ~50-60% of known retail/used market price.
+
+| Floor | Effect |
+|-------|--------|
+| 0 (none) | Full 60 items, ~70% noise |
+| AU$50 | Removes stickers, cables, fans — still lots of traps |
+| ~50% of retail | Removes noise AND most scam-priced listings |
+| ~80% of retail | Aggressive — may remove legitimate used/refurbished |
+
+Example: RTX 4090 used market ~AU$2,500. `priceFloor=2000` reduced 60 items
+to 3 — all the AU$625-875 scam listings eliminated in one shot.
+
+### Step 3: Title keywords (catches remaining noise)
+
+After price floor, some irrelevant items remain. The `keywords` param filters
+by title relevance. Use model-identifying terms:
+
+```javascript
+keywords=["rtx", "4090", "gpu", "graphics", "geforce"]
+```
+
+Keep the list short (3-5 terms) and focused on product identity, not
+descriptors.
+
+### Step 4: Detail-page verification (required, not optional)
+
+This is the only reliable trap detector. The JSON extractor cannot detect
+traps because `maxPrice: null` is the norm even for multi-variant listings.
+A RTX A6000 listing at AU$9,202 — well above any price floor — was still a
+variant trap ("4GB-RTX A6000" variant).
+
+Verify the top N cheapest results that survive Steps 1-3. For high-value
+items, verify all of them. The detail page extractor returns `trapRisk`
+and `trapFlags` for automated screening.
+
+### When to stop searching
+
+If Steps 1-3 return 0 results:
+1. Broaden the query (remove spec details)
+2. Lower the price floor
+3. Try alternative query terms
+
+After 3-4 attempts with 0 results, the product likely doesn't exist on
+AliExpress. Data-center GPUs (L40S, A100, H100, RTX 6000 Ada) are in this
+category. Recognize the absence rather than endlessly broadening.
+
+### Complete pipeline
+
+```
+1. Navigate to search URL with specific query + SortType=total_volume
+2. Extract JSON with keywords + priceFloor filters
+3. If 0 results → broaden query, retry (max 3 attempts)
+4. Open top N detail pages, run trap assessment
+5. Discard trapRisk="trap", flag "suspicious"
+6. Report only trapRisk="clean" (or "suspicious" with caveats)
+```
 
 ## Search URLs
 
