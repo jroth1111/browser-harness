@@ -103,7 +103,7 @@ spread = maxPrice / minPrice
 
 | Spread | Meaning | Action |
 |--------|---------|--------|
-| `null` (no maxPrice) | Single variant | Clean listing |
+| `null` (no maxPrice) | Single variant OR multi-variant with similar prices | **Not safe** — visit detail page to confirm |
 | 1.0–1.5 | Discount only (sale vs original) | `minPrice` is the real price |
 | 1.5–3 | Minor variants (different capacities) | Use title + product knowledge |
 | 3–10 | Variant trap likely (accessory vs product) | `maxPrice` is closer to real price |
@@ -275,6 +275,83 @@ The `variants` array reveals what each SKU option actually is:
 | `"Only Cascade Cable"` | Variant trap — cable, not the workstation |
 | `"4GB-RTX A6000"` | Variant trap — 4GB card labeled as RTX A6000 |
 | `"describe 4"` | Obfuscated variant — seller hiding actual product names |
+
+## Fraud Patterns (3 types observed)
+
+### Type 1: Accessory variant trap
+
+Listing has GPU + cheap accessory (cable, fan) as variants. Search shows accessory price.
+JSON: `spread: null` or `spread > 3`. Detail page variants reveal the trap.
+
+| Example | searchPrice | Detail variant | Real price |
+|---------|-------------|----------------|------------|
+| DGX Spark AU$80 | AU$80 | "Only Cascade Cable" | AU$7,200+ |
+| RTX 4090 AU$80 | AU$80 | "describe 4" (obfuscated) | AU$2,000+ |
+
+Detection: visit detail page, check `variantProperties` for accessory keywords
+(cable, fan, heatsink, sticker, cover, gasket).
+
+### Type 2: Multi-variant price gaming
+
+Listing has multiple GPU models (3060/3070/3090) as variants. Search shows cheapest model price.
+JSON: `maxPrice: null` — the JSON doesn't always expose variant-level pricing spread.
+
+| Example | searchPrice | Cheapest variant | Target variant |
+|---------|-------------|------------------|----------------|
+| "RTX 3090 24GB" AU$476 | AU$476 | RTX 3060 12G | RTX 3090 24G = much higher |
+| "RTX A4000 A3000 A5000" AU$434 | AU$434 | A3000 6GB | A5000 24GB = AU$3,639+ |
+
+Detection: check `variants` array on detail page. If it contains multiple GPU models,
+the displayed `salePrice` is the cheapest variant, not the target product.
+
+### Type 3: Outright scam (no variants)
+
+Listing shows a single price with no variants, but the price is 50-80% below market.
+Typically has high order count (200-400). May ship a different product or nothing.
+
+| Example | Listed price | Market price | Orders |
+|---------|-------------|-------------|--------|
+| RTX PRO 6000 Blackwell | AU$2,173 | ~AU$10,000-15,000 | 338 |
+| RTX 4090 "FRESH IN" | AU$625 | ~AU$2,500 used | 338 |
+
+Detection heuristic: `salePrice < knownRetailPrice * 0.5` AND no variants
+on detail page = high scam probability. The "338 orders" pattern appears
+repeatedly across different scam sellers (likely fabricated).
+
+## Relevance Filtering
+
+The JSON extractor returns 60 items per page, but ~70% are unrelated products
+(lighters, stickers, pillowcases, plumbing parts). Post-extraction filtering
+is essential for product searches.
+
+### Title-based filter (recommended)
+
+```javascript
+// After extraction, filter items by title relevance
+const keywords = ["rtx", "4090", "gpu", "graphics", "geforce"];
+const filtered = items.filter(item =>
+  keywords.some(kw => item.title.toLowerCase().includes(kw))
+);
+```
+
+### Price-based filter
+
+Products below AU$50 in GPU searches are almost always accessories, stickers,
+or replacement parts. Filter: `items.filter(i => i.salePrice > 50)`.
+
+### Data-center / Enterprise GPU availability
+
+| Category | Expected results | Notes |
+|----------|-----------------|-------|
+| Consumer GPUs (RTX 30/40/50 series) | 10-30 per search | High scam rate, many listings |
+| Pro GPUs (RTX A5000/A6000) | 5-15 per search | Moderate availability |
+| Data-center GPUs (L40S, A100, H100) | 0-2 per search | Near-zero AliExpress presence |
+| Workstation flagship (RTX 6000 Ada) | **0** | Not available on AliExpress |
+| New-release pro (RTX PRO 6000 Blackwell) | 1-4 | Mostly scams at AU$2K |
+
+For data-center GPUs (L40S, A100, H100, RTX 6000 Ada), AliExpress is not a
+viable sourcing channel. Use eBay, used-equipment resellers, or authorized
+distributors instead.
 
 ## Empty / No-Match Results
 
