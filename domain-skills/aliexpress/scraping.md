@@ -318,6 +318,22 @@ Detection heuristic: `salePrice < knownRetailPrice * 0.5` AND no variants
 on detail page = high scam probability. The "338 orders" pattern appears
 repeatedly across different scam sellers (likely fabricated).
 
+### The "338 orders" red flag
+
+During field testing across 10 product categories, the number **338** appeared
+as the order count on virtually every GPU listing, regardless of seller, price,
+or product. This number is almost certainly fabricated by sellers or a platform
+artifact. **Do not trust order counts on AliExpress GPU listings.**
+
+Verified order counts that differed from 338:
+- L40S 48GB: 193 orders (no variants, plausible price)
+- RTX PRO 6000 Blackwell AU$33K: 249 orders (no variants, plausible price)
+- RTX 3090 AU$2,084: 127 orders (variant "24GB", legitimate)
+
+Rule of thumb: if the listing has 338 orders AND the price is below market,
+it's almost certainly a scam. If the listing has 338 orders but the price is
+at or above market, it may be a legitimate seller with an inflated count.
+
 ## Relevance Filtering
 
 The JSON extractor returns 60 items per page, but ~70% are unrelated products
