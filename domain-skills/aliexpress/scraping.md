@@ -1,29 +1,19 @@
 # AliExpress — Product Search & Price Comparison
 
 Field-tested against aliexpress.com on 2026-05-02 using Chrome DevTools MCP (CDP).
-Extractors tested across 7+ product categories: consumer GPUs, pro GPUs, data-center
-GPUs, workstations, CPUs, keyboards, shoes, and zero-result queries.
+Tested across 10 GPU/workstation product categories with detail-page verification.
+Browser CDP required. `http_get` returns error pages.
 
-## Architecture
-
-AliExpress search pages embed **structured JSON** in `window._dida_config_._init_data_`
-(~357 KB). This JSON contains all product data — prices, titles, images, URLs — as
-clean typed fields. **No DOM scraping or regex needed for search results.**
-
-Detail pages have no equivalent embedded JSON. Use DOM selectors for those.
-
-| Page | Primary method | Data source |
-|------|---------------|-------------|
-| Search | `window._dida_config_._init_data_` | SSR-embedded JSON |
-| Product detail | DOM selectors | CSS partial-match on class names |
-
-## Fastest Path
+## Complete Workflow
 
 ```
-navigate → /search?SearchText={query}&SortType=price_asc → extract JSON via JS → done
+1. Search  →  extract JSON, filter by title + price floor
+2. Verify  →  open top N detail pages, check variants for traps
+3. Report  →  only include verified clean listings
 ```
 
-Browser CDP is required. `http_get` returns error pages. No JSON-LD or `__NEXT_DATA__`.
+Every product needs Step 2. Across 10 GPU categories, 60-80% of search results
+were scams or variant traps that only the detail page extractor could detect.
 
 ## Search URLs
 
@@ -41,14 +31,12 @@ Browser CDP is required. `http_get` returns error pages. No JSON-LD or `__NEXT_D
 | Value | Effect | Note |
 |-------|--------|------|
 | (none) | Best match | Default |
-| `price_asc` | Cheapest roughly first | Not strict ascending; promoted listings may override |
+| `price_asc` | Cheapest roughly first | Promoted listings may override |
 | `total_volume` | Most orders | Confirmed working |
 
-### Result counts
+60 items per page from the embedded JSON.
 
-60 items per page from the embedded JSON (indexed "0" through "59").
-
-## Embedded JSON Data Source (Primary)
+## Step 1: Search Extractor
 
 ### JSON path
 
@@ -56,90 +44,52 @@ Browser CDP is required. `http_get` returns error pages. No JSON-LD or `__NEXT_D
 window._dida_config_._init_data_.data.data.root.fields.mods.itemList.content
 ```
 
-Returns an object with numeric string keys. Each value is a product object with
-fully structured data — no regex, no DOM, no currency parsing.
+Object with numeric string keys ("0" through "59"), each a product with fully
+structured data — no regex, no DOM parsing, no currency guessing.
 
-### Item structure (confirmed fields)
+### Combined extractor with filtering
 
-```
-{
-  "productId":            "1005011964111724",        // string, product ID
-  "title": {
-    "displayTitle":       "FRESH IN Gaming GeForce RTX 4090 24GB..."
-  },
-  "prices": {
-    "salePrice": {
-      "minPrice":         625.99,                     // number (already parsed)
-      "maxPrice":         2849.27,                    // number, highest variant price
-      "formattedPrice":   "AU $625.99",               // string with currency prefix
-      "currencyCode":     "AUD",                      // adapts to user region
-      "cent":             62599                        // price in cents
-    },
-    "originalPrice": {                                // only present when on sale
-      "minPrice":         834.65,
-      "formattedPrice":   "AU $834.65"
-    },
-    "salePrice": {
-      "discount":         "21% off"                   // only present when on sale
-    }
-  },
-  "productType":          "natural",                  // "natural" = organic; other = promoted
-  "image": {
-    "imgUrl":             "//ae-pic-a1.aliexpress-media.com/kf/..."
-  },
-  "productDetailUrl":     "/item/1005011964111724.html?...",  // needs domain prepended
-}
-```
-
-### Variant-trap detection in JSON
-
-The `minPrice` is always the cheapest variant. A GPU listing with an accessory
-variant shows `minPrice` of the accessory, not the GPU. Detect this with the
-**spread ratio**:
-
-```
-spread = maxPrice / minPrice
-```
-
-| Spread | Meaning | Action |
-|--------|---------|--------|
-| `null` (no maxPrice) | Single variant OR multi-variant with similar prices | **Not safe** — visit detail page to confirm |
-| 1.0–1.5 | Discount only (sale vs original) | `minPrice` is the real price |
-| 1.5–3 | Minor variants (different capacities) | Use title + product knowledge |
-| 3–10 | Variant trap likely (accessory vs product) | `maxPrice` is closer to real price |
-| 10+ | Obvious trap (cable vs GPU) | Discard or use `maxPrice` |
-
-### JSON Search Extractor (Field-Tested)
-
-Run via CDP `evaluate_script` after page load. Returns clean structured data
-directly from the embedded JSON — no DOM parsing, no regex, no currency guessing.
+Run via CDP `evaluate_script` after page load. Accepts `keywords` for title
+relevance filtering and `priceFloor` to discard cheap accessories. Returns
+only relevant, adequately-priced items.
 
 ```javascript
-() => {
+(keywords, priceFloor) => {
   const cfg = window._dida_config_?._init_data_;
   if (!cfg) return { error: "_dida_config_._init_data_ not found" };
   const content = cfg.data?.data?.root?.fields?.mods?.itemList?.content;
-  if (!content) return { error: "itemList.content not found" };
+  if (!content) return { error: "itemList.content not found — no results" };
 
+  const kw = keywords || [];
+  const pf = priceFloor || 0;
   const items = [];
-  for (const [idx, item] of Object.entries(content)) {
+
+  for (const item of Object.values(content)) {
     const sale = item.prices?.salePrice || {};
     const orig = item.prices?.originalPrice;
     const low = sale.minPrice ?? null;
     const high = sale.maxPrice ?? null;
     const spread = (low && high && low > 0) ? +(high / low).toFixed(1) : null;
     const img = item.image || {};
+    const title = item.title?.displayTitle || '';
+    const tlc = title.toLowerCase();
+
+    // Price floor: discard cheap accessories
+    if (low !== null && low < pf) continue;
+
+    // Title relevance: at least one keyword must match (if keywords provided)
+    if (kw.length > 0 && !kw.some(k => tlc.includes(k.toLowerCase()))) continue;
 
     items.push({
       productId:       item.productId,
-      title:           item.title?.displayTitle?.substring(0, 150),
-      salePrice:       low,                            // number, cheapest variant
-      maxPrice:        high,                           // number, most expensive variant
-      originalPrice:   orig?.minPrice ?? null,         // number, was-price (null if not on sale)
-      discount:        sale.discount || null,          // string "21% off" or null
-      currency:        sale.currencyCode || null,      // "AUD", "USD", etc.
+      title:           title.substring(0, 150),
+      salePrice:       low,
+      maxPrice:        high,
+      originalPrice:   orig?.minPrice ?? null,
+      discount:        sale.discount || null,
+      currency:        sale.currencyCode || null,
       spread,
-      productType:     item.productType,               // "natural" = organic
+      productType:     item.productType,
       thumbnailUrl:    img.imgUrl ? "https:" + img.imgUrl : null,
       url:             "https://www.aliexpress.com" + (item.productDetailUrl || "").split("?")[0],
     });
@@ -148,82 +98,31 @@ directly from the embedded JSON — no DOM parsing, no regex, no currency guessi
 }
 ```
 
-### Why JSON over DOM
-
-| Aspect | JSON extractor | DOM extractor |
-|--------|---------------|---------------|
-| Price data | Numeric `minPrice: 625.99` | Regex on `AU$` text — fragile |
-| Currency | `currencyCode: "AUD"` — explicit | Hardcoded `AU$` regex — region-dependent |
-| Variant spread | `minPrice` + `maxPrice` — clean ratio | Multiple regex matches — error-prone |
-| Item count | 60 per page (all items) | Variable (12–24), misses items |
-| Free shipping | Not available in JSON — check detail page DOM | `allText.includes('Free shipping')` |
-| Organic vs promoted | `productType: "natural"` | No distinction possible |
-| Discount info | `discount: "21% off"` + `originalPrice` | Regex `-(\d+)%` on text |
-| Maintenance risk | Low — JSON structure is stable | High — CSS classes change on deploy |
-
-## DOM Fallback Search Extractor
-
-Use only if `_dida_config_` is unavailable (page structure changed, A/B test, etc.).
-This extractor parses visible DOM text with regex.
+**Usage examples:**
 
 ```javascript
-() => {
-  const items = [];
-  document.querySelectorAll('a[href*="/item/"]').forEach(link => {
-    const h3 = link.querySelector('h3');
-    if (!h3) return;
-    const title = h3.innerText.trim();
-    const url = link.href.split('?')[0];
-    const idMatch = url.match(/\/item\/(\d+)\.html/);
-    const allText = link.innerText;
-    const prices = [];
-    const rx = /AU\$\s*([\d,]+\.?\d*)/g;
-    let m;
-    while ((m = rx.exec(allText)) !== null) {
-      const before = allText.substring(Math.max(0, m.index - 15), m.index);
-      const after = allText.substring(m.index + m[0].length).trimStart();
-      if (before.match(/[×x]\s*$/) || before.match(/Save\s*$/i) || after.startsWith('off')) continue;
-      prices.push(parseFloat(m[1].replace(/,/g, '')));
-    }
-    prices.sort((a, b) => a - b);
-    const low = prices[0] || null;
-    const high = prices.length > 1 ? prices[prices.length - 1] : null;
-    const spread = (low && high && low > 0) ? Math.round(high / low) : null;
-    items.push({
-      itemId: idMatch?.[1],
-      title: title.substring(0, 150),
-      lowPrice: low,
-      highPrice: high,
-      spread,
-      priceCount: prices.length,
-      freeShipping: allText.includes('Free shipping'),
-      discount: (allText.match(/-(\d+)%/) || [])[1] || null,
-      url
-    });
-  });
-  return items;
-}
+// GPU search with title filter and price floor
+(keywords, priceFloor) => { /* ... */ }
+// Call with: keywords=["rtx","4090","gpu","graphics","geforce"], priceFloor=500
+
+// Broad search, no filtering
+(keywords, priceFloor) => { /* ... */ }
+// Call with: keywords=[], priceFloor=0
 ```
 
-### DOM filter rules
+### When `itemList.content` is missing
 
-The DOM regex extractor must exclude three patterns that contain price-like text:
+The `mods` object will contain `searchTips` instead of `itemList` when the
+search returns zero results. This is distinct from nonsense queries, which
+return recommended products ( itemList present but titles are unrelated).
 
-| Pattern | Example | Why filter |
-|---------|---------|------------|
-| Installments | `6 × AU$130.94` | Not a product price |
-| Coupon amounts | `AU$3 off on AU$23` | Discount, not price |
-| Savings | `Save AU$3.23` | Savings, not price |
+## Step 2: Detail Page Verification (Required)
 
-### Currency note (DOM only)
+No embedded JSON on detail pages. Use DOM selectors. **Always verify before
+trusting a search result** — variant traps and scams are the norm, not the
+exception, for GPU listings.
 
-The `AU$` prefix is hardcoded in the DOM regex. For other regions, adjust to match
-the local currency prefix (e.g., `US$`, `€`, `£`). The JSON extractor has no
-region dependency — `currencyCode` is explicit.
-
-## Product Detail Page Extractor (DOM)
-
-No embedded JSON on detail pages. Use DOM selectors with CSS partial-match.
+### Detail page extractor with trap assessment
 
 ```javascript
 () => {
@@ -240,143 +139,120 @@ No embedded JSON on detail pages. Use DOM selectors with CSS partial-match.
   }
   const wasPrice = extraPrices.length > 0 ? extraPrices[extraPrices.length - 1] : null;
   const saveMatch = extraText.match(/Save\s+AU\$\s*([\d,]+\.?\d*)/);
+
   const skus = Array.from(document.querySelectorAll('[class*="sku-item--box"]'))
     .map(el => el.innerText?.trim()).filter(Boolean);
   const skuProps = Array.from(document.querySelectorAll('[class*="sku-item--title--"]'))
     .map(el => el.innerText?.trim()).filter(Boolean);
   const ordersMatch = document.body.innerText.match(/(\d[\d,]+)\s*(?:orders|sold|bought)/i);
+  const orders = ordersMatch?.[1] || null;
+
+  // Trap assessment
+  const allVariants = skus.join(' ').toLowerCase();
+  const hasAccessory = /cable|fan|heatsink|sticker|cover|gasket|bracket|sled|sled|thermal/.test(allVariants);
+  const hasMultiGpu = (skus.join('\n').match(/\bRTX\s*\d{3,4}/gi) || []).length > 1
+    || (skus.join('\n').match(/\bA\d{4}\b/g) || []).length > 1;
+  const hasObfuscated = /describe|option\s*\d|package\s*\d/i.test(allVariants);
+  const hasFakeSpec = /4gb.*a6000|4gb.*a5000|intel.*high.*def/i.test(allVariants);
+  const is338Orders = orders === '338';
+
+  let trapRisk = 'clean';
+  const flags = [];
+  if (hasAccessory) { trapRisk = 'trap'; flags.push('accessory variant'); }
+  if (hasMultiGpu) { trapRisk = 'trap'; flags.push('multi-GPU variant — price is for cheapest model'); }
+  if (hasObfuscated) { trapRisk = 'suspicious'; flags.push('obfuscated variant name'); }
+  if (hasFakeSpec) { trapRisk = 'trap'; flags.push('fake spec in variant — e.g. "4GB-RTX A6000"'); }
+  if (is338Orders) { flags.push('338 orders — fabricated count'); }
+
   return {
     currentPrice: current,
     wasPrice,
     saveAmount: saveMatch?.[1] || null,
     variants: skus,
     variantProperties: skuProps,
-    orders: ordersMatch?.[1] || null
+    orders,
+    trapRisk,          // "clean" | "suspicious" | "trap"
+    trapFlags: flags,  // array of detected issues
   };
 }
 ```
+
+### `trapRisk` output guide
+
+| Risk | Meaning | Action |
+|------|---------|--------|
+| `clean` | No variant trap detected, no 338 flag | Include in results |
+| `suspicious` | Obfuscated variant names or 338 orders | Investigate further or exclude |
+| `trap` | Accessory variant, multi-GPU, or fake spec | **Discard** |
 
 ### Detail page selectors
 
 | Data | Selector pattern | Notes |
 |------|-----------------|-------|
 | Current price | `[class*="price-default--current--"]` | Always present on listings with a price |
-| Was/original price | `[class*="price-default--priceExtra--"]` | Contains save amount + was price; filter "Save" prefix |
+| Was/original price | `[class*="price-default--priceExtra--"]` | Filter "Save" prefix from matches |
 | Variant options | `[class*="sku-item--box"]` | Reveals what each variant actually is |
 | Variant property names | `[class*="sku-item--title--"]` | e.g., "Color", "Plug Type" |
 
-### Variant detection on detail pages
-
-The `variants` array reveals what each SKU option actually is:
-
-| Variant text | Meaning |
-|-------------|---------|
-| `"GRAPHICS-CARD"` | Single-variant listing (the real product) |
-| `"Only Cascade Cable"` | Variant trap — cable, not the workstation |
-| `"4GB-RTX A6000"` | Variant trap — 4GB card labeled as RTX A6000 |
-| `"describe 4"` | Obfuscated variant — seller hiding actual product names |
-
-## Fraud Patterns (3 types observed)
+## Fraud Patterns
 
 ### Type 1: Accessory variant trap
 
-Listing has GPU + cheap accessory (cable, fan) as variants. Search shows accessory price.
-JSON: `spread: null` or `spread > 3`. Detail page variants reveal the trap.
+Listing has GPU + cheap accessory as variants. Search shows accessory price.
 
 | Example | searchPrice | Detail variant | Real price |
 |---------|-------------|----------------|------------|
 | DGX Spark AU$80 | AU$80 | "Only Cascade Cable" | AU$7,200+ |
 | RTX 4090 AU$80 | AU$80 | "describe 4" (obfuscated) | AU$2,000+ |
 
-Detection: visit detail page, check `variantProperties` for accessory keywords
-(cable, fan, heatsink, sticker, cover, gasket).
-
 ### Type 2: Multi-variant price gaming
 
-Listing has multiple GPU models (3060/3070/3090) as variants. Search shows cheapest model price.
-JSON: `maxPrice: null` — the JSON doesn't always expose variant-level pricing spread.
+Multiple GPU models as variants. Search shows cheapest model price. `maxPrice: null`
+in JSON — variant-level pricing not always exposed.
 
 | Example | searchPrice | Cheapest variant | Target variant |
 |---------|-------------|------------------|----------------|
-| "RTX 3090 24GB" AU$476 | AU$476 | RTX 3060 12G | RTX 3090 24G = much higher |
+| "RTX 3090 24GB" AU$476 | AU$476 | RTX 3060 12G | RTX 3090 24G = AU$2,084+ |
 | "RTX A4000 A3000 A5000" AU$434 | AU$434 | A3000 6GB | A5000 24GB = AU$3,639+ |
-
-Detection: check `variants` array on detail page. If it contains multiple GPU models,
-the displayed `salePrice` is the cheapest variant, not the target product.
 
 ### Type 3: Outright scam (no variants)
 
-Listing shows a single price with no variants, but the price is 50-80% below market.
-Typically has high order count (200-400). May ship a different product or nothing.
+Single price with no variants, 50-80% below market. 338 fabricated orders.
 
-| Example | Listed price | Market price | Orders |
-|---------|-------------|-------------|--------|
-| RTX PRO 6000 Blackwell | AU$2,173 | ~AU$10,000-15,000 | 338 |
-| RTX 4090 "FRESH IN" | AU$625 | ~AU$2,500 used | 338 |
-
-Detection heuristic: `salePrice < knownRetailPrice * 0.5` AND no variants
-on detail page = high scam probability. The "338 orders" pattern appears
-repeatedly across different scam sellers (likely fabricated).
+| Example | Listed price | Market price |
+|---------|-------------|-------------|
+| RTX PRO 6000 Blackwell | AU$2,173 | ~AU$10,000-15,000 |
+| RTX 4090 "FRESH IN" | AU$625 | ~AU$2,500 used |
 
 ### The "338 orders" red flag
 
-During field testing across 10 product categories, the number **338** appeared
-as the order count on virtually every GPU listing, regardless of seller, price,
-or product. This number is almost certainly fabricated by sellers or a platform
-artifact. **Do not trust order counts on AliExpress GPU listings.**
+The number **338** appears on virtually every GPU listing regardless of seller,
+price, or product. Fabricated by sellers or a platform artifact. Verified order
+counts that differed: L40S 48GB = 193, RTX PRO 6000 AU$33K = 249, RTX 3090
+AU$2,084 = 127.
 
-Verified order counts that differed from 338:
-- L40S 48GB: 193 orders (no variants, plausible price)
-- RTX PRO 6000 Blackwell AU$33K: 249 orders (no variants, plausible price)
-- RTX 3090 AU$2,084: 127 orders (variant "24GB", legitimate)
+Rule: 338 orders + below-market price = scam. 338 orders + at-market price =
+possibly legitimate with inflated count.
 
-Rule of thumb: if the listing has 338 orders AND the price is below market,
-it's almost certainly a scam. If the listing has 338 orders but the price is
-at or above market, it may be a legitimate seller with an inflated count.
-
-## Relevance Filtering
-
-The JSON extractor returns 60 items per page, but ~70% are unrelated products
-(lighters, stickers, pillowcases, plumbing parts). Post-extraction filtering
-is essential for product searches.
-
-### Title-based filter (recommended)
-
-```javascript
-// After extraction, filter items by title relevance
-const keywords = ["rtx", "4090", "gpu", "graphics", "geforce"];
-const filtered = items.filter(item =>
-  keywords.some(kw => item.title.toLowerCase().includes(kw))
-);
-```
-
-### Price-based filter
-
-Products below AU$50 in GPU searches are almost always accessories, stickers,
-or replacement parts. Filter: `items.filter(i => i.salePrice > 50)`.
-
-### Data-center / Enterprise GPU availability
+## Enterprise GPU Availability
 
 | Category | Expected results | Notes |
 |----------|-----------------|-------|
-| Consumer GPUs (RTX 30/40/50 series) | 10-30 per search | High scam rate, many listings |
-| Pro GPUs (RTX A5000/A6000) | 5-15 per search | Moderate availability |
+| Consumer GPUs (RTX 30/40/50 series) | 10-30 per search | High scam/trap rate |
+| Pro GPUs (RTX A5000/A6000) | 5-15 per search | Most are variant traps below AU$10K |
 | Data-center GPUs (L40S, A100, H100) | 0-2 per search | Near-zero AliExpress presence |
 | Workstation flagship (RTX 6000 Ada) | **0** | Not available on AliExpress |
-| New-release pro (RTX PRO 6000 Blackwell) | 1-4 | Mostly scams at AU$2K |
+| New-release pro (RTX PRO 6000 Blackwell) | 1-4 | Only 1 verified non-scam listing |
 
-For data-center GPUs (L40S, A100, H100, RTX 6000 Ada), AliExpress is not a
-viable sourcing channel. Use eBay, used-equipment resellers, or authorized
-distributors instead.
+For data-center GPUs, AliExpress is not viable. Use eBay, used-equipment
+resellers, or authorized distributors.
 
 ## Empty / No-Match Results
 
-Two behaviors observed:
-
 | Query type | Behavior | Extractor result |
 |------------|----------|-----------------|
-| Specific, no matches (e.g., "NVIDIA L40S 48GB GPU") | "Sorry, your search did not match" page | JSON extractor returns `{ count: 0, items: [] }` |
-| Nonsense query (e.g., "xyznonexistent12345") | Falls back to recommended products | Returns ~8 unrelated items — **check titles for relevance** |
+| Specific, no matches (e.g., "NVIDIA L40S 48GB GPU") | "Sorry, your search did not match" | `{ count: 0, items: [] }` (mods has `searchTips` not `itemList`) |
+| Nonsense query (e.g., "xyznonexistent12345") | Falls back to recommended products | Returns ~8 unrelated items — check titles |
 
 ## Anti-Bot
 
@@ -388,14 +264,12 @@ Two behaviors observed:
 
 - **`/w/wholesale/{query}.html` is dead** — use `/search?SearchText={query}`
 - **`SortType=price_asc` is a loose sort** — promoted listings override ordering
-- **CSS module hashes change** — always use `[class*="prefix--"]` partial match for detail pages
-- **`minPrice` is cheapest variant** — a GPU listing with an AU$5 cable variant shows minPrice: 5, not the GPU price. Use `spread` to detect this.
+- **`minPrice` is cheapest variant** — a GPU with an AU$5 cable variant shows minPrice: 5
+- **`maxPrice: null` does NOT mean safe** — multi-variant listings with similar prices show null
 - **Product URLs have tracking params** — always `.split('?')[0]`
 - **`thumbnailUrl` lacks protocol** — prepend `https:` to `//ae-pic-a1...` URLs
-- **`productType: "natural"`** identifies organic listings; promoted/sponsored have different values
-- **Single-price variant traps** — if `spread: null` and the price seems too low for the product, visit the detail page to check variants
-- **Obfuscated variant names** — sellers may use "describe 4" instead of the real product name
+- **Every listing needs detail-page verification** — 60-80% of search results are scams or traps
 - **"Modified" cards** — "V100 Modified for RTX 4090" is a flashed card, not a real 4090
 - **"BUY 2 GET 1 FREE"** on GPU listings is a scam pattern
 - **"For [GPU]..." titles** — replacement parts (fans, coolers), not the GPU itself
-- **Nonsense queries return recommendations** — empty results only for specific no-match queries
+- **CSS module hashes change** — always use `[class*="prefix--"]` partial match for detail pages
