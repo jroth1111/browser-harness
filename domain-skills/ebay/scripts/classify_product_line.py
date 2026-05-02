@@ -16,6 +16,16 @@ import re
 import sys
 
 PRODUCT_PATTERNS: list[tuple[str, str, str]] = [
+    # ── GPU product lines (must come before system patterns) ──
+    (r"\bRTX\s+5090\b", "NVIDIA RTX 5090", "gpu"),
+    (r"\bRTX\s+4090\b", "NVIDIA RTX 4090", "gpu"),
+    (r"\bRTX\s+3090\b", "NVIDIA RTX 3090", "gpu"),
+    (r"\bL40S\b", "NVIDIA L40S", "gpu"),
+    (r"\bRTX\s+A6000\b", "NVIDIA RTX A6000", "gpu"),
+    (r"\bRTX\s+6000\s+Ada\b", "NVIDIA RTX 6000 Ada", "gpu"),
+    (r"\bRTX\s+PRO\s+6000\b", "NVIDIA RTX PRO 6000 Blackwell", "gpu"),
+    (r"\bRTX\s+A5000\b", "NVIDIA RTX A5000", "gpu"),
+    # ── System / laptop / handheld patterns ──
     (r"\bROG\s+Flow\s+Z13\b", "ASUS ROG Flow Z13", "tablet"),
     (r"\bROG\s+Flow\s+X13\b", "ASUS ROG Flow X13", "laptop"),
     (r"\bGPD\s+WIN\s*5\b", "GPD WIN 5", "handheld"),
@@ -40,6 +50,9 @@ PRODUCT_PATTERNS: list[tuple[str, str, str]] = [
 ]
 
 FORM_FACTOR_OVERRIDES = [
+    (r"\bgpu\b", "gpu"),
+    (r"\bgraphics\s+card\b", "gpu"),
+    (r"\bvideo\s+card\b", "gpu"),
     (r"\bhandheld\b", "handheld"),
     (r"\bgaming\s+console\b", "handheld"),
     (r"\btablet\b", "tablet"),

@@ -147,6 +147,16 @@ def extract_seller_trust(html: str) -> dict:
 def classify_product(title: str) -> str:
     t = title.lower()
     patterns = [
+        # GPUs (checked first so GPU matches take priority over system matches)
+        (r'rtx\s+5090', 'NVIDIA RTX 5090'),
+        (r'rtx\s+4090', 'NVIDIA RTX 4090'),
+        (r'rtx\s+3090', 'NVIDIA RTX 3090'),
+        (r'l40s', 'NVIDIA L40S'),
+        (r'rtx\s+a6000', 'NVIDIA RTX A6000'),
+        (r'rtx\s+6000\s+ada', 'NVIDIA RTX 6000 Ada'),
+        (r'rtx\s+pro\s+6000', 'NVIDIA RTX PRO 6000 Blackwell'),
+        (r'rtx\s+a5000', 'NVIDIA RTX A5000'),
+        # Systems
         (r'rog\s+flow\s+z13', 'ASUS ROG Flow Z13'),
         (r'rog\s+flow\s+x13', 'ASUS ROG Flow X13'),
         (r'gpd\s+win\s*5', 'GPD WIN 5'),
@@ -202,26 +212,31 @@ def fetch_page(url: str, cookies: dict) -> list[dict]:
 
 # --- Relevance filtering ---
 
-def make_relevance_filter(target_chip: str, min_price: float = 500.0) -> callable:
+def make_relevance_filter(target_chip: str, min_price: float = 500.0, mode: str = "system") -> callable:
     chip_lower = target_chip.lower()
-    # Extract numeric ID for exact matching (e.g. "395" from "Ryzen AI Max+ 395")
     chip_id = re.search(r'(\d{3,})', target_chip)
     chip_id_str = chip_id.group(1) if chip_id else chip_lower
 
     def is_relevant(item: dict) -> bool:
         t = item['title'].lower()
-        # Require the chip ID in the title
         if chip_id_str not in t:
             return False
         price = item.get('price') or 0
         if price < min_price:
             return False
-        system_kw = ['laptop', 'pc', 'desktop', 'workstation', 'gaming', 'handheld',
-                     'tablet', 'notebook', 'computer', 'mini pc', 'server', 'console',
-                     'supercomputer', 'ai max', 'ryzen', 'pro max', 'flow', 'gpd win',
-                     'zbook', 'onexplayer', 'onexfly', 'minisforum', 'minix', 'nimo',
-                     'evo-x2', 'hp z2', 'convertible', '2-in-1', '2in1', 'dgx', 'dell']
-        return any(kw in t for kw in system_kw)
+        if mode == "system":
+            system_kw = ['laptop', 'pc', 'desktop', 'workstation', 'gaming', 'handheld',
+                         'tablet', 'notebook', 'computer', 'mini pc', 'server', 'console',
+                         'supercomputer', 'ai max', 'ryzen', 'pro max', 'flow', 'gpd win',
+                         'zbook', 'onexplayer', 'onexfly', 'minisforum', 'minix', 'nimo',
+                         'evo-x2', 'hp z2', 'convertible', '2-in-1', '2in1', 'dgx', 'dell']
+            return any(kw in t for kw in system_kw)
+        elif mode == "gpu":
+            gpu_kw = ['rtx', 'gtx', 'radeon', 'gpu', 'graphics', 'video card', 'nvidia',
+                      'geforce', 'quadro', 'a100', 'a6000', 'l40', 'h100', 'blackwell',
+                      'ada', 'ampere', 'founders', 'ti', 'super', 'gb', 'gb', 'a5000']
+            return any(kw in t for kw in gpu_kw)
+        return True  # mode="any" — just chip_id + price filter
     return is_relevant
 
 
@@ -370,7 +385,8 @@ def run_coverage_verification(chip: str, cookies: dict, all_listings: dict,
 
 def cmd_search(args):
     cookies = make_session()
-    is_relevant = make_relevance_filter(args.chip, min_price=args.min_price)
+    mode = getattr(args, 'mode', 'system')
+    is_relevant = make_relevance_filter(args.chip, min_price=args.min_price, mode=mode)
     all_listings = {}
 
     # Build chip terms
@@ -572,6 +588,8 @@ def main():
     s.add_argument("--products", nargs="*")
     s.add_argument("--spec-terms", nargs="*")
     s.add_argument("--min-price", type=float, default=500.0, help="Minimum price filter")
+    s.add_argument("--mode", choices=["system", "gpu", "any"], default="system",
+                   help="Relevance mode: system=systems only, gpu=GPUs only, any=chip_id match only")
     s.add_argument("--delay", type=float, default=3.0, help="Delay between requests (seconds)")
     s.add_argument("--output", "-o", help="Output CSV path")
 
