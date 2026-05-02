@@ -185,29 +185,60 @@ def classify_product(title: str) -> str:
 
 # --- HTTP session ---
 
-def make_session():
-    try:
-        import browser_cookie3
-        cj = browser_cookie3.chrome(domain_name="ebay.com.au")
-        return {c.name: c.value for c in cj}
-    except Exception:
-        return {}
+class Session:
+    """Manages cookies with WAF-aware backoff and automatic refresh."""
+
+    def __init__(self):
+        self._cookies = None
+        self._refresh_cookies()
+
+    def _refresh_cookies(self):
+        try:
+            import browser_cookie3
+            cj = browser_cookie3.chrome(domain_name="ebay.com.au")
+            self._cookies = {c.name: c.value for c in cj}
+        except Exception:
+            self._cookies = {}
+
+    @property
+    def cookies(self):
+        return self._cookies
+
+    def refresh(self):
+        print("  Refreshing cookies...", file=sys.stderr)
+        self._refresh_cookies()
+
+    def fetch_page(self, url: str, retries: int = 2) -> list[dict]:
+        from curl_cffi import requests as cffi_requests
+        for attempt in range(retries + 1):
+            try:
+                r = cffi_requests.get(url, headers=HEADERS, cookies=self._cookies,
+                                      impersonate="chrome136", timeout=15)
+                results = extract_search_results(r.text)
+                if not results and len(r.text) > 100_000:
+                    # Page loaded but no results — might be WAF captcha
+                    if 'captcha' in r.text.lower() or 'Pardon' in r.text:
+                        if attempt < retries:
+                            wait = 30 * (attempt + 1)
+                            print(f"  WAF blocked, waiting {wait}s (attempt {attempt+1}/{retries})...", file=sys.stderr)
+                            time.sleep(wait)
+                            self.refresh()
+                            continue
+                return results
+            except Exception as e:
+                if attempt < retries:
+                    print(f"  ERROR: {e}, retrying...", file=sys.stderr)
+                    time.sleep(10)
+                else:
+                    print(f"  ERROR: {e}", file=sys.stderr)
+                    return []
+        return []
 
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
 }
-
-
-def fetch_page(url: str, cookies: dict) -> list[dict]:
-    from curl_cffi import requests as cffi_requests
-    try:
-        r = cffi_requests.get(url, headers=HEADERS, cookies=cookies, impersonate="chrome136", timeout=15)
-        return extract_search_results(r.text)
-    except Exception as e:
-        print(f"  ERROR: {e}", file=sys.stderr)
-        return []
 
 
 # --- Relevance filtering ---
@@ -271,33 +302,46 @@ def make_relevance_filter(target_chip: str, min_price: float = 500.0, mode: str 
 
 # --- Convergence-based pagination ---
 
-def paginate_query(query: str, cookies: dict, is_relevant: callable,
+def paginate_query(query: str, session: Session, is_relevant: callable,
                    all_listings: dict, delay: float = 3.0,
-                   max_pages: int = 20) -> tuple[int, int, bool]:
+                   max_pages: int = 50, sort: str = "",
+                   source_tag: str = "") -> tuple[int, int, bool]:
     """Fetch pages until convergence (0 new items from a full page).
     Returns (total_fetched, new_count, fully_converged)."""
     new_total = 0
     last_page_new = -1
+    zero_streak = 0
     page = 0
 
     while page < max_pages:
         page += 1
-        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(query)}&LH_BIN=1&_pgn={page}"
-        items = fetch_page(url, cookies)
+        params = f"_nkw={quote(query)}&LH_BIN=1&_pgn={page}"
+        if sort:
+            params += f"&_sop={sort}"
+        url = f"https://www.ebay.com.au/sch/i.html?{params}"
+        items = session.fetch_page(url)
         if not items:
-            break
+            # Empty response after retries — likely end of results or WAF block
+            if zero_streak >= 1:
+                break
+            zero_streak += 1
+            continue
 
         new_this_page = 0
         for i in items:
             if is_relevant(i) and i['listing_id'] not in all_listings:
                 all_listings[i['listing_id']] = i
-                i['query_source'] = query
+                i['query_source'] = source_tag or query
                 new_this_page += 1
                 new_total += 1
 
-        # Convergence: full page with 0 new items means we've seen everything
+        # Convergence: 2 consecutive full pages with 0 new items
         if len(items) >= 50 and new_this_page == 0:
-            return new_total, page, True
+            zero_streak += 1
+            if zero_streak >= 2:
+                return new_total, page, True
+        else:
+            zero_streak = 0
 
         # Short page (last page of results)
         if len(items) < 50:
@@ -305,13 +349,14 @@ def paginate_query(query: str, cookies: dict, is_relevant: callable,
 
         # Same new count as last page = likely repeating (eBay loop)
         if new_this_page == last_page_new and new_this_page > 0:
-            # Check one more page to confirm
-            next_url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(query)}&LH_BIN=1&_pgn={page+1}"
-            next_items = fetch_page(next_url, cookies)
+            next_params = f"_nkw={quote(query)}&LH_BIN=1&_pgn={page+1}"
+            if sort:
+                next_params += f"&_sop={sort}"
+            next_url = f"https://www.ebay.com.au/sch/i.html?{next_params}"
+            next_items = session.fetch_page(next_url)
             if next_items:
                 next_new = sum(1 for i in next_items if is_relevant(i) and i['listing_id'] not in all_listings)
                 if next_new == new_this_page:
-                    # eBay is repeating results
                     return new_total, page, True
             break
 
@@ -323,7 +368,7 @@ def paginate_query(query: str, cookies: dict, is_relevant: callable,
 
 # --- Coverage verification ---
 
-def run_coverage_verification(chip: str, cookies: dict, all_listings: dict,
+def run_coverage_verification(chip: str, session: Session, all_listings: dict,
                               is_relevant: callable, delay: float = 3.0) -> dict:
     """Probe remaining gaps and return coverage report."""
     chip_id = re.search(r'(\d{3,})', chip)
@@ -339,35 +384,24 @@ def run_coverage_verification(chip: str, cookies: dict, all_listings: dict,
 
     print("\n=== Coverage Verification ===", file=sys.stderr)
 
-    # Gap 1: Sort variations
+    # Gap 1: Sort variations (paginated to recover missing listings)
     for sop, label in [(15, "cheapest"), (16, "most expensive")]:
-        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(chip)}&LH_BIN=1&_sop={sop}"
-        items = fetch_page(url, cookies)
-        new = 0
-        for i in items:
-            if is_relevant(i) and i['listing_id'] not in all_listings:
-                all_listings[i['listing_id']] = i
-                i['query_source'] = f"verify:sort_{label}"
-                i['layer'] = 'VERIFY'
-                new += 1
+        new, pages, converged = paginate_query(chip, session, is_relevant,
+                                                all_listings, delay=delay,
+                                                max_pages=10, sort=str(sop),
+                                                source_tag=f"verify:sort_{label}")
         report['gaps_probed'] += 1
         report['new_from_gaps'] += new
         report['probe_details'].append({'probe': f'sort_{label}', 'new': new})
-        print(f"  Sort {label}: +{new} new", file=sys.stderr)
+        print(f"  Sort {label}: +{new} new ({pages} pages)", file=sys.stderr)
         time.sleep(delay)
 
     # Gap 2: Without "Ryzen" prefix
     alt_chip = chip.replace("Ryzen ", "")
     if alt_chip != chip:
-        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(alt_chip)}&LH_BIN=1"
-        items = fetch_page(url, cookies)
-        new = 0
-        for i in items:
-            if is_relevant(i) and i['listing_id'] not in all_listings:
-                all_listings[i['listing_id']] = i
-                i['query_source'] = f"verify:no_ryzen_prefix"
-                i['layer'] = 'VERIFY'
-                new += 1
+        new, _, _ = paginate_query(alt_chip, session, is_relevant,
+                                   all_listings, delay=delay, max_pages=3,
+                                   source_tag="verify:no_ryzen_prefix")
         report['gaps_probed'] += 1
         report['new_from_gaps'] += new
         report['probe_details'].append({'probe': 'no_ryzen_prefix', 'new': new})
@@ -380,15 +414,9 @@ def run_coverage_verification(chip: str, cookies: dict, all_listings: dict,
     undiscovered = [p for p in known_products if p not in discovered_types]
     for product in undiscovered:
         q = f'{product} {chip}'
-        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(q)}&LH_BIN=1"
-        items = fetch_page(url, cookies)
-        new = 0
-        for i in items:
-            if is_relevant(i) and i['listing_id'] not in all_listings:
-                all_listings[i['listing_id']] = i
-                i['query_source'] = f"verify:missing_product_{product}"
-                i['layer'] = 'VERIFY'
-                new += 1
+        new, _, _ = paginate_query(q, session, is_relevant,
+                                   all_listings, delay=delay, max_pages=3,
+                                   source_tag=f"verify:missing_product_{product}")
         report['gaps_probed'] += 1
         report['new_from_gaps'] += new
         report['probe_details'].append({'probe': f'missing_{product}', 'new': new})
@@ -413,7 +441,7 @@ def run_coverage_verification(chip: str, cookies: dict, all_listings: dict,
 # --- Commands ---
 
 def cmd_search(args):
-    cookies = make_session()
+    session = Session()
     mode = getattr(args, 'mode', 'system')
     is_relevant = make_relevance_filter(args.chip, min_price=args.min_price, mode=mode)
     all_listings = {}
@@ -455,7 +483,7 @@ def cmd_search(args):
     # L1 queries first (pre-populated products)
     for product in sorted(l1_products):
         for q in [f'{product} "{args.chip}"', f'{product} {args.chip}']:
-            new, pages, converged = paginate_query(q, cookies, is_relevant, all_listings, delay=args.delay)
+            new, pages, converged = paginate_query(q, session, is_relevant, all_listings, delay=args.delay)
             if new:
                 ctag = "" if converged else " (not converged!)"
                 print(f"  L1-pre: {q}: +{new} ({pages} pages){ctag}", file=sys.stderr)
@@ -467,7 +495,7 @@ def cmd_search(args):
                     [(f"L4: {q}", q) for q in layer4_queries]
 
     for label, q in pass1_queries:
-        new, pages, converged = paginate_query(q, cookies, is_relevant, all_listings, delay=args.delay)
+        new, pages, converged = paginate_query(q, session, is_relevant, all_listings, delay=args.delay)
         if new:
             ctag = "" if converged else " (not converged!)"
             print(f"  {label}: +{new} ({pages} pages){ctag}", file=sys.stderr)
@@ -493,13 +521,13 @@ def cmd_search(args):
         print("\n=== Pass 2: L1 (iteratively discovered) ===", file=sys.stderr)
         for product in sorted(new_products):
             for q in [f'{product} "{args.chip}"', f'{product} {args.chip}']:
-                new, pages, converged = paginate_query(q, cookies, is_relevant, all_listings, delay=args.delay)
+                new, pages, converged = paginate_query(q, session, is_relevant, all_listings, delay=args.delay)
                 if new:
                     print(f"  L1-iter: {q}: +{new} ({pages} pages)", file=sys.stderr)
                 time.sleep(args.delay)
 
     # --- Coverage verification ---
-    report = run_coverage_verification(args.chip, cookies, all_listings, is_relevant, delay=args.delay)
+    report = run_coverage_verification(args.chip, session, all_listings, is_relevant, delay=args.delay)
 
     # --- Final summary ---
     print(f"\n=== Final: {len(all_listings)} unique listings | Coverage: {report['coverage']} ===", file=sys.stderr)
@@ -548,7 +576,7 @@ def cmd_search(args):
 
 def cmd_verify(args):
     from curl_cffi import requests as cffi_requests
-    cookies = make_session()
+    session = Session()
     listings = []
     with open(args.input, newline='') as f:
         for row in csv.DictReader(f):
@@ -560,7 +588,7 @@ def cmd_verify(args):
         lid = row['listing_id']
         url = f"https://www.ebay.com.au/itm/{lid}"
         try:
-            r = cffi_requests.get(url, headers=HEADERS, cookies=cookies, impersonate="chrome136", timeout=15)
+            r = cffi_requests.get(url, headers=HEADERS, cookies=session.cookies, impersonate="chrome136", timeout=15)
             trust = extract_seller_trust(r.text)
             row['seller_name'] = trust['seller']
             row['feedback_pct'] = trust['pct_val'] or ''
