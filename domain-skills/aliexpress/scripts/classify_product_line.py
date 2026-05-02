@@ -18,6 +18,27 @@ import sys
 # Product line patterns ordered by specificity (most specific first).
 # Each tuple: (pattern, product_line, form_factor)
 PRODUCT_PATTERNS: list[tuple[str, str, str]] = [
+    # GPU patterns — standalone graphics cards (most specific first)
+    (r"\bRTX\s*PRO\s*6000\b", "RTX PRO 6000 Blackwell", "standalone_gpu"),
+    (r"\bRTX\s*6000\s+Ada\b", "RTX 6000 Ada", "standalone_gpu"),
+    (r"\bRTX\s*A6000\b", "RTX A6000", "standalone_gpu"),
+    (r"\bRTX\s*A5000\b", "RTX A5000", "standalone_gpu"),
+    (r"\bRTX\s*A4500\b", "RTX A4500", "standalone_gpu"),
+    (r"\bRTX\s*A4000\b", "RTX A4000", "standalone_gpu"),
+    (r"\bRTX\s*A3000\b", "RTX A3000", "standalone_gpu"),
+    (r"\bRTX\s*5090\b", "RTX 5090", "standalone_gpu"),
+    (r"\bRTX\s*5080\b", "RTX 5080", "standalone_gpu"),
+    (r"\bRTX\s*5070\b", "RTX 5070", "standalone_gpu"),
+    (r"\bRTX\s*4090\b", "RTX 4090", "standalone_gpu"),
+    (r"\bRTX\s*4080\b", "RTX 4080", "standalone_gpu"),
+    (r"\bRTX\s*4070\b", "RTX 4070", "standalone_gpu"),
+    (r"\bRTX\s*3090\b", "RTX 3090", "standalone_gpu"),
+    (r"\bRTX\s*3080\b", "RTX 3080", "standalone_gpu"),
+    (r"\bL40S\b", "NVIDIA L40S", "standalone_gpu"),
+    # GPU server/system patterns
+    (r"\b(?:AI\s+Server|GPU\s+Server|4U\s+Server)\b", "GPU Server", "server"),
+    (r"\bGaming\s+(?:Desktop|PC|Computer)\b", "Gaming PC", "desktop"),
+    # Mini-PC / system patterns
     (r"\bGMKtec\s+EVO-?X2\b", "GMKtec EVO-X2", "mini_pc"),
     (r"\bEVO-?X2\b", "GMKtec EVO-X2", "mini_pc"),
     (r"\bBosgame\s+M5\b", "Bosgame M5", "mini_pc"),
@@ -83,14 +104,14 @@ def classify(title: str) -> dict:
             return result
 
     # Fallback: generic classification from title keywords
-    result = {"product_line": "Generic Mini PC", "form_factor": "unknown"}
+    result = {"product_line": "Unknown", "form_factor": "unknown"}
     for pattern, ff in FORM_FACTOR_OVERRIDES:
         if re.search(pattern, title, re.IGNORECASE):
             result["form_factor"] = ff
             break
 
     if "ryzen" in t and ("ai max" in t or "max+ 395" in t or "max + 395" in t):
-        result["product_line"] = "Generic Mini PC"
+        result["product_line"] = "Generic Ryzen AI Max"
         result["form_factor"] = result["form_factor"] if result["form_factor"] != "unknown" else "mini_pc"
 
     return result

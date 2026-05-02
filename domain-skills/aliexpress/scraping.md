@@ -789,24 +789,52 @@ Get the latest snippet: `python3 search.py extract-js`
 Search results contain significant noise. Three filter types work as a cascade:
 
 1. **`--require`** (OR-match) — title must contain at least one keyword
-2. **`--exclude`** (OR-match) — title must NOT contain any of these keywords
+2. **`--exclude`** (word-boundary match) — title must NOT contain any of these
+   keywords as whole words (not substrings)
 3. **`--min-price` / `--max-price`** — filter by AUD price range
+
+Exclusion uses word-boundary matching: `--exclude "model"` won't match
+"modeling" or "rendering". `--exclude "ram"` won't match "framing". This
+prevents false positives on legitimate GPU titles.
 
 Common noise patterns per query type:
 
 | Query type | Noise | Fix |
 |------------|-------|-----|
 | Ambiguous names ("L40S", "A5000") | Vacuums, cameras, phones | Use full name ("RTX A5000"), `--exclude "dreame" "sony"` |
-| GPU searches | Water blocks, NVLink bridges, cables | `--exclude "water block" "bridge" "cable" "cooler"` |
+| GPU searches | Water blocks, cables, coolers, accessories | `--exclude "water block" "cable" "cooler" "heatsink" "bracket"` |
 | Component searches | Building blocks, toys, cases | `--min-price` to cut below real-product threshold |
 | Generic terms ("A5000") | 100% noise | Always prefix with brand ("RTX A5000") |
+
+GPU search safe exclusion keywords (won't kill legitimate listings):
+```
+--exclude "dreame" "vacuum" "robot" "water block" "cooler" "heatsink" \
+  "cable" "riser" "bracket" "backplate" "filter" "brush" "mop" \
+  "dust bag" "spare parts" "earphone" "earbuds" "motorcycle" \
+  "watercolor" "sketchbook" "podofo" "amplifier"
+```
+
+**Do NOT exclude** these common words that appear in legitimate GPU listings:
+"model" (appears in "3D Modeling"), "ram"/"ssd" (system specs),
+"laptop" (gaming laptops), "bridge" (NVLink), "water" (water-cooled GPUs).
 
 ```bash
 python3 search.py merge results.json --existing data.csv \
   --require "rtx" "gpu" "graphics card" \
-  --exclude "dreame" "vacuum" "camera" "water block" "bridge" \
+  --exclude "dreame" "vacuum" "water block" "cooler" "cable" \
   --min-price 100
 ```
+
+### Layer efficiency
+
+Not all queries need all layers. Use early stopping based on product type:
+
+| Type | L2 expected | L3 gain | Recommendation |
+|------|-------------|---------|----------------|
+| Consumer GPU (3090/4090/5090) | 20-30 | +5-15 | Run L3 |
+| Professional GPU (A6000/6000 Ada/A5000) | 10-15 | +0-3 | Skip L3 |
+| Enterprise GPU (L40S/H100) | 2-5 | +0-2 | Skip L3 |
+| System containing GPU | 5-15 | +3-10 | Run L3 |
 
 ### Rapid search workflow
 

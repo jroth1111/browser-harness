@@ -166,12 +166,13 @@ def cmd_merge(args):
             if any(k in i.get("title", "").lower() for k in keywords)
         ]
 
-    # Exclusion filter
+    # Exclusion filter (word-boundary matching to avoid false positives)
     if args.exclude:
-        exclude_kw = [k.lower() for k in args.exclude]
+        import re as _re
+        exclude_patterns = [_re.compile(r'\b' + _re.escape(k) + r'\b', _re.IGNORECASE) for k in args.exclude]
         filtered_items = [
             i for i in filtered_items
-            if not any(k in i.get("title", "").lower() for k in exclude_kw)
+            if not any(p.search(i.get("title", "")) for p in exclude_patterns)
         ]
 
     relevance_filtered = before_relevance - len(filtered_items)
@@ -278,6 +279,14 @@ def cmd_plan(args):
     print("   If yes → stop, skip Layer 3")
     print("   If no  → run Layer 3 for the terms that underperformed")
     print("3. Layer 4 is rarely needed — only for unusual specs")
+    print()
+    print("## Yield expectations by product type")
+    print("| Type | L2 expected | L3 gain | Recommendation |")
+    print("|------|-------------|---------|----------------|")
+    print("| Consumer GPU (3090/4090/5090) | 20-30 | +5-15 | Run L3 |")
+    print("| Professional GPU (A6000/6000 Ada/A5000) | 10-15 | +0-3 | Skip L3 |")
+    print("| Enterprise GPU (L40S/H100) | 2-5 | +0-2 | Skip L3 |")
+    print("| System containing GPU | 5-15 | +3-10 | Run L3 |")
     print()
     print("## Reset accumulated results (run first):")
     print("```javascript")
