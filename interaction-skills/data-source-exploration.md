@@ -160,6 +160,34 @@ No domain skill documents this pattern yet. When building a category search,
 extend the product search extractors with a filter+verify layer rather than
 writing a separate pipeline.
 
+### Maximum-coverage search strategy for component-containment queries
+
+When searching for all products containing a specific component or chip,
+use a 4-layer query taxonomy ordered by specificity:
+
+1. **Known product names** — "DGX Spark", "Ascent GX10", "EdgeXpert"
+2. **Chip/component references** — "GB10", "Grace Blackwell", "GB10 Grace"
+3. **Category + architecture** — "Blackwell AI server", "Blackwell supercomputer",
+   "Blackwell workstation", "Blackwell mini PC"
+4. **Spec-level** — "128GB LPDDR5X Blackwell", "arm cortex x925 blackwell"
+
+Layers 1-2 find products you already know about. Layer 3 catches products
+described generically. Layer 4 catches products that share hardware specs but
+are from different product lines (e.g., Jetson AGX Thor shares Blackwell GPU +
+128GB LPDDR5X with GB10 systems).
+
+Run all queries without price floor. Deduplicate by product ID across all
+queries. Filter by title relevance. Verify survivors on detail pages.
+
+**Homonym noise**: when the product name contains common English words ("spark",
+"grace", "edge"), searches return massive noise (spark plugs, baby names,
+etc.). Title relevance filtering is mandatory — include at least one
+domain-specific term in the filter.
+
+**Negative results are findings**: 3 query variations × 0 results = confirmed
+absence. "Not available on this platform" is a first-class result alongside
+positive findings. Record it in the output.
+
 ## Cross-platform comparison requires detail pages
 
 Search result data is insufficient for like-for-like comparison across
@@ -205,6 +233,11 @@ available on this platform" is a valid and useful result.
 Example: ASUS Ascent GX10 and MSI EdgeXpert returned 0 results across 3 query
 variations each on AliExpress. The correct conclusion is that these products are
 not sold on AliExpress, not that the search needs more refinement.
+
+For maximum-coverage searches, expand this to 3 query variations × 4 query
+layers before concluding absence. The 4-layer taxonomy (product names, chip
+references, category+architecture, spec-level) is documented in the
+"Maximum-coverage search strategy" section above.
 
 ## Marketplace fraud avoidance
 
