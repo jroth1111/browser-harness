@@ -1,54 +1,83 @@
 # eBay — Scraping & Data Extraction
 
-Field-tested against ebay.com on 2026-04-18 using `uv run python` with `http_get`.
-Chrome is NOT required — `http_get` returns full HTML on first access.
+Field-tested against ebay.com.au on 2026-05-02 using `uv run python` with `http_get`
+and again on 2026-05-02 with `curl_cffi` + cookie extraction after Akamai WAF block.
+Currency is AUD. Prices in search results show "AU $" prefix; JSON-LD returns `priceCurrency: "AUD"`.
 
-## Critical: Bot Detection ("Pardon Our Interruption")
+## Critical: Bot Detection ("Pardon Our Interruption" / "Access Denied")
 
-eBay's bot detection fires after roughly **5–10 requests per IP in a short window**.
-The block page is ~13 KB, title `"Pardon Our Interruption..."`, and contains no listing data.
+eBay's Akamai WAF blocks after roughly **5–10 requests** from an unrecognised session.
+The block page is ~400 bytes (`"Access Denied"`) or ~13 KB (`"Pardon Our Interruption..."`).
+
+**Once triggered, the block is total and persistent** — every HTTP client (`curl`,
+Python `requests`, `httpx`, `curl_cffi` without cookies) returns 403 for the entire
+session. The documented 60–120s cooldown does **not** clear it after aggressive use.
+Only cookie extraction + TLS impersonation recovers access (see below).
 
 **Always check before parsing:**
 ```python
 def is_blocked(html):
-    return 'Pardon Our Interruption' in html or len(html) < 20_000
-
-html = http_get("https://www.ebay.com/sch/i.html?_nkw=laptop&LH_BIN=1", headers=HEADERS)
-if is_blocked(html):
-    raise RuntimeError("eBay bot-detection triggered — back off and retry later")
+    return 'Pardon Our Interruption' in html or 'Access Denied' in html or len(html) < 20_000
 ```
 
-**When blocked:** wait at minimum 60–120 seconds before retrying. The block is IP-session-scoped,
-not a hard IP ban; it clears after inactivity.
+### Primary method: `http_get` (fresh IP only)
 
-**Headers required (minimal UA gets blocked faster, full browser UA lasts longer):**
 ```python
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
 }
+
+html = http_get("https://www.ebay.com.au/sch/i.html?_nkw=laptop&LH_BIN=1", headers=HEADERS)
+if is_blocked(html):
+    # Fall through to cookie extraction method below
 ```
 
 A plain `"User-Agent": "Mozilla/5.0"` also works for the first few requests,
 but the full Chrome UA lasts slightly longer before triggering the block.
 
+### Fallback: cookie extraction + TLS impersonation
+
+When `http_get` returns 403, use the universal WAF bypass from
+`interaction-skills/waf-bypass.md`:
+
+```python
+import browser_cookie3
+from curl_cffi import requests as cffi_requests
+
+cj = browser_cookie3.chrome(domain_name="ebay.com.au")
+cookies = {c.name: c.value for c in cj}
+
+r = cffi_requests.get(
+    "https://www.ebay.com.au/sch/i.html?_nkw=laptop&LH_BIN=1",
+    headers=HEADERS,
+    cookies=cookies,
+    impersonate="chrome136",
+    timeout=15,
+)
+# r.status_code == 200, len(r.text) ~ 1.5 MB
+```
+
+The user must have visited ebay.com.au in Chrome at least once for cookies to exist.
+See `interaction-skills/waf-bypass.md` for full details and prerequisites.
+
 ## Search URL Structure
 
 ```
-https://www.ebay.com/sch/i.html?_nkw={query}&{filters}
+https://www.ebay.com.au/sch/i.html?_nkw={query}&{filters}
 ```
 
 Confirmed working URL examples:
 ```python
 # Buy It Now only, sorted by lowest price
-"https://www.ebay.com/sch/i.html?_nkw=mechanical+keyboard&LH_BIN=1&_sop=15"
+"https://www.ebay.com.au/sch/i.html?_nkw=mechanical+keyboard&LH_BIN=1&_sop=15"
 
 # Auctions only
-"https://www.ebay.com/sch/i.html?_nkw=vintage+camera&LH_Auction=1"
+"https://www.ebay.com.au/sch/i.html?_nkw=vintage+camera&LH_Auction=1"
 
 # New condition only, page 2
-"https://www.ebay.com/sch/i.html?_nkw=laptop&LH_ItemCondition=1000&_pgn=2"
+"https://www.ebay.com.au/sch/i.html?_nkw=laptop&LH_ItemCondition=1000&_pgn=2"
 ```
 
 ### Filter Parameters (all confirmed working)
@@ -58,9 +87,27 @@ Confirmed working URL examples:
 | `LH_BIN` | `1` | Buy It Now only |
 | `LH_Auction` | `1` | Auctions only |
 | `LH_ItemCondition` | see below | Filter by condition |
+| `LH_PrefLoc` | see below | Item location filter |
 | `_sop` | see below | Sort order |
 | `_pgn` | `2`, `3`, … | Page number (confirmed: returns ~65–88 items/page) |
 | `_ipg` | `25`, `50`, `100`, `200` | Items per page (unconfirmed, standard eBay param) |
+
+### Location Codes for `LH_PrefLoc`
+
+| Code | Label | Notes |
+|------|-------|-------|
+| *(absent)* | Default (worldwide) | **Includes international sellers only — 0 AU results in testing.** Do not use for AU price comparison. |
+| `1` | Australia only | Located in Australia. Returns domestic sellers + items warehoused in AU. |
+| `2` | North America | Located in US/Canada/Mexico. |
+| `99` | Worldwide | Explicit worldwide (same as default). |
+
+**Critical**: ebay.com.au default search surfaces **international sellers only** for many
+product categories. Confirmed on RTX 5090 search: 60 items, all from China (33), South Korea
+(11), US (4), Japan (3), Taiwan (1), UK (1) — zero from Australia. With `LH_PrefLoc=1`:
+132 items, 77 domestic (shown without "from" label) plus 55 international items warehoused in AU.
+
+For any AU-local price comparison, always add `LH_PrefLoc=1`. Without it, you get
+international bulk/resale listings at prices that don't reflect the AU market.
 
 ### Condition Codes for `LH_ItemCondition`
 
@@ -90,7 +137,7 @@ Confirmed working URL examples:
 ### Item Detail URL
 
 ```
-https://www.ebay.com/itm/{listing_id}
+https://www.ebay.com.au/itm/{listing_id}
 ```
 
 The listing ID is a plain integer (e.g. `167040158614`). Always strip query parameters
@@ -103,16 +150,16 @@ with eBay-specific class names. The response is large (~1.5–1.8 MB uncompresse
 
 ### Card Structure
 
-Each result is an `<li>` element with `data-listingid=<id>`. Key elements within each card:
+Each result is an `<li>` element with `data-listingid="<id>"`. Key elements within each card:
 
 | Data | Pattern |
 |------|---------|
-| Listing ID | `data-listingid=(\d+)` on the `<li>` |
-| Item URL | `href=(https://(?:www\.)?ebay\.com/itm/(\d+))` |
+| Listing ID | `data-listingid="?(\d+)"?` on the `<li>` |
+| Item URL | `href="?(https://(?:www\.)?ebay\.com\.au/itm/(\d+))"?` |
 | Title | `s-card__title` > `su-styled-text primary` > text |
-| Current price | `class=price">\$([0-9,\.]+)<` |
-| Original/list price | `strikethrough[^>]*>\$([0-9,\.]+)` |
-| Image | `class=s-card__image[^>]*src=([^\s>]+)` |
+| Current price | `class="[^"]*price[^"]*">[^<]*\$([0-9,\.]+)<` (AU pages prefix "AU ") |
+| Original/list price | `strikethrough[^>]*>[^$]*\$([0-9,\.]+)` |
+| Image | `class="s-card__image"[^>]*src="([^"]+)"` |
 | Alt title | `img[alt]` in the card (same as product title) |
 
 ### Confirmed Extractor (field-tested, 60 items from a single search)
@@ -134,7 +181,7 @@ def extract_search_results(html):
 
     for card in cards[1:]:  # skip preamble before first card
         # Listing ID (dedup)
-        lid_m = re.search(r'data-listingid=(\d+)', card)
+        lid_m = re.search(r'data-listingid="?(\d+)"?', card)
         if not lid_m:
             continue
         listing_id = lid_m.group(1)
@@ -143,7 +190,7 @@ def extract_search_results(html):
         seen_ids.add(listing_id)
 
         # Item URL (clean, no tracking params)
-        url_m = re.search(r'href=(https://(?:www\.)?ebay\.com/itm/(\d+))', card)
+        url_m = re.search(r'href="?(https://(?:www\.)?ebay\.com\.au/itm/(\d+))"?', card)
         item_url = url_m.group(1).split('?')[0] if url_m else None
 
         # Title from s-card__title
@@ -154,18 +201,18 @@ def extract_search_results(html):
         if not title or title == 'Shop on eBay':
             continue
 
-        # Current price
-        price_m = re.search(r'class=(?:["\'])?[a-z- ]*price["\']?>\$([0-9,\.]+)<', card)
+        # Current price — AU pages show "AU $" prefix, US shows just "$"
+        price_m = re.search(r'class="[^"]*price[^"]*">[^<]*\$([0-9,\.]+)<', card)
         if not price_m:
-            price_m = re.search(r'price">\$([0-9,\.]+)<', card)
+            price_m = re.search(r'price">[^<]*\$([0-9,\.]+)<', card)
         price = '$' + price_m.group(1) if price_m else None
 
         # Original / list price (strikethrough — present when discounted)
-        orig_m = re.search(r'strikethrough[^>]*>\$([0-9,\.]+)', card)
+        orig_m = re.search(r'strikethrough[^>]*>[^$]*\$([0-9,\.]+)', card)
         original_price = '$' + orig_m.group(1) if orig_m else None
 
         # Thumbnail image URL
-        img_m = re.search(r'class=s-card__image[^>]*src=([^\s>]+)', card)
+        img_m = re.search(r'class="?s-card__image"?[^>]*src="?([^"\s>]+)"?', card)
         image = img_m.group(1) if img_m else None
 
         results.append({
@@ -190,15 +237,15 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-html = http_get("https://www.ebay.com/sch/i.html?_nkw=mechanical+keyboard&LH_BIN=1&_sop=15", headers=HEADERS)
+html = http_get("https://www.ebay.com.au/sch/i.html?_nkw=mechanical+keyboard&LH_BIN=1&_sop=15", headers=HEADERS)
 items = extract_search_results(html)
 print(f"{len(items)} items")
 for item in items[:5]:
     print(f"  {item['listing_id']} | {item['title'][:50]} | {item['price']}")
-# Output (confirmed): 60 items
-# 168219240588 | One Plus Keyboard 81 Pro Winter Bonfire Mecha... | $159.00
-# 167461643107 | Logitech 920-012869 G515 TKL Wired Low Profil... | $49.99
-# 167040158614 | Logitech - PRO X TKL LIGHTSPEED Wireless Mech... | $74.99
+# Output (confirmed on AU): 62 items
+# 366284747321 | LED Keyboard Switches Tester Mechanical Keyboa... | $15.88
+# 358156371070 | LED Keyboard Switches Tester Mechanical Keyboa... | $14.85
+# 397354083626 | Mechanical Keyboard MX Switch Tester Lightless... | $15.86
 ```
 
 ## Item Detail Pages: JSON-LD (Reliable)
@@ -292,7 +339,7 @@ def extract_item_detail(html):
 
 **Field-tested on item 167040158614:**
 ```python
-html = http_get("https://www.ebay.com/itm/167040158614", headers=HEADERS)
+html = http_get("https://www.ebay.com.au/itm/167040158614", headers=HEADERS)
 detail = extract_item_detail(html)
 # {
 #   'listing_id':   '167040158614',
@@ -300,7 +347,7 @@ detail = extract_item_detail(html)
 #   'brand':        'Logitech',
 #   'price':        74.99,
 #   'list_price':   '219.99',
-#   'currency':     'USD',
+#   'currency':     'AUD',
 #   'availability': 'InStock',
 #   'condition':    'Refurbished',
 #   'shipping':     'Free',
@@ -313,14 +360,133 @@ detail = extract_item_detail(html)
 # }
 ```
 
-### Item Specifics from `ux-textspans` (complementary to JSON-LD)
+### Seller Trust Data from `ux-textspans` (mandatory for price comparison)
 
-The `ux-textspans` elements in item pages contain additional data not in JSON-LD,
-including seller name, feedback %, items sold, detailed condition text, and all item specifics.
+The `ux-textspans` elements contain seller reputation data not available in JSON-LD.
+**Always extract seller feedback when comparing prices or reporting results.**
+A low price from a seller with <95% positive feedback or <100 feedback count
+is not a valid data point — it's a scam or mislisting signal.
+
+**Field-tested finding:** sellers with 0 feedback never have a feedback percentage
+shown on the page. The regex must handle `feedback_pct = None` for these sellers.
+0-feedback sellers with auto-generated names (`sunny_4539`, `tvbux-89`, `tho-875314`)
+are a confirmed scam pattern on eBay AU for high-value electronics.
 
 ```python
 import re
 
+def extract_seller_trust(html):
+    """Extract seller name, feedback count, and feedback % from an item page.
+    Returns dict with seller, feedback_count, feedback_pct, and flag."""
+    spans = [m.group(1) for m in re.finditer(r'ux-textspans[^>]*>([^<]+)</span>', html)]
+
+    seller_name = None
+    feedback_pct = None
+    feedback_count = None
+
+    for s in spans:
+        if 'positive' in s.lower() and '%' in s:
+            feedback_pct = s  # e.g. "99.6% positive"
+        if s.startswith('(') and s.endswith(')'):
+            inner = s[1:-1].replace(',', '').replace(' ', '')
+            if inner.isdigit():
+                feedback_count = int(inner)  # e.g. "(20742)" or "(0)"
+
+    # Seller name is the span right before the feedback count
+    for i, s in enumerate(spans):
+        if feedback_count is not None and s == f"({feedback_count})" and i > 0:
+            seller_name = spans[i - 1]
+            break
+
+    # Parse percentage — eBay returns "99.8% positive feedback" or "100% positive"
+    pct_val = None
+    if feedback_pct:
+        m = re.search(r'(\d+\.?\d*)%', feedback_pct)
+        if m:
+            pct_val = float(m.group(1))
+
+    # Trust scoring — handles None pct_val (0-feedback sellers)
+    count_val = feedback_count if feedback_count is not None else 0
+    if count_val < 100 or pct_val is None or pct_val < 95:
+        flag = 'HIGH_RISK'
+    elif pct_val < 98 or count_val < 500:
+        flag = 'MODERATE_RISK'
+    else:
+        flag = 'OK'
+
+    return {
+        'seller': seller_name or 'UNKNOWN',
+        'feedback_count': count_val,
+        'feedback_pct': feedback_pct,
+        'pct_val': pct_val,
+        'flag': flag,
+    }
+```
+
+**Thresholds (field-tested against GB10 GPU listings, 2 May 2026):**
+- `OK`: ≥98% positive and ≥500 feedback — established seller, price is credible
+  Example: JW Computers (14,881 feedback, 99.8%), GSPACE (4,598 feedback, 100%)
+- `MODERATE_RISK`: 95-98% or 100-500 feedback — verify listing details carefully
+- `HIGH_RISK`: <95% or <100 feedback or no feedback data — price is not a valid comparison point
+  Example: sunny_4539 (0 feedback), tvbux-89 (0 feedback) — all turned out to be scams
+- **0 feedback is the strongest scam signal.** No legitimate seller of $2,000+ electronics
+  has zero transaction history. Always flag these as HIGH_RISK regardless of price.
+
+**Usage in pipeline:**
+```python
+for item in items:
+    detail_html = http_get(item['url'], headers=HEADERS)
+    trust = extract_seller_trust(detail_html)
+    if trust['flag'] == 'HIGH_RISK':
+        print(f"  SKIPPING {item['listing_id']}: {trust['seller']} "
+              f"({trust['feedback_pct'] or 'no data'}, {trust['feedback_count']} feedback)")
+        continue
+    # ... proceed with price comparison
+```
+
+### Scam Detection Pipeline
+
+Combine three independent signals to classify listings. Any single HIGH_RISK signal
+is sufficient to exclude the listing — no need for multiple signals.
+
+```python
+def classify_listing(item, trust, reference_price=None):
+    """Classify a listing as TRUSTED, SUSPICIOUS, or SCAM.
+    reference_price: cross-platform anchor price (e.g. Amazon price for same product)."""
+
+    # Signal 1: Seller trust
+    if trust['flag'] == 'HIGH_RISK':
+        return 'SCAM', f"seller {trust['seller']} has {trust['feedback_count']} feedback"
+
+    # Signal 2: Price vs reference (50% threshold)
+    if reference_price and item['price'] < reference_price * 0.5:
+        return 'SCAM', f"${item['price']} is <50% of reference ${reference_price}"
+
+    # Signal 3: Title-based variant exclusion (accessories, parts, multi-unit)
+    title_lower = item['title'].lower()
+    PARTS = ['parts', 'for parts', 'broken', 'no core', 'no power', 'board only',
+             'cable', 'shroud', 'water block', 'heatsink', 'fan adapter', 'no gpu']
+    for kw in PARTS:
+        if kw in title_lower:
+            return 'EXCLUDED', f"title contains '{kw}'"
+
+    if trust['flag'] == 'MODERATE_RISK':
+        return 'SUSPICIOUS', f"seller has {trust['feedback_count']} feedback, {trust['feedback_pct']}"
+
+    return 'TRUSTED', 'all signals clear'
+```
+
+**Field-tested results (GB10 Grace Blackwell devices, eBay AU):**
+- 7 listings classified SCAM via seller trust (all 0 feedback, auto-generated names)
+- Price range of SCAM listings: $1,650–$4,860 (31–61% of Amazon reference price)
+- Price range of TRUSTED listings: $6,942–$11,354 (87–142% of Amazon reference price)
+- No TRUSTED listing was priced below 87% of the Amazon reference
+
+### Full `ux-textspans` Reference
+
+Additional data available from the same elements:
+
+```python
 def extract_ux_textspans(html):
     """Return list of all ux-textspans text values from an item page."""
     return [m.group(1) for m in re.finditer(r'ux-textspans[^>]*>([^<]+)</span>', html)]
@@ -331,8 +497,8 @@ def extract_ux_textspans(html):
 # Index [5]  -> seller name ("Logitech")
 # Index [6]  -> seller feedback count ("(20742)")
 # Index [7]  -> seller feedback % ("99.6% positive")
-# Index [10] -> current price ("US $74.99")
-# Index [12] -> list price ("US $219.99")
+# Index [10] -> current price ("AU $74.99")
+# Index [12] -> list price ("AU $219.99")
 # Index [33] -> condition label ("Excellent - Refurbished")
 # Index [36] -> quantity sold ("45 sold")
 # Pairs from [105] onward: item specifics as label/value pairs
@@ -343,7 +509,7 @@ def extract_ux_textspans(html):
 Use `_pgn=N` (confirmed working, returns ~65–88 items per page):
 ```python
 for page in range(1, 4):
-    url = f"https://www.ebay.com/sch/i.html?_nkw=laptop&LH_BIN=1&_sop=15&_pgn={page}"
+    url = f"https://www.ebay.com.au/sch/i.html?_nkw=laptop&LH_BIN=1&_sop=15&_pgn={page}"
     html = http_get(url, headers=HEADERS)
     if is_blocked(html):
         break
@@ -385,7 +551,7 @@ def is_blocked(html):
 
 # Step 1: Search
 html = http_get(
-    "https://www.ebay.com/sch/i.html?_nkw=mechanical+keyboard&LH_BIN=1&_sop=15&LH_ItemCondition=1000",
+    "https://www.ebay.com.au/sch/i.html?_nkw=mechanical+keyboard&LH_BIN=1&_sop=15&LH_ItemCondition=1000",
     headers=HEADERS
 )
 if is_blocked(html):
@@ -420,9 +586,9 @@ for item in items[:5]:
 
 - **Placeholder cards ("Shop on eBay")** — The first card slot may be a promoted/placeholder card with title `"Shop on eBay"` and listing ID `"123456"`. Filter these out.
 
-- **Item URLs have tracking params** — Raw extracted URLs look like `https://www.ebay.com/itm/167040158614?_skw=...&epid=...&hash=...&itmprp=...`. Always strip to `itm/{id}` with `.split('?')[0]`.
+- **Item URLs have tracking params** — Raw extracted URLs look like `https://www.ebay.com.au/itm/167040158614?_skw=...&epid=...&hash=...&itmprp=...`. Always strip to `itm/{id}` with `.split('?')[0]`.
 
-- **`www.ebay.com` vs `ebay.com`** — Some item URLs in search results omit `www.`. Normalize with `url.replace('//ebay.com/', '//www.ebay.com/')`.
+- **`www.ebay.com.au` vs `ebay.com.au`** — Some item URLs in search results omit `www.`. Normalize with `url.replace('//ebay.com.au/', '//www.ebay.com.au/')`.
 
 - **Search response is large** — Uncompressed HTML is 1.5–1.8 MB per page. The `http_get` helper handles gzip transparently, so the actual transfer is much smaller, but parsing a 1.8 MB string is slow. Use `re.split` on card boundaries rather than an HTML parser for speed.
 
@@ -433,3 +599,33 @@ for item in items[:5]:
 - **`list_price` only present when discounted** — `offers.priceSpecification` only appears in JSON-LD when eBay shows a "List Price" comparison. Check `price_spec.get('name') == 'List Price'` before using.
 
 - **Seller data is NOT in JSON-LD** — `d.get('seller')` returns `None` on item pages. The seller name, feedback %, and items sold count are only in `ux-textspans` elements in the HTML body.
+
+- **AU prices include "AU " prefix in HTML** — Price markup on ebay.com.au shows `AU $15.88`, not just `$15.88`. The regex patterns use `[^$]*\$` to skip the prefix. The extractor returns plain `$15.88` (strips the "AU ").
+
+- **Bot detection is session-level, not IP-level** — eBay's Akamai WAF fingerprints the browser/TLS session, not just the IP. A fresh browser context with updated UA can bypass an existing block on the same IP. With `http_get`, wait 60–120s for the block to clear. If the block persists, use the cookie extraction fallback documented above.
+
+- **Lowest-price sort (`_sop=15`) surfaces parts and accessories** — eBay search is keyword-loose. Sorting by lowest price returns fan shrouds, water blocks, cables, broken boards, and replacement parts ahead of actual GPUs. Filter results before comparing prices:
+  ```python
+  PARTS_KEYWORDS = ['parts', 'for parts', 'broken', 'no core', 'no power',
+                    'board only', 'fan adapter', 'water block', 'heatsink',
+                    'cooler', 'cable', 'shroud', 'no gpu', 'read description']
+
+  def is_real_item(title):
+      t = title.lower()
+      return not any(kw in t for kw in PARTS_KEYWORDS)
+
+  real_items = [i for i in extract_search_results(html) if is_real_item(i['title'])]
+  ```
+  Apply this filter before selecting the "best 3 prices" for any product.
+
+- **Discard non-comparative variants** — A listing for an accessory (cable, bracket,
+  adapter) that matches the search keyword but is not the main product must be excluded
+  from price comparisons. Similarly, multi-unit listings ("2 X Nvidia DGX Sparks")
+  cannot be compared per-unit against single listings without normalizing. Always verify
+  the title describes the full product, not a component or variant that shares the keyword.
+
+- **Always run the scam detection pipeline before reporting prices** — Use `classify_listing()` from the "Scam Detection Pipeline" section above. Three independent signals: seller trust, price vs reference, and title-based variant exclusion. Any single HIGH_RISK signal is sufficient to exclude. The `extract_search_results` function returns raw data; the pipeline must filter it before any comparison or reporting.
+
+- **0-feedback sellers are the strongest scam signal** — Confirmed pattern: auto-generated seller names (`sunny_4539`, `tvbux-89`, `tho-875314`) with 0 feedback listing high-value electronics at 30-60% of retail. No legitimate seller of $2,000+ goods has zero transaction history. Always flag these as HIGH_RISK.
+
+- **Default search is worldwide, not AU-local** — ebay.com.au without `LH_PrefLoc` returns international sellers only. Confirmed: RTX 5090 search returned 60 items from China/Korea/US/Japan with zero Australian sellers. Add `LH_PrefLoc=1` for any AU market price comparison. Without it, prices reflect international bulk/resale markets, not local retail.

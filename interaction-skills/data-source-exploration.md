@@ -95,12 +95,159 @@ For each target field:
 
 Field-level parity decides the canonical source. Page-level success does not.
 
+## Filtering strategy
+
+Push filtering to the server whenever possible. The hierarchy:
+
+1. **URL parameters** — the server never sends irrelevant items. Most efficient.
+2. **Embedded JSON filtering** — extract then filter in the extractor script.
+3. **DOM filtering** — last resort, least reliable, most token-expensive.
+
+Server-side price ranges, sort orders, and category filters exist on most
+marketplace platforms (AliExpress `pr=`, Walmart `min_price/max_price`, eBay
+`LH_ItemCondition`). Always check for URL-level filters before falling back to
+client-side extraction and filtering.
+
+**Location/sourcing defaults vary by platform.** Many marketplaces default to
+showing international sellers on regional sites (eBay AU returns zero domestic
+results without `LH_PrefLoc=1`). Before running any price comparison, test
+whether the default search includes local sellers or only international ones.
+If the default is worldwide, add the location filter to every search URL for
+that platform. This is a server-side filter — it removes irrelevant items
+before they reach the extractor, and is strictly better than post-filtering.
+
+## Embedded JSON metadata discovery
+
+Many platforms embed filter and sort metadata in their page JSON. Extract this
+to discover all available URL parameters without reverse-engineering the UI:
+
+- AliExpress: `_dida_config_` contains `sortBar` and `searchRefineFilters`
+- Walmart: `__NEXT_DATA__` contains pagination, sort options, and facet metadata
+- eBay: HTML class patterns reveal available `_sop` and `LH_*` parameters
+
+Run a metadata extraction pass on any new marketplace to build the URL parameter
+reference before building extractors. If the platform adds new filters, they'll
+appear in the metadata without re-probing.
+
+## Product search vs category search
+
+Product search ("find price of RTX 5090") and category search ("find all
+desktops containing GB10") are different operations requiring different
+extraction workflows.
+
+**Product search**: You know the target. Search → extract → done. The domain
+skill extractors are designed for this. One query returns mostly relevant
+results, and the search-level data (title, price, URL) is usually sufficient.
+
+**Category search**: You don't know the model names. Search → discover
+candidates → filter by title keywords → hit detail pages for confirmation →
+deduplicate across multiple queries. This requires a discover-then-verify loop:
+
+```
+1. Broad search (multiple keyword variations)
+2. Deduplicate results across queries by ID (ASIN, listing_id, etc.)
+3. Filter by title keywords matching the target category
+4. Fetch detail pages for surviving candidates
+5. Confirm category membership from detail-level fields
+6. Report confirmed results with full metadata
+```
+
+Category searches produce far more noise. eBay returns accessories, parts,
+and unrelated items sharing keywords. Amazon AU returns every product from the
+brand matching any keyword. Post-filtering on title text is mandatory.
+
+No domain skill documents this pattern yet. When building a category search,
+extend the product search extractors with a filter+verify layer rather than
+writing a separate pipeline.
+
+## Cross-platform comparison requires detail pages
+
+Search result data is insufficient for like-for-like comparison across
+platforms. Search result titles are truncated (Amazon AU returns brand names
+only for systems), abbreviated (eBay truncates at ~80 chars), or misleading
+(both platforms show accessories alongside real products).
+
+For meaningful comparison, the workflow is:
+
+1. Search each platform with the same query.
+2. Extract candidate IDs and prices from search results.
+3. Fetch the product detail page for each candidate.
+4. Normalize fields from detail-level data (full title, specs, configuration,
+   condition, seller location).
+5. Match across platforms on normalized fields, not search result titles.
+
+Price without configuration context is meaningless for systems. A "DGX Spark"
+at $1,933 and one at $8,053 may differ in storage (1TB vs 4TB), condition,
+or seller legitimacy. Always extract and compare configuration metadata
+(storage, RAM, edition) alongside price.
+
+## Search-level price vs detail-level price
+
+Search result prices are preliminary estimates, not final. On marketplaces with
+multi-variant listings, the search-level price can differ significantly from the
+detail page price for the same product ID. Observed: AliExpress search JSON
+showed AU$13,453 but the detail page showed AU$6,957 for the same listing.
+
+This applies across platforms — any site with variant-based pricing (eBay
+multi-variation listings, Amazon configurations, AliExpress SKU variants) can
+show a different price at search level. The detail page is always canonical.
+
+Use search-level prices only for initial filtering and ordering. Never report
+them as final prices without detail-page verification.
+
+## When to stop searching for niche products
+
+After 3 query variations with 0 results for a specific product, the product
+likely isn't on the platform. Continue broadening after this point returns
+unrelated items, not missed products. Document the absence as a finding — "not
+available on this platform" is a valid and useful result.
+
+Example: ASUS Ascent GX10 and MSI EdgeXpert returned 0 results across 3 query
+variations each on AliExpress. The correct conclusion is that these products are
+not sold on AliExpress, not that the search needs more refinement.
+
+## Marketplace fraud avoidance
+
+For platforms with gray-market or counterfeit risk (AliExpress, eBay, etc.):
+
+1. **Seller trust is the primary filter.** Always extract seller reputation
+   data (feedback %, feedback count, account age) alongside listing data.
+   A price from a seller below the platform's trust threshold is not a valid
+   data point — exclude it before comparison. Typical thresholds: <95%
+   positive feedback or <100 transactions = exclude. Domain skills define
+   the exact extraction method and thresholds for their platform.
+2. **Sort order is a fraud filter.** Cheapest-first sort surfaces scams.
+   Use `total_volume` (most orders) or `price_desc` (expensive-first) to
+   surface legitimate sellers.
+3. **Server-side price floors eliminate most scams.** Scam listings are
+   always priced below market. A URL-level price range (`pr=2000-30000`,
+   `min_price=200`) removes them before they reach the extractor.
+4. **Detail-page verification is mandatory for high-value goods.** The
+   search-level data cannot detect variant traps (accessory listed as GPU
+   variant, multi-model listings priced at the cheapest variant). Always
+   verify surviving results on their detail pages.
+5. **Two independent signals justify exclusion.** A listing should be
+   excluded if either: (a) seller trust is below threshold, or (b) price
+   is below 50% of a cross-platform reference price. Both signals are
+   independently sufficient — you don't need both to flag.
+6. **Platform-specific order count artifacts indicate fabrication.** Some
+   platforms show a suspiciously consistent order count across unrelated
+   listings (e.g., AliExpress "338 orders"). When the same count appears
+   on listings from different sellers at wildly different prices, it's a
+   platform or seller fabrication — not real transaction data. Do not use
+   fabricated counts as a trust signal.
+
 ## Cross-domain routing
 
 Use `interaction-skills/cross-domain-control-flow.md` when a workflow mixes
 domains, auth states, public and private sources, iframes, or different browser
 backends. Do not promote a backend across domains by analogy; prove capability
 for the exact source context and record the fallback reason when it fails.
+
+Use `interaction-skills/marketplace-search.md` when searching for products or
+components across multiple e-commerce platforms. It provides component-to-product
+mapping, cross-platform orchestration, form-factor filtering, and a common
+result schema.
 
 ## Backend strategy
 
