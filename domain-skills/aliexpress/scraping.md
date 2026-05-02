@@ -712,10 +712,15 @@ discovery and search directly by product name.
 Scripts in `domain-skills/aliexpress/scripts/` automate the tedious parts of
 maximum-coverage searches:
 
-- **`search.py plan <chip>`** — generates all search URLs (4-layer taxonomy with
-  form-factor synonyms) and prints the browser extraction JS snippet
-- **`search.py merge <results.json>`** — deduplicates, filters noise, classifies
-  product lines, outputs new listings with stats
+- **`search.py plan <chip>`** — generates layered search URLs with early
+  termination guidance. `--layers 2` for chip-only, `--layers 3` (default) for
+  +form-factor synonyms, `--layers 4` for spec-level queries.
+- **`search.py extract-js`** — prints extraction JS that accumulates across
+  navigations via localStorage (persists on same origin). Use `--dump` to
+  retrieve accumulated results, `--reset` to clear.
+- **`search.py merge <results.json>`** — deduplicates, price-filters, keyword-
+  filters, excludes noise, classifies product lines. Supports `--require`,
+  `--exclude`, `--min-price`, `--max-price`.
 - **`generate_search_urls.py`** — URL generator used by search.py; also works
   standalone for custom query sets
 - **`dedup_listings.py`** — compares extracted results against an existing CSV,
@@ -723,6 +728,20 @@ maximum-coverage searches:
   filtering, `--append` to add directly to CSV
 - **`classify_product_line.py`** — auto-classifies titles into product lines and
   form factors using regex patterns
+
+### Accumulating extraction via localStorage
+
+Extraction JS uses `localStorage` (key `__ae_results`) to persist results across
+page navigations. `window.__aeResults` does NOT work — page navigation creates a
+new JS context that wipes window-scoped variables. localStorage persists because
+all AliExpress search pages share the same origin.
+
+```bash
+# Print the JS snippets:
+python3 search.py extract-js          # extract current page, accumulate
+python3 search.py extract-js --dump   # dump all accumulated results
+python3 search.py extract-js --reset  # clear before starting a new batch
+```
 
 ### Search-level extraction JS
 
@@ -733,29 +752,40 @@ Get the latest snippet: `python3 search.py extract-js`
 
 ### Noise filtering
 
-Search results contain significant noise:
-- "Strix Halo" queries return ROG STRIX gaming laptops, AYN Thor handhelds,
-  building blocks (matching "Evo" in titles), and firewall PCs
-- Generic queries return unrelated Ryzen mini PCs (Ryzen 7, Ryzen 9)
+Search results contain significant noise. Three filter types work as a cascade:
 
-Always use `--require` with component-specific keywords to filter noise:
+1. **`--require`** (OR-match) — title must contain at least one keyword
+2. **`--exclude`** (OR-match) — title must NOT contain any of these keywords
+3. **`--min-price` / `--max-price`** — filter by AUD price range
+
+Common noise patterns per query type:
+
+| Query type | Noise | Fix |
+|------------|-------|-----|
+| Ambiguous names ("L40S", "A5000") | Vacuums, cameras, phones | Use full name ("RTX A5000"), `--exclude "dreame" "sony"` |
+| GPU searches | Water blocks, NVLink bridges, cables | `--exclude "water block" "bridge" "cable" "cooler"` |
+| Component searches | Building blocks, toys, cases | `--min-price` to cut below real-product threshold |
+| Generic terms ("A5000") | 100% noise | Always prefix with brand ("RTX A5000") |
+
 ```bash
 python3 search.py merge results.json --existing data.csv \
-  --require "ryzen ai max" "max+ 395" "strix halo"
+  --require "rtx" "gpu" "graphics card" \
+  --exclude "dreame" "vacuum" "camera" "water block" "bridge" \
+  --min-price 100
 ```
 
 ### Rapid search workflow
 
 ```bash
-# 1. Generate all URLs for a component
+# 1. Generate layered URLs with early termination guidance
 python3 domain-skills/aliexpress/scripts/search.py plan "Ryzen AI Max+ 395" --base-terms "Strix Halo"
 
-# 2. Get the extraction JS snippet
-python3 domain-skills/aliexpress/scripts/search.py extract-js
+# 2. Reset accumulation, then navigate to each URL and run extraction JS
+#    (extraction accumulates across navigations automatically via localStorage)
 
-# 3. For each URL: navigate browser → run extraction JS → append to results.json
+# 3. Dump all accumulated results from browser, save to file
 
-# 4. Merge all results, dedup, filter noise, classify
+# 4. Merge, dedup, filter noise, classify
 python3 domain-skills/aliexpress/scripts/search.py merge results.json \
   --existing .private-data/ryzen-aimax395-aliexpress-2026-05-02.csv \
   --require "ryzen ai max" "max+ 395" "max + 395" "strix halo"
@@ -763,3 +793,17 @@ python3 domain-skills/aliexpress/scripts/search.py merge results.json \
 
 When new product lines are discovered, add them to the classifier's
 `PRODUCT_PATTERNS` list in `classify_product_line.py`.
+
+### Query ambiguity warning
+
+Some component names collide with consumer products on AliExpress:
+
+| Query | Noise source | Fix |
+|-------|-------------|-----|
+| "L40S" | Dreame L40s vacuum cleaners | Use `--exclude "dreame" "vacuum"` |
+| "A5000" | Sony A5000 cameras, OnePlus phones | Use "RTX A5000" as query |
+| "RTX 6000 Ada" | Water blocks, NVLink bridges | `--exclude "water block" "bridge"` |
+| "RTX PRO 6000" | Cooling accessories | `--exclude "cooler" "water block"` |
+
+Always check what a bare query returns before trusting results. Ambiguous
+terms need either a more specific query or aggressive `--exclude` filtering.
