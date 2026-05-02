@@ -629,3 +629,77 @@ for item in items[:5]:
 - **0-feedback sellers are the strongest scam signal** — Confirmed pattern: auto-generated seller names (`sunny_4539`, `tvbux-89`, `tho-875314`) with 0 feedback listing high-value electronics at 30-60% of retail. No legitimate seller of $2,000+ goods has zero transaction history. Always flag these as HIGH_RISK.
 
 - **Default search is worldwide, not AU-local** — ebay.com.au without `LH_PrefLoc` returns international sellers only. Confirmed: RTX 5090 search returned 60 items from China/Korea/US/Japan with zero Australian sellers. Add `LH_PrefLoc=1` for any AU market price comparison. Without it, prices reflect international bulk/resale markets, not local retail.
+
+- **Condition is a major price axis for configurable hardware** — Used ROG Flow Z13 units sell for $2.5-3.8K vs $3.8-4K new on the same search page. For meaningful price comparison, always extract condition from detail pages (JSON-LD `itemCondition`) and group results by condition before comparing. Search-level HTML does not include condition.
+
+- **Defect-in-title is transparency, not fraud** — eBay sellers include defects directly in titles: "FRAME SPLIT", "ODOR ISSUE", "Cracked Screen". These are legitimate used-item disclosures. Don't exclude these from results (they're real products), but do flag the condition as defective for price comparison purposes.
+
+- **Sellers misname products** — "ROG Flow X13" is not a real ASUS product (it's the ROG Flow Z13). For category searches, exact product name matching misses mislabeled listings. Use fuzzy matching that accounts for close variant names.
+
+- **Title truncation at ~80 chars loses config** — HP ZBook Ultra G1a listings with long SKU numbers (e.g., "B34KWES#ABD", "CW0H2ES") get truncated before the RAM config. 6 of 15 HP ZBook Ultra listings showed "?" RAM in title-based extraction. Must hit detail pages for spec extraction on business/OEM listings with SKU-based titles.
+
+- **Verified-sample trust is sufficient for hot products** — For categories with 50+ listings, verifying cheapest/most-expensive/median per product type (29% sample) catches all HIGH_RISK sellers. Risk is concentrated at price extremes. Full verification of every listing is unnecessary.
+
+## Category Search: Ryzen AI Max+ 395 (Field-Tested)
+
+**119 listings** across 10 queries (5 AU-only, 5 worldwide), 2 May 2026.
+
+### Product Landscape
+
+| Product | Count | Price Range (AUD) |
+|---------|-------|-------------------|
+| ASUS ROG Flow Z13 | 22 | $2,520–$12,381 |
+| GPD WIN 5 | 17 | $3,247–$4,683 |
+| HP ZBook Ultra G1a | 15 | $3,590–$13,875 |
+| ASUS ROG Flow X13 (mislabeled Z13) | 13 | $5,970–$7,273 |
+| OneXPlayer Super X | 9 | $3,777–$4,721 |
+| OneXPlayer Apex | 8 | $3,191–$5,101 |
+| OneXPlayer ONEXStation i1 | 7 | $5,276–$7,690 |
+| HP Z2 G1a Mini | 6 | $5,700–$12,129 |
+| HP ZBook Studio 99 | 5 | $7,617–$8,289 |
+| MinisForum MS-S1 Max | 5 | $6,109–$6,843 |
+| MINIX ER939-AI | 2 | $4,836–$5,060 |
+| NIMO Mini PC | 2 | $1,526–$3,819 |
+| EVO-X2 Mini PC | 1 | $3,512 |
+
+### Seller Trust (35 verified)
+
+- 28 OK, 4 MODERATE_RISK, 3 HIGH_RISK
+- HIGH_RISK: ari334 (90.5%, 29 fb) × 2, UNKNOWN seller (0 fb) selling NIMO at $1,526
+- MODERATE_RISK: diy-fans (97.8%, 32,805 fb), SEVEN-Leo (97.9%, 139 fb), brand_mini_pc_official_store (99.0%, 391 fb), Direct Sale Factory (99.2%, 122 fb)
+
+### Key Sellers
+
+| Seller | Feedback | Trust | Products Sold |
+|--------|----------|-------|---------------|
+| Antonline | 349,673 (99.5%) | OK | ASUS ROG Flow Z13 |
+| ItsWorthMore | 149,262 (99.5%) | OK | ASUS ROG Flow Z13 (used) |
+| diy-fans | 32,805 (97.8%) | MODERATE | OneXStation i1 |
+| Sinobright | 21,837 (99.6%) | OK | HP ZBook Studio 99, ROG Flow X13 |
+| digi-techx | 16,865 (100.0%) | OK | HP ZBook Ultra G1a, HP Z2 G1a Mini |
+| FutureGear | 12,973 (98.6%) | OK | MINIX ER939-AI |
+| Free Shipping Tech | 12,098 (98.4%) | OK | MINIX ER939-AI |
+| ErsaZZa | 4,792 (99.7%) | OK | HP Z2 G1a Mini |
+| avantgardemm | 2,148 (99.1%) | OK | GPD WIN 5 |
+| Professional Mini Pc Store | 729 (99.8%) | OK | MinisForum, OneXPlayer |
+
+### Queries Used
+
+```
+# AU-only
+_nkw="Ryzen AI Max+ 395"&LH_PrefLoc=1&LH_BIN=1
+_nkw="Ryzen AI Max 395"&LH_PrefLoc=1&LH_BIN=1
+_nkw="AI Max+ 395 laptop"&LH_PrefLoc=1&LH_BIN=1
+_nkw="AI Max+ 395 mini PC"&LH_PrefLoc=1&LH_BIN=1
+_nkw="AI Max+ 395 workstation"&LH_PrefLoc=1&LH_BIN=1
+
+# Worldwide
+_nkw="Ryzen AI Max+ 395"&LH_BIN=1
+_nkw="Ryzen AI Max 395"&LH_BIN=1
+_nkw="AI Max+ 395 laptop"&LH_BIN=1
+_nkw="AI Max+ 395 mini PC"&LH_BIN=1
+_nkw="AI Max+ 395 handheld"&LH_BIN=1
+```
+
+AU-only queries returned 0 results (confirmed: no Australian sellers for this chip yet).
+All 119 listings from worldwide search.

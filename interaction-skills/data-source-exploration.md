@@ -188,6 +188,44 @@ domain-specific term in the filter.
 absence. "Not available on this platform" is a first-class result alongside
 positive findings. Record it in the output.
 
+## Condition is a price axis for configurable hardware
+
+On marketplace platforms with used goods (eBay, Facebook Marketplace, Gumtree), item
+condition (New/Used/Refurbished/Open Box/For Parts) is as important as configuration
+(RAM/storage) for price comparison. A used ROG Flow Z13 sells for $2,520–$3,800; the
+same system new is $3,800–$4,000. Without condition, a $2,520 price looks like a great
+deal when it's actually a defective unit ("FRAME SPLIT", "Cracked Screen").
+
+Condition is rarely available at search level. It requires detail-page extraction.
+Group results by condition before comparing prices. Never mix conditions in a single
+price range without labeling.
+
+Some sellers include defects directly in titles — "FRAME SPLIT", "ODOR ISSUE",
+"Cracked Screen". These are transparency disclosures, not fraud. Flag them as
+defective for price comparison but don't exclude them from results.
+
+## Sellers misname products on marketplace platforms
+
+Marketplace sellers frequently use incorrect product names. Confirmed: "ROG Flow X13"
+listings (which is not a real ASUS product — it's the ROG Flow Z13) at premium prices.
+For category searches, exact product name matching misses mislabeled listings. Use
+fuzzy matching that accounts for close variant names and common seller errors.
+
+## Verified-sample trust is sufficient for hot products
+
+For product categories with 50+ listings, verifying cheapest/most-expensive/median
+listing per product type (a ~30% sample) catches all HIGH_RISK sellers. Risk
+concentrates at price extremes: the cheapest listing in a category is most likely to
+be a scam, and the most expensive is most likely to be mislabeled. Full verification
+of every listing is unnecessary for hot products.
+
+## Title truncation loses config on marketplace platforms
+
+Marketplace platforms truncate titles at ~80 characters (confirmed: eBay). Business/OEM
+listings with long SKU numbers (HP "B34KWES#ABD", Dell part numbers) lose the RAM/storage
+config in truncation. Title-based RAM extraction returns "?" for these. Must hit detail
+pages for spec extraction on listings with SKU-based titles.
+
 ## Cross-platform comparison requires detail pages
 
 Search result data is insufficient for like-for-like comparison across
@@ -220,8 +258,48 @@ This applies across platforms — any site with variant-based pricing (eBay
 multi-variation listings, Amazon configurations, AliExpress SKU variants) can
 show a different price at search level. The detail page is always canonical.
 
+**For configurable hardware (mini PCs, laptops, desktops, servers), the search
+price is guaranteed to be the cheapest configuration, not the one you want.** A
+listing with 64GB/96GB/128GB RAM variants will always show the 64GB price in
+search results. This is a different problem than price drift — it's systematic
+misrepresentation by configuration. Comparison must happen at the variant level:
+navigate to the detail page, identify the target configuration in the variant
+list, and use that variant's price.
+
 Use search-level prices only for initial filtering and ordering. Never report
 them as final prices without detail-page verification.
+
+## Fraud patterns are category-specific, not platform-specific
+
+The fraud pattern depends on what the product category makes possible:
+
+| Category | Dominant fraud pattern | Why |
+|----------|----------------------|-----|
+| GPUs | Accessory variant traps (cables as variants) | Small accessories can co-list |
+| Configurable systems | Multi-config price gaming (search shows cheapest config) | RAM/storage variants are legitimate |
+| Enterprise/niche systems | Seller quality variance (few listings, variable trust) | Small seller pool, no scale |
+| Hot consumer products | Fresh stores with no track record | New sellers flood in to capitalize |
+
+Fraud avoidance strategy should be category-aware. The marketplace fraud
+avoidance section below provides platform-level filters; domain skills should
+add category-specific detection (e.g., GPUs check for accessory variants, mini
+PCs check for config-level price gaming).
+
+## Market density predicts seller quality distribution
+
+Niche products (few listings, small seller pool) have more established sellers
+but fewer choices. Hot products (many listings, flooded market) attract both
+legitimate new entrants and scammers. Adjust seller trust thresholds by market
+density:
+
+- **Niche (< 20 listings)**: use standard thresholds (≥95% feedback, ≥500 followers)
+- **Hot (> 50 listings)**: lower follower threshold (≥10 acceptable if feedback ≥95%),
+  but increase scrutiny on 0% feedback sellers
+
+For hot products, seller verification matters more than product verification
+(the product is real, but is the seller?). For niche products, product
+existence verification matters more (does the product even exist on this
+platform?).
 
 ## When to stop searching for niche products
 
