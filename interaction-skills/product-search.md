@@ -284,7 +284,7 @@ for single-product lookups.
 ## When to stop searching
 
 - After 3-4 queries with 0 new unique products, the product likely doesn't exist on that platform
-- Data-center GPUs (L40S, A100, H100) are genuinely scarce on consumer marketplaces
+- Enterprise/data-center products are genuinely scarce on consumer marketplaces
 - Recognize absence rather than endlessly broadening queries
 
 ---
@@ -342,11 +342,11 @@ described generically. Layer 4 catches products that share hardware specs but
 are from different product lines (e.g., Jetson AGX Thor shares Blackwell GPU +
 128GB LPDDR5X with GB10 systems).
 
-**All 4 layers are mandatory.** Skipping any layer leaves coverage gaps. The
-Ryzen AI Max+ 395 eBay search proved this: skipping Layer 1 (product names)
-missed 43 listings (40% of the total) that chip-level queries didn't surface.
-The same product listing appears under different query result sets depending on
-whether the query matches the product name, the chip name, or the category.
+**All 4 layers are mandatory.** Skipping any layer leaves coverage gaps.
+Field testing confirmed that skipping Layer 1 (product names) missed 40% of
+total listings that chip-level queries didn't surface. The same product listing
+appears under different query result sets depending on whether the query matches
+the product name, the chip name, or the category.
 
 Run all queries without price floor. Deduplicate by product ID across all
 queries. Filter by title relevance. Verify survivors on detail pages.
@@ -363,8 +363,8 @@ Deduplicate across all passes by product ID
 ```
 
 **Pagination is mandatory for hot products.** If a query returns ≥50 results
-on page 1, run at least pages 1-3. Single-page results are incomplete —
-"ROG Flow Z13 AI Max" returned 88 items on page 1 with more on page 2. For
+on page 1, run at least pages 1-3. Single-page results are incomplete — hot
+products can return 80+ items on page 1 with more on subsequent pages. For
 niche products (<50 results), page 1 is sufficient.
 
 **Exact chip ID in the relevance filter.** When the target is a specific chip
