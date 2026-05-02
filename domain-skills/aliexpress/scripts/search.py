@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Batch search orchestrator for AliExpress component searches.
+"""Batch search orchestrator for AliExpress product searches.
 
 Workflow:
-    # Layered search with early termination:
-    python3 search.py plan "Ryzen AI Max+ 395" --base-terms "Strix Halo"
-    python3 search.py plan "RTX 5090" --layers 2       # chip-only
-    python3 search.py plan "RTX 5090" --layers 3       # + form-factor synonyms
+    # GPU search with specificity variants:
+    python3 search.py plan "RTX 4090" --specs "24GB" "48GB" --modifiers "graphics card" "GPU"
+
+    # System containing a chip:
+    python3 search.py plan "Ryzen AI Max+ 395" --synonyms "Strix Halo" --modifiers "mini PC" "desktop"
+
+    # Simple product:
+    python3 search.py plan "mechanical keyboard"
 
     # Accumulating extraction (persists across navigations via localStorage):
     python3 search.py extract-js --reset                # clear accumulated results
@@ -14,7 +18,7 @@ Workflow:
 
     # Merge, dedup, filter, classify:
     python3 search.py merge results.json --existing data.csv \\
-        --require "ryzen ai max" "395" --min-price 500
+        --require "rtx" "gpu" --min-price 500
 """
 
 import argparse
@@ -90,13 +94,15 @@ def cmd_generate(args):
     gen_args = [
         sys.executable,
         str(SCRIPT_DIR / "generate_search_urls.py"),
-        args.chip,
+        args.query,
         "--sort", args.sort,
     ]
-    if args.base_terms:
-        gen_args.extend(["--base-terms"] + args.base_terms)
-    if args.form_factors:
-        gen_args.extend(["--form-factors"] + args.form_factors)
+    if args.synonyms:
+        gen_args.extend(["--synonyms"] + args.synonyms)
+    if args.modifiers:
+        gen_args.extend(["--modifiers"] + args.modifiers)
+    if args.specs:
+        gen_args.extend(["--specs"] + args.specs)
     if args.products:
         gen_args.extend(["--products"] + args.products)
     if args.spec_terms:
@@ -137,12 +143,11 @@ def cmd_merge(args):
     # Price filter
     filtered_items = after_dedup
     if args.min_price is not None or args.max_price is not None:
-        before_price = len(filtered_items)
         kept = []
         for item in filtered_items:
             price = parse_aud_price(item.get("price", ""))
             if price is None:
-                kept.append(item)  # keep if price can't be parsed
+                kept.append(item)
                 continue
             if args.min_price is not None and price < args.min_price:
                 continue
@@ -195,17 +200,21 @@ def cmd_merge(args):
 
 
 def cmd_plan(args):
-    print(f"# Search plan for: {args.chip}")
+    print(f"# Search plan for: {args.query}")
     print()
 
     gen_args = [
         sys.executable,
         str(SCRIPT_DIR / "generate_search_urls.py"),
-        args.chip,
+        args.query,
         "--sort", "volume",
     ]
-    if args.base_terms:
-        gen_args.extend(["--base-terms"] + args.base_terms)
+    if args.synonyms:
+        gen_args.extend(["--synonyms"] + args.synonyms)
+    if args.specs:
+        gen_args.extend(["--specs"] + args.specs)
+    if args.modifiers:
+        gen_args.extend(["--modifiers"] + args.modifiers)
     if args.products:
         gen_args.extend(["--products"] + args.products)
 
@@ -218,34 +227,35 @@ def cmd_plan(args):
             all_queries.append((label, url))
 
     # Split into layers
-    layers = {2: [], 3: [], 4: []}
+    layers: dict[int, list] = {}
     for label, url in all_queries:
         if label.startswith("L1:"):
             layers.setdefault(1, []).append((label, url))
         elif label.startswith("L2:"):
-            layers[2].append((label, url))
+            layers.setdefault(2, []).append((label, url))
         elif label.startswith("L3:"):
-            layers[3].append((label, url))
+            layers.setdefault(3, []).append((label, url))
         elif label.startswith("L4:"):
-            layers[4].append((label, url))
+            layers.setdefault(4, []).append((label, url))
 
     max_layer = args.layers
 
-    # Layer 2: chip/component references (always run)
+    # Layer 2: base queries + specificity variants (always run)
     l2 = layers.get(2, [])
-    print(f"## Layer 2 — chip references ({len(l2)} URLs)")
-    print("Run these first. If coverage is sufficient, stop here.")
-    for label, url in l2:
-        print(f"  {label}")
-        print(f"  {url}")
-        print()
+    if l2:
+        print(f"## Layer 2 — base queries ({len(l2)} URLs)")
+        print("Run these first. If coverage is sufficient, stop here.")
+        for label, url in l2:
+            print(f"  {label}")
+            print(f"  {url}")
+            print()
 
-    # Layer 3: form-factor synonyms (run if Layer 2 coverage is insufficient)
+    # Layer 3: breadth expansion (run if Layer 2 coverage is insufficient)
     l3 = layers.get(3, [])
     if max_layer >= 3 and l3:
-        print(f"## Layer 3 — form-factor synonyms ({len(l3)} URLs)")
-        print("Run if Layer 2 missed expected products. Each form-factor keyword")
-        print("reaches a different slice of AliExpress's search index.")
+        print(f"## Layer 3 — breadth expansion ({len(l3)} URLs)")
+        print("Run if Layer 2 missed expected products. Each modifier reaches")
+        print("a different slice of AliExpress's search index.")
         for label, url in l3:
             print(f"  {label}")
             print(f"  {url}")
@@ -260,14 +270,14 @@ def cmd_plan(args):
             print(f"  {url}")
             print()
 
-    # Early termination guidance
+    # Strategy summary
     total = len(l2) + (len(l3) if max_layer >= 3 else 0) + (len(l4) if max_layer >= 4 else 0)
     print(f"## Strategy ({total} URLs total)")
     print("1. Run Layer 2 queries, extract results")
-    print("2. Check: did Layer 2 find all expected product lines?")
+    print("2. Check: did Layer 2 find all expected products?")
     print("   If yes → stop, skip Layer 3")
-    print("   If no  → run Layer 3 form-factor synonyms for the chip terms that underperformed")
-    print("3. Layer 4 is rarely needed — only for components with unusual specs")
+    print("   If no  → run Layer 3 for the terms that underperformed")
+    print("3. Layer 4 is rarely needed — only for unusual specs")
     print()
     print("## Reset accumulated results (run first):")
     print("```javascript")
@@ -295,11 +305,12 @@ def main():
 
     # generate
     gen = sub.add_parser("generate", help="Generate search URLs")
-    gen.add_argument("chip")
-    gen.add_argument("--base-terms", nargs="*")
-    gen.add_argument("--form-factors", nargs="*")
-    gen.add_argument("--products", nargs="*")
-    gen.add_argument("--spec-terms", nargs="*")
+    gen.add_argument("query", help="Main search term")
+    gen.add_argument("--synonyms", nargs="*", help="Alternative names for the same product")
+    gen.add_argument("--modifiers", nargs="*", help="Category/context words to append")
+    gen.add_argument("--specs", nargs="*", help="Specificity tokens that change results (e.g. '24GB')")
+    gen.add_argument("--products", nargs="*", help="Known product names for Layer 1")
+    gen.add_argument("--spec-terms", nargs="*", help="Full spec-level queries for Layer 4")
     gen.add_argument("--sort", default="volume")
     gen.add_argument("--urls-only", action="store_true")
 
@@ -314,16 +325,18 @@ def main():
     mrg.add_argument("--existing", help="Existing CSV to dedup against")
     mrg.add_argument("--require", nargs="*", help="Title must contain at least one keyword")
     mrg.add_argument("--exclude", nargs="*", help="Exclude titles containing any of these keywords")
-    mrg.add_argument("--min-price", type=float, default=None, help="Minimum price in AUD (excludes noise below threshold)")
+    mrg.add_argument("--min-price", type=float, default=None, help="Minimum price in AUD")
     mrg.add_argument("--max-price", type=float, default=None, help="Maximum price in AUD")
 
     # plan
     plan = sub.add_parser("plan", help="Generate layered search plan")
-    plan.add_argument("chip")
-    plan.add_argument("--base-terms", nargs="*")
-    plan.add_argument("--products", nargs="*")
+    plan.add_argument("query", help="Main search term")
+    plan.add_argument("--synonyms", nargs="*", help="Alternative names for the same product")
+    plan.add_argument("--specs", nargs="*", help="Specificity tokens that change results (e.g. '24GB')")
+    plan.add_argument("--modifiers", nargs="*", help="Category/context words to append (e.g. 'graphics card')")
+    plan.add_argument("--products", nargs="*", help="Known product names for Layer 1")
     plan.add_argument("--layers", type=int, default=3, choices=[2, 3, 4],
-                      help="Max layer depth: 2=chip-only, 3=+form-factors (default), 4=+spec-level")
+                      help="Max layer depth: 2=base-only, 3=+modifiers (default), 4=+spec-level")
 
     args = parser.parse_args()
     if args.command == "generate":

@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Generate AliExpress search URLs for a component search.
+"""Generate AliExpress search URLs for any product search.
 
 Usage:
-    python3 generate_search_urls.py "Ryzen AI Max+ 395"
-    python3 generate_search_urls.py "GB10" --base-terms "Grace Blackwell"
-    python3 generate_search_urls.py "RTX 5090" --form-factors "desktop" "laptop"
+    # GPU with specificity variants:
+    python3 generate_search_urls.py "RTX 4090" --specs "24GB" "48GB" --modifiers "graphics card" "GPU"
 
-Output: one URL per line, ready for browser navigation.
+    # System containing a chip:
+    python3 generate_search_urls.py "Ryzen AI Max+ 395" --synonyms "Strix Halo" --modifiers "mini PC" "desktop"
+
+    # Simple product:
+    python3 generate_search_urls.py "mechanical keyboard"
+
+Output: tab-separated label and URL per line.
 """
 
 import argparse
@@ -20,23 +25,6 @@ SORTS = {
     "best": None,
 }
 
-# Form-factor synonyms that produce non-overlapping results on AliExpress.
-# Each must be a separate query.
-DEFAULT_FORM_FACTORS = [
-    "mini PC",
-    "desktop",
-    "workstation",
-    "server",
-    "host",
-    "gaming computer",
-]
-
-# 4-layer query taxonomy
-# Layer 1: known product names (user-supplied via --products)
-# Layer 2: chip/component references (the main term + --base-terms)
-# Layer 3: category + architecture (chip + form-factor synonyms)
-# Layer 4: spec-level (--spec-terms)
-
 
 def build_url(query: str, sort: str = "volume") -> str:
     encoded = quote(query)
@@ -48,32 +36,40 @@ def build_url(query: str, sort: str = "volume") -> str:
 
 
 def generate_queries(
-    chip: str,
-    base_terms: list[str] | None = None,
-    form_factors: list[str] | None = None,
+    query: str,
+    synonyms: list[str] | None = None,
+    specs: list[str] | None = None,
+    modifiers: list[str] | None = None,
     products: list[str] | None = None,
     spec_terms: list[str] | None = None,
 ) -> list[tuple[str, str]]:
-    """Return (query, url) pairs for all layers."""
-    ffs = form_factors or DEFAULT_FORM_FACTORS
+    """Return (label, url) pairs for all layers."""
+    terms = [query] + (synonyms or [])
     queries = []
 
     # Layer 1: known product names
     if products:
         for p in products:
-            q = f"{p} {chip}"
+            q = f"{p} {query}"
             queries.append((f"L1: {q}", build_url(q)))
 
-    # Layer 2: chip references
-    terms = [chip] + (base_terms or [])
+    # Layer 2: bare terms (always generated)
     for t in terms:
         queries.append((f"L2: {t}", build_url(t)))
 
-    # Layer 3: category + form-factor
-    for t in terms:
-        for ff in ffs:
-            q = f"{t} {ff}"
-            queries.append((f"L3: {q}", build_url(q)))
+    # Layer 2: term × spec specificity variants
+    if specs:
+        for t in terms:
+            for s in specs:
+                q = f"{t} {s}"
+                queries.append((f"L2: {q}", build_url(q)))
+
+    # Layer 3: term × modifier breadth expansion
+    if modifiers:
+        for t in terms:
+            for m in modifiers:
+                q = f"{t} {m}"
+                queries.append((f"L3: {q}", build_url(q)))
 
     # Layer 4: spec-level
     if spec_terms:
@@ -85,16 +81,21 @@ def generate_queries(
 
 def main():
     parser = argparse.ArgumentParser(description="Generate AliExpress search URLs")
-    parser.add_argument("chip", help="Chip/component name (e.g. 'Ryzen AI Max+ 395')")
+    parser.add_argument("query", help="Main search term (e.g. 'RTX 4090')")
     parser.add_argument(
-        "--base-terms",
+        "--synonyms",
         nargs="*",
-        help="Additional chip reference terms (e.g. 'Strix Halo')",
+        help="Alternative names for the same product (e.g. 'Strix Halo')",
     )
     parser.add_argument(
-        "--form-factors",
+        "--specs",
         nargs="*",
-        help="Form-factor synonyms (default: built-in list)",
+        help="Specificity tokens that change search results (e.g. '24GB' '48GB')",
+    )
+    parser.add_argument(
+        "--modifiers",
+        nargs="*",
+        help="Category/context words to append (e.g. 'graphics card' 'GPU')",
     )
     parser.add_argument(
         "--products",
@@ -104,7 +105,7 @@ def main():
     parser.add_argument(
         "--spec-terms",
         nargs="*",
-        help="Spec-level queries for Layer 4 (e.g. '128GB LPDDR5X Blackwell')",
+        help="Full spec-level queries for Layer 4",
     )
     parser.add_argument(
         "--sort",
@@ -120,9 +121,10 @@ def main():
     args = parser.parse_args()
 
     queries = generate_queries(
-        args.chip,
-        base_terms=args.base_terms,
-        form_factors=args.form_factors,
+        args.query,
+        synonyms=args.synonyms,
+        specs=args.specs,
+        modifiers=args.modifiers,
         products=args.products,
         spec_terms=args.spec_terms,
     )
