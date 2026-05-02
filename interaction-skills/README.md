@@ -11,13 +11,15 @@ hands off to a generic browser, source, session, or output concern.
 2. If the page loaded but required fields are missing, use
    `backend-capability.md`.
 3. If the fetch returns 403 / bot detection, use `waf-bypass.md`.
-4. If the task is a category search (find all X containing Y) or
+4. If the task is a product search across marketplace platforms (AliExpress,
+   eBay, Walmart, Amazon), use `product-search.md`.
+5. If the task is a category search (find all X containing Y) or
    cross-platform comparison, use `data-source-exploration.md`
    (product-vs-category and comparison-requires-detail-pages sections).
-5. If designing a scraper or report from scratch, use
+6. If designing a scraper or report from scratch, use
    `data-source-exploration.md`.
-6. If the problem is a UI mechanic, pick the smallest mechanic doc below.
-7. If the task reveals durable cross-domain learning, use
+7. If the problem is a UI mechanic, pick the smallest mechanic doc below.
+8. If the task reveals durable cross-domain learning, use
    `empirical-learning-gate.md` before editing shared docs.
 
 ## Buckets
@@ -55,6 +57,7 @@ hands off to a generic browser, source, session, or output concern.
 - `iframes.md`
 - `network-requests.md`
 - `print-as-pdf.md`
+- `product-search.md`
 - `screenshots.md`
 - `scrolling.md`
 - `session-continuity.md`

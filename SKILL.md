@@ -5,7 +5,9 @@ description: Direct browser control via CDP. Use when the user wants to automate
 
 # browser-harness
 
-Direct browser control via CDP. Read helpers.py — that's where the functions live. For setup, install, or connection problems, read install.md.
+Direct browser control via CDP. `SKILL.md` is the agent router. For setup,
+install, or connection problems, read `install.md`. For executable browser
+primitives, use `browser-harness` with the helpers preloaded from `helpers.py`.
 
 ## Usage
 
@@ -22,53 +24,112 @@ PY
 - On macOS, `browser-harness --setup --accept-remote-debugging-dialog` can opt into keyboard-only approval for Chrome's remote-debugging consent dialog.
 - `browser-harness --launch-profile PATH --port 9222` launches a visible agent-owned Chrome profile with loopback CDP when you need a fresh profile/process.
 
-Available interaction skills:
-- interaction-skills/connection.md — startup sequence, tab visibility, omnibox popup fix
-- interaction-skills/backend-capability.md — diagnose loaded-but-empty pages and backend capability
-- interaction-skills/cross-domain-control-flow.md — choose source, auth state, and backend across domains
-- interaction-skills/data-source-exploration.md — discover public/private data primitives before designing extraction
-- interaction-skills/data-display.md — render scraped datasets as self-contained HTML with tables, charts, and tree views (file-based report output, not live CDP tab inspection)
-- interaction-skills/empirical-learning-gate.md — promote browser observations into skill updates only after source-context, redaction, canonical-artifact, positive-probe, and negative-probe checks
-- interaction-skills/session-continuity.md — persist auth/session continuity metadata safely
+## Cold-Start Router
 
-Available domain skills:
-- airbnb/README.md (folder landing page and fast path)
-- airbnb/overview.md (start here — file map, executable scripts, schema index)
-- airbnb/scripts/README.md (executable runners, collectors, probes, helpers)
-- airbnb/exploration-protocol.md
-- airbnb/workflows-current-state.md
-- airbnb/market-research-playbook.md
-- airbnb/data-inventory.md
-- airbnb/session-continuity.md
-- airbnb/host-sources.md
-- airbnb/public-market.md
-- airbnb/operator-insight-workflows.md
-- airbnb/content-optimization-playbook.md
-- airbnb/visual-revenue-workflows.md
-- airbnb/schema-core.md
-- airbnb/schema-performance.md
-- airbnb/schema-operations.md
-- airbnb/schema-public-market.md
-- airbnb/schema-market-research.md
-- airbnb/schema-finance.md
-- airbnb/schema-demand-context.md
-- airbnb/analytics-alerts.md
-- airbnb/decisioning.md
-- airbnb/data-quality.md
-- airbnb/pipeline-fulfilment.md (status)
-- airbnb/enhancement-roadmap.md (plan)
-- airbnb/e2e-insights-data-display-plan.md (plan)
-- airbnb/insights-granularity-map.md (fact table)
-- realestate-com-au/scraping.md
-- tiktok/upload.md
-- polymarket/scraping.md
-- youtube/scraping.md
-- youtube/surface-map.json
-- youtube/search.md
-- youtube/video-detail.md
-- youtube/fallbacks-and-verification.md
-- surface-map-pattern.md
-- surface-map.schema.json
+Start from the user intent, then pick the control path and evidence family. Do
+not start from provider choice or collector code unless the router names it.
+
+| User intent | First doc | Run path | Evidence/source owner | Output rule |
+|---|---|---|---|---|
+| Install, connect, repair local browser access | `install.md` | `browser-harness --setup`, `--doctor`, `--launch-profile` | `admin.py`, `daemon.py`, `docs/local-cdp-providers.md` | Local daemon/socket/log state stays outside skill docs |
+| Execute a browser action or inspect a page | This file, then relevant interaction skill if mechanics get hard | `browser-harness <<'PY' ... PY` | `helpers.py` over CDP through `run.py` and `daemon.py` | Use screenshots/page info as verification evidence |
+| Choose backend, auth state, or source family | `interaction-skills/cross-domain-control-flow.md` | Capability probe, then selected browser/API/export path | Source context and required field contract | Capability receipts can be stored in local/session artifacts, not shared secrets |
+| Discover a scraper/data model | `interaction-skills/data-source-exploration.md`, then `domain-skills/<site>/` | Export/API/static/browser path selected by field proof | Domain skill owns site semantics and source priority | Persist only reusable routes/selectors/contracts |
+| Search for products across marketplaces | `interaction-skills/product-search.md` | Composable layered queries per platform, parallel http_get + sequential CDP | Domain skill owns transport and extractors | Normalize to common schema, dedup by platform ID |
+| Use a known site workflow | `domain-skills/<site>/...` | Domain-specific script or browser flow named by that skill | Domain workflow and schema/contract docs | Private run data stays in ignored local paths |
+| Render a collected dataset | `interaction-skills/data-display.md` | `from data_display import render_dataset` | Input file schema from the producing workflow | HTML output is generated; keep sensitive inputs private |
+| Preserve or reuse auth safely | `interaction-skills/session-continuity.md` | `login_session.py` helpers through a CDP client | Redacted manifest plus private auth bundle | `.session-store/` is redacted; `.private-data/` is secret |
+| Promote a learned rule into a skill | `interaction-skills/empirical-learning-gate.md` | `browser-harness --skill-learning-gate CANDIDATE.json` | `domain-skills/skill-learning-candidate.schema.json` | Candidate evidence must pass redaction and negative-probe checks |
+| Clean up or reorganize a skill | `interaction-skills/cross-domain-control-flow.md` | Domain Skill Reorganization Workflow | Root/domain router owns handoffs; schema docs own contracts | Exclude `.private-data/`, `.session-store/`, `outputs/`, caches |
+
+## Hierarchy Map
+
+Level 0 is the browser-harness skill root.
+
+| Level | Buckets | Concrete homes |
+|---|---|---|
+| 1 | Root harness, interaction skills, domain skills, provider docs, package/tests, generated/private artifacts | `SKILL.md`, `interaction-skills/`, `domain-skills/`, `docs/`, `pyproject.toml`, `test_*.py`, ignored local dirs |
+| 2 under root harness | install/control plane, command runner, CDP daemon, helper primitives, data display, session/auth helpers, skill-learning gate | `install.md`, `run.py`, `admin.py`, `daemon.py`, `helpers.py`, `data_display.py`, `login_session.py`, `skill_learning_gate.py` |
+| 2 under interaction skills | backend/source control, browser mechanics, data display, session continuity, empirical learning | `interaction-skills/README.md`, `interaction-skills/*.md` |
+| 2 under domain skills | site workflows, surface-map contracts, rich domain bundles, fixtures/receipts/reports | `domain-skills/README.md`, `domain-skills/<site>/`, `domain-skills/surface-map*.json`, `domain-skills/surface-map-pattern.md` |
+| 3 under rich domain bundles | overview/router, workflows/playbooks, schema/contracts, scripts, fixtures, receipts/reports, private/generated local stores | Airbnb and YouTube are the current multi-file bundles |
+
+Control-flow hierarchy:
+`user intent -> root router -> workflow/mechanic/domain doc -> run path -> evidence/source contract -> output/provenance -> skill update or action`.
+
+Source-family hierarchy:
+`browser-harness -> evidence family -> logical layer -> artifact bucket -> concrete doc/script/schema/artifact`.
+
+Canonical evidence families:
+
+| Evidence family | Logical layer | Primary owners |
+|---|---|---|
+| Browser visual/UI state | screenshots, coordinate clicks, tabs, viewport, dialogs, uploads | `helpers.py`, `interaction-skills/screenshots.md`, mechanics docs |
+| DOM/CDP runtime state | JS evaluation, page info, AX tree, raw CDP | `helpers.py`, `daemon.py`, mechanics docs |
+| Same-origin browser-session HTTP | cookies, user agent, seeded fetches | `helpers.py`, `login_session.py`, `interaction-skills/cookies.md` |
+| Static HTTP/API/export | direct fetches, exports, embedded data | `helpers.py`, `interaction-skills/data-source-exploration.md`, domain skills |
+| Provider/backend capability | Chrome/Edge, Browser Use, Lightpanda, remote/self-hosted CDP | `interaction-skills/cross-domain-control-flow.md`, `docs/local-cdp-providers.md` |
+| Domain-specific evidence | site URLs, selectors, source priority, workflow semantics | `domain-skills/<site>/` |
+| Local data/report artifacts | JSON/JSONL/CSV inputs and generated HTML explorers | `data_display.py`, `interaction-skills/data-display.md`, ignored `outputs/` or private domain stores |
+| Skill-learning evidence | observed surface, positive/negative probes, redaction status | `interaction-skills/empirical-learning-gate.md`, `skill_learning_gate.py`, candidate schema |
+
+## Executable And Helper Index
+
+| Artifact | Role | Control-flow stage | Direct run? | Owner |
+|---|---|---|---|---|
+| `browser-harness` / `run.py` | runner | execution | yes | CLI, helper preload, daemon auto-start |
+| `browser-harness --doctor` | guard/probe | capability check | yes | local daemon, endpoint, CDP hygiene |
+| `browser-harness --setup` | runner | intake/setup | yes | interactive browser attach |
+| `browser-harness --launch-profile PATH` | runner | source/backend selection | yes | agent-owned headful profile |
+| `browser-harness --skill-learning-gate` | guard | validation/provenance | yes | empirical skill promotion gate |
+| `browser-harness --update -y` | runner | maintenance | yes, only when user asks | update then restart daemon |
+| `helpers.py` | helper module | browser execution/evidence | preloaded, not standalone | CDP/browser primitives |
+| `admin.py` | helper module | setup/maintenance | through `run.py` | daemon setup, doctor, launch, update |
+| `daemon.py` | service module | execution transport | indirect | CDP websocket and socket bridge |
+| `data_display.py` | helper module | generated report output | import `render_dataset` | self-contained HTML explorers |
+| `login_session.py` | helper module | auth/session continuity | import from workflows | redacted manifests, cookie/header helpers |
+| `lightpanda_control.py` | helper module | backend capability | import from workflows | direct Lightpanda CDP control and field gates |
+| `skill_learning_gate.py` | guard module | validation/provenance | direct via CLI wrapper | candidate schema, redaction, promotion checks |
+| `tools/render_airbnb_fixtures.py` | local helper | generated report refresh | helper-only | Airbnb private local fixture rendering |
+
+## Reusable Interaction Buckets
+
+Use these when the task is cross-domain, mechanical, or not yet tied to one
+site. The full interaction inventory is `interaction-skills/README.md`.
+
+| Bucket | Docs | Owns |
+|---|---|---|
+| Backend/source routing | `interaction-skills/cross-domain-control-flow.md`, `interaction-skills/backend-capability.md`, `interaction-skills/data-source-exploration.md`, `interaction-skills/network-requests.md` | Source family, auth/backend choice, capability gates, source discovery |
+| Browser mechanics | `interaction-skills/connection.md`, `interaction-skills/tabs.md`, `interaction-skills/viewport.md`, `interaction-skills/screenshots.md`, `interaction-skills/scrolling.md` | Stable tab/session control and visual verification |
+| UI controls | `interaction-skills/dialogs.md`, `interaction-skills/dropdowns.md`, `interaction-skills/uploads.md`, `interaction-skills/drag-and-drop.md`, `interaction-skills/iframes.md`, `interaction-skills/cross-origin-iframes.md`, `interaction-skills/shadow-dom.md`, `interaction-skills/print-as-pdf.md`, `interaction-skills/downloads.md` | Reusable interaction patterns that are not site-specific |
+| Data/session outputs | `interaction-skills/data-display.md`, `interaction-skills/cookies.md`, `interaction-skills/session-continuity.md`, `interaction-skills/empirical-learning-gate.md` | Reports, cookie/session safety, redacted manifests, promotion checks |
+
+## Domain Skill Buckets
+
+Domain skills are site-specific. Use `domain-skills/README.md` for the
+directory-level router. For the exhaustive top-level inventory, run:
+
+```bash
+find domain-skills -mindepth 1 -maxdepth 1 -type d | sort
+```
+
+For a selected site, run `rg --files domain-skills/<site>`.
+
+| Bucket | Start here | Notes |
+|---|---|---|
+| Rich multi-file domain bundles | `domain-skills/airbnb/overview.md`, `domain-skills/youtube/overview.md`, `domain-skills/ai-chat-archive/overview.md` | Have routers, workflow docs, scripts/helpers, fixtures, schemas or surface maps |
+| Single-file site skills | `domain-skills/<site>/*.md` | Usually one concise scraping/action workflow for the site |
+| Shared domain contracts | `domain-skills/surface-map-pattern.md`, `domain-skills/surface-map.schema.json`, `domain-skills/skill-learning-candidate.schema.json` | Schema/process contracts reused by domain bundles |
+| Private/generated local artifacts | `domain-skills/<site>/.private-data/`, `domain-skills/<site>/.session-store/`, `domain-skills/<site>/outputs/` | Ignored or package-excluded local state; never broad-search or copy into reusable docs |
+
+High-signal domain entry points:
+
+- `domain-skills/airbnb/overview.md` — Airbnb host intelligence router.
+- `domain-skills/youtube/overview.md` — YouTube workflow/router bundle.
+- `domain-skills/ai-chat-archive/overview.md` — SQLite-only logged-in AI chat archive workflow for ChatGPT, Claude, Gemini, Grok, and Perplexity.
+- `domain-skills/realestate-com-au/scraping.md` — REA public scraping workflow.
+- `domain-skills/tiktok/upload.md` — TikTok upload workflow.
+- `domain-skills/polymarket/scraping.md` — Polymarket scraping workflow.
 
 ### Airbnb cold-read path
 
@@ -76,7 +137,8 @@ When the task is about Airbnb host intelligence and you have no prior context,
 read progressively:
 
 1. `domain-skills/airbnb/overview.md` — first stop. Use its 90-second cold
-   start, source-family route, and task router before opening scripts.
+   start, Intent Router, source guardrails, and Expanded Routing Matrix before
+   opening scripts.
 2. `domain-skills/airbnb/scripts/README.md` — only after you know data must be
    collected, probed, validated, or exported.
 3. `domain-skills/airbnb/host-sources.md` — logged-in host inventory,
@@ -102,6 +164,10 @@ run.py calls ensure_daemon() before exec — you never start/stop manually unles
 ## Search first
 
 Search domain-skills/ first for the domain you are working on before inventing a new approach.
+
+If the task is to clean up or reorganize a domain skill, use
+`interaction-skills/cross-domain-control-flow.md` and its Domain Skill
+Reorganization Workflow before editing shared docs.
 
 Only if you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. The available interaction skills are:
 - backend-capability.md
