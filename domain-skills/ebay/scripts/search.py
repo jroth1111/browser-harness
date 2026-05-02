@@ -424,16 +424,18 @@ def run_coverage_verification(chip: str, session: Session, all_listings: dict,
         print(f"  Missing product '{product}': {status}", file=sys.stderr)
         time.sleep(delay)
 
-    # Determine coverage confidence
+    # Determine coverage confidence based on gap ratio, not absolute count
+    total = len(all_listings)
+    gap_ratio = report['new_from_gaps'] / max(total, 1)
     if report['new_from_gaps'] == 0:
         report['coverage'] = 'HIGH'
         print(f"\n  Coverage: HIGH — {report['gaps_probed']} gap probes found 0 new listings", file=sys.stderr)
-    elif report['new_from_gaps'] <= 3:
+    elif gap_ratio <= 0.03 or report['new_from_gaps'] <= 5:
         report['coverage'] = 'MEDIUM'
-        print(f"\n  Coverage: MEDIUM — {report['new_from_gaps']} new from {report['gaps_probed']} probes", file=sys.stderr)
+        print(f"\n  Coverage: MEDIUM — {report['new_from_gaps']} new from {report['gaps_probed']} probes ({gap_ratio:.1%} gap ratio)", file=sys.stderr)
     else:
         report['coverage'] = 'LOW'
-        print(f"\n  Coverage: LOW — {report['new_from_gaps']} new from {report['gaps_probed']} probes, re-run recommended", file=sys.stderr)
+        print(f"\n  Coverage: LOW — {report['new_from_gaps']} new from {report['gaps_probed']} probes ({gap_ratio:.1%} gap ratio), re-run recommended", file=sys.stderr)
 
     return report
 
