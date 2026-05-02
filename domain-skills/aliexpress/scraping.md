@@ -469,6 +469,24 @@ in JSON — variant-level pricing not always exposed.
 | "RTX 3090 24GB" AU$476 | AU$476 | RTX 3060 12G | RTX 3090 24G = AU$2,084+ |
 | "RTX A4000 A3000 A5000" AU$434 | AU$434 | A3000 6GB | A5000 24GB = AU$3,639+ |
 
+### Type 2b: Multi-config variant pricing (configurable systems)
+
+Distinct from multi-GPU price gaming. Configurable systems (mini PCs, laptops,
+desktops) have legitimate RAM and storage variants. The search price always
+reflects the cheapest configuration (lowest RAM, no SSD). This is not fraud —
+the listing is real — but the search price is useless for comparison unless you
+specify the exact configuration.
+
+| Example | searchPrice | Cheapest config | Target config |
+|---------|-------------|-----------------|---------------|
+| GMKtec EVO-X2 AU$3,011 | AU$3,011 | 64GB / 2TB | 128GB / 2TB = higher |
+| OneXPlayer Super X AU$3,353 | AU$3,353 | 48GB / 1TB | 128GB / 2TB = higher |
+| Bosgame M5 AU$3,725 | AU$3,725 | 128GB / no SSD | 128GB / 2TB = higher |
+
+Rule: for configurable systems, always check the variant list for the target
+configuration. Never report search-level prices as 128GB prices without
+confirming which variant they correspond to.
+
 ### Type 3: Outright scam (no variants)
 
 Single price with no variants, 50-80% below market. 338 fabricated orders.
@@ -501,6 +519,31 @@ is low (it's a real product), but the per-unit price requires division.
 
 Extract the variant text to detect bundles. If a variant contains "2 units",
 "pair", or a quantity > 1, divide the price accordingly before comparison.
+
+### Fresh stores on hot products
+
+Newly-released, in-demand products (Ryzen AI Max+ 395, new GPU launches)
+attract fresh stores with 100% feedback but < 25 followers. These sellers
+opened stores specifically to sell the hot product. The standard trust
+threshold (< 50 followers = avoid) would reject all of them.
+
+For hot products, lower the follower threshold to < 10 (not < 50) and
+weight feedback percentage more heavily. A 100% feedback seller with 11–24
+followers selling a hot product is more trustworthy than a 66% feedback
+seller with thousands of followers. Context matters — seller trust thresholds
+should adapt to product lifecycle stage.
+
+### Accessory traps are category-specific
+
+Accessory variant traps (cable at AU$80 for a AU$7,000 system) appear in
+categories where accessories can co-list as variants: GPUs (cables, fans),
+laptops (cooling pads), phones (cases). Mini PCs, handhelds, and tablets do
+not have accessory traps — the product is the whole system with no cheap
+accessory to hide as a variant.
+
+For non-accessory categories, the fraud patterns shift to: multi-config price
+gaming (Type 2b), fresh stores with no track record, and outright scams with
+0% feedback. Adjust the trap detection strategy by category.
 
 ## Triage: Price-to-Market Ratio
 
@@ -567,6 +610,7 @@ result. All three must align.
 | GB10 AI systems (Dell Pro Max) | 1 per search | Single verified clean listing |
 | GB10 AI systems (ASUS Ascent GX10) | **0** | Not available on AliExpress |
 | GB10 AI systems (MSI EdgeXpert) | **0** | Only charger/accessories found, not the system |
+| Ryzen AI Max+ 395 systems | 86 unique across 8 queries | 18 product lines: GMKtec EVO-X2, Bosgame M5, FEVM FAEX1, FEVM FAEX9, Beelink GTR9 Pro, OpenClaw, Minisforum MS-S1 MAX, SZBOX, Z2 Mini G1a, GPD WIN 5, OneXPlayer Apex MAX+, OneXPlayer Super X, Onexfly Apex, AYANEO NEXT 2 + generic mini PCs and motherboards. Hot product — form-factor synonyms required for coverage. |
 
 For data-center GPUs, AliExpress is not viable. Use eBay, used-equipment
 resellers, or authorized distributors.
@@ -594,13 +638,42 @@ and category terms. Use them when the component has distinguishing specs that
 are uncommon in combination. The results won't be the target product, but they
 may be relevant to the user's underlying intent.
 
-### Product convergence for niche components
+### Form-factor keywords are non-overlapping query spaces
 
-For niche enterprise hardware like GB10, all listings on AliExpress converge
-to a small number of actual products regardless of seller. 14 unique listings
-found across 8 queries are all the same two products (DGX Spark 128GB/4TB and
-Dell Pro Max GB10) from different resellers. Once you've identified the actual
-products, future searches can skip discovery and search directly by product name.
+AliExpress search treats different form-factor keywords as separate result
+sets with minimal overlap. For configurable systems, each of these must be a
+separate Layer 3 query:
+
+- "mini PC"
+- "desktop"
+- "workstation"
+- "host"
+- "gaming computer"
+- "server"
+
+Observed: "Ryzen AI Max workstation" found the Z2 Mini G1a (AU$4,960.69) that
+"Ryzen AI Max mini PC" and "Ryzen AI Max desktop" did not return at all. The
+search engine does not treat these as synonyms — each keyword reaches a
+different slice of the product index.
+
+For maximum coverage, enumerate all plausible form-factor synonyms as
+separate queries. Do not assume the search engine equates them.
+
+### Product convergence scales with market density
+
+**Niche products** (few listings, small seller pool): all listings converge to
+a small number of actual products quickly. GB10: 14 listings across 8 queries
+→ 2 products (DGX Spark, Dell Pro Max). 3 queries with 0 new product lines =
+confirmed coverage.
+
+**Hot products** (many listings, large seller pool): convergence is slower but
+still happens. Ryzen AI Max+ 395: 86 listings across 8 queries → 18 product
+lines. 6 verification queries added only 1 new product line. The stopping
+rule scales: after 3 queries with 0 new product lines, coverage is confirmed
+regardless of market density.
+
+Once you've identified the actual product lines, future searches can skip
+discovery and search directly by product name.
 
 ## Empty / No-Match Results
 
@@ -619,6 +692,7 @@ products, future searches can skip discovery and search directly by product name
 ## Gotchas
 
 - **`/w/wholesale/{query}.html` is dead** — use `/search?SearchText={query}`
+- **`[class*="price"]` doesn't work for search-level prices** — AliExpress uses obfuscated CSS classes with no "price" substring. Use `innerText` regex (`/AU\$([\d,]+\.?\d*)/`) on the card element instead. The `extract-js` command in search.py has the correct snippet.
 - **`SortType=price_asc` is a loose sort** — promoted listings override ordering
 - **`minPrice` is cheapest variant** — a GPU with an AU$5 cable variant shows minPrice: 5
 - **Search price ≠ detail price** — search JSON can show AU$13K while detail shows AU$7K for the same ID. Detail page is authoritative.
@@ -632,3 +706,60 @@ products, future searches can skip discovery and search directly by product name
 - **CSS module hashes change** — always use `[class*="prefix--"]` partial match for detail pages
 - **"dedicated line" and "cascade cable" are DGX Spark accessory traps** — listings at $80-$100 with these variant names are cables, not the DGX Spark system. The accessory regex must include `dedicated line|cascade|power cord` to catch these. Confirmed on product IDs 1005010734242172, 1005010734240196, 1005011659350058.
 - **Max-coverage category search requires multiple query strategies** — "GB10" alone returns 60 items but only 4 are relevant. Combining "GB10 Grace Blackwell" (8 results, 5 relevant), "DGX Spark" (60 results, 12 relevant), "Grace Blackwell workstation" (60 results, 7 relevant), and "Blackwell AI desktop computer" (60 results, 16 relevant) found 14 unique GB10 system listings after deduplication. Single-query coverage misses 40-60% of available listings.
+
+## Batch search scripts
+
+Scripts in `domain-skills/aliexpress/scripts/` automate the tedious parts of
+maximum-coverage searches:
+
+- **`search.py plan <chip>`** — generates all search URLs (4-layer taxonomy with
+  form-factor synonyms) and prints the browser extraction JS snippet
+- **`search.py merge <results.json>`** — deduplicates, filters noise, classifies
+  product lines, outputs new listings with stats
+- **`generate_search_urls.py`** — URL generator used by search.py; also works
+  standalone for custom query sets
+- **`dedup_listings.py`** — compares extracted results against an existing CSV,
+  outputs only new listings; supports `--require` and `--exclude` for relevance
+  filtering, `--append` to add directly to CSV
+- **`classify_product_line.py`** — auto-classifies titles into product lines and
+  form factors using regex patterns
+
+### Search-level extraction JS
+
+The extraction JS uses `a[class*="search-card-item"]` (not `a[href*="/item/"]`)
+and text-based price extraction (not `[class*="price"]` CSS selectors) because
+AliExpress uses obfuscated CSS classes that don't contain the word "price".
+Get the latest snippet: `python3 search.py extract-js`
+
+### Noise filtering
+
+Search results contain significant noise:
+- "Strix Halo" queries return ROG STRIX gaming laptops, AYN Thor handhelds,
+  building blocks (matching "Evo" in titles), and firewall PCs
+- Generic queries return unrelated Ryzen mini PCs (Ryzen 7, Ryzen 9)
+
+Always use `--require` with component-specific keywords to filter noise:
+```bash
+python3 search.py merge results.json --existing data.csv \
+  --require "ryzen ai max" "max+ 395" "strix halo"
+```
+
+### Rapid search workflow
+
+```bash
+# 1. Generate all URLs for a component
+python3 domain-skills/aliexpress/scripts/search.py plan "Ryzen AI Max+ 395" --base-terms "Strix Halo"
+
+# 2. Get the extraction JS snippet
+python3 domain-skills/aliexpress/scripts/search.py extract-js
+
+# 3. For each URL: navigate browser → run extraction JS → append to results.json
+
+# 4. Merge all results, dedup, filter noise, classify
+python3 domain-skills/aliexpress/scripts/search.py merge results.json \
+  --existing .private-data/ryzen-aimax395-aliexpress-2026-05-02.csv \
+  --require "ryzen ai max" "max+ 395" "max + 395" "strix halo"
+```
+
+When new product lines are discovered, add them to the classifier's
+`PRODUCT_PATTERNS` list in `classify_product_line.py`.

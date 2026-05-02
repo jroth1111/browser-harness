@@ -28,22 +28,23 @@ SCRIPT_DIR = Path(__file__).parent
 
 EXTRACT_JS = r"""
 () => {
-  const links = document.querySelectorAll('a[href*="/item/"]');
+  const cards = document.querySelectorAll('a[class*="search-card-item"]');
   const results = [];
   const seen = new Set();
-  links.forEach(a => {
-    const urlMatch = a.href.match(/\/item\/(\d+)\.html/);
-    if (!urlMatch) return;
+  for (let card of cards) {
+    const urlMatch = card.href?.match(/\/item\/(\d+)\.html/);
+    if (!urlMatch) continue;
     const pid = urlMatch[1];
-    if (seen.has(pid)) return;
+    if (seen.has(pid)) continue;
     seen.add(pid);
-    const h3 = a.querySelector('h3');
+    const h3 = card.querySelector('h3');
     const title = h3?.innerText?.trim() || '';
-    if (!title) return;
-    const priceEl = a.querySelector('[class*="price"]');
-    const price = priceEl?.innerText?.trim() || '';
-    results.push({ product_id: pid, title: title.substring(0, 200), price: price.substring(0, 30) });
-  });
+    if (!title) continue;
+    const cardText = card.innerText || '';
+    const priceMatch = cardText.match(/AU\$([\d,]+\.?\d*)/);
+    const price = priceMatch ? priceMatch[0] : '';
+    results.push({ product_id: pid, title, price });
+  }
   return results;
 }
 """.strip()
@@ -88,8 +89,21 @@ def cmd_merge(args):
                 if pid:
                     existing_ids.add(pid)
 
-    before = len(new_items)
-    new_items = [i for i in new_items if i.get("product_id", "") not in existing_ids]
+    total_input = len(new_items)
+    after_dedup = [i for i in new_items if i.get("product_id", "") not in existing_ids]
+    duplicates_removed = total_input - len(after_dedup)
+
+    # Relevance filter
+    filtered_items = after_dedup
+    if args.require:
+        keywords = [k.lower() for k in args.require]
+        filtered_items = [
+            i for i in filtered_items
+            if any(k in i.get("title", "").lower() for k in keywords)
+        ]
+
+    relevance_filtered = len(after_dedup) - len(filtered_items)
+    new_items = filtered_items
 
     # Classify
     classify_args = [sys.executable, str(SCRIPT_DIR / "classify_product_line.py"), "--input", "-"]
@@ -97,7 +111,7 @@ def cmd_merge(args):
     classified = json.loads(proc.stdout)
 
     # Summary
-    print(f"Existing: {len(existing_ids)} | Extracted: {before} | New: {len(new_items)} | Duplicates: {before - len(new_items)}", file=sys.stderr)
+    print(f"Existing: {len(existing_ids)} | Input: {total_input} | Duplicates: {duplicates_removed} | Filtered: {relevance_filtered} | New: {len(new_items)}", file=sys.stderr)
 
     product_lines = {}
     for item in classified:
@@ -169,6 +183,7 @@ def main():
     mrg = sub.add_parser("merge", help="Merge, dedup, and classify results")
     mrg.add_argument("input", help="JSON file with extracted results")
     mrg.add_argument("--existing", help="Existing CSV to dedup against")
+    mrg.add_argument("--require", nargs="*", help="Title must contain at least one keyword")
 
     # plan
     plan = sub.add_parser("plan", help="Generate full search plan")

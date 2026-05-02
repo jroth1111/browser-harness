@@ -33,6 +33,7 @@ PRODUCT_PATTERNS: list[tuple[str, str, str]] = [
     (r"\bSZBOX\b", "SZBOX", "mini_pc"),
     (r"\bVO-?X2\b", "VO-X2", "mini_pc"),
     (r"\bZ2\s+Mini\s+G1a\b", "Z2 Mini G1a", "mini_pc"),
+    (r"\bLCFC-?H02\b", "LCFC-H02", "barebones"),
     (r"\bGPD\s+WIN\s*5\b", "GPD WIN 5", "handheld"),
     (r"\bOneXPlayer\s+Apex\s+MAX\+?\b", "OneXPlayer Apex MAX+", "handheld"),
     (r"\bOneXPlayer\s+Super\s+X\b", "OneXPlayer Super X", "tablet"),

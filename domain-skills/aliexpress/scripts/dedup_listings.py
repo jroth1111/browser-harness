@@ -76,17 +76,61 @@ def main():
         action="store_true",
         help="Print stats to stderr",
     )
+    parser.add_argument(
+        "--require",
+        nargs="*",
+        help="Title must contain at least one of these keywords (case-insensitive)",
+    )
+    parser.add_argument(
+        "--exclude",
+        nargs="*",
+        help="Exclude titles containing any of these keywords (case-insensitive)",
+    )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help="Append new listings to the existing CSV instead of printing to stdout",
+    )
     args = parser.parse_args()
 
     existing_ids = load_existing_ids(args.existing_csv)
     new_items = load_input(args.input)
 
-    before = len(new_items)
-    new_items = [item for item in new_items if item.get("product_id", "") not in existing_ids]
+    total_input = len(new_items)
+    after_dedup = [item for item in new_items if item.get("product_id", "") not in existing_ids]
+    duplicates_removed = total_input - len(after_dedup)
+
+    # Relevance filter
+    filtered_items = after_dedup
+    if args.require:
+        keywords = [k.lower() for k in args.require]
+        filtered_items = [
+            item for item in filtered_items
+            if any(k in item.get("title", "").lower() for k in keywords)
+        ]
+
+    # Exclusion filter
+    if args.exclude:
+        exclude_kw = [k.lower() for k in args.exclude]
+        filtered_items = [
+            item for item in filtered_items
+            if not any(k in item.get("title", "").lower() for k in exclude_kw)
+        ]
+
+    relevance_filtered = len(after_dedup) - len(filtered_items)
+    new_items = filtered_items
     after = len(new_items)
 
     if args.stats:
-        print(f"Existing: {len(existing_ids)} | Input: {before} | New: {after} | Duplicates: {before - after}", file=sys.stderr)
+        print(f"Existing: {len(existing_ids)} | Input: {total_input} | Duplicates: {duplicates_removed} | Relevance filtered: {relevance_filtered} | New: {after}", file=sys.stderr)
+
+    if args.append and args.existing_csv and new_items:
+        with open(args.existing_csv, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=new_items[0].keys())
+            writer.writerows(new_items)
+        if args.stats:
+            print(f"Appended {len(new_items)} rows to {args.existing_csv}", file=sys.stderr)
+        return
 
     out = sys.stdout
     if args.output != "-":
