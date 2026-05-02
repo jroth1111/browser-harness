@@ -4,6 +4,46 @@ Field-tested against ebay.com.au on 2026-05-02 using `uv run python` with `http_
 and again on 2026-05-02 with `curl_cffi` + cookie extraction after Akamai WAF block.
 Currency is AUD. Prices in search results show "AU $" prefix; JSON-LD returns `priceCurrency: "AUD"`.
 
+## Scripts
+
+Executable scripts in `domain-skills/ebay/scripts/`:
+
+| Script | Purpose |
+|--------|---------|
+| `search.py` | Full 4-layer search orchestrator: fetch, extract, dedup, classify, export |
+| `generate_search_urls.py` | Generate eBay search URLs with 4-layer taxonomy and pagination |
+| `classify_product_line.py` | Classify listing titles into product lines, form factors, RAM, storage |
+
+### Quick start
+
+```bash
+# Full search with iterative discovery:
+uv run python3 domain-skills/ebay/scripts/search.py search "Ryzen AI Max+ 395" --output results.csv
+
+# Verify seller trust on existing CSV:
+uv run python3 domain-skills/ebay/scripts/search.py verify results.csv --output verified.csv
+
+# Generate URLs only (no fetching):
+python3 domain-skills/ebay/scripts/search.py urls "RTX 5090" --products "RTX 5090"
+
+# Classify titles from CSV:
+python3 domain-skills/ebay/scripts/classify_product_line.py --csv results.csv --field title
+```
+
+### search.py workflow
+
+```
+Pass 1: L2 (chip refs) + L3 (category+architecture) + L4 (spec-level)
+  → discover product types present on the platform
+Pass 2: L1 queries for each discovered product name
+  → catches listings that chip-level queries miss
+Deduplicate by listing_id across all passes
+Export to CSV with product_type, layer, query_source
+```
+
+The iterative discovery loop is mandatory — the Ryzen AI Max+ 395 search
+proved that L1 adds 20+ listings that L2-4 miss entirely.
+
 ## Critical: Bot Detection ("Pardon Our Interruption" / "Access Denied")
 
 eBay's Akamai WAF blocks after roughly **5–10 requests** from an unrecognised session.
