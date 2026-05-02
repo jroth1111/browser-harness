@@ -680,6 +680,16 @@ for item in items[:5]:
 
 - **Verified-sample trust is sufficient for hot products** — For categories with 50+ listings, verifying cheapest/most-expensive/median per product type (29% sample) catches all HIGH_RISK sellers. Risk is concentrated at price extremes. Full verification of every listing is unnecessary.
 
+- **GPU chip IDs are ambiguous across generations** — "6000" appears in RTX A6000, RTX 6000 Ada, and RTX PRO 6000. The relevance filter must check for the distinguishing qualifier (A/Ada/PRO) adjacent to the number, not just the number itself. Without this, a search for "RTX 6000 Ada" returns RTX A6000 and Quadro RTX 6000 (Turing) listings too.
+
+- **Bare chip names match non-GPU products** — "L40S" matches robot vacuums (Dreame L40S Pro) and industrial parts (Yanmar starters, SICK sensors). Always provide known product names via `--products` for ambiguous chip IDs.
+
+- **eBay results are non-deterministic per session** — The same search URL can return different listings on consecutive requests. This makes perfect convergence impossible for high-volume queries. The coverage rating uses gap-ratio (new_from_probes / total_listings) to account for this: <=3% = MEDIUM, >3% = LOW.
+
+- **20s+ delay between GPU searches prevents WAF** — Running 8 GPU searches in a batch script with 15s delays causes WAF blocks on GPUs 7-8. 20s delays with the Session class (auto cookie refresh + backoff) is more reliable.
+
+- **Pagination convergence requires 2 consecutive zero-new pages** — A single zero-new page can be coincidence on high-volume queries (60+ items/page, high dedup rate). Requiring 2 consecutive zero-new pages eliminates false convergence without significantly increasing request count.
+
 ## Category Search: Ryzen AI Max+ 395 (Field-Tested)
 
 **119 listings** across 10 queries (5 AU-only, 5 worldwide), 2 May 2026.
@@ -743,3 +753,49 @@ _nkw="AI Max+ 395 handheld"&LH_BIN=1
 
 AU-only queries returned 0 results (confirmed: no Australian sellers for this chip yet).
 All 119 listings from worldwide search.
+
+## GPU Search (Field-Tested, 2 May 2026)
+
+8-GPU search across consumer and enterprise GPUs. All searches use `--mode gpu`
+which filters for GPU-related keywords in titles.
+
+### Results
+
+| GPU | Listings | Coverage | Category |
+|-----|----------|----------|----------|
+| RTX 5090 | 688 | MEDIUM | Consumer |
+| RTX 4090 | 597 | MEDIUM | Consumer |
+| RTX 3090 | 347 | HIGH | Consumer |
+| RTX PRO 6000 Blackwell | 92 | MEDIUM | Enterprise |
+| RTX A5000 | 92 | HIGH | Enterprise |
+| L40S | 94 | MEDIUM | Enterprise |
+| RTX A6000 | 60 | HIGH | Enterprise |
+| RTX 6000 Ada | 56 | HIGH | Enterprise |
+
+### GPU-Specific Learnings
+
+**Chip ID disambiguation.** "6000" is shared by three GPU generations:
+RTX A6000 (Ampere), RTX 6000 Ada (Ada Lovelace), RTX PRO 6000 (Blackwell).
+The relevance filter must match the distinguishing qualifier adjacent to the number:
+- "RTX A6000" → requires "a6000" or "a 6000" in title
+- "RTX 6000 Ada" → requires "6000 ada" or "6000ada" in title
+- "RTX PRO 6000" → requires "pro 6000" or "pro6000" in title
+Without this, cross-contamination is severe (RTX 6000 Ada search pulled in 54 non-Ada listings).
+
+**L40S needs product name hints.** Bare "L40S" matches robot vacuums, starters, and
+industrial sensors. Must pass `--products 'NVIDIA L40S' 'HPE NVIDIA L40S'` to seed the
+search with known product names. The L1 pre-population then catches GPU listings.
+
+**Enterprise GPUs exist on eBay AU but are rare.** L40S at 94 listings was surprising —
+they're datacenter GPUs sold by international sellers on ebay.com.au. All enterprise GPUs
+ship from EU/US/UK, not AU.
+
+**Consumer GPU coverage plateaus.** RTX 5090 with ~700 listings can't reach HIGH coverage
+because eBay returns non-deterministic results per request — each page fetch returns a
+slightly different set of listings. The gap-ratio coverage threshold (<=3% = MEDIUM)
+accounts for this. For consumer GPUs, MEDIUM coverage with 600+ listings is the practical limit.
+
+**Batch execution triggers WAF.** Running 8 GPUs sequentially within one shell script
+causes the last 2-3 GPUs to get WAF-blocked. The Session class handles this with
+automatic cookie refresh and exponential backoff, but individual GPU runs with 20s+
+delays between them are more reliable than batch execution.
