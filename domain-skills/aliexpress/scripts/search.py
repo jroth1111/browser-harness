@@ -281,6 +281,7 @@ def cmd_plan(args):
     print("3. Layer 4 is rarely needed — only for unusual specs")
     print()
     print("## Yield expectations by product type")
+    print("L2 bare terms include volume + price_desc sort variants.")
     print("| Type | L2 expected | L3 gain | Recommendation |")
     print("|------|-------------|---------|----------------|")
     print("| Consumer GPU (3090/4090/5090) | 20-30 | +5-15 | Run L3 |")

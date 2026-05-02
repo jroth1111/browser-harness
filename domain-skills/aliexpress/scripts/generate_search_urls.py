@@ -42,10 +42,16 @@ def generate_queries(
     modifiers: list[str] | None = None,
     products: list[str] | None = None,
     spec_terms: list[str] | None = None,
+    l2_extra_sorts: list[str] | None = None,
 ) -> list[tuple[str, str]]:
-    """Return (label, url) pairs for all layers."""
+    """Return (label, url) pairs for all layers.
+
+    L2 bare terms get volume sort plus any extra sorts in l2_extra_sorts.
+    This catches listings that only surface under different sort algorithms.
+    """
     terms = [query] + (synonyms or [])
     queries = []
+    extra_sorts = l2_extra_sorts or ["price_desc"]
 
     # Layer 1: known product names
     if products:
@@ -53,11 +59,16 @@ def generate_queries(
             q = f"{p} {query}"
             queries.append((f"L1: {q}", build_url(q)))
 
-    # Layer 2: bare terms (always generated)
+    # Layer 2: bare terms — volume sort (primary)
     for t in terms:
         queries.append((f"L2: {t}", build_url(t)))
 
-    # Layer 2: term × spec specificity variants
+    # Layer 2: bare terms — extra sort variants for coverage
+    for t in terms:
+        for sort in extra_sorts:
+            queries.append((f"L2: {t} [{sort}]", build_url(t, sort)))
+
+    # Layer 2: term × spec specificity variants (volume only)
     if specs:
         for t in terms:
             for s in specs:
