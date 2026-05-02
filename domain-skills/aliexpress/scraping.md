@@ -709,25 +709,59 @@ discovery and search directly by product name.
 
 ## Batch search scripts
 
-Scripts in `domain-skills/aliexpress/scripts/` automate the tedious parts of
-maximum-coverage searches:
+Scripts in `domain-skills/aliexpress/scripts/` automate maximum-coverage searches
+for any product type:
 
-- **`search.py plan <chip>`** — generates layered search URLs with early
-  termination guidance. `--layers 2` for chip-only, `--layers 3` (default) for
-  +form-factor synonyms, `--layers 4` for spec-level queries.
+- **`search.py plan <query>`** — generates layered search URLs with early
+  termination. Composable flags: `--synonyms`, `--specs`, `--modifiers`.
 - **`search.py extract-js`** — prints extraction JS that accumulates across
-  navigations via localStorage (persists on same origin). Use `--dump` to
-  retrieve accumulated results, `--reset` to clear.
+  navigations via localStorage. Use `--dump` to retrieve, `--reset` to clear.
 - **`search.py merge <results.json>`** — deduplicates, price-filters, keyword-
   filters, excludes noise, classifies product lines. Supports `--require`,
   `--exclude`, `--min-price`, `--max-price`.
 - **`generate_search_urls.py`** — URL generator used by search.py; also works
   standalone for custom query sets
 - **`dedup_listings.py`** — compares extracted results against an existing CSV,
-  outputs only new listings; supports `--require` and `--exclude` for relevance
-  filtering, `--append` to add directly to CSV
-- **`classify_product_line.py`** — auto-classifies titles into product lines and
-  form factors using regex patterns
+  outputs only new listings; supports `--require` and `--exclude`
+- **`classify_product_line.py`** — auto-classifies titles into product lines
+
+### Composable query expansion
+
+The layer system adapts to any search type through composable flags:
+
+| Flag | Purpose | Example |
+|------|---------|---------|
+| `query` (positional) | Main search term | "RTX 4090" |
+| `--synonyms` | Alternative names | "Strix Halo" |
+| `--specs` | Specificity tokens that change results | "24GB" "48GB" |
+| `--modifiers` | Category/context words appended to queries | "graphics card" "GPU" |
+
+**Layer 2** (base coverage): bare terms + term×spec combos.
+**Layer 3** (breadth): term×modifier combos.
+**Layer 4** (deep): full spec queries via `--spec-terms`.
+
+Why `--specs` matters: AliExpress treats "RTX 4090" and "RTX 4090 24GB" as
+orthogonal queries. Adding specificity tokens nearly doubles coverage for
+consumer products.
+
+### Search patterns by type
+
+```bash
+# Standalone GPUs:
+plan "RTX 4090" --specs "24GB" "48GB" --modifiers "graphics card" "GPU" "gaming PC"
+
+# Systems containing a chip:
+plan "Ryzen AI Max+ 395" --synonyms "Strix Halo" --modifiers "mini PC" "desktop" "workstation" "server"
+
+# Ambiguous terms that need disambiguation:
+plan "RTX A5000" --specs "24GB" --modifiers "professional" "workstation"
+
+# Simple product (no expansion):
+plan "mechanical keyboard"
+
+# Category browsing:
+plan "4K monitor" --modifiers "gaming" "IPS" "32 inch"
+```
 
 ### Accumulating extraction via localStorage
 
@@ -778,7 +812,8 @@ python3 search.py merge results.json --existing data.csv \
 
 ```bash
 # 1. Generate layered URLs with early termination guidance
-python3 domain-skills/aliexpress/scripts/search.py plan "Ryzen AI Max+ 395" --base-terms "Strix Halo"
+python3 domain-skills/aliexpress/scripts/search.py plan "RTX 4090" \
+  --specs "24GB" "48GB" --modifiers "graphics card" "GPU" "gaming PC"
 
 # 2. Reset accumulation, then navigate to each URL and run extraction JS
 #    (extraction accumulates across navigations automatically via localStorage)
@@ -787,8 +822,8 @@ python3 domain-skills/aliexpress/scripts/search.py plan "Ryzen AI Max+ 395" --ba
 
 # 4. Merge, dedup, filter noise, classify
 python3 domain-skills/aliexpress/scripts/search.py merge results.json \
-  --existing .private-data/ryzen-aimax395-aliexpress-2026-05-02.csv \
-  --require "ryzen ai max" "max+ 395" "max + 395" "strix halo"
+  --require "rtx" "gpu" "graphics card" \
+  --exclude "water block" "bridge" "cooler" --min-price 100
 ```
 
 When new product lines are discovered, add them to the classifier's
@@ -796,7 +831,7 @@ When new product lines are discovered, add them to the classifier's
 
 ### Query ambiguity warning
 
-Some component names collide with consumer products on AliExpress:
+Some product names collide with consumer products on AliExpress:
 
 | Query | Noise source | Fix |
 |-------|-------------|-----|
