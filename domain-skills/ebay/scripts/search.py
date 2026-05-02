@@ -5,16 +5,16 @@ Generates search URLs, fetches pages via curl_cffi + cookie extraction,
 extracts results, deduplicates, classifies, and exports to CSV.
 
 Implements the 4-layer iterative discovery loop:
-  Pass 1: layers 2-4 → discover products → extract unique product names
-  Pass 2: layer 1 queries for each discovered product name → new listings
-  Deduplicate across all passes by listing ID
+  Pass 1: L1 (pre-populated products) + L2-4 → discover + fetch
+  Pass 2: L1 (iteratively discovered products) → catch remaining
+  Coverage verification: auto-probes gaps and reports confidence
 
 Usage:
-    # Full search with 4-layer discovery:
-    python3 search.py "Ryzen AI Max+ 395" --output results.csv
+    # Full search with 4-layer discovery and coverage verification:
+    python3 search.py search "Ryzen AI Max+ 395" --output results.csv
 
     # With extra terms and product names:
-    python3 search.py "GB10" --base-terms "Grace Blackwell" --products "DGX Spark"
+    python3 search.py search "GB10" --base-terms "Grace Blackwell" --products "DGX Spark"
 
     # Seller trust verification on results:
     python3 search.py verify results.csv
@@ -33,8 +33,32 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 SCRIPT_DIR = Path(__file__).parent
+
+# --- Component-to-product mapping (pre-populates L1) ---
+
+COMPONENT_PRODUCTS = {
+    "ryzen ai max+ 395": [
+        "ROG Flow Z13", "GPD WIN 5", "HP ZBook Ultra G1a", "HP Z2 G1a Mini",
+        "HP ZBook Studio 99", "OneXPlayer Super X", "OneXPlayer Apex",
+        "ONEXStation i1", "MinisForum MS-S1 Max", "MINIX ER939-AI",
+        "NIMO Mini PC", "EVO-X2", "AYANEO NEXT 2", "Beelink GTR9 Pro",
+    ],
+    "gb10": [
+        "DGX Spark", "Dell Pro Max", "Ascent GX10", "EdgeXpert",
+    ],
+}
+
+
+def lookup_products(chip: str) -> list[str]:
+    chip_lower = chip.lower()
+    for key, products in COMPONENT_PRODUCTS.items():
+        if key in chip_lower or chip_lower in key:
+            return products
+    return []
+
 
 # --- Extraction ---
 
@@ -118,7 +142,7 @@ def extract_seller_trust(html: str) -> dict:
     }
 
 
-# --- Classification (inline, also available via classify_product_line.py) ---
+# --- Classification ---
 
 def classify_product(title: str) -> str:
     t = title.lower()
@@ -154,13 +178,10 @@ def classify_product(title: str) -> str:
 def make_session():
     try:
         import browser_cookie3
-        from curl_cffi import requests as cffi_requests
         cj = browser_cookie3.chrome(domain_name="ebay.com.au")
-        cookies = {c.name: c.value for c in cj}
+        return {c.name: c.value for c in cj}
     except Exception:
-        cookies = {}
-
-    return cookies
+        return {}
 
 
 HEADERS = {
@@ -169,7 +190,7 @@ HEADERS = {
 }
 
 
-def fetch_page(url: str, cookies: dict, delay: float = 3.0) -> list[dict]:
+def fetch_page(url: str, cookies: dict) -> list[dict]:
     from curl_cffi import requests as cffi_requests
     try:
         r = cffi_requests.get(url, headers=HEADERS, cookies=cookies, impersonate="chrome136", timeout=15)
@@ -182,9 +203,15 @@ def fetch_page(url: str, cookies: dict, delay: float = 3.0) -> list[dict]:
 # --- Relevance filtering ---
 
 def make_relevance_filter(target_chip: str, min_price: float = 500.0) -> callable:
+    chip_lower = target_chip.lower()
+    # Extract numeric ID for exact matching (e.g. "395" from "Ryzen AI Max+ 395")
+    chip_id = re.search(r'(\d{3,})', target_chip)
+    chip_id_str = chip_id.group(1) if chip_id else chip_lower
+
     def is_relevant(item: dict) -> bool:
         t = item['title'].lower()
-        if target_chip.lower() not in t:
+        # Require the chip ID in the title
+        if chip_id_str not in t:
             return False
         price = item.get('price') or 0
         if price < min_price:
@@ -198,19 +225,156 @@ def make_relevance_filter(target_chip: str, min_price: float = 500.0) -> callabl
     return is_relevant
 
 
+# --- Convergence-based pagination ---
+
+def paginate_query(query: str, cookies: dict, is_relevant: callable,
+                   all_listings: dict, delay: float = 3.0,
+                   max_pages: int = 20) -> tuple[int, int, bool]:
+    """Fetch pages until convergence (0 new items from a full page).
+    Returns (total_fetched, new_count, fully_converged)."""
+    new_total = 0
+    last_page_new = -1
+    page = 0
+
+    while page < max_pages:
+        page += 1
+        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(query)}&LH_BIN=1&_pgn={page}"
+        items = fetch_page(url, cookies)
+        if not items:
+            break
+
+        new_this_page = 0
+        for i in items:
+            if is_relevant(i) and i['listing_id'] not in all_listings:
+                all_listings[i['listing_id']] = i
+                i['query_source'] = query
+                new_this_page += 1
+                new_total += 1
+
+        # Convergence: full page with 0 new items means we've seen everything
+        if len(items) >= 50 and new_this_page == 0:
+            return new_total, page, True
+
+        # Short page (last page of results)
+        if len(items) < 50:
+            return new_total, page, True
+
+        # Same new count as last page = likely repeating (eBay loop)
+        if new_this_page == last_page_new and new_this_page > 0:
+            # Check one more page to confirm
+            next_url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(query)}&LH_BIN=1&_pgn={page+1}"
+            next_items = fetch_page(next_url, cookies)
+            if next_items:
+                next_new = sum(1 for i in next_items if is_relevant(i) and i['listing_id'] not in all_listings)
+                if next_new == new_this_page:
+                    # eBay is repeating results
+                    return new_total, page, True
+            break
+
+        last_page_new = new_this_page
+        time.sleep(delay)
+
+    return new_total, page, page >= max_pages
+
+
+# --- Coverage verification ---
+
+def run_coverage_verification(chip: str, cookies: dict, all_listings: dict,
+                              is_relevant: callable, delay: float = 3.0) -> dict:
+    """Probe remaining gaps and return coverage report."""
+    chip_id = re.search(r'(\d{3,})', chip)
+    chip_id_str = chip_id.group(1) if chip_id else chip.lower()
+
+    report = {
+        'total_listings': len(all_listings),
+        'gaps_probed': 0,
+        'new_from_gaps': 0,
+        'probe_details': [],
+        'coverage': 'UNKNOWN',
+    }
+
+    print("\n=== Coverage Verification ===", file=sys.stderr)
+
+    # Gap 1: Sort variations
+    for sop, label in [(15, "cheapest"), (16, "most expensive")]:
+        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(chip)}&LH_BIN=1&_sop={sop}"
+        items = fetch_page(url, cookies)
+        new = 0
+        for i in items:
+            if is_relevant(i) and i['listing_id'] not in all_listings:
+                all_listings[i['listing_id']] = i
+                i['query_source'] = f"verify:sort_{label}"
+                i['layer'] = 'VERIFY'
+                new += 1
+        report['gaps_probed'] += 1
+        report['new_from_gaps'] += new
+        report['probe_details'].append({'probe': f'sort_{label}', 'new': new})
+        print(f"  Sort {label}: +{new} new", file=sys.stderr)
+        time.sleep(delay)
+
+    # Gap 2: Without "Ryzen" prefix
+    alt_chip = chip.replace("Ryzen ", "")
+    if alt_chip != chip:
+        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(alt_chip)}&LH_BIN=1"
+        items = fetch_page(url, cookies)
+        new = 0
+        for i in items:
+            if is_relevant(i) and i['listing_id'] not in all_listings:
+                all_listings[i['listing_id']] = i
+                i['query_source'] = f"verify:no_ryzen_prefix"
+                i['layer'] = 'VERIFY'
+                new += 1
+        report['gaps_probed'] += 1
+        report['new_from_gaps'] += new
+        report['probe_details'].append({'probe': 'no_ryzen_prefix', 'new': new})
+        print(f"  No 'Ryzen' prefix: +{new} new", file=sys.stderr)
+        time.sleep(delay)
+
+    # Gap 3: Known products not yet discovered
+    known_products = lookup_products(chip)
+    discovered_types = {classify_product(item['title']) for item in all_listings.values()}
+    undiscovered = [p for p in known_products if p not in discovered_types]
+    for product in undiscovered:
+        q = f'{product} {chip}'
+        url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(q)}&LH_BIN=1"
+        items = fetch_page(url, cookies)
+        new = 0
+        for i in items:
+            if is_relevant(i) and i['listing_id'] not in all_listings:
+                all_listings[i['listing_id']] = i
+                i['query_source'] = f"verify:missing_product_{product}"
+                i['layer'] = 'VERIFY'
+                new += 1
+        report['gaps_probed'] += 1
+        report['new_from_gaps'] += new
+        report['probe_details'].append({'probe': f'missing_{product}', 'new': new})
+        status = f"+{new}" if new else "0 (confirmed absent)"
+        print(f"  Missing product '{product}': {status}", file=sys.stderr)
+        time.sleep(delay)
+
+    # Determine coverage confidence
+    if report['new_from_gaps'] == 0:
+        report['coverage'] = 'HIGH'
+        print(f"\n  Coverage: HIGH — {report['gaps_probed']} gap probes found 0 new listings", file=sys.stderr)
+    elif report['new_from_gaps'] <= 3:
+        report['coverage'] = 'MEDIUM'
+        print(f"\n  Coverage: MEDIUM — {report['new_from_gaps']} new from {report['gaps_probed']} probes", file=sys.stderr)
+    else:
+        report['coverage'] = 'LOW'
+        print(f"\n  Coverage: LOW — {report['new_from_gaps']} new from {report['gaps_probed']} probes, re-run recommended", file=sys.stderr)
+
+    return report
+
+
 # --- Commands ---
 
 def cmd_search(args):
-    from curl_cffi import requests as cffi_requests
-
     cookies = make_session()
     is_relevant = make_relevance_filter(args.chip, min_price=args.min_price)
     all_listings = {}
-    query_stats = []
 
-    # Layer 2: chip references
+    # Build chip terms
     chip_terms = [args.chip] + (args.base_terms or [])
-    # Add PRO variant
     pro_variant = args.chip.replace('+ ', '+ PRO ').replace('Max ', 'Max PRO ')
     if pro_variant != args.chip:
         chip_terms.append(pro_variant)
@@ -218,87 +382,82 @@ def cmd_search(args):
     layer2_queries = []
     for t in chip_terms:
         layer2_queries.append(f'"{t}"')
-        layer2_queries.append(t)  # unquoted version
+        layer2_queries.append(t)
 
-    # Layer 3: category + architecture
     form_factors = args.form_factors or [
         "laptop", "mini PC", "workstation", "handheld", "desktop",
         "tablet", "2-in-1", "PC", "gaming", "notebook",
     ]
     layer3_queries = []
-    for t in chip_terms[:2]:  # Only use primary chip terms for layer 3
+    for t in chip_terms[:2]:
         for ff in form_factors:
             layer3_queries.append(f'"{t}" {ff}')
 
-    # Layer 4: spec-level
     layer4_queries = args.spec_terms or []
 
-    # --- Pass 1: Layers 2-4 ---
-    print("=== Pass 1: Layers 2-4 ===", file=sys.stderr)
+    # Pre-populate L1 from component mapping + user-supplied products
+    l1_products = set()
+    mapped = lookup_products(args.chip)
+    if mapped:
+        l1_products.update(mapped)
+        print(f"Pre-populated {len(mapped)} products from component mapping", file=sys.stderr)
+    if args.products:
+        l1_products.update(args.products)
+
+    # --- Pass 1: L1 (pre-populated) + L2-4 ---
+    print("=== Pass 1: L1 (pre-populated) + L2-4 ===", file=sys.stderr)
+
+    # L1 queries first (pre-populated products)
+    for product in sorted(l1_products):
+        for q in [f'{product} "{args.chip}"', f'{product} {args.chip}']:
+            new, pages, converged = paginate_query(q, cookies, is_relevant, all_listings, delay=args.delay)
+            if new:
+                ctag = "" if converged else " (not converged!)"
+                print(f"  L1-pre: {q}: +{new} ({pages} pages){ctag}", file=sys.stderr)
+            time.sleep(args.delay)
+
+    # L2-4 queries
     pass1_queries = [(f"L2: {q}", q) for q in layer2_queries] + \
                     [(f"L3: {q}", q) for q in layer3_queries] + \
                     [(f"L4: {q}", q) for q in layer4_queries]
 
     for label, q in pass1_queries:
-        new = 0
-        for page in range(1, args.pages + 1):
-            from urllib.parse import quote
-            url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(q)}&LH_BIN=1&_pgn={page}"
-            items = fetch_page(url, cookies)
-            if not items:
-                break
-            for i in items:
-                if is_relevant(i) and i['listing_id'] not in all_listings:
-                    all_listings[i['listing_id']] = i
-                    i['query_source'] = q
-                    i['layer'] = label.split(':')[0].strip()
-                    new += 1
-            if len(items) < 50:
-                break
-            time.sleep(args.delay)
-
-        query_stats.append((label, new))
-        tag = f" (+{new})" if new else ""
-        print(f"  {label}: {new} new{tag}", file=sys.stderr)
+        new, pages, converged = paginate_query(q, cookies, is_relevant, all_listings, delay=args.delay)
+        if new:
+            ctag = "" if converged else " (not converged!)"
+            print(f"  {label}: +{new} ({pages} pages){ctag}", file=sys.stderr)
         time.sleep(args.delay)
 
     print(f"\nPass 1 total: {len(all_listings)} unique listings", file=sys.stderr)
 
-    # --- Discover product names ---
+    # --- Discover additional product names ---
     discovered = set()
     for item in all_listings.values():
         pt = classify_product(item['title'])
         if pt != 'Other':
             discovered.add(pt)
-    print(f"Discovered {len(discovered)} product types", file=sys.stderr)
 
-    # --- Pass 2: Layer 1 ---
-    print("\n=== Pass 2: Layer 1 (product names) ===", file=sys.stderr)
-    for product in sorted(discovered):
-        for q in [f'{product} "{args.chip}"', f'{product} {args.chip}']:
-            new = 0
-            for page in range(1, args.pages + 1):
-                from urllib.parse import quote
-                url = f"https://www.ebay.com.au/sch/i.html?_nkw={quote(q)}&LH_BIN=1&_pgn={page}"
-                items = fetch_page(url, cookies)
-                if not items:
-                    break
-                for i in items:
-                    if is_relevant(i) and i['listing_id'] not in all_listings:
-                        all_listings[i['listing_id']] = i
-                        i['query_source'] = q
-                        i['layer'] = 'L1'
-                        new += 1
-                if len(items) < 50:
-                    break
+    new_products = discovered - l1_products
+    if new_products:
+        print(f"Discovered {len(new_products)} additional product types: {', '.join(sorted(new_products))}", file=sys.stderr)
+    else:
+        print("No new product types discovered beyond pre-populated set", file=sys.stderr)
+
+    # --- Pass 2: L1 (iteratively discovered) ---
+    if new_products:
+        print("\n=== Pass 2: L1 (iteratively discovered) ===", file=sys.stderr)
+        for product in sorted(new_products):
+            for q in [f'{product} "{args.chip}"', f'{product} {args.chip}']:
+                new, pages, converged = paginate_query(q, cookies, is_relevant, all_listings, delay=args.delay)
+                if new:
+                    print(f"  L1-iter: {q}: +{new} ({pages} pages)", file=sys.stderr)
                 time.sleep(args.delay)
 
-            if new:
-                print(f"  L1: {q}: +{new} new", file=sys.stderr)
-            time.sleep(args.delay)
+    # --- Coverage verification ---
+    report = run_coverage_verification(args.chip, cookies, all_listings, is_relevant, delay=args.delay)
 
-    # --- Classify and export ---
-    print(f"\n=== Final: {len(all_listings)} unique listings ===", file=sys.stderr)
+    # --- Final summary ---
+    print(f"\n=== Final: {len(all_listings)} unique listings | Coverage: {report['coverage']} ===", file=sys.stderr)
 
     product_counts = {}
     for item in all_listings.values():
@@ -308,8 +467,9 @@ def cmd_search(args):
     for pt, cnt in sorted(product_counts.items(), key=lambda x: -x[1]):
         print(f"  {pt}: {cnt}", file=sys.stderr)
 
+    # --- Export ---
     if args.output:
-        fieldnames = ['listing_id', 'title', 'price_aud', 'product_type', 'form_factor',
+        fieldnames = ['listing_id', 'title', 'price_aud', 'product_type',
                       'seller_location', 'layer', 'query_source', 'url']
         with open(args.output, 'w', newline='') as f:
             w = csv.DictWriter(f, fieldnames=fieldnames)
@@ -321,24 +481,28 @@ def cmd_search(args):
                     'title': item['title'],
                     'price_aud': item.get('price', ''),
                     'product_type': pt,
-                    'form_factor': item.get('layer', ''),
                     'seller_location': item['location'],
                     'layer': item.get('layer', ''),
                     'query_source': item.get('query_source', ''),
                     'url': item.get('url', ''),
                 })
         print(f"\nExported to {args.output}", file=sys.stderr)
+
+        # Write coverage report alongside CSV
+        report_path = args.output.replace('.csv', '-coverage.json')
+        report['final_count'] = len(all_listings)
+        report['product_counts'] = product_counts
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        print(f"Coverage report: {report_path}", file=sys.stderr)
     else:
-        # Output JSON to stdout
         for item in sorted(all_listings.values(), key=lambda x: x.get('price') or 0):
             item['product_type'] = classify_product(item['title'])
         print(json.dumps(list(all_listings.values()), indent=2))
 
 
 def cmd_verify(args):
-    """Verify seller trust for listings in a CSV."""
     from curl_cffi import requests as cffi_requests
-
     cookies = make_session()
     listings = []
     with open(args.input, newline='') as f:
@@ -401,24 +565,20 @@ def main():
     parser = argparse.ArgumentParser(description="eBay batch search orchestrator")
     sub = parser.add_subparsers(dest="command")
 
-    # search (default)
-    s = sub.add_parser("search", help="Full 4-layer search with fetch")
+    s = sub.add_parser("search", help="Full 4-layer search with fetch and coverage verification")
     s.add_argument("chip", help="Chip/component name")
     s.add_argument("--base-terms", nargs="*")
     s.add_argument("--form-factors", nargs="*")
     s.add_argument("--products", nargs="*")
     s.add_argument("--spec-terms", nargs="*")
-    s.add_argument("--pages", type=int, default=3)
     s.add_argument("--min-price", type=float, default=500.0, help="Minimum price filter")
     s.add_argument("--delay", type=float, default=3.0, help="Delay between requests (seconds)")
     s.add_argument("--output", "-o", help="Output CSV path")
 
-    # verify
     v = sub.add_parser("verify", help="Verify seller trust from CSV")
     v.add_argument("input", help="CSV with listing_id column")
     v.add_argument("--output", "-o", help="Output CSV path")
 
-    # urls
     u = sub.add_parser("urls", help="Generate search URLs only")
     u.add_argument("chip")
     u.add_argument("--base-terms", nargs="*")
