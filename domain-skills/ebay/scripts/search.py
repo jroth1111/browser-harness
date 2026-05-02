@@ -213,13 +213,42 @@ def fetch_page(url: str, cookies: dict) -> list[dict]:
 # --- Relevance filtering ---
 
 def make_relevance_filter(target_chip: str, min_price: float = 500.0, mode: str = "system") -> callable:
-    chip_lower = target_chip.lower()
+    chip_lower = target_chip.lower().strip()
     chip_id = re.search(r'(\d{3,})', target_chip)
     chip_id_str = chip_id.group(1) if chip_id else chip_lower
 
+    # Disambiguation: when multiple GPU generations share the same numeric ID,
+    # require the distinguishing qualifier adjacent to the number in the title.
+    # Build regex patterns that match the chip as it appears in titles.
+    ambiguous_ids = {'6000'}
+    if chip_id_str in ambiguous_ids:
+        # For "RTX A6000"       → require "a6000" or "a 6000" in title
+        # For "RTX 6000 Ada"    → require "6000 ada" or "6000ada" in title
+        # For "RTX PRO 6000"    → require "pro 6000" or "pro6000" in title
+        before_match = re.search(r'(\w+)\s*' + chip_id_str, chip_lower)
+        after_match = re.search(chip_id_str + r'\s*(\w+)', chip_lower)
+        if before_match and before_match.group(1) != 'rtx':
+            prefix = before_match.group(1)
+            _pat = re.compile(re.escape(prefix) + r'\s*' + re.escape(chip_id_str))
+        elif after_match:
+            suffix = after_match.group(1)
+            _pat = re.compile(re.escape(chip_id_str) + r'\s*' + re.escape(suffix))
+        else:
+            _pat = None
+
+        if _pat:
+            def match_fn(title_lower, _p=_pat):
+                return bool(_p.search(title_lower))
+        else:
+            def match_fn(title_lower):
+                return chip_id_str in title_lower
+    else:
+        def match_fn(title_lower):
+            return chip_id_str in title_lower
+
     def is_relevant(item: dict) -> bool:
         t = item['title'].lower()
-        if chip_id_str not in t:
+        if not match_fn(t):
             return False
         price = item.get('price') or 0
         if price < min_price:
