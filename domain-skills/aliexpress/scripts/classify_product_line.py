@@ -34,7 +34,7 @@ PRODUCT_PATTERNS: list[tuple[str, str, str]] = [
     (r"\bRTX\s*4070\b", "RTX 4070", "standalone_gpu"),
     (r"\bRTX\s*3090\b", "RTX 3090", "standalone_gpu"),
     (r"\bRTX\s*3080\b", "RTX 3080", "standalone_gpu"),
-    (r"\bL40S\b", "NVIDIA L40S", "standalone_gpu"),
+    (r"\bL40S\b.*\b(?:GPU|graphics|GDDR|accelerator|AI\s+training|deep\s+learning|tensor|rendering)\b", "NVIDIA L40S", "standalone_gpu"),
     # GPU server/system patterns
     (r"\b(?:AI\s+Server|GPU\s+Server|4U\s+Server)\b", "GPU Server", "server"),
     (r"\bGaming\s+(?:Desktop|PC|Computer)\b", "Gaming PC", "desktop"),

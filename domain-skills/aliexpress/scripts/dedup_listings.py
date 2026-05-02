@@ -91,6 +91,18 @@ def main():
         action="store_true",
         help="Append new listings to the existing CSV instead of printing to stdout",
     )
+    parser.add_argument(
+        "--min-price",
+        type=float,
+        default=None,
+        help="Minimum price in AUD (parse AU$X,XXX format)",
+    )
+    parser.add_argument(
+        "--max-price",
+        type=float,
+        default=None,
+        help="Maximum price in AUD",
+    )
     args = parser.parse_args()
 
     existing_ids = load_existing_ids(args.existing_csv)
@@ -100,8 +112,31 @@ def main():
     after_dedup = [item for item in new_items if item.get("product_id", "") not in existing_ids]
     duplicates_removed = total_input - len(after_dedup)
 
-    # Relevance filter
+    # Price filter
     filtered_items = after_dedup
+    price_filtered = 0
+    if args.min_price is not None or args.max_price is not None:
+        import re
+        kept = []
+        for item in filtered_items:
+            raw = item.get("price", "")
+            m = re.search(r'([\d,]+\.?\d*)', raw) if raw else None
+            if m:
+                try:
+                    price = float(m.group(1).replace(',', ''))
+                    if args.min_price is not None and price < args.min_price:
+                        price_filtered += 1
+                        continue
+                    if args.max_price is not None and price > args.max_price:
+                        price_filtered += 1
+                        continue
+                except ValueError:
+                    pass
+            kept.append(item)
+        filtered_items = kept
+
+    # Relevance filter
+    before_relevance = len(filtered_items)
     if args.require:
         keywords = [k.lower() for k in args.require]
         filtered_items = [
@@ -109,20 +144,21 @@ def main():
             if any(k in item.get("title", "").lower() for k in keywords)
         ]
 
-    # Exclusion filter
+    # Exclusion filter (word-boundary matching to avoid false positives)
     if args.exclude:
-        exclude_kw = [k.lower() for k in args.exclude]
+        import re as _re
+        exclude_patterns = [_re.compile(r'\b' + _re.escape(k) + r'\b', _re.IGNORECASE) for k in args.exclude]
         filtered_items = [
             item for item in filtered_items
-            if not any(k in item.get("title", "").lower() for k in exclude_kw)
+            if not any(p.search(item.get("title", "")) for p in exclude_patterns)
         ]
 
-    relevance_filtered = len(after_dedup) - len(filtered_items)
+    relevance_filtered = before_relevance - len(filtered_items)
     new_items = filtered_items
     after = len(new_items)
 
     if args.stats:
-        print(f"Existing: {len(existing_ids)} | Input: {total_input} | Duplicates: {duplicates_removed} | Relevance filtered: {relevance_filtered} | New: {after}", file=sys.stderr)
+        print(f"Existing: {len(existing_ids)} | Input: {total_input} | Duplicates: {duplicates_removed} | Price filtered: {price_filtered} | Title filtered: {relevance_filtered} | New: {after}", file=sys.stderr)
 
     if args.append and args.existing_csv and new_items:
         with open(args.existing_csv, "a", newline="") as f:
