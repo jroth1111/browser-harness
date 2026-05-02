@@ -169,6 +169,10 @@ use a 4-layer query taxonomy ordered by specificity:
 2. **Chip/component references** — "GB10", "Grace Blackwell", "GB10 Grace"
 3. **Category + architecture** — "Blackwell AI server", "Blackwell supercomputer",
    "Blackwell workstation", "Blackwell mini PC"
+   Each form-factor synonym must be a **separate query**. Marketplace search
+   engines do not treat "mini PC", "desktop", "workstation", "host", "server"
+   as equivalent — they reach different slices of the product index. Enumerate
+   all plausible synonyms rather than assuming the engine equates them.
 4. **Spec-level** — "128GB LPDDR5X Blackwell", "arm cortex x925 blackwell"
 
 Layers 1-2 find products you already know about. Layer 3 catches products
@@ -176,8 +180,51 @@ described generically. Layer 4 catches products that share hardware specs but
 are from different product lines (e.g., Jetson AGX Thor shares Blackwell GPU +
 128GB LPDDR5X with GB10 systems).
 
+**All 4 layers are mandatory.** Skipping any layer leaves coverage gaps. The
+Ryzen AI Max+ 395 eBay search proved this: skipping Layer 1 (product names)
+missed 43 listings (40% of the total) that chip-level queries didn't surface.
+The same product listing appears under different query result sets depending on
+whether the query matches the product name, the chip name, or the category.
+
 Run all queries without price floor. Deduplicate by product ID across all
 queries. Filter by title relevance. Verify survivors on detail pages.
+
+**Iterative discovery loop.** Run layers 2-3 first to discover product names
+present on the platform. Then immediately run layer 1 queries for every product
+found. This two-pass approach ensures layer 1 uses actual product names from
+the platform rather than assumed names that may not exist there.
+
+```
+Pass 1: layers 2-4 → discover products → extract unique product names
+Pass 2: layer 1 queries for each discovered product name → new listings
+Deduplicate across all passes by product ID
+```
+
+**Pagination is mandatory for hot products.** If a query returns ≥50 results
+on page 1, run at least pages 1-3. Single-page results are incomplete —
+"ROG Flow Z13 AI Max" returned 88 items on page 1 with more on page 2. For
+niche products (<50 results), page 1 is sufficient.
+
+**Exact chip ID in the relevance filter.** When the target is a specific chip
+model (e.g., "Ryzen AI Max+ 395"), the relevance filter must require that
+exact identifier ("395") in the title. Do not accept "max" + product name
+alone — the same product family ships with multiple chip tiers (380, 385, 390,
+395, plus PRO variants). Filtering on "max" + "ZBook" returns all five chip
+tiers, not just the 395.
+
+```python
+# Wrong — accepts 380, 385, 390, PRO 380, PRO 385, PRO 390, 395
+'395' not required, just 'max' + product name
+
+# Right — only 395 listings
+target_chip = '395'
+relevant = [i for i in items if target_chip in i['title']]
+```
+
+**Chip families have multiple tiers.** Modern chips ship in families (Ryzen
+AI Max 380/385/390/395, PRO variants). The same product chassis (HP ZBook
+Ultra G1a, HP Z2 G1a Mini) is available with every tier. When searching for
+one tier, the relevance filter must exclude the others explicitly.
 
 **Homonym noise**: when the product name contains common English words ("spark",
 "grace", "edge"), searches return massive noise (spark plugs, baby names,
@@ -187,6 +234,12 @@ domain-specific term in the filter.
 **Negative results are findings**: 3 query variations × 0 results = confirmed
 absence. "Not available on this platform" is a first-class result alongside
 positive findings. Record it in the output.
+
+**Accessory noise scales with product popularity.** Hot products attract
+accessory listings (cases, bags, stickers, rack mounts, cables, screen
+protectors) that contain the product name but cost $10-50 vs $3,000+ for the
+actual product. A price floor filter (e.g., `price > $200` for systems) or
+an accessory keyword blocklist eliminates these at the filter stage.
 
 ## Condition is a price axis for configurable hardware
 
@@ -316,6 +369,14 @@ For maximum-coverage searches, expand this to 3 query variations × 4 query
 layers before concluding absence. The 4-layer taxonomy (product names, chip
 references, category+architecture, spec-level) is documented in the
 "Maximum-coverage search strategy" section above.
+
+Convergence rate scales with market density. Niche products converge after
+2-3 queries (GB10: 14 listings → 2 products). Hot products converge more
+slowly but still converge — 6 verification queries on a hot product (Ryzen
+AI Max+ 395: 86 listings → 18 product lines) found only 1 additional product
+line. The gap is usually vocabulary (missing form-factor synonyms), not depth
+(missing pagination). Verification queries should test synonym coverage rather
+than deeper pagination.
 
 ## Marketplace fraud avoidance
 
