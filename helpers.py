@@ -1918,7 +1918,6 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
                 "original_status": ep.get("status", 0),
                 "replay_status": e.code,
                 "status_match": False,
-                "error": str(e),
             })
         except Exception as exc:
             results.append({"url": url, "error": str(exc)})

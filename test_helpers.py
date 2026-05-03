@@ -326,12 +326,45 @@ def test_close_tabs_does_not_switch_when_current_survives():
 
 
 def test_new_tab_reports_missing_target_id():
-    with patch("helpers.cdp", return_value={}):
+    with patch("helpers.cdp", return_value={}), \
+         patch("helpers.list_tabs", return_value=[]):
         try:
             helpers.new_tab()
         except RuntimeError as e:
             assert "targetId" in str(e)
             assert "Target.createTarget" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_new_tab_enforces_tab_limit():
+    five_tabs = [{"targetId": f"t-{i}"} for i in range(5)]
+    with patch("helpers.list_tabs", return_value=five_tabs):
+        try:
+            helpers.new_tab()
+        except RuntimeError as e:
+            assert "tab limit" in str(e)
+            assert "5/5" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_new_tab_allows_under_limit():
+    three_tabs = [{"targetId": f"t-{i}"} for i in range(3)]
+    with patch("helpers.list_tabs", return_value=three_tabs), \
+         patch("helpers.cdp", return_value={"targetId": "new-1"}), \
+         patch("helpers.switch_tab"):
+        helpers.new_tab()
+
+
+def test_new_tab_respects_bh_max_tabs_env(monkeypatch):
+    monkeypatch.setattr(helpers, "_MAX_TABS", 2)
+    two_tabs = [{"targetId": f"t-{i}"} for i in range(2)]
+    with patch("helpers.list_tabs", return_value=two_tabs):
+        try:
+            helpers.new_tab()
+        except RuntimeError as e:
+            assert "2/2" in str(e)
         else:
             raise AssertionError("expected RuntimeError")
 
@@ -1142,3 +1175,364 @@ def test_field_triage_broken_selector():
     records = [{"name": "A", "price": 10}, {"name": "B", "price": None}, {"name": "C", "price": None}]
     triage = helpers.field_triage(records)
     assert triage["price"]["status"] == "BROKEN"
+
+
+# --- CrawlState save/load ---
+
+def test_crawl_state_save_load_roundtrip(tmp_path):
+    state = helpers.CrawlState("id")
+    state.add({"id": "a", "name": "Alice"})
+    state.add({"id": "b", "name": "Bob"})
+    state.record_blocked("https://example.com/x", "WAF")
+    state.record_scope_total("cat", 10)
+    state.page_done(2)
+    path = str(tmp_path / "crawl.json")
+    state.save(path)
+
+    loaded = helpers.CrawlState.load(path)
+    assert loaded.key_field == "id"
+    assert len(loaded._records) == 2
+    assert loaded._records[0]["name"] == "Alice"
+    assert loaded._dup_attempts == 0
+    assert len(loaded._blocked) == 1
+    assert loaded._scope_totals == {"cat": 10}
+    assert list(loaded._marginal) == [2]
+
+
+def test_crawl_state_save_load_preserves_marginal_window(tmp_path):
+    state = helpers.CrawlState("id", marginal_window=3)
+    state.page_done(5)
+    state.page_done(0)
+    path = str(tmp_path / "crawl.json")
+    state.save(path)
+
+    loaded = helpers.CrawlState.load(path)
+    assert loaded._marginal.maxlen == 3
+    assert list(loaded._marginal) == [5, 0]
+
+
+def test_crawl_state_save_handles_non_serializable(tmp_path):
+    state = helpers.CrawlState("id")
+    state.add({"id": "a", "ts": object()})
+    path = str(tmp_path / "crawl.json")
+    state.save(path)
+    loaded = helpers.CrawlState.load(path)
+    assert len(loaded._records) == 1
+
+
+# --- SafetyGate ---
+
+def test_safety_gate_ok_with_no_limits():
+    gate = helpers.SafetyGate()
+    for _ in range(100):
+        assert gate.ok() is True
+
+
+def test_safety_gate_max_requests():
+    gate = helpers.SafetyGate(max_requests=3)
+    assert gate.ok() is True
+    assert gate.ok() is True
+    assert gate.ok() is True
+    assert gate.ok() is False
+
+
+def test_safety_gate_consecutive_blocks():
+    gate = helpers.SafetyGate(consecutive_block_threshold=2)
+    assert gate.ok() is True
+    gate.record(403, blocked=True)
+    assert gate.ok() is True
+    gate.record(403, blocked=True)
+    assert gate.ok() is False
+
+
+def test_safety_gate_consecutive_blocks_resets_on_success():
+    gate = helpers.SafetyGate(consecutive_block_threshold=2)
+    gate.ok()
+    gate.record(403, blocked=True)
+    gate.record(200)  # resets consecutive blocks
+    assert gate.ok() is True
+
+
+def test_safety_gate_429_backoff():
+    import time
+    gate = helpers.SafetyGate(backoff_on_429=True)
+    gate.ok()
+    gate.record(429)
+    gate._backoff_until = time.time() + 10  # force future backoff
+    assert gate.ok() is False
+
+
+def test_safety_gate_raise_on_fail():
+    gate = helpers.SafetyGate(max_requests=1, raise_on_fail=True)
+    assert gate.ok() is True
+    try:
+        gate.ok()
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as e:
+        assert "max_requests" in str(e)
+
+
+def test_safety_gate_reset():
+    gate = helpers.SafetyGate(max_requests=1)
+    assert gate.ok() is True
+    assert gate.ok() is False
+    gate.reset()
+    assert gate.ok() is True
+
+
+def test_safety_gate_summary():
+    gate = helpers.SafetyGate(max_requests=10)
+    gate.ok()
+    gate.record(200)
+    s = gate.summary()
+    assert s["requests"] == 1
+    assert s["elapsed_seconds"] >= 0
+    assert s["limits_reached"] == []
+
+
+# --- NetworkCapture ---
+
+def test_network_capture_start_enables_network_domain():
+    with patch("helpers.cdp") as mock_cdp:
+        cap = helpers.NetworkCapture()
+        cap.start()
+    mock_cdp.assert_called_with("Network.enable")
+
+
+def test_network_capture_stop_disables_network_domain():
+    with patch("helpers.cdp") as mock_cdp:
+        cap = helpers.NetworkCapture()
+        cap.stop()
+    assert ("Network.disable",) in [c.args for c in mock_cdp.call_args_list]
+
+
+def test_network_capture_poll_processes_request_events():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1",
+            "request": {"url": "https://api.example.com/users", "method": "GET", "headers": {}},
+            "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1",
+            "response": {"status": 200, "headers": {"content-type": "application/json"}, "mimeType": "application/json"},
+        }},
+        {"method": "Page.loadEventFired", "params": {}},
+    ]
+    with patch("helpers.drain_events", return_value=events):
+        cap = helpers.NetworkCapture()
+        cap.poll()
+
+    eps = cap.endpoints()
+    assert len(eps) == 1
+    assert eps[0]["url"] == "https://api.example.com/users"
+    assert eps[0]["count"] == 1
+
+
+def test_network_capture_endpoints_deduplicates():
+    events_a = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1", "request": {"url": "https://api.example.com/users", "method": "GET", "headers": {}}, "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1", "response": {"status": 200, "headers": {}, "mimeType": "json"},
+        }},
+    ]
+    events_b = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r2", "request": {"url": "https://api.example.com/users", "method": "GET", "headers": {}}, "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r2", "response": {"status": 200, "headers": {}, "mimeType": "json"},
+        }},
+    ]
+    cap = helpers.NetworkCapture()
+    with patch("helpers.drain_events", side_effect=[events_a, events_b]):
+        cap.poll()
+        cap.poll()
+
+    eps = cap.endpoints()
+    assert len(eps) == 1
+    assert eps[0]["count"] == 2
+
+
+def test_network_capture_responses_for_filters():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1", "request": {"url": "https://api.example.com/users", "method": "GET", "headers": {}}, "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1", "response": {"status": 200, "headers": {}, "mimeType": "json"},
+        }},
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r2", "request": {"url": "https://cdn.example.com/bundle.js", "method": "GET", "headers": {}}, "type": "Script",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r2", "response": {"status": 200, "headers": {}, "mimeType": "js"},
+        }},
+    ]
+    with patch("helpers.drain_events", return_value=events):
+        cap = helpers.NetworkCapture()
+        cap.poll()
+
+    api = cap.responses_for(r"api\.example")
+    assert len(api) == 1
+    assert api[0]["url"] == "https://api.example.com/users"
+
+
+def test_network_capture_handles_redirect():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1", "request": {"url": "http://example.com/old", "method": "GET", "headers": {}}, "type": "Document",
+        }},
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1", "request": {"url": "https://example.com/new", "method": "GET", "headers": {}}, "type": "Document",
+            "redirectResponse": {"status": 301, "headers": {"location": "/new"}, "mimeType": ""},
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1", "response": {"status": 200, "headers": {}, "mimeType": "text/html"},
+        }},
+    ]
+    with patch("helpers.drain_events", return_value=events):
+        cap = helpers.NetworkCapture()
+        cap.poll()
+
+    assert len(cap._entries) == 2  # redirect + final
+    assert cap._entries[0]["url"] == "http://example.com/old"
+    assert cap._entries[1]["url"] == "https://example.com/new"
+
+
+def test_network_capture_max_entries_evicts_oldest():
+    cap = helpers.NetworkCapture(max_entries=2)
+    for i in range(4):
+        cap._entries.append({"url": f"https://example.com/{i}", "method": "GET",
+                             "status": 200, "response_headers": {}, "content_type": ""})
+        while len(cap._entries) > cap._max:
+            cap._entries.pop(0)
+    assert len(cap._entries) == 2
+    assert cap._entries[0]["url"] == "https://example.com/2"
+
+
+def test_network_capture_summary():
+    cap = helpers.NetworkCapture()
+    cap._entries = [
+        {"url": "https://api.example.com/a", "resource_type": "XHR", "status": 200},
+        {"url": "https://api.example.com/b", "resource_type": "XHR", "status": 404},
+    ]
+    cap._requests = {"r3": {"url": "pending"}}
+    s = cap.summary()
+    assert s["total_requests"] == 3
+    assert s["total_responses"] == 2
+    assert s["by_resource_type"]["XHR"] == 2
+    assert s["by_status"][200] == 1
+    assert s["pending_requests"] == 1
+
+
+# --- url_cluster ---
+
+def test_url_cluster_replaces_numeric_ids():
+    result = helpers.url_cluster(["https://api.example.com/users/123/posts/456"])
+    assert result[0]["pattern"] == "https://api.example.com/users/{id}/posts/{id}"
+
+
+def test_url_cluster_replaces_uuids():
+    result = helpers.url_cluster(["https://api.example.com/items/a1b2c3d4-e5f6-7890-abcd-ef1234567890"])
+    assert result[0]["pattern"] == "https://api.example.com/items/{uuid}"
+
+
+def test_url_cluster_groups_by_pattern():
+    result = helpers.url_cluster([
+        "https://api.example.com/users/10",
+        "https://api.example.com/users/20",
+        "https://api.example.com/users/30",
+    ])
+    assert len(result) == 1
+    assert result[0]["count"] == 3
+    assert result[0]["pattern"] == "https://api.example.com/users/{id}"
+
+
+def test_url_cluster_slug_with_number():
+    result = helpers.url_cluster(["https://example.com/item-12345"])
+    assert result[0]["pattern"] == "https://example.com/item-{id}"
+
+
+def test_url_cluster_empty():
+    assert helpers.url_cluster([]) == []
+
+
+# --- discover_api_endpoints ---
+
+def test_discover_api_endpoints_extracts_fetch_urls():
+    html = '<html><script>fetch("/api/data"); fetch("/api/users");</script></html>'
+    with patch("helpers.http_get", return_value=html):
+        result = helpers.discover_api_endpoints("https://example.com/page")
+    urls = [e["url"] for e in result["endpoints"]]
+    assert "https://example.com/api/data" in urls
+    assert "https://example.com/api/users" in urls
+
+
+def test_discover_api_endpoints_extracts_from_external_scripts():
+    html = '<html><script src="/app.js"></script></html>'
+    js_code = 'fetch("/api/v2/items"); axios.get("/api/products");'
+    with patch("helpers.http_get", side_effect=[html, js_code]):
+        result = helpers.discover_api_endpoints("https://example.com/page")
+    urls = [e["url"] for e in result["endpoints"]]
+    assert "https://example.com/api/v2/items" in urls
+    assert "https://example.com/api/products" in urls
+
+
+def test_discover_api_endpoints_handles_fetch_failure():
+    with patch("helpers.http_get", side_effect=Exception("fail")), \
+         patch("helpers.http_get_browser_session_response", side_effect=Exception("also fail")):
+        result = helpers.discover_api_endpoints("https://example.com")
+    assert result["endpoints"] == []
+    assert len(result["errors"]) == 1
+
+
+def test_discover_api_endpoints_skips_template_literals():
+    html = '<script>fetch(`/api/${id}`);</script>'
+    with patch("helpers.http_get", return_value=html):
+        result = helpers.discover_api_endpoints("https://example.com")
+    assert result["endpoints"] == []
+
+
+# --- replay_endpoints ---
+
+def test_replay_endpoints_status_match():
+    cap = helpers.NetworkCapture()
+    cap._entries = [
+        {"url": "https://api.example.com/a", "method": "GET", "status": 200,
+         "content_type": "application/json", "response_headers": {}, "resource_type": "XHR"},
+    ]
+    with patch("helpers.http_get", return_value='{"ok": true}'), \
+         patch("time.sleep"):
+        result = helpers.replay_endpoints(cap)
+    assert result["results"][0]["status_match"] is True
+    assert result["summary"]["matched"] == 1
+
+
+def test_replay_endpoints_skips_non_get():
+    cap = helpers.NetworkCapture()
+    cap._entries = [
+        {"url": "https://api.example.com/a", "method": "POST", "status": 200,
+         "content_type": "json", "response_headers": {}, "resource_type": "XHR"},
+    ]
+    with patch("time.sleep"):
+        result = helpers.replay_endpoints(cap)
+    assert result["results"][0]["skipped"] is True
+    assert result["summary"]["total"] == 1
+
+
+def test_replay_endpoints_captures_errors():
+    cap = helpers.NetworkCapture()
+    cap._entries = [
+        {"url": "https://api.example.com/a", "method": "GET", "status": 200,
+         "content_type": "json", "response_headers": {}, "resource_type": "XHR"},
+    ]
+    with patch("helpers.http_get", side_effect=urllib.error.HTTPError(
+        "https://api.example.com/a", 403, "Forbidden", {}, io.BytesIO(b""))), \
+         patch("time.sleep"):
+        result = helpers.replay_endpoints(cap)
+    assert result["results"][0]["status_match"] is False
+    assert result["results"][0]["replay_status"] == 403
+    assert result["summary"]["errors"] == 0
