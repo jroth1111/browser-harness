@@ -130,6 +130,18 @@ def drain_events():  return _send({"meta": "drain_events"}).get("events", [])
 def endpoint_info(): return _send({"meta": "endpoint_info"}).get("endpoint_info", {})
 
 
+def launch_browser(**kwargs):
+    """Launch Chrome with CDP and connect the daemon. Returns {pid, port, ws_url}."""
+    from admin import launch_browser as _launch
+    return _launch(**kwargs)
+
+
+def close_browser(launch_info):
+    """Close a browser launched by launch_browser()."""
+    from admin import close_browser as _close
+    return _close(launch_info)
+
+
 # --- navigation / page ---
 def goto_url(url):
     """Navigate the current tab to *url* and return CDP result.

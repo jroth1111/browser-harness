@@ -484,7 +484,88 @@ def run_launch_profile(profile_path, port=9222, url="about:blank", chrome_path=N
     return 0
 
 
-def run_setup(accept_remote_debugging_dialog=False):
+def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
+                   port=0, chrome_path=None):
+    """Launch Chrome with CDP and connect the daemon.
+
+    Returns dict with pid, port, ws_url, profile_path, temp_profile.
+    """
+    import shutil, subprocess, tempfile
+    chrome = chrome_path or os.environ.get("BH_CHROME_PATH") or _default_chrome_executable()
+    if not chrome:
+        raise RuntimeError("Chrome not found; set BH_CHROME_PATH or install Chrome")
+    port = port or 0
+    is_temp = False
+    if profile:
+        user_data_dir = str(Path(profile).expanduser())
+        dap = Path(user_data_dir) / "DevToolsActivePort"
+        try: dap.unlink()
+        except FileNotFoundError: pass
+    else:
+        user_data_dir = tempfile.mkdtemp(prefix="bh-chrome-")
+        is_temp = True
+    cmd = [chrome]
+    cmd.append(f"--remote-debugging-port={port}")
+    cmd.append(f"--user-data-dir={user_data_dir}")
+    cmd.extend(["--no-first-run", "--no-default-browser-check",
+                "--disable-background-networking", "--disable-sync",
+                "--disable-features=Translate", "--metrics-recording-only"])
+    if headless:
+        cmd.append("--headless=new")
+        cmd.extend(_HEADLESS_STEALTH_ARGS)
+    if proxy:
+        cmd.append(f"--proxy-server={proxy}")
+    if extensions:
+        ext_list = ",".join(str(e) for e in extensions)
+        cmd.append(f"--load-extension={ext_list}")
+        cmd.append(f"--disable-extensions-except={ext_list}")
+    cmd.append("about:blank")
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True)
+    deadline = time.time() + 15
+    dap_path = Path(user_data_dir) / "DevToolsActivePort"
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"Chrome exited immediately (pid {proc.pid})")
+        if dap_path.exists():
+            break
+        time.sleep(0.3)
+    else:
+        proc.kill()
+        raise RuntimeError("Chrome did not write DevToolsActivePort within 15s")
+    dap_lines = dap_path.read_text().strip().split("\n")
+    actual_port = int(dap_lines[0].strip())
+    ws_path = dap_lines[1].strip() if len(dap_lines) > 1 else ""
+    env_ws = f"ws://127.0.0.1:{actual_port}{ws_path}"
+    os.environ["BH_CDP_WS"] = env_ws
+    restart_daemon()
+    ensure_daemon()
+    return {
+        "pid": proc.pid,
+        "port": actual_port,
+        "ws_url": env_ws,
+        "profile_path": user_data_dir,
+        "temp_profile": is_temp,
+        "_proc": proc,
+    }
+
+
+def close_browser(launch_info):
+    """Close a browser launched by launch_browser()."""
+    import signal
+    restart_daemon()
+    pid = launch_info.get("pid")
+    if pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    if launch_info.get("temp_profile"):
+        import shutil
+        shutil.rmtree(launch_info["profile_path"], ignore_errors=True)
+
+
+
     """Interactive bootstrap: attach to the running browser, guiding the user through chrome://inspect if needed.
 
     Exit code 0 on success, 1 on failure."""
