@@ -2,10 +2,32 @@
 
 Field-tested against ubereats.com on 2026-05-04.
 
-**Hard block**: Navigating to `ubereats.com` returns "access denied" immediately —
-no page content renders. Likely WAF/bot detection at the CDN layer. Requires a
-seeded browser session (user logged in via their real Chrome) or alternative
-approach (see Anti-detection notes).
+**WAF hard block**: Navigating to `ubereats.com` with CDP connected returns "access denied"
+immediately — no page content renders. CDP detection via WAF at CDN layer. **Use SeleniumBase
+UC Mode** to bypass.
+
+## Access
+
+```python
+from seleniumbase import SB
+import json, time
+
+with SB(uc=True, test=True) as sb:
+    sb.uc_open_with_reconnect("https://www.ubereats.com/", 4)
+    time.sleep(2)
+
+    # Restore saved session (skip if first-time — see overview.md)
+    with open("domain-skills/food-delivery/.private-data/ubereats_cookies.json") as f:
+        for c in json.load(f):
+            try: sb.driver.add_cookie(c)
+            except: pass
+    sb.driver.refresh()
+    time.sleep(3)
+
+    # Now authenticated — proceed with automation
+```
+
+Run via: `.venv/bin/python3 <<'PY' ... PY`
 
 ## URLs
 
@@ -27,14 +49,11 @@ approach (see Anti-detection notes).
 ## Navigation
 
 ```python
-# CONFIRMED: direct navigation returns "access denied" in unauthenticated CDP sessions.
-# Must use a seeded user browser session.
+# browser-harness CDP — BLOCKED by WAF. Use SeleniumBase UC Mode instead.
 tid = new_tab("https://www.ubereats.com/")
 result = wait_for_content()
 if result["block"]:
-    # "access denied" — user must be logged into Uber Eats in their Chrome
-    # Try: seed_browser_session("https://www.ubereats.com/") first
-    # Or ask user to open Uber Eats in their browser and navigate there
+    # "access denied" — cannot bypass via CDP, use SB(uc=True) path above
     capture_screenshot()
 ```
 

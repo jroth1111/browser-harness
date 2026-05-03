@@ -2,11 +2,36 @@
 
 Field-tested against doordash.com on 2026-05-04.
 
-**Cloudflare Turnstile**: DoorDash uses Cloudflare Turnstile on all pages. The home
-page loads as a marketing/landing page with Turnstile running in background.
-Search and store pages show a full-page Cloudflare challenge ("Verify you are human").
-Use `detect_turnstile()` → `solve_turnstile()` from browser-harness after navigation.
-If Turnstile fails, the page shows "Verification failed" and blocks further access.
+**Cloudflare Turnstile**: DoorDash uses Cloudflare Turnstile on all pages. CDP-connected
+browsers (browser-harness, MCP DevTools) are detected via three signals: screenX/screenY
+coordinate bug in cross-origin iframes, Runtime.enable side effects, and debugger timing.
+JS-level stealth patches are themselves detectable. **Use SeleniumBase UC Mode** to bypass.
+
+## Access
+
+```python
+from seleniumbase import SB
+import json, time
+
+with SB(uc=True, test=True) as sb:
+    sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
+    time.sleep(2)
+
+    # Restore saved session (skip if first-time — see overview.md)
+    with open("domain-skills/food-delivery/.private-data/doordash_cookies.json") as f:
+        for c in json.load(f):
+            try: sb.driver.add_cookie(c)
+            except: pass
+    sb.driver.refresh()
+    time.sleep(3)
+
+    # If full-page Cloudflare challenge appears:
+    sb.uc_gui_click_captcha()
+
+    # Now authenticated — proceed with automation
+```
+
+Run via: `.venv/bin/python3 <<'PY' ... PY`
 
 ## URLs
 
@@ -23,7 +48,7 @@ If Turnstile fails, the page shows "Verification failed" and blocks further acce
 ## Auth detection
 
 - **Logged in**: delivery address in header, user avatar present, no "Sign in" prompt.
-- **Not logged out (CONFIRMED)**: login modal appears as dialog overlay with iframe to `identity.doordash.com/auth`. Contains Google/Facebook/Apple OAuth + email/password form. Dismissible via close button — reveals marketing landing page.
+- **Not logged in (CONFIRMED)**: login modal appears as dialog overlay with iframe to `identity.doordash.com/auth`. Contains Google/Facebook/Apple OAuth + email/password form. Dismissible via close button — reveals marketing landing page.
 - **Not logged in footer**: "Sign In" link points to `identity.doordash.com/auth`.
 - **DashPass indicator**: DashPass logo or badge visible when subscribed (affects pricing display).
 
@@ -36,14 +61,12 @@ Landing page elements (CONFIRMED):
 ## Navigation
 
 ```python
+# browser-harness CDP — BLOCKED by Turnstile. Use SeleniumBase UC Mode instead.
 tid = new_tab("https://www.doordash.com/")
 result = wait_for_content()
 if result["block"]:
-    # Cloudflare Turnstile challenge likely
+    # Cannot bypass Turnstile via CDP — use SB(uc=True) path above
     capture_screenshot()
-    detect_turnstile()
-    solve_turnstile()
-    # stop and ask user if still blocked
 ```
 
 ## Restaurant list extraction — STATUS: NEEDS_FIELD_TESTING
