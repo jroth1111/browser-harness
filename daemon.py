@@ -309,6 +309,7 @@ class Daemon:
         if meta == "endpoint_info": return {"endpoint_info": self.endpoint_info}
         if meta == "set_session":
             self.session = req.get("session_id")
+            self._attached_target_id = req.get("target_id", self._attached_target_id)
             return {"session_id": self.session}
         if meta == "pending_dialog": return {"dialog": self.dialog}
         if meta == "shutdown":    self.stop.set(); return {"ok": True}

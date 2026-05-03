@@ -194,6 +194,7 @@ def _wait_until_network_idle(timeout=15.0):
     pending = set()
     deadline = time.time() + timeout
     idle_since = None
+    result = {"ok": False, "reason": "timeout"}
     while time.time() < deadline:
         for ev in drain_events():
             m = ev.get("method", "")
@@ -207,11 +208,15 @@ def _wait_until_network_idle(timeout=15.0):
             if idle_since is None:
                 idle_since = time.time()
             elif time.time() - idle_since >= 0.5:
-                return {"ok": True, "reason": "networkidle"}
+                result = {"ok": True, "reason": "networkidle"}
+                break
         else:
             idle_since = None
         time.sleep(0.1)
-    return {"ok": False, "reason": "timeout", "pending_requests": len(pending)}
+    cdp("Network.disable")
+    if not result["ok"]:
+        result["pending_requests"] = len(pending)
+    return result
 
 
 def smart_wait(timeout=20.0, min_text=200, waf_timeout=15.0):

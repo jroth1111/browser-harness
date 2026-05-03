@@ -526,12 +526,16 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
     dap_path = Path(user_data_dir) / "DevToolsActivePort"
     while time.time() < deadline:
         if proc.poll() is not None:
+            if is_temp:
+                shutil.rmtree(user_data_dir, ignore_errors=True)
             raise RuntimeError(f"Chrome exited immediately (pid {proc.pid})")
         if dap_path.exists():
             break
         time.sleep(0.3)
     else:
         proc.kill()
+        if is_temp:
+            shutil.rmtree(user_data_dir, ignore_errors=True)
         raise RuntimeError("Chrome did not write DevToolsActivePort within 15s")
     dap_lines = dap_path.read_text().strip().split("\n")
     actual_port = int(dap_lines[0].strip())
