@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://browser-harness.local/schemas/skill-learning-candidate.schema.json",
+  "title": "Browser Harness Skill Learning Candidate",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "domain",
+    "affected_skill_paths",
+    "observed_surface",
+    "evidence_refs",
+    "observed_behavior",
+    "proposed_rule",
+    "forbidden_overgeneralization",
+    "source_contextuality",
+    "positive_probe",
+    "negative_probe",
+    "redaction_status",
+    "confidence",
+    "promotion_decision"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "affected_skill_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "observed_surface": {
+      "type": "object",
+      "required": [
+        "origin",
+        "url_pattern",
+        "auth_context",
+        "browser_backend",
+        "source_family",
+        "required_fields"
+      ],
+      "properties": {
+        "origin": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url_pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "auth_context": {
+          "type": "string",
+          "minLength": 1
+        },
+        "browser_backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "observed_behavior": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proposed_rule": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proposed_artifact_text": {
+      "type": "string"
+    },
+    "forbidden_overgeneralization": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_contextuality": {
+      "type": "object",
+      "required": [
+        "scope",
+        "does_not_apply_when"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "does_not_apply_when": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "positive_probe": {
+      "type": "object",
+      "required": [
+        "description",
+        "evidence_required"
+      ],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_required": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "negative_probe": {
+      "type": "object",
+      "required": [
+        "description",
+        "forbidden_path"
+      ],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "forbidden_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "redaction_status": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "not_run"
+          ]
+        },
+        "finding_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "promotion_decision": {
+      "type": "string",
+      "enum": [
+        "accept",
+        "revise",
+        "reject"
+      ]
+    },
+    "holdout_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": true
+}

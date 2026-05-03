@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Browser Harness Domain Skill Surface Map",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "domain",
+    "path_types",
+    "forbidden",
+    "execution_policy",
+    "primitives",
+    "fallback_nodes",
+    "fallback_dags",
+    "verification_probes"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "domain": {"type": "string", "minLength": 1},
+    "field_tested": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "path_types": {
+      "type": "array",
+      "items": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "forbidden": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 1
+    },
+    "execution_policy": {
+      "type": "object",
+      "required": ["stop_on", "fallback_on", "never_fallback_to", "receipt_required"],
+      "properties": {
+        "stop_on": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "fallback_on": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "never_fallback_to": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "receipt_required": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+      }
+    },
+    "fallback_nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path_type"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]}
+        }
+      }
+    },
+    "browser_harness_primitives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path_type", "use"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+          "use": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "primitives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "path_type", "primary", "fallback_chain", "inputs", "outputs", "evidence"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "path_type": {"type": "string", "enum": ["api", "browser", "hybrid", "static", "local"]},
+          "primary": {"type": "string", "minLength": 1},
+          "fallback_chain": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "inputs": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+          "outputs": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+          "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+        }
+      }
+    },
+    "fallback_dags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1},
+        "minItems": 1
+      }
+    },
+    "verification_probes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["positive", "negative"],
+        "properties": {
+          "positive": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+          "negative": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+        }
+      }
+    }
+  }
+}
