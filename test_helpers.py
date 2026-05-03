@@ -369,7 +369,55 @@ def test_new_tab_respects_bh_max_tabs_env(monkeypatch):
             raise AssertionError("expected RuntimeError")
 
 
-def test_wait_for_load_uses_page_events_not_runtime():
+def test_is_recoverable_matches_session_errors():
+    assert helpers._is_recoverable(RuntimeError("Session with given id not found"))
+    assert helpers._is_recoverable(RuntimeError("Target closed"))
+    assert helpers._is_recoverable(RuntimeError("Not attached to target: abc"))
+    assert not helpers._is_recoverable(RuntimeError("network timeout"))
+    assert not helpers._is_recoverable(RuntimeError("invalid selector"))
+
+
+def test_with_session_recovery_retries_on_recoverable():
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("Session with given id not found")
+        return "ok"
+
+    with patch("helpers._reconnect"):
+        result = helpers.with_session_recovery(flaky)
+    assert result == "ok"
+    assert calls["n"] == 2
+
+
+def test_with_session_recovery_propagates_non_recoverable():
+    def bad():
+        raise RuntimeError("something else")
+
+    with patch("helpers._reconnect"):
+        try:
+            helpers.with_session_recovery(bad)
+        except RuntimeError as e:
+            assert "something else" in str(e)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+
+def test_with_session_recovery_no_infinite_retry():
+    calls = {"n": 0}
+
+    def always_fails():
+        calls["n"] += 1
+        raise RuntimeError("Target closed")
+
+    with patch("helpers._reconnect"):
+        try:
+            helpers.with_session_recovery(always_fails)
+        except RuntimeError:
+            pass
+    assert calls["n"] == 2  # original + 1 retry
     calls = []
 
     def fake_cdp(method, **params):

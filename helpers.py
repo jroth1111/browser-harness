@@ -121,6 +121,31 @@ def _require_key(mapping, key, context):
     return mapping[key]
 
 
+_RECOVERABLE_PATTERNS = (
+    "Session with given id not found",
+    "Not attached to target",
+    "Connection closed",
+    "Target closed",
+    "No session with given id",
+)
+
+
+def _is_recoverable(error):
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in _RECOVERABLE_PATTERNS)
+
+
+def with_session_recovery(fn, *args, retries=1, **kwargs):
+    """Run fn(), retry once on recoverable CDP errors after reconnecting."""
+    try:
+        return fn(*args, **kwargs)
+    except Exception as e:
+        if not _is_recoverable(e) or retries <= 0:
+            raise
+        _reconnect()
+        return fn(*args, **kwargs)
+
+
 def cdp(method, session_id=None, timeout=30, **params):
     """Raw CDP. cdp('Page.navigate', url='...'), cdp('DOM.getDocument', depth=-1)."""
     return _send({"method": method, "params": params, "session_id": session_id}, timeout=timeout).get("result", {})
@@ -1763,7 +1788,7 @@ class NetworkCapture:
     def clear(self):
         self._requests = {}
         self._responses = {}
-        self._entries = []
+        self._entries = deque(maxlen=self._max)
 
     def _finalize(self, rid, status, resp_headers, content_type):
         req = self._requests.pop(rid, None)
@@ -1775,8 +1800,6 @@ class NetworkCapture:
         if "body" in resp:
             entry["body"] = resp["body"]
         self._entries.append(entry)
-        while len(self._entries) > self._max:
-            self._entries.pop(0)
 
 
 def url_cluster(urls):
