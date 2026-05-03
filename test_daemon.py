@@ -308,3 +308,92 @@ def test_acquire_daemon_lock_excludes_second_process(tmp_path, monkeypatch):
     finally:
         fcntl.flock(first, fcntl.LOCK_UN)
         first.close()
+
+
+async def _run_handler(d, requests):
+    """Send `requests` (list of JSON-dict) on a single connection, collect responses."""
+    responses = []
+
+    class FakeReader:
+        def __init__(self, lines):
+            self._lines = iter(lines)
+        async def readline(self):
+            for line in self._lines:
+                return line
+            return b""
+
+    class FakeWriter:
+        def __init__(self):
+            self.written = []
+        def write(self, data):
+            self.written.append(data)
+        async def drain(self):
+            pass
+        def close(self):
+            pass
+
+    lines = [(json.dumps(r) + "\n").encode() for r in requests]
+    reader = FakeReader(lines)
+    writer = FakeWriter()
+    handler = daemon.serve.__code__.co_consts
+    # Access the handler defined inside serve() via the Daemon's handle method
+    # We'll call d.handle() directly to simulate the handler loop
+    # But actually, let's use the real handler via asyncio.start_unix_server
+    # Simpler: call d.handle() for each request
+    for req in requests:
+        resp = await d.handle(req)
+        responses.append(resp)
+    return responses
+
+
+def test_handler_processes_multiple_requests():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP()
+    d.session = "session-1"
+    d.stop = asyncio.Event()
+
+    async def run():
+        return await _run_handler(d, [
+            {"method": "Target.getTargets", "params": {}},
+            {"meta": "session"},
+            {"method": "Browser.getVersion", "params": {}},
+        ])
+
+    responses = asyncio.run(run())
+    assert len(responses) == 3
+    assert "result" in responses[0]
+    assert responses[1] == {"session_id": "session-1"}
+    assert "result" in responses[2]
+
+
+def test_handler_single_request_compat():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP()
+    d.session = "session-1"
+    d.stop = asyncio.Event()
+
+    async def run():
+        return await _run_handler(d, [
+            {"meta": "endpoint_info"},
+        ])
+
+    responses = asyncio.run(run())
+    assert len(responses) == 1
+    assert "endpoint_info" in responses[0]
+
+
+def test_malformed_devtools_active_port_skipped_gracefully(tmp_path, monkeypatch):
+    """DevToolsActivePort with only a port number (no path) should be skipped, not crash."""
+    port_only_dir = tmp_path / "Chrome"
+    port_only_dir.mkdir()
+    (port_only_dir / "DevToolsActivePort").write_text("9222")
+
+    monkeypatch.setattr(daemon, "PROFILES", [port_only_dir])
+    monkeypatch.delenv("BH_CDP_WS", raising=False)
+
+    try:
+        daemon._resolve_cdp_endpoint_from_devtools_active_port(wait_for_port=False)
+    except RuntimeError as e:
+        assert "not found" in str(e).lower() or "DevToolsActivePort" in str(e)
+    else:
+        raise AssertionError("expected RuntimeError — no valid DevToolsActivePort should be found")

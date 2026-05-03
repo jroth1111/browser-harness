@@ -192,7 +192,7 @@ def _resolve_cdp_endpoint_from_devtools_active_port(wait_for_port=True):
     for base in PROFILES:
         try:
             port, path = (base / "DevToolsActivePort").read_text().strip().split("\n", 1)
-        except (FileNotFoundError, NotADirectoryError):
+        except (FileNotFoundError, NotADirectoryError, ValueError):
             continue
         port = port.strip()
         path = path.strip()
@@ -319,11 +319,13 @@ async def serve(d):
 
     async def handler(reader, writer):
         try:
-            line = await reader.readline()
-            if not line: return
-            resp = await d.handle(json.loads(line))
-            writer.write((json.dumps(resp, default=str) + "\n").encode())
-            await writer.drain()
+            while True:
+                line = await reader.readline()
+                if not line:
+                    break
+                resp = await d.handle(json.loads(line))
+                writer.write((json.dumps(resp, default=str) + "\n").encode())
+                await writer.drain()
         except Exception as e:
             log(f"conn: {e}")
             try:
@@ -333,6 +335,10 @@ async def serve(d):
                 pass
         finally:
             writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
 
     server = await asyncio.start_unix_server(handler, path=SOCK)
     os.chmod(SOCK, 0o600)
@@ -358,7 +364,7 @@ def already_running():
 
 
 def acquire_daemon_lock():
-    lock_file = open(PID, "w")
+    lock_file = open(PID, "a+")
     try:
         fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError as e:
@@ -366,6 +372,8 @@ def acquire_daemon_lock():
         if e.errno in {errno.EACCES, errno.EAGAIN}:
             raise RuntimeError(f"daemon already running according to {PID}") from e
         raise
+    lock_file.seek(0)
+    lock_file.truncate()
     lock_file.write(str(os.getpid()))
     lock_file.flush()
     return lock_file
