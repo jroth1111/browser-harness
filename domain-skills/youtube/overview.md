@@ -9,6 +9,29 @@ transcript-only recipe and it is not a wrapper around the official YouTube Data
 API. It distinguishes API/direct HTTP surfaces from browser-only and hybrid
 browser/API surfaces.
 
+## Source exploration
+
+Follow the exploration order from `interaction-skills/data-source-exploration.md`:
+
+1. **APIs**: YouTube's InnerTube API (`/youtubei/v1/*`) provides structured data
+   for search, player metadata, channel tabs, playlists, and comments. Requires
+   a valid `INNERTUBE_CONTEXT` but no authentication — works with a fresh signed-out
+   browser session. See `innertube.md` for endpoint details.
+2. **Static HTTP**: oEmbed endpoint provides title, author, thumbnail for public videos.
+3. **Embedded JSON**: `ytInitialData` and `ytInitialPlayerResponse` on watch/search
+   pages. See `interaction-skills/data-source-exploration.md` embedded JSON extraction patterns.
+4. **Browser (CDP)**: Required for transcript capture, filter chip rendering, and
+   any field requiring user interaction (expanding descriptions, loading more comments).
+
+Backend selection follows the routing ladder from
+`interaction-skills/cross-domain-control-flow.md`. YouTube converges on the
+InnerTube API for most data — CDP is only needed when the API doesn't cover the
+requested fields or when browser interaction is required.
+
+**Auth boundaries**: Follow `interaction-skills/session-continuity.md` for session
+management. YouTube works signed-out for public content. Do not reuse authenticated
+sessions for public observations.
+
 ## Operating Rules
 
 - Prefer the primitive in `surface-map.json` whose `outputs` exactly cover the
@@ -44,6 +67,10 @@ browser/API surfaces.
 
 The machine-readable registry is the acceptance source for this skill:
 `surface-map.json`.
+
+Use `scripts/README.md` before running any YouTube helper script. It classifies
+each script as a runner, probe, guard, or exporter and records the expected
+outputs and refusal boundaries.
 
 Use `scripts/render_docs.py` after editing `surface-map.json`; it regenerates
 the summary tables in `generated-surfaces.md`. Use `scripts/live_smoke.py`

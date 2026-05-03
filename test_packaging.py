@@ -22,4 +22,5 @@ def test_package_config_installs_runtime_modules_and_skill_assets():
     assert "*.js" in setuptools["package-data"]["browser_harness_assets"]
     excluded_domain_data = setuptools["exclude-package-data"]["browser_harness_domain_skills"]
     assert "**/receipts/**" not in excluded_domain_data
+    assert "**/outputs/**" in excluded_domain_data
     assert "SKILL.md" in setuptools["data-files"]["share/browser-harness"]

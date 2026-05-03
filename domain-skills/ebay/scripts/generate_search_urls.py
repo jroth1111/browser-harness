@@ -9,8 +9,8 @@ Implements the 4-layer query taxonomy from data-source-exploration.md:
 
 Usage:
     python3 generate_search_urls.py "Ryzen AI Max+ 395"
-    python3 generate_search_urls.py "GB10" --base-terms "Grace Blackwell"
-    python3 generate_search_urls.py "RTX 5090" --products "RTX 5090" --form-factors "desktop" "laptop"
+    python3 generate_search_urls.py "GB10" --synonyms "Grace Blackwell"
+    python3 generate_search_urls.py "RTX 5090" --products "RTX 5090" --modifiers "desktop" "laptop"
 
 Output: TSV of label<TAB>url per line.
 """
@@ -86,8 +86,10 @@ def generate_queries(
 def main():
     parser = argparse.ArgumentParser(description="Generate eBay search URLs")
     parser.add_argument("chip", help="Chip/component name")
-    parser.add_argument("--base-terms", nargs="*", help="Additional chip reference terms")
-    parser.add_argument("--form-factors", nargs="*", help="Form-factor synonyms")
+    parser.add_argument("--base-terms", nargs="*", dest="base_terms", help="Additional chip reference terms (legacy)")
+    parser.add_argument("--synonyms", nargs="*", dest="base_terms", help="Alternative names for the search target")
+    parser.add_argument("--form-factors", nargs="*", dest="form_factors", help="Form-factor synonyms (legacy)")
+    parser.add_argument("--modifiers", nargs="*", dest="form_factors", help="Category/context words for queries")
     parser.add_argument("--products", nargs="*", help="Known product names for Layer 1")
     parser.add_argument("--spec-terms", nargs="*", help="Spec-level queries for Layer 4")
     parser.add_argument("--pages", type=int, default=3, help="Pages per query (default: 3)")

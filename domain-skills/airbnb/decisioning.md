@@ -81,8 +81,24 @@ Fields:
 - `hypothesis`
 - `variant_description`
 - `control_description`
+- `funnel_stage`
+- `consumer_archetype`
+- `hero_photo_key`
+- `title_variant`
+- `insights_period_basis`
 - `target_metric`
 - `guardrail_metrics`
+- `exposure_metric`
+- `click_metric`
+- `consideration_metric`
+- `booking_metric`
+- `bookings_per_impression_metric`
+- `wishlist_to_booking_friction_metric`
+- `trust_metric`
+- `review_relevance_metric`
+- `qualified_engagement_metric`
+- `conversion_stage_priority`
+- `momentum_signal_caution_flags`
 - `pre_period_start`
 - `pre_period_end`
 - `post_period_start`
@@ -90,7 +106,17 @@ Fields:
 - `eligible_dates`
 - `excluded_dates`
 - `demand_context_controls`
+- `audience_quality_notes`
 - `status`
+
+For hero/title/photo tests, keep funnel-stage metrics separate. Exposure,
+click-through, consideration, booking, and trust can move in different
+directions. Do not count artificial wishlist campaigns, unrelated friend clicks,
+or non-consumer traffic as positive signal unless the experiment explicitly
+models that audience-quality risk. Treat views, hang time, and wishlists as
+momentum signals unless they are tied to qualified guest intent; give more weight
+to bookings, relevant five-star reviews, low resolution/refund friction, and
+guest language that reinforces the target filters or trip type.
 
 ## `airbnb_outcome_attribution`
 
@@ -131,12 +157,13 @@ Content-change subtypes:
 
 | Subtype | Evidence to require |
 |---|---|
-| `hero_photo_change` | Search-card click issue or hero gap; own hero subject; A-comp hero pattern; title alignment note |
-| `first_five_reorder` | Photo order gap; current first-five subjects; missing early proof; proposed order |
-| `gallery_reshoot_or_edit` | Photo/design gap; missing shots or edit defects; reshoot/edit brief |
-| `title_above_fold_rewrite` | Search-card click issue or guest-segment mismatch; current title; primary and challenger copy |
-| `full_section_copy_rewrite` | Listing-page conversion issue, guest-segment mismatch, or amenity proof gap; source facts for every claim |
-| `caption_or_amenity_proof_update` | Amenity visibility gap; photo proof and Airbnb amenity-field evidence |
+| `hero_photo_change` | Low search-to-listing evidence or hero gap; own hero subject; A-comp hero pattern; title alignment note; expected search-card metric |
+| `first_five_reorder` | Listing-page conversion issue or photo order gap; current first-five subjects; missing early proof; proposed order; expected listing-to-booking or bookings-per-impression metric |
+| `gallery_reshoot_or_edit` | Photo/design gap; missing shots or edit defects; reshoot/edit brief; Insights funnel stage; expected metric to move |
+| `photo_currency_or_as_pictured_fix` | Stale photo, changed furnishing/amenity, seasonal closure, condition mismatch, missing post-clean evidence, or review/dispute risk |
+| `title_above_fold_rewrite` | Search-card click issue or guest-segment mismatch; current title; primary and challenger copy; expected search-to-listing metric |
+| `full_section_copy_rewrite` | Listing-page conversion issue, guest-segment mismatch, or amenity proof gap; source facts for every claim; expected listing-to-booking metric |
+| `caption_or_amenity_proof_update` | Amenity visibility gap; photo proof, Airbnb amenity-field evidence, target filter alignment, and expected filtered-conversion or review-relevance effect |
 
 Decision-gate outputs from `scripts/decision_gates.py` can create
 recommendations when `decision == fix` or `decision == pursue`. Outputs with
@@ -151,6 +178,13 @@ work before creating the action. The board or brief should preserve the prior
 title, above-fold copy, photo order, and captions needed for rollback. Do not
 log a content edit as implemented until the actual Airbnb fields or photo order
 changed.
+
+For content actions backed by Insights-vs-listing correlation, record the
+conversion stage explicitly. Search-card actions should target
+`search_to_listing_conversion`; first-five, proof, copy, and trust actions should
+target `listing_to_booking_conversion` or bookings per impression; high
+view/wishlist but low booking cases should carry a friction metric and a
+confounder note instead of being counted as photo wins.
 
 ## Outcome review cadence
 

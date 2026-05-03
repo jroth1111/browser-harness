@@ -638,6 +638,66 @@ def _first_from_row_or_sources(row, records, *fields):
     return None
 
 
+def _conversion_stage_context(row, records=(), issue=""):
+    """Carry period-aligned Insights context into content and gallery outputs."""
+    issue = str(issue or "").strip()
+    stage = _first_from_row_or_sources(
+        row,
+        records,
+        "insights_funnel_stage",
+        "conversion_stage_priority",
+        "funnel_stage",
+    )
+    if not stage:
+        if issue in {"search_card_click_problem", "hero_photo_gap"}:
+            stage = "search_card_click"
+        elif issue in {"listing_page_conversion_problem", "sleeping_capacity_not_proven", "amenity_not_visible", "design_gap"}:
+            stage = "listing_page_conversion"
+        elif issue == "visibility_problem":
+            stage = "visibility"
+        elif issue == "price_not_content_problem":
+            stage = "economics_not_content"
+    stage = str(stage).strip() if stage else None
+
+    expected_metric = _first_from_row_or_sources(
+        row,
+        records,
+        "expected_metric_to_move",
+        "expected_metric",
+        "target_metric",
+    )
+    if not expected_metric:
+        if stage == "search_card_click":
+            expected_metric = "search_to_listing_conversion"
+        elif stage == "listing_page_conversion":
+            expected_metric = "listing_to_booking_conversion"
+        elif stage == "wishlist_or_view_friction":
+            expected_metric = "bookings_per_impression"
+        elif stage == "visibility":
+            expected_metric = "first_page_search_impressions"
+        elif issue in {"hero_photo_gap", "search_card_click_problem"}:
+            expected_metric = "search_to_listing_conversion"
+        elif issue == "photo_order_gap":
+            expected_metric = "search_to_listing_conversion"
+        elif issue and issue != "no_clear_issue":
+            expected_metric = "listing_to_booking_conversion"
+
+    return {
+        "insights_period_start": _first_from_row_or_sources(row, records, "insights_period_start", "period_start"),
+        "insights_period_end": _first_from_row_or_sources(row, records, "insights_period_end", "period_end"),
+        "insights_metric_basis": _first_from_row_or_sources(row, records, "insights_metric_basis", "metric_basis"),
+        "insights_funnel_stage": stage,
+        "search_to_listing_delta_basis": _first_from_row_or_sources(row, records, "search_to_listing_delta_basis"),
+        "listing_to_booking_delta_basis": _first_from_row_or_sources(row, records, "listing_to_booking_delta_basis"),
+        "wishlist_to_booking_friction_basis": _first_from_row_or_sources(row, records, "wishlist_to_booking_friction_basis"),
+        "conversion_correlation_basis": _first_from_row_or_sources(row, records, "conversion_correlation_basis", "conversion_correlation_summary"),
+        "conversion_stage_priority": _first_from_row_or_sources(row, records, "conversion_stage_priority") or stage,
+        "expected_metric_to_move": expected_metric,
+        "conversion_confounder_flags": as_list(_first_from_row_or_sources(row, records, "conversion_confounder_flags")),
+        "insights_confidence": _first_from_row_or_sources(row, records, "insights_confidence"),
+    }
+
+
 def _own_public_audit(row):
     return (row or {}).get("own_public_listing_audit") or (row or {}).get("own_public_audit") or {}
 
@@ -1090,6 +1150,7 @@ def build_gallery_cro_execution_board(row):
     row = row or {}
     own_audit = _own_public_audit(row)
     source_gap = row.get("source_photo_product_gap_audit") or {}
+    source_records = _source_gate_records(row)
     issue = _issue_from_content_row(row) or str(source_gap.get("issue_class") or source_gap.get("primary_gap") or "").strip()
     evidence_refs = unique(as_list(row.get("evidence_refs")) + as_list(own_audit.get("evidence_refs")))
     force = truthy(row.get("explicit_gallery_request")) or truthy(row.get("user_requested_gallery_work"))
@@ -1148,7 +1209,12 @@ def build_gallery_cro_execution_board(row):
         [item["subject"] for item in room_coverage if item["status"] == "missing"]
         + [item["amenity"] for item in amenity_plan if item["status"] == "missing"]
     )
-    expected_metric = "search_to_listing_conversion" if issue in {"hero_photo_gap", "photo_order_gap", "search_card_click_problem"} else "listing_to_booking_conversion"
+    conversion_context = _conversion_stage_context(row, source_records, issue)
+    expected_metric = conversion_context.get("expected_metric_to_move") or (
+        "search_to_listing_conversion"
+        if issue in {"hero_photo_gap", "photo_order_gap", "search_card_click_problem"}
+        else "listing_to_booking_conversion"
+    )
     review_window_days = int(as_number(row.get("review_window_days"), 14) or 14)
     first_five_order = [
         {
@@ -1186,6 +1252,19 @@ def build_gallery_cro_execution_board(row):
         "seasonality": row.get("seasonality"),
         "channel_goal": row.get("channel_goal") or "airbnb",
         "why_book": why_book,
+        "insights_period_start": conversion_context.get("insights_period_start"),
+        "insights_period_end": conversion_context.get("insights_period_end"),
+        "insights_metric_basis": conversion_context.get("insights_metric_basis"),
+        "insights_funnel_stage": conversion_context.get("insights_funnel_stage"),
+        "search_to_listing_delta_basis": conversion_context.get("search_to_listing_delta_basis"),
+        "listing_to_booking_delta_basis": conversion_context.get("listing_to_booking_delta_basis"),
+        "wishlist_to_booking_friction_basis": conversion_context.get("wishlist_to_booking_friction_basis"),
+        "conversion_correlation_basis": conversion_context.get("conversion_correlation_basis"),
+        "conversion_stage_priority": conversion_context.get("conversion_stage_priority"),
+        "expected_metric_to_move": conversion_context.get("expected_metric_to_move"),
+        "conversion_confounder_flags": conversion_context.get("conversion_confounder_flags"),
+        "insights_confidence": conversion_context.get("insights_confidence"),
+        "conversion_stage_context": conversion_context,
         "hero_primary_photo_id_or_subject": hero["photo_id_or_subject"] if hero else None,
         "hero_alternate_photo_ids_or_subjects": [card["photo_id_or_subject"] for card in alternates],
         "hero_crop_safety_score": hero["crop_safety_score"] if hero else None,
@@ -1204,6 +1283,8 @@ def build_gallery_cro_execution_board(row):
             "primary_hypothesis": "new hero and first-five order improves bookings per impression",
             "kpi": "bookings_per_impression",
             "fallback_kpi": expected_metric,
+            "insights_funnel_stage": conversion_context.get("insights_funnel_stage"),
+            "conversion_confounder_flags": conversion_context.get("conversion_confounder_flags"),
             "guardrails": ["listing_to_booking_conversion", "save_rate", "message_rate", "accuracy_complaints"],
             "cadence": "weekly",
             "stop_rule": "keep the variant only after two consecutive reads show at least 10% relative lift with neutral or improving guardrails",
@@ -1360,12 +1441,12 @@ def build_listing_content_optimization_brief(row):
         missing_required_facts.append("listing facts for section copy")
 
     missing_shots = _missing_shots(row, issue, own_audit)
-    expected_metric = _first_from_row_or_sources(
-        row,
-        source_records,
-        "expected_metric",
-        "target_metric",
-    ) or ("search_to_listing_conversion" if issue in {"hero_photo_gap", "photo_order_gap", "search_card_click_problem"} else "listing_to_booking_conversion")
+    conversion_context = _conversion_stage_context(row, source_records, issue)
+    expected_metric = conversion_context.get("expected_metric_to_move") or (
+        "search_to_listing_conversion"
+        if issue in {"hero_photo_gap", "photo_order_gap", "search_card_click_problem"}
+        else "listing_to_booking_conversion"
+    )
     hero_subject = (
         row.get("hero_primary_photo_id_or_subject")
         or row.get("recommended_hero_photo_id")
@@ -1403,6 +1484,19 @@ def build_listing_content_optimization_brief(row):
         stay_length=row.get("stay_length"),
         seasonality=row.get("seasonality"),
         why_book=why_book,
+        insights_period_start=conversion_context.get("insights_period_start"),
+        insights_period_end=conversion_context.get("insights_period_end"),
+        insights_metric_basis=conversion_context.get("insights_metric_basis"),
+        insights_funnel_stage=conversion_context.get("insights_funnel_stage"),
+        search_to_listing_delta_basis=conversion_context.get("search_to_listing_delta_basis"),
+        listing_to_booking_delta_basis=conversion_context.get("listing_to_booking_delta_basis"),
+        wishlist_to_booking_friction_basis=conversion_context.get("wishlist_to_booking_friction_basis"),
+        conversion_correlation_basis=conversion_context.get("conversion_correlation_basis"),
+        conversion_stage_priority=conversion_context.get("conversion_stage_priority"),
+        expected_metric_to_move=conversion_context.get("expected_metric_to_move"),
+        conversion_confounder_flags=conversion_context.get("conversion_confounder_flags"),
+        insights_confidence=conversion_context.get("insights_confidence"),
+        conversion_stage_context=conversion_context,
         optimization_scope=CONTENT_SCOPE_BY_ISSUE.get(issue, ["title_above_fold_rewrite", "hero_photo_change"] if force else []),
         current_title_text=current_title,
         recommended_primary_title=primary_title,
@@ -1427,6 +1521,8 @@ def build_listing_content_optimization_brief(row):
         copy_sections=_copy_sections(row, issue, why_book),
         ab_test_plan={
             "hypothesis": f"Changing content for {issue} will improve {expected_metric}",
+            "insights_funnel_stage": conversion_context.get("insights_funnel_stage"),
+            "conversion_confounder_flags": conversion_context.get("conversion_confounder_flags"),
             "variants": [
                 {"name": "Primary", "title": primary_title, "above_fold": above_fold_primary, "hero": hero_subject},
                 {"name": "Challenger", "title": challenger_title, "above_fold": above_fold_challenger, "hero": None},

@@ -73,8 +73,10 @@ Fields:
 - `search_to_listing_conversion`
 - `listing_to_booking_conversion`
 - `overall_conversion_rate`
+- `bookings_per_impression`
 - `views`
 - `wishlist_additions`
+- `wishlist_to_booking_friction`
 - `booking_lead_time`
 - `returning_guest_pct`
 - `comparison_to_similar_listings`
@@ -214,6 +216,12 @@ Fields:
 - `impressions`
 - `search_to_listing_rate`
 - `listing_to_booking_rate`
+- `insights_funnel_stage`
+- `search_to_listing_delta_basis`
+- `listing_to_booking_delta_basis`
+- `wishlist_to_booking_friction_basis`
+- `expected_metric_to_move`
+- `conversion_confounder_flags`
 - `comp_price_index`
 - `hero_photo_subject`
 - `photo_count`

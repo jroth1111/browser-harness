@@ -4,14 +4,34 @@ Field-tested against ebay.com.au on 2026-05-02 using `uv run python` with `http_
 and again on 2026-05-02 with `curl_cffi` + cookie extraction after Akamai WAF block.
 Currency is AUD. Prices in search results show "AU $" prefix; JSON-LD returns `priceCurrency: "AUD"`.
 
+## Source exploration
+
+Follow the exploration order from `interaction-skills/data-source-exploration.md`:
+
+1. **Exports**: eBay has no structured export/download for search results. Skip.
+2. **APIs**: All public APIs are dead or require OAuth (see APIs section below). Skip.
+3. **HTTP**: `http_get` with full Chrome UA works for ~5-10 requests before Akamai WAF block.
+4. **Browser**: Not needed — HTTP with cookie fallback covers all use cases.
+
+Backend capability is proven: `http_get` returns ~1.5MB HTML with full search results.
+When blocked, cookie extraction + TLS impersonation via `interaction-skills/waf-bypass.md`
+recovers access. No need to test capability per session — the pattern is stable.
+
+**Backend selection**: Follow routing ladder from `interaction-skills/cross-domain-control-flow.md`.
+eBay diverges at step 3: `http_get` is the cheapest backend that works, not CDP.
+
+**Session management**: When cookie extraction is needed for WAF bypass, follow the
+session continuity patterns from `interaction-skills/session-continuity.md`. Do not
+commit cookie values — extract at runtime from the user's browser profile.
+
 ## Scripts
 
 Executable scripts in `domain-skills/ebay/scripts/`:
 
 | Script | Purpose |
 |--------|---------|
-| `search.py` | Full 4-layer search orchestrator: fetch, extract, dedup, classify, export |
-| `generate_search_urls.py` | Generate eBay search URLs with 4-layer taxonomy and pagination |
+| `search.py` | Full 4-layer search orchestrator: fetch, extract, dedup, classify, export. Uses `--synonyms`/`--modifiers` (unified with AliExpress vocabulary). |
+| `generate_search_urls.py` | Generate eBay search URLs with 4-layer taxonomy and pagination. Uses `--synonyms`/`--modifiers`. |
 | `classify_product_line.py` | Classify listing titles into product lines, form factors, RAM, storage |
 
 ### Quick start

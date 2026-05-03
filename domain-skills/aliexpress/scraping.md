@@ -4,6 +4,25 @@ Field-tested against aliexpress.com on 2026-05-02 using Chrome DevTools MCP (CDP
 Tested across 10 GPU/workstation product categories with detail-page verification.
 Browser CDP required. `http_get` returns error pages.
 
+## Source exploration
+
+Follow the exploration order from `interaction-skills/data-source-exploration.md`:
+
+1. **Exports**: AliExpress has no structured export/download. Skip.
+2. **APIs**: No public API. Internal API endpoints require browser session context.
+   Embedded JSON (`_dida_config_`) provides structured data on search pages but
+   requires CDP to access — not a standalone API. See `interaction-skills/data-source-exploration.md`
+   embedded JSON extraction patterns.
+3. **HTTP**: `http_get` returns error pages. Dead path — AliExpress blocks non-browser HTTP.
+4. **Browser (CDP)**: Required. Returns 60 structured items per search page via
+   embedded JSON. No anti-bot observed with CDP.
+
+Backend capability is proven: CDP + embedded JSON extraction is the only viable path.
+No need to re-test `http_get` — it has been confirmed blocked.
+
+**Backend selection**: Follow routing ladder from `interaction-skills/cross-domain-control-flow.md`.
+AliExpress diverges at step 2 — no API/HTTP option works, so CDP is mandatory.
+
 ## Search Strategy
 
 ### The core problem

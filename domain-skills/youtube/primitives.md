@@ -6,9 +6,9 @@ Use browser-harness directly. Do not add a YouTube-specific manager layer.
 
 - `http_get(url)`: public oEmbed, thumbnails, RSS, embed pages, static watch or
   search HTML.
-- `http_get_browser_session(url)`: same-domain reads after a real profile has
-  established usable YouTube page state. Seed first with `seed_browser_session()`
-  if cookies may be stale. Do not print cookie headers.
+- `http_get_browser_session(url)` and `fetch_with_browser_session(url,
+  seed_url=...)`: same-domain reads after a real profile has established usable
+  YouTube page state. Do not print cookie headers.
 - `/youtubei/v1/search`: global search, filters, chips, and continuations using
   page-derived context.
 - `/youtubei/v1/player`: player metadata and playability.

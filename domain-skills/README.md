@@ -1,8 +1,10 @@
-# Domain Skills
+# Domain Skills — Discovery Index
 
-Domain skills are site-specific operating manuals. Use them after
-`../SKILL.md` decides the task is about a known site, or after an interaction
-skill discovers that a source, selector, route, or workflow is site-specific.
+This file is a discovery index, not a routing destination. SKILL.md routes
+directly to `domain-skills/<site>/overview.md` or the first .md file in a
+domain folder. Use this only when you need to discover which domain skills
+exist, find the cold-read path for a rich bundle, or understand the full
+folder inventory.
 
 ## Cold Start
 
@@ -38,14 +40,33 @@ rg --files domain-skills/<site>
 | Placeholders | `salesforce/`, `spreadshirt/` | Reserved folders with no reusable workflow yet |
 | Private/generated local state | `.private-data/`, `.session-store/`, `outputs/`, `__pycache__/` | Local run artifacts only; never authoritative reusable guidance |
 
-## Rich Bundle Entry Points
+## Rich Bundle Cold-Read Paths
 
-| Folder | Start here | Notes |
-|---|---|---|
-| `airbnb/` | `airbnb/overview.md` | Intent-first host intelligence router, workflow docs, schema docs, script index, fixtures, and private/session separation |
-| `youtube/` | `youtube/overview.md` | YouTube workflow routing, primitives, surface map, fixtures, receipts, reports, and scripts |
-| `ai-chat-archive/` | `ai-chat-archive/overview.md` | Logged-in AI chat archive workflow, SQLite-only canonical layout, incremental sync, and verification rules |
-| `atlas/` | `atlas/overview.md` | Authenticated recruitment SaaS notes; single overview rather than a script bundle |
+When landing on a rich domain with no prior context, read progressively.
+
+### Airbnb (`airbnb/`)
+1. `overview.md` — intent router, source guardrails, expanded routing matrix
+2. `scripts/README.md` — only when you need to run, probe, or validate
+3. `host-sources.md` — logged-in host inventory and export workflows
+4. `public-market.md` — logged-out guest-visible comps and search rank
+5. `data-quality.md` — receipts, source classes, quarantine, provenance
+
+### YouTube (`youtube/`)
+1. `overview.md` — operating rules, primitive selection, surface-map registry
+2. `scraping.md` — extraction workflows by data type
+3. `generated-surfaces.md` — machine-readable surface summary
+4. `scripts/` — only when a script is named by the workflow docs
+
+### AI Chat Archive (`ai-chat-archive/`)
+1. `overview.md` — provider router, required run shape, completion rules
+2. `storage-decision.md` — SQLite canonical store decisions
+3. `archive-layout.md` — database schema and export layout
+4. `provider-surfaces.md` — provider-specific discovery rules
+5. `sync-strategy.md` — resume, incremental, delta behavior
+6. `verification.md` — completion and integrity probes
+
+### Atlas (`atlas/`)
+1. `overview.md` — routes, filters, GraphQL bootstrap, auth notes
 
 ## Full Domain Folder Inventory
 
@@ -72,4 +93,4 @@ rg --files domain-skills/<site>
   domain bundle has scripts.
 - Interaction skills own reusable browser mechanics and cross-domain control
   flow.
-- Root `../SKILL.md` owns the whole-harness cold-start router and executable index.
+- Root `../SKILL.md` owns the whole-harness cold-start router.

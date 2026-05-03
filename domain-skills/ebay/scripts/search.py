@@ -14,7 +14,7 @@ Usage:
     python3 search.py search "Ryzen AI Max+ 395" --output results.csv
 
     # With extra terms and product names:
-    python3 search.py search "GB10" --base-terms "Grace Blackwell" --products "DGX Spark"
+    python3 search.py search "GB10" --synonyms "Grace Blackwell" --products "DGX Spark"
 
     # Seller trust verification on results:
     python3 search.py verify results.csv
@@ -62,12 +62,19 @@ def lookup_products(chip: str) -> list[str]:
 
 # --- Extraction ---
 
+# Required fields for search results — field-level acceptance per
+# interaction-skills/cross-domain-control-flow.md routing ladder.
+# Note: condition is NOT available at search level — detail page required.
+SEARCH_REQUIRED_FIELDS = {'listing_id', 'title', 'price'}
+
+
 def extract_search_results(html: str) -> list[dict]:
     if 'Pardon Our Interruption' in html or 'Access Denied' in html or len(html) < 20_000:
         return []
     cards = re.split(r'(?=<li[^>]+data-listingid=)', html)
     results = []
     seen = set()
+    missing_fields = {}
     for card in cards[1:]:
         lid_m = re.search(r'data-listingid="?(\d+)"?', card)
         if not lid_m:
@@ -91,13 +98,19 @@ def extract_search_results(html: str) -> list[dict]:
         loc_m = re.search(r'from\s+([^<]+?)(?:\s*</)', card)
         location = loc_m.group(1).strip() if loc_m else 'Unknown'
 
-        results.append({
+        row = {
             'listing_id': lid,
             'url': (url_m.group(1).split('?')[0] if url_m else None) or f"https://www.ebay.com.au/itm/{lid}",
             'title': title,
             'price': price,
             'location': location,
-        })
+        }
+        for f in SEARCH_REQUIRED_FIELDS:
+            if row.get(f) is None:
+                missing_fields[f] = missing_fields.get(f, 0) + 1
+        results.append(row)
+    if missing_fields:
+        print(f"  Field coverage warning: {missing_fields}", file=sys.stderr)
     return results
 
 
@@ -642,8 +655,10 @@ def main():
 
     s = sub.add_parser("search", help="Full 4-layer search with fetch and coverage verification")
     s.add_argument("chip", help="Chip/component name")
-    s.add_argument("--base-terms", nargs="*")
-    s.add_argument("--form-factors", nargs="*")
+    s.add_argument("--base-terms", nargs="*", dest="base_terms")
+    s.add_argument("--synonyms", nargs="*", dest="base_terms")
+    s.add_argument("--form-factors", nargs="*", dest="form_factors")
+    s.add_argument("--modifiers", nargs="*", dest="form_factors")
     s.add_argument("--products", nargs="*")
     s.add_argument("--spec-terms", nargs="*")
     s.add_argument("--min-price", type=float, default=500.0, help="Minimum price filter")

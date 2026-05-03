@@ -1,20 +1,21 @@
 # Amazon — Product Search & Data Extraction
 
-Field-tested against amazon.com on 2025-04-18 using a logged-in Chrome session.
+Field-tested against amazon.com.au on 2026-05-02 using a Chrome session.
 No CAPTCHA or bot detection was triggered during any test run.
+Currency is AUD. Amazon AU shows "RRP" where US shows "List Price".
 
 ## Navigation
 
 ### Direct search URL (fastest, always use this)
 ```python
-goto_url("https://www.amazon.com/s?k=mechanical+keyboard")
+goto_url("https://www.amazon.com.au/s?k=mechanical+keyboard")
 wait_for_load()
 wait(2)  # dynamic content needs ~2s after readyState=complete
 ```
 
 ### Search box typing (use when you need category filtering)
 ```python
-goto_url("https://www.amazon.com")
+goto_url("https://www.amazon.com.au")
 wait_for_load()
 wait(1)
 js("document.querySelector('#twotabsearchtextbox').focus()")
@@ -30,7 +31,7 @@ wait(2)
 ### Direct product page
 ```python
 # URL pattern: /dp/{ASIN}  or  /dp/{ASIN}?th=1 (Amazon may redirect to add ?th=1)
-goto_url("https://www.amazon.com/dp/B08Z6X4NK3")
+goto_url("https://www.amazon.com.au/dp/B08Z6X4NK3")
 wait_for_load()
 wait(2)
 ```
@@ -42,7 +43,7 @@ wait(2)
 (observed when the daemon attached to a different real tab). The safe pattern:
 
 ```python
-tid = new_tab("https://www.amazon.com/s?k=mechanical+keyboard")
+tid = new_tab("https://www.amazon.com.au/s?k=mechanical+keyboard")
 wait_for_load()
 wait(2)
 ```
@@ -52,21 +53,24 @@ After that, `goto_url()` works fine within the same Amazon session.
 ## Search Results Extraction
 
 ### Container selector
-`[data-component-type="s-search-result"]` — confirmed working, yields ~22 results per page.
+`[data-component-type="s-search-result"]` — confirmed working, yields ~60 results per page.
 
 ### Full extraction (field-tested)
 ```python
 results = js("""
-  Array.from(document.querySelectorAll('[data-component-type="s-search-result"]')).map(el => ({
-    asin: el.getAttribute('data-asin'),
-    title: el.querySelector('h2 span')?.innerText?.trim(),
-    price: el.querySelector('.a-price .a-offscreen')?.innerText,
-    list_price: el.querySelector('.a-text-price .a-offscreen')?.innerText,
-    rating: el.querySelector('[aria-label*="out of 5 stars"]')?.getAttribute('aria-label')?.split(' ')[0],
-    reviews: el.querySelector('[aria-label*="ratings"]')?.getAttribute('aria-label'),
-    is_sponsored: !!el.querySelector('.puis-sponsored-label-text'),
-    url: el.querySelector('h2 a')?.href
-  }))
+  Array.from(document.querySelectorAll('[data-component-type="s-search-result"]')).map(el => {
+    var asin = el.getAttribute('data-asin');
+    return {
+      asin: asin,
+      title: el.querySelector('h2 span')?.innerText?.trim(),
+      price: el.querySelector('.a-price .a-offscreen')?.innerText,
+      list_price: el.querySelector('.a-text-price .a-offscreen')?.innerText,
+      rating: el.querySelector('[aria-label*="out of 5 stars"]')?.getAttribute('aria-label')?.split(' ')[0],
+      reviews: el.querySelector('[aria-label*="ratings"]')?.getAttribute('aria-label'),
+      is_sponsored: !!el.querySelector('.puis-sponsored-label-text'),
+      url: asin ? 'https://www.amazon.com.au/dp/' + asin : null
+    };
+  }).filter(r => r.asin)
 """)
 ```
 
@@ -77,12 +81,12 @@ results = js("""
 - **`list_price`**: `.a-text-price .a-offscreen` — only present when item is on sale (was/now pricing).
 - **`rating`**: Use `aria-label` on `[aria-label*="out of 5 stars"]` — gives `"4.5 out of 5 stars, rating details"`, split on space for the number.
 - **`reviews`**: Use `[aria-label*="ratings"]` attribute — gives `"1,514 ratings"`. Do NOT use `.a-size-base.s-underline-text` — that element exists on sponsored results and shows "Xbox" (a cross-sell widget text).
-- **`is_sponsored`**: `.puis-sponsored-label-text` is present on sponsored listings; first 2-3 results are usually sponsored.
-- **`url`**: `h2 a` href — contains the full `/dp/{ASIN}/...` URL.
+- **`is_sponsored`**: `.puis-sponsored-label-text` is present on sponsored listings; first 12 results are usually sponsored.
+- **`url`**: Construct from ASIN — `h2 a` does NOT exist on AU search cards. Sponsored cards have zero links; organic cards link via image/swatches but not title. `'https://www.amazon.com.au/dp/' + asin` is the only reliable method.
 
 ## Product Detail Page Extraction
 
-### Confirmed selectors (field-tested on B08Z6X4NK3)
+### Confirmed selectors (field-tested on B0D3F69XSP)
 ```python
 detail = js("""
   ({
@@ -113,14 +117,16 @@ detail = js("""
 
 ## Best Sellers Page
 
-URL: `https://www.amazon.com/Best-Sellers-{Category}/zgbs/{slug}/`
-e.g. `https://www.amazon.com/Best-Sellers-Electronics/zgbs/electronics/`
+URL: `https://www.amazon.com.au/gp/bestsellers/{slug}/`
+e.g. `https://www.amazon.com.au/gp/bestsellers/electronics/`
+
+Note: The US format `/Best-Sellers-{Category}/zgbs/{slug}/` returns 404 on AU. Use `/gp/bestsellers/` instead.
 
 ### DOM structure (2025)
 `.zg-item-immersion` **does not exist** — Amazon migrated to CSS modules. Use `[data-asin]` anchored on `[id="gridItemRoot"]`:
 
 ```python
-goto_url("https://www.amazon.com/Best-Sellers-Electronics/zgbs/electronics/")
+goto_url("https://www.amazon.com.au/gp/bestsellers/electronics/")
 wait_for_load()
 wait(2)
 
@@ -132,7 +138,7 @@ items = js("""
       rank: container.querySelector('[class*="zg-bdg-text"]')?.innerText,
       title: container.querySelector('img[alt]')?.getAttribute('alt'),
       price: container.querySelector('.p13n-sc-price, .a-size-base.a-color-price')?.innerText,
-      url: 'https://www.amazon.com/dp/' + el.getAttribute('data-asin')
+      url: 'https://www.amazon.com.au/dp/' + el.getAttribute('data-asin')
     }
   }).filter(r => r.rank)
 """)
@@ -151,7 +157,7 @@ if next_url:
     wait(2)
 
 # Or construct by page number
-goto_url("https://www.amazon.com/s?k=wireless+mouse&page=2")
+goto_url("https://www.amazon.com.au/s?k=wireless+mouse&page=2")
 ```
 
 ## Result Count
@@ -196,3 +202,6 @@ Amazon may serve a CAPTCHA on fresh/anonymous sessions. Using the browser's exis
 - **ASIN from URL**: Use `/dp/([A-Z0-9]{10})/` regex on the product URL. `data-asin` on search results is always the canonical ASIN.
 - **`?th=1` redirect**: Amazon appends `?th=1` (and sometimes `?psc=1`) to product URLs after redirect. This is normal — `input[name="ASIN"]` always has the clean ASIN.
 - **Wait 2s after `wait_for_load()`**: Amazon search results load the listing cards asynchronously. `readyState=complete` fires before cards render. A hard 2s wait is required.
+- **Product pages need longer on AU**: Product detail pages can take 4–5s to fully render on AU. If `#productTitle` is null, the page hasn't finished loading. Use `new_tab()` for the first product page visit.
+- **Product overview specs**: `#productOverview_feature_div table` provides structured key/value specs (brand, connectivity, etc.) — useful when bullet points are sparse.
+- **Search result titles are brand-only for computers/systems**: For desktops, laptops, and computer systems, `h2 span` returns just the brand name ("ASUS", "MSI") instead of the full product name. This doesn't affect GPUs, peripherals, or accessories — only system-level products. For these categories, search extraction can identify ASINs and prices, but `#productTitle` from the product detail page is required for the actual product name.
