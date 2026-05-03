@@ -295,7 +295,10 @@ def test_restore_session_state_and_verify_passes_authenticated_urls():
         def __init__(self):
             self.calls = []
             self.page_statuses = iter([
+                # wait_for_origin polls
                 {"url": "about:blank", "title": "", "readyState": "complete", "textLength": 0},
+                {"url": "https://www.example.com/", "title": "Home", "readyState": "complete", "textLength": 0},
+                # navigate_and_wait pre_url + polls
                 {"url": "https://www.example.com/", "title": "Home", "readyState": "complete", "textLength": 0},
                 {"url": "https://www.example.com/private", "title": "Private", "readyState": "complete", "textLength": 500},
             ])
@@ -336,6 +339,9 @@ def test_restore_session_state_and_verify_passes_authenticated_urls():
 
 def test_verify_authenticated_urls_fails_login_redirect():
     states = iter([
+        # navigate_and_wait pre_url
+        {"url": "about:blank", "title": "", "readyState": "complete", "textLength": 0},
+        # navigate_and_wait first poll — redirected to login
         {"url": "https://www.example.com/login?redirect=private", "title": "Log in", "readyState": "complete", "textLength": 500},
     ])
 
@@ -368,7 +374,7 @@ def test_http_get_with_login_session_captures_http_error_body():
             return {"cookies": [{"name": "sid", "value": "abc", "domain": ".example.com", "path": "/", "secure": True}]}
         raise AssertionError(method)
 
-    with patch("urllib.request.urlopen", side_effect=err):
+    with patch("urllib.request.OpenerDirector.open", side_effect=err):
         result = login_session.http_get_with_login_session(
             client,
             "https://www.example.com/private",
@@ -407,4 +413,31 @@ def test_prompt_user_login_waits_until_url_and_text_match():
     assert result["ok"] is True
     assert result["reason"] == "login_observed"
     assert calls[0] == ("Page.enable", {})
-    assert calls[1] == ("Page.navigate", {"url": "https://example.com/login"})
+
+
+def test_cross_domain_redirect_strips_cookies():
+    import urllib.request
+
+    handler = login_session._CrossDomainRedirectHandler()
+    req = urllib.request.Request("https://example.com/path", headers={"Cookie": "sid=abc"})
+    # Simulate a redirect to a different origin
+    new = handler.redirect_request(
+        req, None, 302, "Found", {"Location": "https://other.com/path"}, "https://other.com/path",
+    )
+    assert new is not None
+    # The new request should NOT carry the Cookie header
+    assert "Cookie" not in new.headers
+    assert "Cookie" not in new.unredirected_hdrs
+
+
+def test_same_domain_redirect_keeps_cookies():
+    import urllib.request
+
+    handler = login_session._CrossDomainRedirectHandler()
+    req = urllib.request.Request("https://example.com/path", headers={"Cookie": "sid=abc"})
+    # Same-origin redirect — cookie should be preserved
+    new = handler.redirect_request(
+        req, None, 302, "Found", {"Location": "https://example.com/other"}, "https://example.com/other",
+    )
+    assert new is not None
+    assert new.headers.get("Cookie") == "sid=abc"

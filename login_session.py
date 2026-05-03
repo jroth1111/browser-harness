@@ -153,7 +153,9 @@ def cookie_matches_url(cookie, url):
         return False
     path = cookie.get("path") or "/"
     request_path = parsed.path or "/"
-    return request_path.startswith(path.rstrip("/") or "/")
+    if path == "/":
+        return True
+    return request_path == path or request_path.startswith(path if path.endswith("/") else path + "/")
 
 
 def browser_cookies(client, urls, session_id=None):
@@ -345,7 +347,7 @@ def set_cookie_param(cookie):
     if "url" not in out and domain:
         host = str(domain).lstrip(".")
         path = out.get("path") or "/"
-        scheme = "https" if out.get("secure", True) else "http"
+        scheme = "https" if out.get("secure", False) else "http"
         out["url"] = f"{scheme}://{host}{path}"
     return out
 
@@ -442,15 +444,34 @@ def wait_for_page_status(client, min_text=250, timeout=30.0, poll=0.5, session_i
 
 
 def navigate_and_wait(client, url, min_text=250, timeout=30.0, poll=0.5, session_id=None):
+    pre_url = runtime_value(client, "location.href", session_id=session_id)
     send_cdp(client, "Page.enable", session_id=session_id)
     send_cdp(client, "Page.navigate", {"url": url}, session_id=session_id)
-    return wait_for_page_status(client, min_text=min_text, timeout=timeout, poll=poll, session_id=session_id)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        last = page_status(client, session_id=session_id)
+        url_changed = last.get("url") != pre_url
+        text_ok = int(last.get("textLength") or 0) >= min_text
+        if url_changed and text_ok:
+            return {**last, "ok": True, "reason": "content"}
+        # Same URL but content loaded — page refresh or canonical redirect.
+        if not url_changed and text_ok and last.get("readyState") == "complete":
+            return {**last, "ok": True, "reason": "content"}
+        time.sleep(poll)
+    last = page_status(client, session_id=session_id)
+    return {**last, "ok": False, "reason": "timeout"}
 
 
 def _same_origin(url, origin):
     got = urlparse(url or "")
     want = urlparse(origin or "")
-    return bool(got.scheme and got.netloc and got.scheme == want.scheme and got.netloc == want.netloc)
+    if not (got.scheme and got.netloc and got.scheme == want.scheme):
+        return False
+    if (got.hostname or "").lower() != (want.hostname or "").lower():
+        return False
+    got_port = got.port or (443 if got.scheme == "https" else 80)
+    want_port = want.port or (443 if want.scheme == "https" else 80)
+    return got_port == want_port
 
 
 def wait_for_origin(client, origin, timeout=30.0, poll=0.5, session_id=None):
@@ -565,11 +586,25 @@ def _read_http_text(response):
     return data.decode("utf-8", "replace")
 
 
+class _CrossDomainRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Strip cookies when a redirect crosses origin boundaries."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None:
+            orig_url = req.full_url if hasattr(req, "full_url") else ""
+            if orig_url and newurl and not _same_origin(orig_url, newurl):
+                new.headers.pop("Cookie", None)
+                new.unredirected_hdrs.pop("Cookie", None)
+        return new
+
+
 def http_get_with_login_session(client, url, headers=None, cookie_urls=None, timeout=20.0, block_detector=None):
     """HTTP GET with browser user agent and matching browser cookies."""
-    req = urllib.request.Request(url, headers=browser_session_headers(client, url, headers=headers, cookie_urls=cookie_urls))
+    req_headers = browser_session_headers(client, url, headers=headers, cookie_urls=cookie_urls)
+    req = urllib.request.Request(url, headers=req_headers)
+    opener = urllib.request.build_opener(_CrossDomainRedirectHandler)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with opener.open(req, timeout=timeout) as response:
             text = _read_http_text(response)
             status = getattr(response, "status", None) or (response.getcode() if hasattr(response, "getcode") else 200)
             final_url = response.geturl() if hasattr(response, "geturl") else url
@@ -579,6 +614,17 @@ def http_get_with_login_session(client, url, headers=None, cookie_urls=None, tim
         status = error.code
         final_url = error.geturl()
         response_headers = dict(error.headers)
+    except (urllib.error.URLError, OSError, TimeoutError) as error:
+        text = ""
+        status = None
+        final_url = url
+        response_headers = {}
+        block = {"blocked": False, "kind": None, "evidence": []}
+        return {
+            "ok": False, "http_ok": False, "status": status, "url": final_url,
+            "text": text, "block": block, "headers": response_headers,
+            "error": str(error),
+        }
 
     block = block_detector(html=text, text=text, url=final_url) if block_detector else {"blocked": False, "kind": None, "evidence": []}
     http_ok = 200 <= int(status or 0) < 400
