@@ -156,7 +156,15 @@ Target fields per order:
 ## Anti-detection notes
 
 - **CONFIRMED: Cloudflare Turnstile** on all pages. Home page loads with Turnstile iframe; search/store pages show full challenge.
+- **CDP detection**: Turnstile detects CDP via three signals — screenX/screenY coordinate bug in cross-origin iframes, Runtime.enable console side effects, and debugger statement timing. JS-level stealth patches (`navigator.webdriver = false`) are themselves detectable via property descriptor probing.
+- **SOLVED: SeleniumBase UC Mode** bypasses Turnstile. Uses patched chromedriver that disconnects during challenge window. Home page loads in ~13s without triggering a full-page challenge.
+  ```python
+  from seleniumbase import SB
+  with SB(uc=True, test=True) as sb:
+      sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
+      # If full-page challenge appears:
+      sb.uc_gui_click_captcha()  # OS-level pyautogui click, not CDP
+  ```
 - DoorDash also known to use PerimeterX on some routes.
-- If `wait_for_content()` reports a block, follow `safety.md` and `interaction-skills/waf-bypass.md`.
-- The logged-out landing page loads without challenge but restaurant listings require passing Turnstile.
+- If `wait_for_content()` reports a block via browser-harness, switch to SeleniumBase UC Mode.
 - Respect session limits in `safety.md`.

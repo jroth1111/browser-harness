@@ -5,8 +5,8 @@ Browse restaurants, extract menus, compare prices across platforms, place orders
 
 ## Prerequisites
 
-- User must be logged into the target platform in their running Chrome.
-- The skill does not handle login credentials. If not logged in, ask the user to log in manually.
+- **Anti-bot bypass required**: Both platforms block CDP-connected browsers. Use SeleniumBase UC Mode (`uc=True`) to bypass Cloudflare Turnstile (DoorDash) and WAF (Uber Eats). See "Accessing platforms" below.
+- User must be logged into the target platform. The skill does not handle login credentials — ask the user to log in manually if needed.
 - For placing orders: user must have a valid delivery address and payment method configured on the platform.
 - For cross-platform comparison: user must be logged into both platforms (separate tabs).
 
@@ -63,6 +63,28 @@ safety.md                <- consent gates, rate limits, anti-detection
 platforms/ubereats.md    <- Uber Eats specific selectors and flows
 platforms/doordash.md    <- DoorDash specific selectors and flows
 ```
+
+## Accessing platforms
+
+Both platforms have strong anti-bot protection that detects CDP connections. Browser-harness and MCP DevTools tools **cannot access these sites directly**.
+
+**Use SeleniumBase UC Mode** (installed in browser-harness `.venv`):
+
+```python
+from seleniumbase import SB
+
+with SB(uc=True, test=True) as sb:
+    sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
+    # If full-page Cloudflare challenge appears:
+    sb.uc_gui_click_captcha()  # OS-level click, not CDP
+
+    # For Uber Eats:
+    sb.uc_open_with_reconnect("https://www.ubereats.com/", 4)
+```
+
+Run via: `.venv/bin/python3 <<'PY' ... PY`
+
+UC Mode works by disconnecting the WebDriver during the challenge window and using a patched chromedriver that removes automation flags. OS-level `pyautogui` clicks bypass the screenX/screenY detection bug in cross-origin iframes.
 
 ## Browser automation approach
 

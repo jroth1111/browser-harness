@@ -138,10 +138,14 @@ Target fields per order:
 
 ## Anti-detection notes
 
-- **CONFIRMED: hard WAF block**. `ubereats.com` returns "access denied" for CDP-connected browsers that aren't authenticated. No Turnstile challenge — just flat denial.
-- Requires user to be logged into Uber Eats in their running Chrome before automation begins.
-- Try `seed_browser_session("https://www.ubereats.com/")` to establish a valid session.
-- If `seed_browser_session` fails, the user must manually visit Uber Eats and log in first.
+- **CONFIRMED: hard WAF block** with CDP-connected browsers. `ubereats.com` returns "access denied". No Turnstile challenge — just flat denial.
+- **SOLVED: SeleniumBase UC Mode** bypasses the WAF. Uses patched chromedriver that disconnects during page load. Home page loads in ~9s without access denied.
+  ```python
+  from seleniumbase import SB
+  with SB(uc=True, test=True) as sb:
+      sb.uc_open_with_reconnect("https://www.ubereats.com/", 4)
+  ```
+- Alternative: `seed_browser_session("https://www.ubereats.com/")` with browser-harness may work if user is logged into their real Chrome.
 - Vary timing between navigations (2-5s between restaurant pages).
 - Do not scrape all restaurants in a feed sequentially — browse naturally.
 - Take breaks after 15-20 page loads.
