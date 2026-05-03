@@ -71,10 +71,9 @@ def _is_local_chrome_mode(env=None):
 
 def daemon_alive(name=None):
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(1)
-        s.connect(_paths(name)[0])
-        s.close()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            s.connect(_paths(name)[0])
         return True
     except (FileNotFoundError, ConnectionRefusedError, socket.timeout):
         return False
@@ -86,14 +85,15 @@ def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog
         # Stale daemons accept connects AND reply to meta:* (pure Python) even when the
         # CDP WS to Chrome is dead — probe with a real CDP call and require "result".
         try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(3)
-            s.connect(_paths(name)[0])
-            s.sendall(b'{"method":"Target.getTargets","params":{}}\n')
-            data = b""
-            while not data.endswith(b"\n"):
-                chunk = s.recv(1 << 16)
-                if not chunk: break
-                data += chunk
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(3)
+                s.connect(_paths(name)[0])
+                s.sendall(b'{"method":"Target.getTargets","params":{}}\n')
+                data = b""
+                while not data.endswith(b"\n"):
+                    chunk = s.recv(1 << 16)
+                    if not chunk: break
+                    data += chunk
             if b'"result"' in data: return
         except Exception: pass
         restart_daemon(name)
@@ -127,6 +127,9 @@ def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog
                 print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
             restart_daemon(name)
             continue
+        if p.poll() is None:
+            try: p.wait(timeout=3)
+            except Exception: pass
         raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check /tmp/bh-{name or NAME}.log")
 
 
@@ -140,16 +143,15 @@ def restart_daemon(name=None):
 
     sock, pid_path = _paths(name)
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(5)
-        s.connect(sock)
-        s.sendall(b'{"meta":"shutdown"}\n')
-        s.recv(1024)
-        s.close()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(5)
+            s.connect(sock)
+            s.sendall(b'{"meta":"shutdown"}\n')
+            s.recv(1024)
     except Exception:
         pass
     try:
-        pid = int(open(pid_path).read())
+        pid = int(Path(pid_path).read_text())
     except (FileNotFoundError, ValueError):
         pid = None
     if pid:
@@ -279,20 +281,22 @@ def _chrome_running():
 
 
 def _daemon_meta(meta, name=None, timeout=2.0):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    s.connect(_paths(name)[0])
-    s.sendall((json.dumps({"meta": meta}) + "\n").encode())
-    data = b""
-    while not data.endswith(b"\n"):
-        chunk = s.recv(1 << 16)
-        if not chunk:
-            break
-        data += chunk
-    s.close()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect(_paths(name)[0])
+        s.sendall((json.dumps({"meta": meta}) + "\n").encode())
+        data = b""
+        while not data.endswith(b"\n"):
+            chunk = s.recv(1 << 16)
+            if not chunk:
+                break
+            data += chunk
     if not data:
         return {}
-    return json.loads(data)
+    try:
+        return json.loads(data)
+    except (ValueError, TypeError):
+        return {}
 
 
 def _open_chrome_inspect():
@@ -410,7 +414,6 @@ _HEADLESS_STEALTH_ARGS = (
     "--disable-client-side-phishing-detection",
     "--disable-backgrounding-occluded-windows",
     "--autoplay-policy=user-gesture-required",
-    "--disable-blink-features=AutomationControlled",
     "--disable-features=AudioServiceOutOfProcess,TranslateUI,BlinkGenPropertyTrees",
 )
 
@@ -444,7 +447,7 @@ def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_pa
     if headless:
         cmd.append("--headless=new")
         cmd.extend(_HEADLESS_STEALTH_ARGS)
-        cmd.extend(f"--ignore-default-args-switch={a}" for a in _HEADLESS_HARMFUL_ARGS)
+        cmd.append(f"--ignore-default-args={','.join(_HEADLESS_HARMFUL_ARGS)}")
     if window_size:
         cmd.append(f"--window-size={window_size[0]},{window_size[1]}")
     cmd.append(url)
