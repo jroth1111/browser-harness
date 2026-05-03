@@ -60,6 +60,9 @@ def runtime_value(client, expression, session_id=None):
         {"expression": expression, "returnByValue": True, "awaitPromise": True},
         session_id=session_id,
     )
+    if "exceptionDetails" in result:
+        desc = result["exceptionDetails"].get("exception", {}).get("description", "")
+        raise RuntimeError(f"JS exception evaluating {expression!r}: {desc}")
     return result.get("result", {}).get("value")
 
 
@@ -117,7 +120,7 @@ class LightpandaCDP:
         except Exception:
             pass
 
-    def _request(self, method, params=None, session_id=None):
+    def _request(self, method, params=None, session_id=None, timeout=30.0):
         self.next_id += 1
         message = {"id": self.next_id, "method": method}
         if params is not None:
@@ -125,13 +128,15 @@ class LightpandaCDP:
         if session_id:
             message["sessionId"] = session_id
         self.ws.send(json.dumps(message))
-        while True:
-            reply = json.loads(self.ws.recv())
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            reply = json.loads(self.ws.recv(timeout=max(0, deadline - time.time())))
             if reply.get("id") != self.next_id:
                 continue
             if "error" in reply:
                 raise RuntimeError(f"{method} failed: {reply['error']}")
             return reply.get("result", {})
+        raise RuntimeError(f"{method} timed out after {timeout}s — no matching response")
 
     def _default_session_for(self, method):
         if method.startswith(_BROWSER_SCOPED_PREFIXES):
@@ -187,9 +192,13 @@ class LightpandaServer:
             stderr=stderr,
             start_new_session=True,
         )
-        self.version = wait_json_version(self.port, timeout=timeout)
-        self.client = LightpandaCDP(self.version["webSocketDebuggerUrl"])
-        self.client.ensure_page()
+        try:
+            self.version = wait_json_version(self.port, timeout=timeout)
+            self.client = LightpandaCDP(self.version["webSocketDebuggerUrl"])
+            self.client.ensure_page()
+        except Exception:
+            self.close()
+            raise
         return self
 
     def close(self):
@@ -202,7 +211,7 @@ class LightpandaServer:
                 self.proc.wait(timeout=5)
             except Exception:
                 try:
-                    os.kill(self.proc.pid, signal.SIGKILL)
+                    self.proc.kill()
                 except Exception:
                     pass
                 try:
