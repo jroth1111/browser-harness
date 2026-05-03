@@ -9,21 +9,26 @@ class Response:
     lxml overhead.
     """
 
-    def __init__(self, html, text, url, status, source):
+    def __init__(self, html, text, url, status, source, headers=None, encoding="utf-8"):
         self.html = html or ""
         self.text = text or ""
         self.url = url
         self.status = status
         self.source = source  # "http" | "session" | "browser" | "auto"
+        self.headers = headers or {}
+        self.encoding = encoding
         self._tree = None
 
     @property
     def tree(self):
         """Parsed lxml tree. Built on first access."""
         if self._tree is None:
-            from lxml.html import fromstring
+            from lxml.html import fromstring, HTMLParser
 
-            self._tree = fromstring(self.html)
+            self._tree = fromstring(
+                self.html or "<html><body></body></html>",
+                parser=HTMLParser(recover=True, encoding="utf-8"),
+            )
         return self._tree
 
     def css(self, selector):

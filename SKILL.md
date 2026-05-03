@@ -64,6 +64,7 @@ If nothing matches: scan `domain-skills/` with `rg --files domain-skills/<site>`
 - Raw CDP for anything helpers don't cover: cdp("Domain.method", params).
 - Structured fetching: `fetch(url)` returns a `Response` with `.css(selector)`, `.css_text(selector)`, `.xpath(expr)`, `.text`, `.html`. Use `source="http"` for static pages, `source="session"` after seeding, `source="browser"` for JS-required pages, `source="auto"` (default) to cascade.
 - Cloudflare Turnstile: when `wait_for_content()` reports a blocked page on a Cloudflare site, try `detect_turnstile()` → `solve_turnstile()`. Requires a visible browser.
+- Resource blocking: `block_resources()` installs a CDP route to block ad domains and/or resource types on the current page. Call after navigation.
 
 ## Search domain-skills/ first
 

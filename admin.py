@@ -375,6 +375,53 @@ def _validate_port(port):
     return port
 
 
+_HEADLESS_STEALTH_ARGS = (
+    "--disable-blink-features=AutomationControlled",
+    "--test-type",
+    "--lang=en-US",
+    "--mute-audio",
+    "--disable-sync",
+    "--hide-scrollbars",
+    "--disable-logging",
+    "--enable-async-dns",
+    "--accept-lang=en-US",
+    "--use-mock-keychain",
+    "--disable-translate",
+    "--disable-voice-input",
+    "--window-position=0,0",
+    "--ignore-gpu-blocklist",
+    "--disable-dev-shm-usage",
+    "--metrics-recording-only",
+    "--disable-crash-reporter",
+    "--force-color-profile=srgb",
+    "--font-render-hinting=none",
+    "--aggressive-cache-discard",
+    "--disable-domain-reliability",
+    "--disable-threaded-animation",
+    "--disable-threaded-scrolling",
+    "--enable-simple-cache-backend",
+    "--disable-background-networking",
+    "--enable-surface-synchronization",
+    "--disable-renderer-backgrounding",
+    "--disable-ipc-flooding-protection",
+    "--safebrowsing-disable-auto-update",
+    "--disable-background-timer-throttling",
+    "--run-all-compositor-stages-before-draw",
+    "--disable-client-side-phishing-detection",
+    "--disable-backgrounding-occluded-windows",
+    "--autoplay-policy=user-gesture-required",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-features=AudioServiceOutOfProcess,TranslateUI,BlinkGenPropertyTrees",
+)
+
+_HEADLESS_HARMFUL_ARGS = (
+    "--enable-automation",
+    "--disable-component-update",
+    "--disable-default-apps",
+    "--disable-extensions",
+)
+
+
 def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_path=None,
                            headless=False, window_size=None):
     """Launch Chrome with a loopback CDP endpoint and explicit profile."""
@@ -396,6 +443,8 @@ def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_pa
     ]
     if headless:
         cmd.append("--headless=new")
+        cmd.extend(_HEADLESS_STEALTH_ARGS)
+        cmd.extend(f"--ignore-default-args-switch={a}" for a in _HEADLESS_HARMFUL_ARGS)
     if window_size:
         cmd.append(f"--window-size={window_size[0]},{window_size[1]}")
     cmd.append(url)

@@ -802,63 +802,200 @@ def http_get(url, headers=None, timeout=20.0):
                 data = gzip.decompress(data)
             except (OSError, EOFError):
                 pass
-        return data.decode()
+        charset = "utf-8"
+        ct = r.headers.get("Content-Type", "")
+        if "charset=" in ct:
+            charset = ct.split("charset=")[1].split(";")[0].strip().strip('"')
+        try:
+            return data.decode(charset)
+        except (UnicodeDecodeError, LookupError):
+            return data.decode("utf-8", errors="replace")
+
+
+def _detect_cloudflare_type(html):
+    """Detect Cloudflare challenge type from page content. Returns type string or None."""
+    for ctype in ("non-interactive", "managed", "interactive"):
+        if f"cType: '{ctype}'" in html:
+            return ctype
+    if 'script[src*="challenges.cloudflare.com/turnstile"]' in html:
+        return "embedded"
+    return None
 
 
 def detect_turnstile(timeout=5.0):
-    """Check if a Cloudflare Turnstile challenge iframe is present on the current page.
+    """Check if a Cloudflare Turnstile challenge is present on the current page.
 
-    Returns ``{"found": bool, "iframe_target_id": str|None}``.
+    Returns ``{"found": bool, "challenge_type": str|None, "iframe_target_id": str|None}``.
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
         for t in cdp("Target.getTargets").get("targetInfos", []):
             if t.get("type") == "iframe" and "challenges.cloudflare.com" in t.get("url", ""):
-                return {"found": True, "iframe_target_id": t["targetId"]}
-        # Also check for turnstile script in DOM
-        has_script = js("""!!document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]')""")
-        if has_script:
-            return {"found": True, "iframe_target_id": None}
+                return {"found": True, "challenge_type": "turnstile_iframe", "iframe_target_id": t["targetId"]}
+        # Check for Turnstile script or widget in DOM
+        found = js("""!!(
+            document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]') ||
+            document.querySelector('.cf-turnstile') ||
+            document.querySelector('#cf-turnstile') ||
+            document.querySelector('#cf_turnstile')
+        )""")
+        if found:
+            return {"found": True, "challenge_type": "turnstile_widget", "iframe_target_id": None}
+        # Check page title for "Just a moment..." (CF challenge page)
+        title = js("document.title")
+        if title and "just a moment" in title.lower():
+            return {"found": True, "challenge_type": "cf_challenge_page", "iframe_target_id": None}
         time.sleep(0.5)
-    return {"found": False, "iframe_target_id": None}
+    return {"found": False, "challenge_type": None, "iframe_target_id": None}
 
 
-def solve_turnstile(timeout=30.0, poll=1.0):
+def solve_turnstile(timeout=30.0, poll=1.0, max_attempts=3):
     """Click the Cloudflare Turnstile checkbox and wait for challenge completion.
 
     Requires a visible browser (headful or headless with virtual display).
-    Returns ``{"solved": bool, "reason": str}``.
+    Uses Scrapling's offset coordinates (+26-28/+25-27px from widget top-left)
+    and humanized click timing. Retries recursively if the challenge persists.
+    Returns ``{"solved": bool, "reason": str, "attempts": int}``.
     """
-    detection = detect_turnstile(timeout=5.0)
-    if not detection["found"]:
-        return {"solved": False, "reason": "no_turnstile_found"}
+    import random
 
-    # The Turnstile checkbox is inside a nested iframe. click_at_xy handles
-    # cross-origin hit-testing through Chrome's browser process, so we just
-    # need the checkbox bounding box from the main frame's perspective.
-    # The checkbox is typically ~28x28px in the top-right area of the widget.
-    checkbox = js("""(() => {
-        const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
-        if (!iframe) return null;
-        const r = iframe.getBoundingClientRect();
-        // The checkbox is offset from the iframe's top-left corner
-        return {x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height};
-    })()""")
-    if not checkbox:
-        return {"solved": False, "reason": "iframe_bbox_not_found"}
+    for attempt in range(1, max_attempts + 1):
+        detection = detect_turnstile(timeout=5.0)
+        if not detection["found"]:
+            return {"solved": False, "reason": "no_turnstile_found", "attempts": attempt}
 
-    x, y = float(checkbox["x"]), float(checkbox["y"])
-    click_at_xy(x, y)
+        # Non-interactive challenges just need waiting
+        html = js("document.documentElement.outerHTML") or ""
+        challenge_type = _detect_cloudflare_type(html)
 
-    # Wait for content to appear after solving
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        status = page_content_status()
-        if status.get("ok") or (int(status.get("textLength") or 0) >= 200 and
-                                 not status.get("block", {}).get("blocked")):
-            return {"solved": True, "reason": "content_appeared"}
-        time.sleep(poll)
-    return {"solved": False, "reason": "timeout"}
+        if challenge_type == "non-interactive":
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                title = js("document.title") or ""
+                if "just a moment" not in title.lower():
+                    return {"solved": True, "reason": "non_interactive_passed", "attempts": attempt}
+                time.sleep(1.0)
+            return {"solved": False, "reason": "timeout", "attempts": attempt}
+
+        # Find the Turnstile widget bounding box. Try iframe first, then CSS selectors.
+        box = js("""(() => {
+            // Method 1: CF iframe bounding box
+            const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+            if (iframe) {
+                const r = iframe.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) return {x: r.x, y: r.y, w: r.width, h: r.height};
+            }
+            // Method 2: Turnstile widget container selectors (Scrapling fallback)
+            for (const sel of ['#cf-turnstile div', '#cf_turnstile div', '.turnstile>div>div',
+                               '.main-content p+div>div>div']) {
+                const el = document.querySelector(sel);
+                if (el) {
+                    const r = el.getBoundingClientRect();
+                    if (r.width > 0 && r.height > 0) return {x: r.x, y: r.y, w: r.width, h: r.height};
+                }
+            }
+            return null;
+        })()""")
+
+        if not box:
+            # No widget found — check if challenge already solved
+            title = js("document.title") or ""
+            if "just a moment" not in title.lower():
+                return {"solved": True, "reason": "already_solved", "attempts": attempt}
+            return {"solved": False, "reason": "widget_not_found", "attempts": attempt}
+
+        # Scrapling's exact offset: checkbox is +26-28px right and +25-27px down from top-left
+        x = box["x"] + random.randint(26, 28)
+        y = box["y"] + random.randint(25, 27)
+
+        # Humanized click: move to position first, then click with delay
+        click_at_xy(x, y, humanize=True)
+
+        # Wait for CF page to disappear
+        wait(0.5)  # Brief pause for click to register
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            title = js("document.title") or ""
+            if "just a moment" not in title.lower():
+                # Verify actual content appeared
+                status = page_content_status()
+                if int(status.get("textLength") or 0) >= 100:
+                    return {"solved": True, "reason": "content_appeared", "attempts": attempt}
+            time.sleep(poll)
+
+        # Challenge still present — retry if attempts remain
+        if attempt >= max_attempts:
+            return {"solved": False, "reason": "timeout_after_retries", "attempts": attempt}
+
+    return {"solved": False, "reason": "max_attempts_exceeded", "attempts": max_attempts}
+
+
+def block_resources(ad_domains=True, extra_domains=None, resource_types=None):
+    """Install CDP route to block ad domains and/or resource types on the current page.
+
+    Call after navigating to a page. Uses Fetch.enable to intercept and abort
+    matching requests. Returns the number of blocked domain patterns registered.
+    Set *ad_domains*=False to skip the built-in ad list. *resource_types*
+    accepts CDP resource types like ``["image", "font", "media", "stylesheet"]``.
+    """
+    domains = set()
+    if ad_domains:
+        domains.update(_AD_DOMAINS)
+    if extra_domains:
+        domains.update(extra_domains)
+
+    if resource_types:
+        cdp("Fetch.enable", patterns=[{"resourceType": rt, "requestStage": "Request"} for rt in resource_types])
+        # Install handler via Fetch.requestPaused events
+        cdp("Fetch.enable", patterns=[{"urlPattern": "*", "requestStage": "Request"}])
+
+    # Register domain-blocking via CDP Network.setBlockedURLs (available since Chrome 81)
+    if domains:
+        url_patterns = [f"*.{d}/*" for d in domains]
+        cdp("Network.setBlockedURLs", urls=url_patterns)
+        cdp("Network.enable")
+        return len(url_patterns)
+    return 0
+
+
+_AD_DOMAINS = (
+    "ad.doubleclick.net", "ads.google.com", "adservice.google.com",
+    "adservice.google.dk", "pagead2.googlesyndication.com",
+    "ads.pubmatic.com", "ad.360yield.com", "ad.turn.com",
+    "adadvisor.net", "adnxs.com", "adsrvr.org", "advertising.com",
+    "ads.yahoo.com", "adcolony.com", "adform.net", "adition.com",
+    "adk2.com", "adn.com", "adocean.pl", "adroll.com", "adscale.de",
+    "adsdk.yandex.ru", "adsymptotic.com", "adtech.de", "adtechus.com",
+    "adtng.com", "adux.com", "advombat.ru", "adxpansion.com",
+    "adzerk.net", "amazon-adsystem.com", "analytics.google.com",
+    "assets.bounceexchange.com", "bat.bing.com", "bid.g.doubleclick.net",
+    "bing.com/th?", "braze.com", "bounceexchange.com", "branch.io",
+    "btloader.com", "casalemedia.com", "cdn.mxpnl.com", "chartbeat.net",
+    "clicks.hurra.com", "cloudflare.com/cdn-cgi/scripts/", "criteo.com",
+    "criteo.net", "cs.ecn.atomicmpc.com.au", "doubleclick.net",
+    "e-merchant.com", "e2.enemygem.com", "eyeota.net", "facebook.com/tr",
+    "facebook.net/signals", "fonts.googleapis.com", "fonts.gstatic.com",
+    "google-analytics.com", "google.com/pagead", "googleadservices.com",
+    "googlesyndication.com", "googletagmanager.com",
+    "hotjar.com", "impact-ad.jp", "js.driftt.com", "liadm.com",
+    "linkedin.com/li/", "lix Baseline.com", "log.outbrain.com",
+    "metrics.brightcove.com", "mixpanel.com", "moatads.com",
+    "mxpnl.com", "netdice.hurra.com", "newegg.com/html", "newrelic.com",
+    "nr-data.net", "optimizely.com", "outbrain.com", "owneriq.net",
+    "pagead.googlesyndication.com", "panels.tv", "pixel.facebook.com",
+    "pixel.quantserve.com", "pixel.wp.com", "pubmatic.com",
+    "quantserve.com", "rfihub.com", "rubiconproject.com",
+    "scorecardresearch.com", "segment.io", "segment.com", "semasio.net",
+    "serving-sys.com", "sharethis.com", "simplicitymarketingltd.ck.io",
+    "snap.licdn.com", "ssl.google-analytics.com", "stats.g.doubleclick.net",
+    "taboola.com", "tapad.com", "tapstream.com", "tdn.daftcode.com",
+    "theadex.com", "thetradedesk.com", "track.hubspot.com",
+    "tracker.affirm.com", "trc.taboola.com", "tremorhub.com",
+    "trustarc.com", "turn.com", "twitter.com/i/", "urbanairship.com",
+    "visualrevenue.com", "vk.com/rtrg", "world.taobao.com",
+    "x.bidswitch.net", "yandex.ru/clck", "yandex.ru/cycounter",
+    "zeotap.com",
+)
 
 
 def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
@@ -873,16 +1010,17 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
     """
     from response import Response
 
-    def _make(text, url_, status, src):
-        return Response(html=text, text=text, url=url_, status=status, source=src)
-
     if source == "http":
         text = http_get(url, headers=headers, timeout=timeout)
-        return _make(text, url, 200, "http")
+        return Response(html=text, text=text, url=url, status=200, source="http")
 
     if source == "session":
         result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
-        return _make(result.get("text", ""), result.get("url", url), result.get("status", 0), "session")
+        return Response(
+            html=result.get("text", ""), text=result.get("text", ""),
+            url=result.get("url", url), status=result.get("status", 0),
+            source="session", headers=result.get("headers", {}),
+        )
 
     if source == "browser":
         tid = None
@@ -891,26 +1029,33 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
             wait_for_load(timeout=timeout)
             status = wait_for_content(min_text=min_text, timeout=timeout)
             html = js("document.documentElement.outerHTML") or ""
-            return Response(html=html, text=status.get("text", ""), url=status.get("url", url),
-                            status=200 if status.get("ok") else 0, source="browser")
+            return Response(
+                html=html, text=status.get("text", ""),
+                url=status.get("url", url), status=200 if status.get("ok") else 0,
+                source="browser",
+            )
         finally:
             if tid:
                 close_tab(tid)
 
     # source="auto": cascade http → session → browser
-    text = None
     try:
         text = http_get(url, headers=headers, timeout=timeout)
         block = detect_block_page(html=text, text=text, url=url)
         if not block.get("blocked") and len(text.strip()) >= min_text:
-            return _make(text, url, 200, "http")
+            return Response(html=text, text=text, url=url, status=200, source="http")
     except Exception:
         pass
 
     try:
         result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
-        if result.get("ok"):
-            return _make(result.get("text", ""), result.get("url", url), result.get("status", 0), "session")
+        block = detect_block_page(html=result.get("text", ""), text=result.get("text", ""), url=url)
+        if result.get("ok") and not block.get("blocked") and len((result.get("text") or "").strip()) >= min_text:
+            return Response(
+                html=result.get("text", ""), text=result.get("text", ""),
+                url=result.get("url", url), status=result.get("status", 0),
+                source="session", headers=result.get("headers", {}),
+            )
     except Exception:
         pass
 
