@@ -1,0 +1,10 @@
+Reservation ID: HMABC12345
+Listing ID: 100
+Listing: City apartment
+Guest: Example Guest
+Check in: 2026-05-01
+Check out: 2026-05-04
+Nights: 3
+Guests: 2
+Currency: AUD
+Payout: $873.00

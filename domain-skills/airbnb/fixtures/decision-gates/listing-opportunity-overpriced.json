@@ -1,0 +1,30 @@
+{
+  "listing_id": "100",
+  "target_date_or_window": "2026-07",
+  "guest_segment": "family",
+  "stay_length": 3,
+  "own_rank_or_absence": 18,
+  "own_total_price": 1400,
+  "a_comp_price_rows": [
+    {
+      "visible_price_total": 1000
+    },
+    {
+      "visible_price_total": 1100
+    },
+    {
+      "visible_price_total": 1200
+    }
+  ],
+  "review_maturity_input": {
+    "review_count": 33,
+    "latest_review_date": "2026-04-01",
+    "recent_review_count_90d": 5
+  },
+  "search_rank": 18,
+  "photo_count": 20,
+  "evidence_refs": [
+    "own-public",
+    "comp-scan"
+  ]
+}

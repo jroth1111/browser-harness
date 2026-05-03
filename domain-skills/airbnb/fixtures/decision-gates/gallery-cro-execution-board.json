@@ -1,0 +1,60 @@
+{
+  "listing_id": "100",
+  "source_issue_class": "hero_photo_gap",
+  "target_guest_segment": "family_group",
+  "stay_length": "3 nights",
+  "seasonality": "summer",
+  "channel_goal": "airbnb",
+  "why_book": "secure parking and family lounge near the CBD",
+  "title_or_search_card_promise": "Secure parking family CBD apartment",
+  "current_photo_order": ["old-exterior", "old-bedroom", "old-kitchen", "old-bathroom", "old-lounge"],
+  "own_public_listing_audit": {
+    "amenity_claims_visible": ["parking", "pool_or_spa", "family"],
+    "amenity_claims_proven_in_photos": ["parking", "family"],
+    "missing_photo_proof": ["pool_or_spa"],
+    "design_gap_flags": []
+  },
+  "a_comp_visual_patterns": {
+    "hero_subject_mode": "parking",
+    "first_five_subjects": ["parking", "living_area", "kitchen", "bedroom", "bathroom"]
+  },
+  "candidate_photos": [
+    {
+      "photo_id": "parking-hero",
+      "subject": "secure parking bay",
+      "demand_driver_score": 94,
+      "clarity_diagnosticity_score": 88,
+      "crop_safety_score": 91,
+      "crop_notes": "Keep bay signage centred in square and 4:5 crops."
+    },
+    {
+      "photo_id": "lounge-wide",
+      "subject": "family lounge and dining",
+      "demand_driver_score": 86,
+      "clarity_diagnosticity_score": 84,
+      "crop_safety_score": 87
+    },
+    {
+      "photo_id": "kitchen-wide",
+      "subject": "kitchen with oven",
+      "demand_driver_score": 78,
+      "clarity_diagnosticity_score": 82,
+      "crop_safety_score": 84
+    },
+    {
+      "photo_id": "primary-bedroom",
+      "subject": "queen bedroom",
+      "demand_driver_score": 79,
+      "clarity_diagnosticity_score": 81,
+      "crop_safety_score": 82
+    },
+    {
+      "photo_id": "bathroom-wide",
+      "subject": "bathroom shower",
+      "demand_driver_score": 76,
+      "clarity_diagnosticity_score": 80,
+      "crop_safety_score": 81
+    }
+  ],
+  "evidence_refs": ["own-public:100", "a-comp-visuals:melbourne-cbd"]
+}

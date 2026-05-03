@@ -1,0 +1,27 @@
+{
+  "season_rows": [
+    {
+      "season_segment": "peak",
+      "net_after_tactics": 5200,
+      "adr_floor": 430,
+      "occupancy_floor": 0.82
+    },
+    {
+      "season_segment": "shoulder",
+      "net_after_tactics": 3400,
+      "adr_floor": 310,
+      "occupancy_floor": 0.64
+    },
+    {
+      "season_segment": "slow",
+      "net_after_tactics": 2800,
+      "adr_floor": 190,
+      "occupancy_floor": 0.48
+    }
+  ],
+  "candidate_cost_floor": 1200,
+  "required_monthly_net": 2500,
+  "evidence_refs": [
+    "slow-season-pass-grid"
+  ]
+}

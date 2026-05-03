@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "airbnb-warehouse-manifest.schema.json",
+  "title": "Airbnb warehouse export manifest contract",
+  "type": "object",
+  "required": ["warehouse_exports"],
+  "properties": {
+    "warehouse_exports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["table", "path", "row_count", "grain", "source_family", "surface_class", "auth_context"],
+        "properties": {
+          "table": {"type": "string"},
+          "path": {"type": "string"},
+          "row_count": {"type": "integer"},
+          "grain": {"type": ["string", "null"]},
+          "source_family": {"type": ["string", "null"]},
+          "surface_class": {"type": ["string", "null"]},
+          "auth_context": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

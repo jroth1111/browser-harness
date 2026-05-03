@@ -1,0 +1,35 @@
+{
+  "case_type": "photo_conversion_rescue",
+  "listing_id": "100",
+  "starting_symptom": "high impressions with low search-to-listing conversion",
+  "before_state_evidence": [
+    "own-public-search-card",
+    "insights-conversion",
+    "a-comp-visual-set"
+  ],
+  "hypothesis": "The hero photo does not show the scarce winning amenity that A-comps use to earn clicks.",
+  "counterexample_matrix": {
+    "thesis_result": "supported",
+    "winner_with_feature": "A-comp free parking hero",
+    "loser_without_feature": "own exterior hero",
+    "same_boundary_checked": true
+  },
+  "recommended_intervention": "replace hero photo with free parking proof",
+  "expected_metric": "search_to_listing_conversion",
+  "pre_window": {
+    "start": "2026-04-01",
+    "end": "2026-04-14"
+  },
+  "post_window": {
+    "start": "2026-04-15",
+    "end": "2026-04-29"
+  },
+  "rollback_criteria": "revert if search-to-listing conversion or booking quality worsens after the review window",
+  "review_window_days": 14,
+  "evidence_refs": [
+    "case-study-evidence-pack"
+  ],
+  "demand_context_controls": [
+    "ordinary_weekend"
+  ]
+}

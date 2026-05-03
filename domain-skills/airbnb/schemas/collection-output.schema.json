@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "airbnb-collection-output.schema.json",
+  "title": "Airbnb collection output contract",
+  "type": "object",
+  "required": [
+    "run_id",
+    "observed_at",
+    "collection_status",
+    "source_family",
+    "surface_class",
+    "auth_context",
+    "last_good_guard",
+    "warehouse_exports"
+  ],
+  "properties": {
+    "run_id": {"type": "string"},
+    "observed_at": {"type": "string"},
+    "collection_status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial_failed",
+        "partial_unverified",
+        "quarantined_empty_after_prior_nonempty",
+        "refused_empty_feed_after_prior_nonempty"
+      ]
+    },
+    "source_family": {"type": "string"},
+    "surface_class": {"type": "string"},
+    "auth_context": {"type": "string"},
+    "last_good_guard": {"type": "object"},
+    "warehouse_exports": {"type": "array"},
+    "partition_manifest": {"type": ["object", "null"]},
+    "capability_registry_ref": {"type": ["object", "null"]},
+    "redaction_scan": {"type": "object"}
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "same_map_boundary_flag": true,
+  "same_room_type_flag": true,
+  "same_property_class_flag": true,
+  "same_bedroom_band_flag": true,
+  "same_target_guest_count_flag": true,
+  "same_stay_length_flag": true,
+  "same_date_or_season_flag": true,
+  "same_core_amenity_filters_flag": true,
+  "same_visible_price_context_flag": true,
+  "same_channel_flag": true,
+  "can_host_reproduce": "no",
+  "maturity_grade": "mature",
+  "winning_variable": "private rooftop pool",
+  "evidence_refs": [
+    "premium-comp-card",
+    "premium-comp-listing"
+  ]
+}

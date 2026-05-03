@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "candidate_id": "airbnb-universal-logged-out",
+  "domain": "airbnb",
+  "affected_skill_paths": [
+    "domain-skills/airbnb/public-market.md"
+  ],
+  "observed_surface": {
+    "origin": "https://www.airbnb.com.au",
+    "url_pattern": "/s/<place>/homes",
+    "auth_context": "fresh_logged_out_public_guest_visible",
+    "browser_backend": "headful_chrome",
+    "source_family": "public_market",
+    "required_fields": [
+      "result_card_order",
+      "visible_total_price"
+    ]
+  },
+  "evidence_refs": [
+    "airbnb-public-market-search-receipt"
+  ],
+  "observed_behavior": "A logged-out public search showed public guest rank and prices.",
+  "proposed_rule": "Always use logged-out state for every Airbnb workflow.",
+  "forbidden_overgeneralization": "Host dashboard workflows also use logged-out state.",
+  "source_contextuality": {
+    "scope": "Airbnb public search only.",
+    "does_not_apply_when": [
+      "Host dashboard, private analytics, settings, listing editor, exports, reservations, messages, or billing are required."
+    ]
+  },
+  "positive_probe": {
+    "description": "Public rank and price are observed.",
+    "evidence_required": "Receipt with result order and visible price."
+  },
+  "negative_probe": {
+    "description": "Private host workflows are not collapsed into public search state.",
+    "forbidden_path": "Logged-out state for host dashboard workflows."
+  },
+  "redaction_status": {
+    "status": "pass",
+    "finding_count": 0
+  },
+  "confidence": "low",
+  "promotion_decision": "accept"
+}

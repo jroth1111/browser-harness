@@ -1,0 +1,34 @@
+{
+  "listing_id": "100",
+  "margin_floor": 275,
+  "intended_strategy": {
+    "date_class": "event",
+    "source_of_authority": "airbnb_manual",
+    "smart_pricing_policy": "custom_rule_controls",
+    "blocked_discount_types": [
+      "custom_promotion",
+      "weekly"
+    ],
+    "require_rule_set_for_high_demand": true,
+    "review_cadence_days": 7
+  },
+  "calendar_rows": [
+    {
+      "calendar_date": "2026-12-31",
+      "date_class": "event",
+      "nightly_price": 620,
+      "custom_promotion_discount_pct": 15,
+      "booking_pace": "strong",
+      "rule_set_id": "",
+      "smart_pricing_flag": false,
+      "minimum_stay": 2,
+      "check_in_allowed": true,
+      "checkout_allowed": true
+    }
+  ],
+  "evidence_refs": [
+    "calendar:100:2026-12-31",
+    "pricing-settings:100",
+    "demand-event:nye"
+  ]
+}
