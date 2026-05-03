@@ -1,6 +1,11 @@
 import gzip
 import io
+import json
+import os
+import stat
+import tempfile
 import urllib.error
+from pathlib import Path
 from unittest.mock import patch
 
 import login_session
@@ -441,3 +446,63 @@ def test_same_domain_redirect_keeps_cookies():
     )
     assert new is not None
     assert new.headers.get("Cookie") == "sid=abc"
+
+
+def test_registrable_domain_extracts_etld1():
+    assert login_session._registrable_domain("www.airbnb.com") == "airbnb.com"
+    assert login_session._registrable_domain("sub.example.co.uk") == "example.co.uk"
+    assert login_session._registrable_domain("example.com") == "example.com"
+    assert login_session._registrable_domain("") == ""
+    assert login_session._registrable_domain("localhost") == "localhost"
+
+
+def test_save_and_load_auth_profile_roundtrip(tmp_path):
+    profiles_dir = tmp_path / "profiles"
+    fake_state = {
+        "state_format": "browser-harness.login_session.v1",
+        "cookies": [{"name": "sid", "value": "abc123", "domain": ".example.com", "path": "/"}],
+        "origins": [{"origin": "https://example.com", "localStorage": {"key": "val"}, "sessionStorage": {}}],
+    }
+
+    def fake_client(method, **kwargs):
+        if "getCookies" in method or "Cookies" in method:
+            return {"cookies": fake_state["cookies"]}
+        if "Storage" in method or "storage" in method:
+            return {"localStorage": [{"name": "key", "value": "val"}], "sessionStorage": []}
+        return {}
+
+    with patch.object(login_session, "_PROFILES_DIR", profiles_dir), \
+         patch("login_session.session_manifest", return_value={"site": "example.com"}), \
+         patch("login_session.session_state", return_value=fake_state), \
+         patch("login_session.restore_session_state") as mock_restore:
+        path = login_session.save_auth_profile(fake_client, "www.example.com")
+        assert (profiles_dir / "example.com" / "manifest.json").exists()
+        assert (profiles_dir / "example.com" / "state.json").exists()
+
+        state_file = profiles_dir / "example.com" / "state.json"
+        perms = stat.S_IMODE(os.stat(state_file).st_mode)
+        assert perms & 0o077 == 0  # no group/other read
+
+        result = login_session.load_auth_profile(fake_client, "example.com")
+        assert result is True
+        mock_restore.assert_called_once()
+
+
+def test_load_auth_profile_returns_false_when_missing(tmp_path):
+    with patch.object(login_session, "_PROFILES_DIR", tmp_path / "nonexistent"):
+        assert login_session.load_auth_profile(lambda **kw: {}, "missing.com") is False
+
+
+def test_load_auth_profile_returns_false_when_expired(tmp_path):
+    domain_dir = tmp_path / "expired.com"
+    domain_dir.mkdir()
+    old_state = {"cookies": [], "origins": [], "observed_at": "2020-01-01T00:00:00Z"}
+    state_file = domain_dir / "state.json"
+    state_file.write_text(json.dumps(old_state))
+    # Set mtime to 2 days ago
+    import time as _time
+    old_mtime = _time.time() - 48 * 3600
+    os.utime(state_file, (old_mtime, old_mtime))
+
+    with patch.object(login_session, "_PROFILES_DIR", tmp_path):
+        assert login_session.load_auth_profile(lambda **kw: {}, "expired.com", ttl=86400) is False

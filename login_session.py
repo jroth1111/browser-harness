@@ -14,10 +14,12 @@ helpers that work with any CDP client shaped as:
 import gzip
 import inspect
 import json
+import os
 import re
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlparse
 
 
@@ -679,3 +681,72 @@ def prompt_user_login(
             return {**last, "ok": True, "reason": "login_observed"}
         time.sleep(poll)
     return {**last, "ok": False, "reason": "timeout"}
+
+
+# --- auth profile persistence ---
+
+_PROFILES_DIR = Path.home() / ".bh-profiles"
+_PROFILE_TTL = 24 * 60 * 60  # 24 hours
+
+
+def _registrable_domain(hostname):
+    """Extract eTLD+1 from hostname. Simple heuristic without tldextract."""
+    if not hostname:
+        return hostname
+    stripped = hostname.removeprefix("www.")
+    parts = stripped.split(".")
+    if len(parts) <= 2:
+        return stripped
+    multi_tlds = {"co.uk", "co.jp", "com.au", "co.nz", "com.br", "com.cn",
+                  "com.hk", "com.sg", "co.kr", "co.in", "org.uk", "net.au"}
+    if ".".join(parts[-2:]) in multi_tlds and len(parts) >= 3:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
+def auth_profile_path(domain):
+    return _PROFILES_DIR / _registrable_domain(domain)
+
+
+def save_auth_profile(client, domain, urls=None, session_id=None):
+    """Save cookies and storage for *domain* to ~/.bh-profiles.
+
+    Returns the profile directory path. Creates manifest.json (redacted) and
+    state.json (full values, 0600 permissions).
+    """
+    domain = _registrable_domain(domain)
+    profile_dir = _PROFILES_DIR / domain
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    urls = urls or [f"https://{domain}"]
+
+    manifest = session_manifest(client, urls, site=domain, session_id=session_id)
+    (profile_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+    state = session_state(client, urls, site=domain, session_id=session_id)
+    state_path = profile_dir / "state.json"
+    state_path.write_text(json.dumps(state, indent=2))
+    state_path.chmod(0o600)
+
+    return str(profile_dir)
+
+
+def load_auth_profile(client, domain, ttl=_PROFILE_TTL, session_id=None):
+    """Load and restore auth profile for *domain* if fresh enough.
+
+    Returns True if restored, False if no profile or expired.
+    """
+    domain = _registrable_domain(domain)
+    state_path = _PROFILES_DIR / domain / "state.json"
+    if not state_path.exists():
+        return False
+
+    try:
+        age = time.time() - os.path.getmtime(state_path)
+        if age > ttl:
+            return False
+    except OSError:
+        return False
+
+    state = json.loads(state_path.read_text())
+    restore_session_state(client, state, session_id=session_id)
+    return True
