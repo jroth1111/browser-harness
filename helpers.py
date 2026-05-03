@@ -1,5 +1,5 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
-import atexit, base64, json, os, re, socket, time, urllib.error, urllib.request
+import atexit, base64, functools, json, os, re, socket, time, urllib.error, urllib.request
 from collections import deque
 from importlib.resources import files
 from pathlib import Path
@@ -148,7 +148,6 @@ def with_session_recovery(fn, *args, retries=1, **kwargs):
 
 def _recovered(fn):
     """Decorator: retry once on recoverable CDP errors after reconnecting."""
-    import functools
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:

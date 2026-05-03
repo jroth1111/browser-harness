@@ -1,5 +1,6 @@
 """Capture network requests observed during browser navigation."""
 import base64
+import time
 
 import helpers
 
@@ -12,14 +13,22 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
     Returns a list of dicts: {url, method, status, resource_type, mime_type,
     response_headers}. When capture_bodies is True, also includes {body} for
     responses up to 2MB.
+
+    Uses a simple timed wait instead of smart_wait to avoid draining the
+    daemon event buffer and disabling the Network domain prematurely.
     """
     helpers.cdp("Network.enable")
     helpers.drain_events()
 
     helpers.goto_url(url)
-    helpers.smart_wait(timeout=timeout)
+    time.sleep(timeout)
 
     events = helpers.drain_events()
+
+    try:
+        helpers.cdp("Network.disable")
+    except Exception:
+        pass
 
     # Index request → {requestId, url, method, resourceType}
     requests = {}
