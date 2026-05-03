@@ -1,8 +1,9 @@
-# Interaction Skills
+# Interaction Skills — Help Index
 
-Interaction skills are reusable browser mechanics and cross-domain control
-rules. Use them when the task is not yet site-specific, or when a domain skill
-hands off to a generic browser, source, session, or output concern.
+This file is a discovery index, not a routing destination. SKILL.md routes
+directly to individual files. Use this only when no row in SKILL.md matched
+your task, you need to discover which mechanic file covers an unusual edge
+case, or you want to understand the full file inventory.
 
 ## Start Here
 
@@ -14,11 +15,12 @@ hands off to a generic browser, source, session, or output concern.
 4. If the task is a product search across marketplace platforms (AliExpress,
    eBay, Walmart, Amazon), use `product-search.md`.
 5. If the task is a category search (find all X containing Y) or
-   cross-platform comparison, use `data-source-exploration.md`
-   (product-vs-category and comparison-requires-detail-pages sections).
+   cross-platform comparison, use `product-search.md`
+   (marketplace search strategy and marketplace trust/fraud sections).
 6. If designing a scraper or report from scratch, use
    `data-source-exploration.md`.
-7. If the problem is a UI mechanic, pick the smallest mechanic doc below.
+7. If the problem is a UI mechanic (scrolling, dropdowns, iframes, etc.), use
+   `ui-mechanics.md`.
 8. If the task reveals durable cross-domain learning, use
    `empirical-learning-gate.md` before editing shared docs.
 
@@ -26,43 +28,45 @@ hands off to a generic browser, source, session, or output concern.
 
 | Bucket | Files | Owns |
 |---|---|---|
-| Backend and source routing | `cross-domain-control-flow.md`, `backend-capability.md`, `data-source-exploration.md`, `network-requests.md` | Source family choice, capability gates, source discovery, category search pattern, cross-platform comparison, network observation |
-| Browser state and viewport | `connection.md`, `tabs.md`, `viewport.md`, `screenshots.md`, `scrolling.md` | Tab/session control, geometry, visual verification, scroll ownership |
-| UI controls | `dialogs.md`, `dropdowns.md`, `uploads.md`, `drag-and-drop.md`, `iframes.md`, `cross-origin-iframes.md`, `shadow-dom.md`, `print-as-pdf.md`, `downloads.md` | Reusable interaction patterns independent of one site |
+| Backend and source routing | `cross-domain-control-flow.md`, `backend-capability.md`, `data-source-exploration.md` | Source family choice, capability gates, source discovery |
+| Product search and marketplace | `product-search.md`, `marketplace-search.md` | Cross-platform product search, category search, marketplace fraud, seller trust |
+| Browser state | `connection.md`, `tabs.md` | Tab/session control, startup sequence |
+| UI mechanics | `dialogs.md`, `ui-mechanics.md` | Screenshots, scrolling, dropdowns, iframes, shadow DOM, uploads, downloads, drag-and-drop, viewport, print-as-PDF, network observation |
 | Data and session artifacts | `data-display.md`, `cookies.md`, `session-continuity.md`, `waf-bypass.md`, `empirical-learning-gate.md` | Dataset rendering, cookie safety, redacted continuity manifests, WAF bypass fallback, skill-learning promotion |
+| API extraction and coverage | `api-schema-audit.md`, `coverage-accounting.md`, `extraction-coverage.md` | API schema comparison, data threading, static asset discovery, coverage edge cases, field triage |
 
 ## Ownership Rules
 
 - Interaction skills own reusable mechanics and control-plane rules.
 - Domain skills own site routes, selectors, source priority, and domain-specific
   field semantics.
-- `../SKILL.md` owns the root cold-start router and executable/helper index.
+- `../SKILL.md` owns the root cold-start router.
 - Private values, cookies, auth headers, raw private payloads, and user-specific
   run data do not belong here.
 
+## Field-tested gotchas
+
+- Omnibox popups are fake page targets. Filter `chrome://omnibox-popup...` and other internals when you need a real tab.
+- CDP target order != Chrome's visible tab-strip order. Use UI automation when the user means "the first/second tab I can see"; `Target.activateTarget` only shows a known target.
+- Default daemon sessions can go stale. `ensure_real_tab()` re-attaches to a real page.
+- If you need framework-specific DOM tricks, check `ui-mechanics.md` first.
+
 ## Complete File Inventory
 
+- `api-schema-audit.md`
 - `backend-capability.md`
 - `connection.md`
 - `cookies.md`
+- `coverage-accounting.md`
 - `cross-domain-control-flow.md`
-- `cross-origin-iframes.md`
 - `data-display.md`
 - `data-source-exploration.md`
 - `dialogs.md`
-- `downloads.md`
-- `drag-and-drop.md`
-- `dropdowns.md`
 - `empirical-learning-gate.md`
-- `iframes.md`
-- `network-requests.md`
-- `print-as-pdf.md`
+- `extraction-coverage.md`
+- `marketplace-search.md`
 - `product-search.md`
-- `screenshots.md`
-- `scrolling.md`
 - `session-continuity.md`
-- `shadow-dom.md`
 - `tabs.md`
-- `uploads.md`
-- `viewport.md`
+- `ui-mechanics.md`
 - `waf-bypass.md`

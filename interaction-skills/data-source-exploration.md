@@ -14,6 +14,7 @@ Generalizable:
 - field inventory and provenance
 - network/API observation discipline
 - primitive registry shape
+- extraction coverage and tri-state field semantics (see `extraction-coverage.md`)
 
 Site-specific details belong in `domain-skills/<site>/`:
 
@@ -31,7 +32,10 @@ Site-specific details belong in `domain-skills/<site>/`:
    required fields.
 3. Inventory public sources without authentication.
 4. Test the cheapest backend first with `diagnose_url_capability()`.
-5. Inventory authenticated/exportable sources in a persistent browser profile.
+5. If using browser extraction: probe CSS selectors via `evaluate_script`
+   before writing extraction JS. See `extraction-coverage.md` for selector
+   discovery, entity-type identification, and tri-state field semantics.
+6. Inventory authenticated/exportable sources in a persistent browser profile.
 6. Prefer structured exports/downloads over UI text.
 7. Inspect network requests only after UI/export behavior is understood.
 8. Register primitives with source, scope, confidence, freshness, privacy class,
@@ -95,6 +99,10 @@ For each target field:
 
 Field-level parity decides the canonical source. Page-level success does not.
 
+For multi-stage API crawls, see `api-schema-audit.md` for data threading between
+waves, heterogeneous dict classification, and schema comparison against actual API
+responses.
+
 ## Embedded JSON extraction
 
 Many sites embed structured data in `<script>` tags within the HTML. This is
@@ -152,7 +160,9 @@ Push filtering to the server whenever possible. The hierarchy:
 
 Always check for URL-level filters before falling back to client-side extraction.
 Platform-specific filter parameters (AliExpress `pr=`, Walmart `min_price/max_price`,
-eBay `LH_ItemCondition`) are documented in `product-search.md` and domain skills.
+eBay `LH_ItemCondition`) are domain-specific and documented in `product-search.md`
+and individual domain skills. The examples illustrate the concept; actual parameters
+vary by platform and change over time.
 
 ## Backend strategy
 
