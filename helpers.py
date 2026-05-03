@@ -316,6 +316,16 @@ def goto_url(url, wait_until=None):
         "domain_skills": ds,
     }
 
+def goto_with_auth(url, wait_until=None):
+    """Navigate to *url*, restoring a saved auth profile for the domain first.
+
+    Calls load_auth_profile before goto_url. If no profile exists or it's
+    expired, navigates without restored auth. Returns the goto_url result.
+    """
+    login_session.load_auth_profile(cdp, urlparse(url).hostname or "")
+    return goto_url(url, wait_until=wait_until)
+
+
 def navigate_via_google(url, google_base="https://www.google.com"):
     """Navigate to URL with Google as the HTTP Referer.
 

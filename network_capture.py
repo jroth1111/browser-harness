@@ -1,5 +1,5 @@
 """Capture network requests observed during browser navigation."""
-import time
+import base64
 
 import helpers
 
@@ -71,7 +71,6 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
                     )
                     body = body_result.get("body", "")
                     if body_result.get("base64Encoded"):
-                        import base64
                         body = base64.b64decode(body).decode("utf-8", errors="replace")
                     entry["body"] = body[:_MAX_BODY_CHARS]
                 except Exception:

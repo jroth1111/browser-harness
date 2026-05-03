@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import base64
 import gzip
 import io
@@ -75,6 +75,23 @@ def test_goto_url_discovers_packaged_domain_skill_assets(tmp_path):
 
     asset_dir.assert_called_once_with("domain-skills", "browser_harness_domain_skills")
     assert result == {"frameId": "frame-1", "domain_skills": ["overview.md"]}
+
+
+def test_goto_with_auth_loads_profile_before_navigation():
+    with patch("helpers.login_session.load_auth_profile", return_value=True) as mock_load, \
+         patch("helpers.cdp", return_value={"frameId": "f1"}), \
+         patch("helpers.drain_events", return_value=[]):
+        result = helpers.goto_with_auth("https://www.airbnb.com/rooms/123")
+    mock_load.assert_called_once()
+    assert mock_load.call_args[0][1] == "www.airbnb.com"
+
+
+def test_goto_with_auth_navigates_even_without_profile():
+    with patch("helpers.login_session.load_auth_profile", return_value=False), \
+         patch("helpers.cdp", return_value={"frameId": "f1"}), \
+         patch("helpers.drain_events", return_value=[]):
+        result = helpers.goto_with_auth("https://example.com")
+    assert result == {"frameId": "f1"}
 
 
 def test_switch_tab_does_not_mutate_title():
@@ -1605,7 +1622,13 @@ def test_replay_endpoints_status_match():
         {"url": "https://api.example.com/a", "method": "GET", "status": 200,
          "content_type": "application/json", "response_headers": {}, "resource_type": "XHR"},
     ]
-    with patch("helpers.http_get", return_value='{"ok": true}'), \
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.headers.get.return_value = "application/json"
+    mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    with patch("helpers.urllib.request.urlopen", return_value=mock_resp), \
+         patch("helpers._real_user_agent", return_value="TestAgent/1.0"), \
          patch("time.sleep"):
         result = helpers.replay_endpoints(cap)
     assert result["results"][0]["status_match"] is True
@@ -1630,8 +1653,9 @@ def test_replay_endpoints_captures_errors():
         {"url": "https://api.example.com/a", "method": "GET", "status": 200,
          "content_type": "json", "response_headers": {}, "resource_type": "XHR"},
     ]
-    with patch("helpers.http_get", side_effect=urllib.error.HTTPError(
+    with patch("helpers.urllib.request.urlopen", side_effect=urllib.error.HTTPError(
         "https://api.example.com/a", 403, "Forbidden", {}, io.BytesIO(b""))), \
+         patch("helpers._real_user_agent", return_value="TestAgent/1.0"), \
          patch("time.sleep"):
         result = helpers.replay_endpoints(cap)
     assert result["results"][0]["status_match"] is False
