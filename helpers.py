@@ -990,6 +990,64 @@ def ax_snapshot(max_nodes=120, compact=False):
     return out
 
 
+def clear_refs():
+    """Clear the element ref map. Call after navigation to invalidate stale refs."""
+    global _ref_map, _ref_seq
+    _ref_map = {}
+    _ref_seq = 0
+
+
+def _resolve_ref_center(ref):
+    """Resolve an eN ref to page (x, y) coordinates via DOM.getBoxModel."""
+    entry = _ref_map.get(ref)
+    if not entry:
+        raise RuntimeError(f"unknown ref {ref!r}; take a snapshot first")
+    bid = entry["backend_node_id"]
+    if bid is None:
+        raise RuntimeError(f"ref {ref} has no backend_node_id; re-snapshot")
+    try:
+        model = cdp("DOM.getBoxModel", backendNodeId=bid)
+    except RuntimeError:
+        return _resolve_ref_fallback(entry)
+    content = model.get("model", {}).get("content", [])
+    if len(content) >= 8:
+        x = (content[0] + content[2] + content[4] + content[6]) / 4
+        y = (content[1] + content[3] + content[5] + content[7]) / 4
+        return x, y
+    raise RuntimeError(f"ref {ref}: DOM.getBoxModel returned no content quad")
+
+
+def _resolve_ref_fallback(entry):
+    """Fallback: re-query AX tree to find fresh backend_node_id by role/name."""
+    nodes = cdp("Accessibility.getFullAXTree").get("nodes", [])
+    role, name, nth = entry["role"], entry["name"], entry["nth"]
+    match_count = 0
+    for node in nodes:
+        n_role = _ax_value(node.get("role"))
+        n_name = _ax_value(node.get("name"))
+        if n_role == role and n_name == name:
+            if match_count == nth:
+                bid = node.get("backendDOMNodeId")
+                if bid is None:
+                    break
+                entry["backend_node_id"] = bid
+                model = cdp("DOM.getBoxModel", backendNodeId=bid)
+                content = model.get("model", {}).get("content", [])
+                if len(content) >= 8:
+                    x = (content[0] + content[2] + content[4] + content[6]) / 4
+                    y = (content[1] + content[3] + content[5] + content[7]) / 4
+                    return x, y
+                break
+            match_count += 1
+    raise RuntimeError(f"could not resolve ref for {role} {name!r}")
+
+
+def click_ref(ref, **kwargs):
+    """Click element by eN ref from last ax_snapshot(compact=True)."""
+    x, y = _resolve_ref_center(ref)
+    click_at_xy(x, y, **kwargs)
+
+
 # --- crawl state ---
 class CrawlState:
     """In-memory dedup/accumulator for browser crawls. Opt-in, no persistence."""
