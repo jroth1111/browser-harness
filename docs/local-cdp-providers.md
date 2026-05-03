@@ -254,7 +254,7 @@ Notes:
 - `lightpanda_control.evaluate_field_contract()` and
   `wait_for_field_contract()` provide reusable named field gates for direct
   Lightpanda CDP tests.
-- If a headful profile has already solved a protected domain, use `fetch_with_browser_session(url, seed_url=...)` from that profile to gather HTML/data, then pass the extracted results to Lightpanda-only workflows.
+- If a headful profile has already solved a protected domain, use `seed_browser_session(url)` then `http_get_browser_session(url)` to gather HTML/data, then pass the extracted results to Lightpanda-only workflows.
 - Example: for `realestate.com.au`, observed Lightpanda behavior on 2026-04-27 was a Kasada/KPSDK challenge document with empty body text; the REA-specific workflow lives in `domain-skills/realestate-com-au/scraping.md`.
 
 ## Steel Local Docker

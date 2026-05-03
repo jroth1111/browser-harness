@@ -17,7 +17,7 @@ Classify the requested target before opening a browser:
 | Public dynamic page | Cheapest CDP backend with capability gates | Fast if fields render |
 | Public visual/rank/price task | Fresh logged-out headful Chrome | Screenshots and rendered order matter |
 | Authenticated UI/export/download | Persistent headful Chrome profile | Login, MFA, device trust, files |
-| Same-origin follow-up fetches | `fetch_with_browser_session()` after headful seed | Faster than rendering every page |
+| Same-origin follow-up fetches | `http_get_browser_session()` after headful seed | Faster than rendering every page |
 | Cross-origin iframe interaction | Compositor click first; iframe target only for JS inspection | Page DOM cannot pierce cross-origin frames |
 
 **HTTP extraction caveat**: Many sites block non-browser HTTP even when content
@@ -58,7 +58,7 @@ override generic preferences because backend capability is site-specific.
 6. Use headful Chrome as the reference backend whenever the task depends on
    auth, downloads, visual state, ranking, prices, maps, modals, lazy cards, or
    anti-bot/device reputation.
-7. Use `fetch_with_browser_session()` only after a headful seed proves useful
+7. Use `http_get_browser_session()` only after a headful seed proves useful
    content for the target site/session. Treat it as cookie reuse, not a challenge
    solver.
 8. Store a capability receipt for every backend attempted: source context,

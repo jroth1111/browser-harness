@@ -125,7 +125,7 @@ Example shape:
 3. If login/MFA/account selection appears, ask the user to complete it.
 4. Run `seed_browser_session()` against a safe same-domain page.
 5. Record cookie names/domains and capability, not cookie values.
-6. Use `fetch_with_browser_session()` only for same-domain authenticated fetches
+6. Use `http_get_browser_session()` only for same-domain authenticated fetches
    after the profile has loaded useful private content.
 
 Generic module example:

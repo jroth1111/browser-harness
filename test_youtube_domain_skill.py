@@ -37,7 +37,6 @@ def test_youtube_browser_harness_helper_coverage_is_explicit():
         "http_get",
         "http_get_browser_session",
         "http_get_browser_session_response",
-        "fetch_with_browser_session",
         "seed_browser_session",
         "new_tab",
         "goto_url",

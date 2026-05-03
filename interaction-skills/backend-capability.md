@@ -98,19 +98,13 @@ backend cannot, use the headful profile to seed/fetch the HTML or API data, then
 hand extracted data to the lightweight workflow.
 
 ```python
-result = fetch_with_browser_session(
-    "https://example.com/protected/page",
-    seed_url="https://example.com/",
-    retries=1,
-)
-if not result["ok"]:
-    raise RuntimeError((result["reason"], result["block"], result["attempts"]))
-html = result["text"]
+seed_browser_session("https://example.com/")
+html = http_get_browser_session("https://example.com/protected/page")
 ```
 
-`fetch_with_browser_session()` is still same-domain cookie reuse, not a challenge
-solver. If the seed browser cannot load useful content, the backend is not
-capable for that domain/session.
+`http_get_browser_session()` is same-domain cookie reuse, not a challenge solver.
+If the seed browser cannot load useful content, the backend is not capable for
+that domain/session.
 
 ## Concrete example
 

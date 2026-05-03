@@ -22,24 +22,19 @@ print(len(html), detect_block_page(html=html))
 ```
 
 For domains where cookies can expire or a seed challenge may need to run first,
-prefer `fetch_with_browser_session()`:
+seed the browser session first, then fetch:
 
 ```python
-result = fetch_with_browser_session(
-    "https://example.com/protected/page",
-    seed_url="https://example.com/",
-    retries=1,
-)
-if not result["ok"]:
-    raise RuntimeError((result["reason"], result["block"], result["attempts"]))
-html = result["text"]
+seed_browser_session("https://example.com/")
+html = http_get_browser_session("https://example.com/protected/page")
+print(len(html), detect_block_page(html=html))
 ```
 
 Rules:
 
-- Use this for same-domain fetches after a real browser has passed a challenge.
+- Use `http_get_browser_session()` for same-domain fetches after a real browser has passed a challenge.
 - It does not solve challenges on its own; invalid or absent cookies still return block pages.
-- `fetch_with_browser_session()` can re-open the seed URL in the browser once, then retry the HTTP fetch.
+- If cookies may be stale, run `seed_browser_session(url)` first to refresh them, then fetch.
 - Cookie matching is domain/path/secure filtered for the target URL.
 - Do not use broad manual `Cookie` headers that send one site's cookies to another site.
 
@@ -60,11 +55,9 @@ useful. The reusable part is the seed/fetch retry; the REA-specific URLs and
 payload parsing belong in `domain-skills/realestate-com-au/scraping.md`.
 
 ```python
-result = fetch_with_browser_session(
+seed_browser_session("https://www.realestate.com.au/")
+html = http_get_browser_session(
     "https://www.realestate.com.au/property-house-vic-tarneit-143160680",
-    seed_url="https://www.realestate.com.au/",
-    retries=1,
 )
-if result["ok"]:
-    print(len(result["text"]))
+print(len(html))
 ```

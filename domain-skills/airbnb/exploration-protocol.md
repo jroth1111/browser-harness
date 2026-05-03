@@ -26,7 +26,7 @@ all hosts have the same tools enabled.
 | Airbnb Help/Resource Centre pages | Lightpanda or direct HTTP when content is static | Fast documentation refresh |
 | Authenticated host UI | Persistent headful Chrome profile | Preserves login, device trust, MFA, and full browser surface |
 | Authenticated exports/downloads | Persistent headful Chrome profile for download; parser after download | Reliable source files |
-| Same-domain authenticated fetches | `fetch_with_browser_session()` after headful seed | Faster than rendering each private page, but only after session is valid |
+| Same-domain authenticated fetches | `http_get_browser_session()` after headful seed | Faster than rendering each private page, but only after session is valid |
 
 Do not type Airbnb credentials. If login, MFA, or account selection is required,
 stop and ask the user to complete it in the browser.
@@ -134,7 +134,8 @@ For each surface, record:
 ### 4. Network/API observation pass
 
 Only after UI/export behavior is understood, inspect network requests for
-structured payloads. Use `../../interaction-skills/network-requests.md` if needed.
+structured payloads. Use `../../interaction-skills/ui-mechanics.md` (Network
+Requests section) if needed.
 
 Record request shape, endpoint path, response field names, auth requirements, and
 whether the data is more reliable than UI text. Do not commit tokens, cookies,

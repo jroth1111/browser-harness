@@ -32,6 +32,36 @@ public reviews, public prices, amenities, rules, or Help/Resource Centre pages.
 Those sources should be observed logged out unless the explicit task is to test
 logged-in personalization.
 
+## Auth state file
+
+The restorable auth bundle is a single self-contained JSON file:
+
+```text
+domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json
+```
+
+Format: `browser-harness.login_session.v1`. Contains all cookies, localStorage,
+and sessionStorage values needed to restore an authenticated Airbnb host session
+into a fresh temporary browser profile. No other files are required — no browser
+profile directory, no external cookie store, no session-store manifests.
+
+The `.session-store/` manifests and capability receipts are redacted metadata
+(cookie *names*, storage *keys*, verification receipts). They reference this file
+but hold no auth material themselves.
+
+**Restoration flow:** `login_session.restore_session_state_and_verify()` loads
+the JSON, injects cookies via CDP `Network.setCookies`, injects storage via JS
+evaluation, then navigates to protected URLs to verify the session is live.
+
+**Exporting:** When packaging this skill for distribution:
+- **Without credentials** (default): exclude all of `.private-data/` and
+  `.session-store/`. Recipients will need to log in themselves and capture a
+  fresh auth bundle.
+- **With credentials**: include only `host-main-cdp-state.json` from
+  `.private-data/`. Exclude everything else under `.private-data/` and
+  `.session-store/` — those are redacted metadata and local working state, not
+  needed for auth restoration.
+
 Recommended layout:
 
 ```text
@@ -104,7 +134,7 @@ should start from a logged-out Lightpanda or fresh browser context and use
 3. If login/MFA is required, ask the user to complete it.
 4. Run `seed_browser_session()` against a safe Airbnb page.
 5. Record cookie names/domains and source capability, not cookie values.
-6. Use `fetch_with_browser_session()` only for same-domain authenticated fetches
+6. Use `http_get_browser_session()` only for same-domain authenticated fetches
    after the profile has loaded useful private content.
 7. If a private restorable auth bundle is required, export it with
    `login_session.session_state(...)` into `.private-data/auth-state/` and verify

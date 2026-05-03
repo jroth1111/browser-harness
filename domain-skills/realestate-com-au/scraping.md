@@ -34,15 +34,13 @@ For REA, seed with a URL known to render content in the user's persistent
 headful Chrome profile, then bulk-fetch REA pages with the same browser session.
 
 ```python
-result = fetch_with_browser_session(
+seed_browser_session("https://www.realestate.com.au/")
+html = http_get_browser_session(
     "https://www.realestate.com.au/property-house-vic-tarneit-143160680",
-    seed_url="https://www.realestate.com.au/property/l30-unit-3003-500-elizabeth-st-melbourne-vic-3000/",
-    retries=1,
 )
-if not result["ok"]:
-    raise RuntimeError(f"REA fetch failed: {result['reason']} {result['block']}")
+if detect_block_page(html=html).get("blocked"):
+    raise RuntimeError("REA fetch blocked")
 
-html = result["text"]
 exchange = extract_argonaut_exchange(html)
 print(exchange.keys())
 ```
