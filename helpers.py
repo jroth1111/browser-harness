@@ -2233,6 +2233,11 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
             except Exception: pass
 
 
+def fetch_with_browser_session(url, headers=None, timeout=20.0, min_text=500):
+    """Fetch with browser-established cookies and return a Response object."""
+    return fetch(url, source="session", headers=headers, timeout=timeout, min_text=min_text)
+
+
 def _close_sock():
     global _sock
     if _sock is not None:
