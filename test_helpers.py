@@ -418,6 +418,59 @@ def test_with_session_recovery_no_infinite_retry():
         except RuntimeError:
             pass
     assert calls["n"] == 2  # original + 1 retry
+
+
+def test_smart_wait_resolves_on_load():
+    with patch("helpers.page_content_status", return_value={"textLength": 50, "block": {}}), \
+         patch("helpers._wait_until_load", return_value={"ok": True, "reason": "load"}), \
+         patch("time.sleep"):
+        result = helpers.smart_wait(timeout=5.0)
+    assert result["phase"] == "load"
+    assert result["ok"] is True
+
+
+def test_smart_wait_resolves_on_network_idle():
+    load_fail = {"ok": False, "reason": "timeout"}
+    idle_ok = {"ok": True, "reason": "networkidle"}
+
+    def fake_wait_until_load(strategy, timeout=15.0):
+        return load_fail
+
+    def fake_wait_until_network_idle(timeout=15.0):
+        return idle_ok
+
+    with patch("helpers.page_content_status", return_value={"textLength": 50, "block": {}}), \
+         patch("helpers._wait_until_load", side_effect=fake_wait_until_load), \
+         patch("helpers._wait_until_network_idle", side_effect=fake_wait_until_network_idle), \
+         patch("time.sleep"):
+        result = helpers.smart_wait(timeout=5.0)
+    assert result["phase"] == "networkidle"
+    assert result["ok"] is True
+
+
+def test_smart_wait_detects_waf_block():
+    blocked_status = {"textLength": 0, "block": {"blocked": True, "waf": "cloudflare"}}
+    with patch("helpers.page_content_status", return_value=blocked_status), \
+         patch("time.sleep"):
+        result = helpers.smart_wait(timeout=2.0, waf_timeout=0.5)
+    assert result["phase"] == "waf_blocked"
+    assert result["ok"] is False
+
+
+def test_smart_wait_returns_timeout_when_all_phases_fail():
+    load_fail = {"ok": False, "reason": "timeout"}
+    idle_fail = {"ok": False, "reason": "timeout", "pending_requests": 3}
+    content_fail = {"ok": False, "reason": "timeout", "textLength": 0}
+
+    with patch("helpers.page_content_status", return_value={"textLength": 0, "block": {}}), \
+         patch("helpers._wait_until_load", return_value=load_fail), \
+         patch("helpers._wait_until_network_idle", return_value=idle_fail), \
+         patch("helpers.wait_for_content", return_value=content_fail), \
+         patch("time.sleep"):
+        result = helpers.smart_wait(timeout=5.0)
+    assert result["phase"] == "timeout"
+    assert result["ok"] is False
+    assert "elapsed_ms" in result
     calls = []
 
     def fake_cdp(method, **params):

@@ -214,6 +214,62 @@ def _wait_until_network_idle(timeout=15.0):
     return {"ok": False, "reason": "timeout", "pending_requests": len(pending)}
 
 
+def smart_wait(timeout=20.0, min_text=200, waf_timeout=15.0):
+    """Multi-phase page-ready check: settle, WAF detect, load, network idle, content.
+
+    Each phase draws from the total *timeout* budget. Returns a dict with
+    {phase, ok, reason, elapsed_ms} describing which phase resolved first.
+    """
+    start = time.time()
+
+    def remaining():
+        return max(0, timeout - (time.time() - start))
+
+    # Phase 1: settle — give the page a moment to start rendering
+    time.sleep(min(1.0, remaining()))
+
+    # Phase 2: WAF / block-page detection
+    if remaining() > 0:
+        try:
+            status = page_content_status()
+            if status.get("block", {}).get("blocked"):
+                waf_deadline = time.time() + min(waf_timeout, remaining())
+                while time.time() < waf_deadline:
+                    time.sleep(0.5)
+                    status = page_content_status()
+                    if not status.get("block", {}).get("blocked"):
+                        return {"phase": "waf_cleared", "ok": True, "reason": "waf_cleared",
+                                "elapsed_ms": int((time.time() - start) * 1000)}
+                return {"phase": "waf_blocked", "ok": False, "reason": "blocked",
+                        "elapsed_ms": int((time.time() - start) * 1000)}
+        except Exception:
+            pass
+
+    # Phase 3: load event
+    if remaining() > 0:
+        load_result = _wait_until_load("load", timeout=min(5.0, remaining()))
+        if load_result.get("ok"):
+            return {"phase": "load", "ok": True, "reason": "load",
+                    "elapsed_ms": int((time.time() - start) * 1000)}
+
+    # Phase 4: network idle
+    if remaining() > 0:
+        idle_result = _wait_until_network_idle(timeout=min(5.0, remaining()))
+        if idle_result.get("ok"):
+            return {"phase": "networkidle", "ok": True, "reason": "networkidle",
+                    "elapsed_ms": int((time.time() - start) * 1000)}
+
+    # Phase 5: content check
+    if remaining() > 0:
+        content_result = wait_for_content(min_text=min_text, timeout=remaining())
+        if content_result.get("ok"):
+            return {"phase": "content", "ok": True, "reason": content_result.get("reason"),
+                    "elapsed_ms": int((time.time() - start) * 1000)}
+
+    return {"phase": "timeout", "ok": False, "reason": "all_phases_exhausted",
+            "elapsed_ms": int((time.time() - start) * 1000)}
+
+
 def goto_url(url, wait_until=None):
     """Navigate the current tab to *url*.
 
@@ -832,7 +888,7 @@ def switch_tab(target):
     target_id = target.get("targetId") if isinstance(target, dict) else target
     cdp("Target.activateTarget", targetId=target_id)
     sid = _require_key(cdp("Target.attachToTarget", targetId=target_id, flatten=True), "sessionId", "Target.attachToTarget response")
-    _send({"meta": "set_session", "session_id": sid})
+    _send({"meta": "set_session", "session_id": sid, "target_id": target_id})
     return sid
 
 def close_tab(target=None):
@@ -1296,7 +1352,7 @@ class SafetyGate:
         self._count = 0
         self._start = time.time()
         self._consecutive_blocks = 0
-        self._429_count = 0
+        self._count_429 = 0
         self._backoff_until = 0.0
         self._backoff_dur = 1.0
 
@@ -1319,7 +1375,7 @@ class SafetyGate:
         else:
             self._consecutive_blocks = 0
         if status_code == 429 and self._backoff_on_429:
-            self._429_count += 1
+            self._count_429 += 1
             self._backoff_until = time.time() + self._backoff_dur
             self._backoff_dur = min(self._backoff_dur * 2, 60.0)
 
@@ -1328,7 +1384,7 @@ class SafetyGate:
             "requests": self._count,
             "elapsed_seconds": round(time.time() - self._start, 1),
             "consecutive_blocks": self._consecutive_blocks,
-            "429_count": self._429_count,
+            "429_count": self._count_429,
             "limits_reached": self._limits_reached(),
             "backoff_until": self._backoff_until if self._backoff_until > time.time() else None,
         }
@@ -1337,7 +1393,7 @@ class SafetyGate:
         self._count = 0
         self._start = time.time()
         self._consecutive_blocks = 0
-        self._429_count = 0
+        self._count_429 = 0
         self._backoff_until = 0.0
         self._backoff_dur = 1.0
 
@@ -1802,29 +1858,31 @@ class NetworkCapture:
         self._entries.append(entry)
 
 
+_URL_NUM = re.compile(r"^\d{2,}$")
+_URL_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+_URL_HEX = re.compile(r"^[0-9a-f]{16,}$", re.I)
+_URL_SLUG = re.compile(r"^(.*[-_])\d{2,}$")
+
+
 def url_cluster(urls):
     """Normalize URL path segments and group by pattern.
 
     Numbers → ``{id}``, UUIDs → ``{uuid}``, hex hashes → ``{hash}``.
     Returns ``[{pattern, urls, count}]`` sorted by count descending.
     """
-    _NUM = re.compile(r"^\d{2,}$")
-    _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
-    _HEX = re.compile(r"^[0-9a-f]{16,}$", re.I)
-    _SLUG_NUM = re.compile(r"^(.*[-_])\d{2,}$")
 
     def _norm(url):
         p = urlparse(url)
         segs = []
         for s in p.path.split("/"):
-            if _NUM.match(s):
+            if _URL_NUM.match(s):
                 s = "{id}"
-            elif _UUID.match(s):
+            elif _URL_UUID.match(s):
                 s = "{uuid}"
-            elif _HEX.match(s):
+            elif _URL_HEX.match(s):
                 s = "{hash}"
             else:
-                m = _SLUG_NUM.match(s)
+                m = _URL_SLUG.match(s)
                 if m:
                     s = m.group(1) + "{id}"
             segs.append(s)
@@ -1838,6 +1896,14 @@ def url_cluster(urls):
         [{"pattern": k, "urls": v, "count": len(v)} for k, v in groups.items()],
         key=lambda x: -x["count"],
     )
+
+
+_API_PATTERNS = [
+    (re.compile(r'''fetch\(\s*["'`]([^"'`]+)["'`]'''), None, "fetch"),
+    (re.compile(r'''axios\.\w+\(\s*["'`]([^"'`]+)["'`]'''), None, "axios"),
+    (re.compile(r'''\.open\(\s*["']\w+["']\s*,\s*["'`]([^"'`]+)["'`]'''), None, "xhr"),
+    (re.compile(r'''["'`](/api/[^"'`]+)["'`]'''), None, "api_path"),
+]
 
 
 def discover_api_endpoints(url, timeout=20.0):
@@ -1877,17 +1943,10 @@ def discover_api_endpoints(url, timeout=20.0):
             if text:
                 js_sources.append(text)
                 fetched += 1
-
-    patterns = [
-        (re.compile(r'''fetch\(\s*["'`]([^"'`]+)["'`]'''), None, "fetch"),
-        (re.compile(r'''axios\.\w+\(\s*["'`]([^"'`]+)["'`]'''), None, "axios"),
-        (re.compile(r'''\.open\(\s*["']\w+["']\s*,\s*["'`]([^"'`]+)["'`]'''), None, "xhr"),
-        (re.compile(r'''["'`](/api/[^"'`]+)["'`]'''), None, "api_path"),
-    ]
     seen = set()
     endpoints = []
     for src in js_sources:
-        for regex, group, source in patterns:
+        for regex, group, source in _API_PATTERNS:
             for m in regex.finditer(src):
                 raw = m.group(group) if group else m.group(1)
                 if not raw or raw.startswith(("${", "javascript:", "data:")) or "${" in raw:
@@ -1946,12 +2005,13 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
             results.append({"url": url, "error": str(exc)})
         time.sleep(0.1)
 
-    matched = sum(1 for r in results if r.get("status_match"))
-    errors = sum(1 for r in results if "error" in r)
+    replayed = [r for r in results if not r.get("skipped")]
+    matched = sum(1 for r in replayed if r.get("status_match"))
+    errors = sum(1 for r in replayed if "error" in r)
     return {
         "results": results,
         "summary": {"total": len(results), "matched": matched,
-                    "mismatched": len(results) - matched - errors, "errors": errors},
+                    "mismatched": len(replayed) - matched - errors, "errors": errors},
     }
 
 
