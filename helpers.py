@@ -146,6 +146,21 @@ def with_session_recovery(fn, *args, retries=1, **kwargs):
         return fn(*args, **kwargs)
 
 
+def _recovered(fn):
+    """Decorator: retry once on recoverable CDP errors after reconnecting."""
+    import functools
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            if not _is_recoverable(e):
+                raise
+            _reconnect()
+            return fn(*args, **kwargs)
+    return wrapper
+
+
 def cdp(method, session_id=None, timeout=30, **params):
     """Raw CDP. cdp('Page.navigate', url='...'), cdp('DOM.getDocument', depth=-1)."""
     return _send({"method": method, "params": params, "session_id": session_id}, timeout=timeout).get("result", {})
@@ -177,7 +192,9 @@ def _wait_until_load(strategy, timeout=15.0):
     elif strategy == "networkidle":
         return _wait_until_network_idle(timeout)
     else:
-        return {"ok": True, "reason": "unknown_strategy"}
+        raise ValueError(f"unknown wait_until strategy: {strategy!r}")
+    cdp("Page.enable")
+    drain_events()
     deadline = time.time() + timeout
     while time.time() < deadline:
         for ev in drain_events():
@@ -215,7 +232,10 @@ def _wait_until_network_idle(timeout=15.0):
                 idle_since = None
             time.sleep(0.1)
     finally:
-        cdp("Network.disable")
+        try:
+            cdp("Network.disable")
+        except Exception:
+            pass
     if not result["ok"]:
         result["pending_requests"] = len(pending)
     return result
@@ -277,6 +297,7 @@ def smart_wait(timeout=20.0, min_text=200, waf_timeout=15.0):
             "elapsed_ms": int((time.time() - start) * 1000)}
 
 
+@_recovered
 def goto_url(url, wait_until=None):
     """Navigate the current tab to *url*.
 
@@ -344,6 +365,7 @@ def navigate_via_google(url, google_base="https://www.google.com"):
     info = page_info()
     return {**status, "w": info.get("w", 0), "h": info.get("h", 0)}
 
+@_recovered
 def page_info():
     """{url, title, w, h, sx, sy, pw, ph} - viewport + scroll + page size.
 
@@ -483,6 +505,7 @@ def detect_block_page(html="", text="", url=""):
         return {"blocked": False, "kind": None, "evidence": []}
     return {"blocked": True, "kind": kind, "evidence": evidence}
 
+@_recovered
 def page_content_status(html_limit=12000, text_limit=12000):
     """Return JS-derived page content health plus block/challenge detection.
 
@@ -799,6 +822,7 @@ def _debug_click_dpr(image_width):
         return 1
     return image_width / viewport_width
 
+@_recovered
 def click_at_xy(x, y, button="left", clicks=1, humanize=False, steps=12):
     if os.environ.get("BH_DEBUG_CLICKS"):
         global _debug_click_counter
@@ -877,6 +901,7 @@ def scroll(x, y, dy=-300, dx=0):
 
 
 # --- visual ---
+@_recovered
 def capture_screenshot(path="/tmp/shot.png", full=False):
     r = cdp("Page.captureScreenshot", format="png", captureBeyondViewport=full)
     data = base64.b64decode(_require_key(r, "data", "Page.captureScreenshot response"))
@@ -1020,14 +1045,8 @@ def wait(seconds=1.0):
 
 def wait_for_load(timeout=15.0):
     """Wait for Page.loadEventFired without executing page JavaScript."""
-    cdp("Page.enable")
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        for event in drain_events():
-            if event.get("method") == "Page.loadEventFired":
-                return True
-        time.sleep(0.3)
-    return False
+    result = _wait_until_load("load", timeout)
+    return result.get("ok", False)
 
 def wait_for_load_js(timeout=15.0):
     """JS-based load wait fallback. This explicitly executes page JavaScript."""
@@ -1190,8 +1209,11 @@ def ax_snapshot(max_nodes=120, compact=False):
             parts.append(f'"{name}"')
         attrs = [f"ref={ref}"]
         for k, v in _ax_props(node).items():
-            if v is not None and v is not False:
-                attrs.append(f"{k}={v}")
+            if v is None:
+                continue
+            if v is False and k != "disabled":
+                continue
+            attrs.append(f"{k}={v}")
         parts.append(f"[{', '.join(attrs)}]")
         if value and value != name:
             parts.append(f": {value}")
@@ -1236,6 +1258,15 @@ def _resolve_ref_fallback(entry):
     for node in nodes:
         n_role = _ax_value(node.get("role"))
         n_name = _ax_value(node.get("name"))
+        # Apply same filter as compact mode so nth index matches
+        if n_role in STRUCTURAL_ROLES:
+            continue
+        if n_role == "StaticText" and not n_name:
+            continue
+        is_interactive = n_role in INTERACTIVE_ROLES
+        is_content = n_role in CONTENT_ROLES and n_name
+        if not is_interactive and not is_content:
+            continue
         if n_role == role and n_name == name:
             if match_count == nth:
                 bid = node.get("backendDOMNodeId")

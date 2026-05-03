@@ -111,7 +111,7 @@ def test_switch_tab_does_not_mutate_title():
         ("Target.activateTarget", {"targetId": "target-2"}),
         ("Target.attachToTarget", {"targetId": "target-2", "flatten": True}),
     ]
-    assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2"}
+    assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2", "target_id": "target-2"}
 
 
 def test_send_reconnects_on_transport_error():
@@ -255,7 +255,7 @@ def test_close_tab_closes_current_and_switches_to_remaining_real_tab():
         ("Target.attachToTarget", {"targetId": "target-2", "flatten": True}),
         ("Target.getTargetInfo", {}),  # post-switch internal-URL check
     ]
-    assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2"}
+    assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2", "target_id": "target-2"}
 
 
 def test_close_tab_closes_non_current_without_switching():
@@ -1525,8 +1525,6 @@ def test_network_capture_max_entries_evicts_oldest():
     for i in range(4):
         cap._entries.append({"url": f"https://example.com/{i}", "method": "GET",
                              "status": 200, "response_headers": {}, "content_type": ""})
-        while len(cap._entries) > cap._max:
-            cap._entries.pop(0)
     assert len(cap._entries) == 2
     assert cap._entries[0]["url"] == "https://example.com/2"
 
