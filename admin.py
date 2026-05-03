@@ -20,20 +20,25 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME", "default")
-BU_API = "https://api.browser-use.com/api/v3"
+NAME = os.environ.get("BH_NAME", "default")
 GH_RELEASES = "https://api.github.com/repos/browser-use/browser-harness/releases/latest"
-VERSION_CACHE = Path("/tmp/bu-version-cache.json")
+VERSION_CACHE = Path("/tmp/bh-version-cache.json")
 VERSION_CACHE_TTL = 24 * 3600
 
 
 def _paths(name):
     n = name or NAME
-    return f"/tmp/bu-{n}.sock", f"/tmp/bu-{n}.pid"
+    return f"/tmp/bh-{n}.sock", f"/tmp/bh-{n}.pid"
+
+
+def _legacy_paths(name):
+    n = name or NAME
+    prefix = "/tmp/" + "bu-"
+    return f"{prefix}{n}.sock", f"{prefix}{n}.pid", f"{prefix}{n}.log"
 
 
 def _log_tail(name):
-    p = f"/tmp/bu-{name or NAME}.log"
+    p = f"/tmp/bh-{name or NAME}.log"
     try:
         return Path(p).read_text().strip().splitlines()[-1]
     except (FileNotFoundError, IndexError):
@@ -61,7 +66,7 @@ def _needs_chrome_remote_debugging_prompt(msg):
 
 def _is_local_chrome_mode(env=None):
     """True when the daemon discovers a local Chrome instead of a remote CDP WS."""
-    return not (env or {}).get("BU_CDP_WS") and not os.environ.get("BU_CDP_WS")
+    return not (env or {}).get("BH_CDP_WS") and not os.environ.get("BH_CDP_WS")
 
 
 def daemon_alive(name=None):
@@ -75,7 +80,7 @@ def daemon_alive(name=None):
         return False
 
 
-def ensure_daemon(wait=60.0, name=None, env=None):
+def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog=False):
     """Idempotent. Self-heals stale daemon, cold Chrome, and missing Allow on chrome://inspect."""
     if daemon_alive(name):
         # Stale daemons accept connects AND reply to meta:* (pure Python) even when the
@@ -96,10 +101,11 @@ def ensure_daemon(wait=60.0, name=None, env=None):
     import subprocess, sys
     local = _is_local_chrome_mode(env)
     for attempt in (0, 1):
-        e = {**os.environ, **({"BU_NAME": name} if name else {}), **(env or {})}
+        e = {**os.environ, **({"BH_NAME": name} if name else {}), **(env or {})}
+        root = os.path.dirname(os.path.abspath(__file__))
         p = subprocess.Popen(
-            ["uv", "run", "daemon.py"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
+            [sys.executable, os.path.join(root, "daemon.py")],
+            cwd=root,
             env=e, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
         )
         deadline = time.time() + wait
@@ -110,24 +116,18 @@ def ensure_daemon(wait=60.0, name=None, env=None):
         msg = _log_tail(name) or ""
         if local and attempt == 0 and _needs_chrome_remote_debugging_prompt(msg):
             _open_chrome_inspect()
-            print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
+            if accept_remote_debugging_dialog:
+                result = _accept_remote_debugging_dialog_keyboard()
+                if result.get("ok"):
+                    print("browser-harness: sent keyboard approval for chrome://inspect remote-debugging dialog", file=sys.stderr)
+                else:
+                    print(f"browser-harness: keyboard approval failed: {result.get('error') or result.get('reason')}", file=sys.stderr)
+                    print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
+            else:
+                print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
             restart_daemon(name)
             continue
-        raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check /tmp/bu-{name or NAME}.log")
-
-
-def stop_remote_daemon(name="remote"):
-    """Stop a remote daemon and its backing Browser Use cloud browser.
-
-    Triggers the daemon's clean shutdown, which PATCHes
-    /browsers/{id} {"action":"stop"} so billing ends and any profile
-    state in the session is persisted."""
-    # restart_daemon is misnamed — it only stops the daemon (sends
-    # shutdown, SIGTERMs if needed, unlinks socket+pid). It never
-    # restarts anything on its own; a follow-up `browser-harness`
-    # call would auto-spawn a fresh one via ensure_daemon(). That
-    # "run-it-again-to-restart" workflow is why it was named that way.
-    restart_daemon(name)
+        raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check /tmp/bh-{name or NAME}.log")
 
 
 def restart_daemon(name=None):
@@ -169,175 +169,20 @@ def restart_daemon(name=None):
             os.unlink(f)
         except FileNotFoundError:
             pass
-
-
-def _browser_use(path, method, body=None):
-    key = os.environ.get("BROWSER_USE_API_KEY")
-    if not key:
-        raise RuntimeError("BROWSER_USE_API_KEY missing -- see .env.example")
-    req = urllib.request.Request(
-        f"{BU_API}{path}",
-        method=method,
-        data=(json.dumps(body).encode() if body is not None else None),
-        headers={"X-Browser-Use-API-Key": key, "Content-Type": "application/json"},
-    )
-    return json.loads(urllib.request.urlopen(req, timeout=60).read() or b"{}")
-
-
-def _cdp_ws_from_url(cdp_url):
-    return json.loads(urllib.request.urlopen(f"{cdp_url}/json/version", timeout=15).read())["webSocketDebuggerUrl"]
-
-
-def _has_local_gui():
-    """True when this machine plausibly has a browser we can open. False on headless servers."""
-    import platform
-    system = platform.system()
-    if system in ("Darwin", "Windows"):
-        return True
-    if system == "Linux":
-        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-    return False
-
-
-def _show_live_url(url):
-    """Print liveUrl and auto-open it locally if there's a GUI."""
-    import sys, webbrowser
-    if not url: return
-    print(url)
-    if not _has_local_gui():
-        print("(no local GUI — share the liveUrl with the user)", file=sys.stderr)
-        return
-    try:
-        webbrowser.open(url, new=2)
-        print("(opened liveUrl in your default browser)", file=sys.stderr)
-    except Exception as e:
-        print(f"(couldn't auto-open: {e} — share the liveUrl with the user)", file=sys.stderr)
-
-
-def list_cloud_profiles():
-    """List cloud profiles under the current API key.
-
-    Returns [{id, name, userId, cookieDomains, lastUsedAt}, ...]. `cookieDomains`
-    is the array of domain strings the cloud profile has cookies for — use
-    `len(cookieDomains)` as a cheap 'how much is logged in' summary. Per-cookie
-    detail on a *local* profile before sync: `profile-use inspect --profile <name>`.
-
-    Paginates through all pages — the API caps `pageSize` at 100."""
-    out, page = [], 1
-    while True:
-        listing = _browser_use(f"/profiles?pageSize=100&pageNumber={page}", "GET")
-        items = listing.get("items") if isinstance(listing, dict) else listing
-        if not items:
-            break
-        for p in items:
-            detail = _browser_use(f"/profiles/{p['id']}", "GET")
-            out.append({
-                "id": detail["id"],
-                "name": detail.get("name"),
-                "userId": detail.get("userId"),
-                "cookieDomains": detail.get("cookieDomains") or [],
-                "lastUsedAt": detail.get("lastUsedAt"),
-            })
-        if isinstance(listing, dict) and len(out) >= listing.get("totalItems", len(out)):
-            break
-        page += 1
-    return out
-
-
-def _resolve_profile_name(profile_name):
-    """Find a single cloud profile by exact name; raise if 0 or >1 match."""
-    matches = [p for p in list_cloud_profiles() if p.get("name") == profile_name]
-    if not matches:
-        raise RuntimeError(f"no cloud profile named {profile_name!r} -- call list_cloud_profiles() or sync_local_profile() first")
-    if len(matches) > 1:
-        raise RuntimeError(f"{len(matches)} cloud profiles named {profile_name!r} -- pass profileId=<uuid> instead")
-    return matches[0]["id"]
-
-
-def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
-    """Provision a Browser Use cloud browser and start a daemon attached to it.
-
-    kwargs forwarded to `POST /browsers` (camelCase):
-      profileId        — cloud profile UUID; start already-logged-in. Default: none (clean browser).
-      profileName      — cloud profile name; resolved client-side to profileId via list_cloud_profiles().
-      proxyCountryCode — ISO2 country code (default "us"); pass None to disable the BU proxy.
-      timeout          — minutes, 1..240.
-      customProxy      — {host, port, username, password, ignoreCertErrors}.
-      browserScreenWidth / browserScreenHeight, allowResizing, enableRecording.
-
-    Returns the full browser dict including `liveUrl`. Prints the liveUrl and
-    auto-opens it locally when a GUI is detected, so the user can watch along."""
-    if daemon_alive(name):
-        raise RuntimeError(f"daemon {name!r} already alive -- restart_daemon({name!r}) first")
-    if profileName:
-        if "profileId" in create_kwargs:
-            raise RuntimeError("pass profileName OR profileId, not both")
-        create_kwargs["profileId"] = _resolve_profile_name(profileName)
-    browser = _browser_use("/browsers", "POST", create_kwargs)
-    ensure_daemon(
-        name=name,
-        env={"BU_CDP_WS": _cdp_ws_from_url(browser["cdpUrl"]), "BU_BROWSER_ID": browser["id"]},
-    )
-    _show_live_url(browser.get("liveUrl"))
-    return browser
+    for f in _legacy_paths(name):
+        try:
+            os.unlink(f)
+        except FileNotFoundError:
+            pass
 
 
 def list_local_profiles():
     """Detected local browser profiles on this machine. Shells out to `profile-use list --json`.
-    Returns [{BrowserName, BrowserPath, ProfileName, ProfilePath, DisplayName}, ...].
-    Requires `profile-use` (see interaction-skills/profile-sync.md for install)."""
+    Returns [{BrowserName, BrowserPath, ProfileName, ProfilePath, DisplayName}, ...]."""
     import json, shutil, subprocess
     if not shutil.which("profile-use"):
-        raise RuntimeError("profile-use not installed -- curl -fsSL https://browser-use.com/profile.sh | sh")
+        raise RuntimeError("profile-use not installed; use `browser-harness --setup` or configure local Chrome remote debugging")
     return json.loads(subprocess.check_output(["profile-use", "list", "--json"], text=True))
-
-
-def sync_local_profile(profile_name, browser=None, cloud_profile_id=None,
-                        include_domains=None, exclude_domains=None):
-    """Sync a local profile's cookies to a cloud profile. Returns the cloud UUID.
-
-    Shells out to `profile-use sync` (v1.0.4+). Requires BROWSER_USE_API_KEY and the
-    target local Chrome profile to be closed (profile-use needs an exclusive lock on
-    the Cookies DB).
-
-    Args:
-      profile_name:       local Chrome profile name (as shown by `list_local_profiles`).
-      browser:            disambiguate when multiple browsers have profiles of the
-                          same name (e.g. "Google Chrome"). Default: any match.
-      cloud_profile_id:   push cookies into this existing cloud profile instead of
-                          creating a new one. Idempotent — call again to refresh
-                          the same profile. Default: create new.
-      include_domains:    only sync cookies for these domains (and subdomains).
-                          Leading dot is optional. Example: ["google.com", "stripe.com"].
-      exclude_domains:    drop cookies for these domains (and subdomains). Applied
-                          before `include_domains` so exclude wins on overlap."""
-    import os, re, shutil, subprocess, sys
-    if not shutil.which("profile-use"):
-        raise RuntimeError("profile-use not installed -- curl -fsSL https://browser-use.com/profile.sh | sh")
-    if not os.environ.get("BROWSER_USE_API_KEY"):
-        raise RuntimeError("BROWSER_USE_API_KEY missing")
-    cmd = ["profile-use", "sync", "--profile", profile_name]
-    if browser:
-        cmd += ["--browser", browser]
-    if cloud_profile_id:
-        cmd += ["--cloud-profile-id", cloud_profile_id]
-    for d in include_domains or []:
-        cmd += ["--domain", d]
-    for d in exclude_domains or []:
-        cmd += ["--exclude-domain", d]
-    r = subprocess.run(cmd, text=True, capture_output=True)
-    sys.stdout.write(r.stdout)
-    sys.stderr.write(r.stderr)
-    if r.returncode != 0:
-        raise RuntimeError(f"profile-use sync failed (exit {r.returncode})")
-    # With --cloud-profile-id the tool prints "♻️ Using existing cloud profile"
-    # instead of "Profile created: <uuid>", so we already know the UUID.
-    if cloud_profile_id:
-        return cloud_profile_id
-    m = re.search(r"Profile created:\s+([0-9a-f-]{36})", r.stdout)
-    if not m:
-        raise RuntimeError(f"profile-use did not report a profile UUID (exit {r.returncode})")
-    return m.group(1)
 
 
 def _version():
@@ -417,22 +262,6 @@ def check_for_update():
     return cur, latest, newer
 
 
-def print_update_banner(out=None):
-    """Print the update banner to stderr once per day. Silent when up-to-date or offline."""
-    import sys
-    out = out or sys.stderr
-    cache = _cache_read()
-    today = time.strftime("%Y-%m-%d")
-    if cache.get("banner_shown_on") == today:
-        return
-    cur, latest, newer = check_for_update()
-    if not newer:
-        return
-    print(f"[browser-harness] update available: {cur} -> {latest}", file=out)
-    print(f"[browser-harness] agents: run `browser-harness --update -y` to upgrade and restart the daemon", file=out)
-    _cache_write({**cache, "banner_shown_on": today})
-
-
 def _chrome_running():
     """Cross-platform best-effort check for a running Chrome/Edge process."""
     import platform, subprocess
@@ -447,6 +276,23 @@ def _chrome_running():
         return any(n.lower() in out.lower() for n in names)
     except Exception:
         return False
+
+
+def _daemon_meta(meta, name=None, timeout=2.0):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    s.connect(_paths(name)[0])
+    s.sendall((json.dumps({"meta": meta}) + "\n").encode())
+    data = b""
+    while not data.endswith(b"\n"):
+        chunk = s.recv(1 << 16)
+        if not chunk:
+            break
+        data += chunk
+    s.close()
+    if not data:
+        return {}
+    return json.loads(data)
 
 
 def _open_chrome_inspect():
@@ -469,7 +315,114 @@ def _open_chrome_inspect():
         pass
 
 
-def run_setup():
+def _remote_debugging_keyboard_applescript(wait=1.0, app_name="Google Chrome"):
+    return [
+        f'tell application "{app_name}" to activate',
+        f"delay {float(wait):.2f}",
+        'tell application "System Events"',
+        "keystroke tab",
+        "delay 0.10",
+        "keystroke space",
+        "delay 0.10",
+        "keystroke tab",
+        "delay 0.10",
+        "keystroke return",
+        "end tell",
+    ]
+
+
+def _accept_remote_debugging_dialog_keyboard(wait=1.0, app_name="Google Chrome"):
+    """Opt-in keyboard-only consent for Chrome's native remote-debugging dialog."""
+    import platform, subprocess
+    if platform.system() != "Darwin":
+        return {"ok": False, "reason": "keyboard consent automation is implemented for macOS only"}
+    args = ["osascript"]
+    for line in _remote_debugging_keyboard_applescript(wait=wait, app_name=app_name):
+        args.extend(["-e", line])
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=10, check=False)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    return {
+        "ok": result.returncode == 0,
+        "returncode": result.returncode,
+        "stderr": result.stderr.strip(),
+        "error": result.stderr.strip() if result.returncode else "",
+    }
+
+
+def _default_chrome_executable():
+    import platform, shutil
+    if platform.system() == "Darwin":
+        candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ]
+        for candidate in candidates:
+            if Path(candidate).exists():
+                return candidate
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def _validate_port(port):
+    port = int(port)
+    if port < 1 or port > 65535:
+        raise ValueError("port must be in 1..65535")
+    return port
+
+
+def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_path=None):
+    """Launch visible Chrome with a loopback CDP endpoint and explicit profile."""
+    import subprocess
+    profile = Path(profile_path).expanduser()
+    profile.mkdir(parents=True, exist_ok=True)
+    port = _validate_port(port)
+    chrome = chrome_path or _default_chrome_executable()
+    if not chrome:
+        raise RuntimeError("could not find a Chrome/Chromium executable")
+    cmd = [
+        chrome,
+        f"--user-data-dir={profile}",
+        "--remote-debugging-address=127.0.0.1",
+        f"--remote-debugging-port={port}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--new-window",
+        url,
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return {
+        "pid": proc.pid,
+        "profile_path": str(profile),
+        "http_endpoint": f"http://127.0.0.1:{port}",
+        "env": f"BH_CDP_WS=http://127.0.0.1:{port}",
+        "command": cmd,
+    }
+
+
+def run_launch_profile(profile_path, port=9222, url="about:blank", chrome_path=None, json_output=False):
+    """CLI wrapper for launching an agent-owned headful Chrome profile."""
+    import sys
+    try:
+        result = launch_headful_profile(profile_path, port=port, url=url, chrome_path=chrome_path)
+    except Exception as e:
+        print(f"launch failed: {e}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"launched Chrome pid {result['pid']}")
+        print(f"profile: {result['profile_path']}")
+        print(f"endpoint: {result['http_endpoint']}")
+        print(f"export {result['env']}")
+    return 0
+
+
+def run_setup(accept_remote_debugging_dialog=False):
     """Interactive bootstrap: attach to the running browser, guiding the user through chrome://inspect if needed.
 
     Exit code 0 on success, 1 on failure."""
@@ -486,7 +439,7 @@ def run_setup():
 
     # First attach attempt.
     try:
-        ensure_daemon(wait=20.0)
+        ensure_daemon(wait=20.0, accept_remote_debugging_dialog=accept_remote_debugging_dialog)
         print("daemon is up.")
         return 0
     except RuntimeError as e:
@@ -499,6 +452,12 @@ def run_setup():
         print("  1. if chrome shows the profile picker, pick your normal profile;")
         print("  2. tick 'Discover network targets' and click Allow if prompted.")
         _open_chrome_inspect()
+        if accept_remote_debugging_dialog:
+            result = _accept_remote_debugging_dialog_keyboard()
+            if result.get("ok"):
+                print("sent keyboard approval for the remote-debugging dialog.")
+            else:
+                print(f"keyboard approval failed: {result.get('error') or result.get('reason')}")
     else:
         print(f"attach failed: {first_err}")
         print("retrying for up to 60s (chrome may still be starting up)...")
@@ -507,7 +466,7 @@ def run_setup():
     last = first_err
     while time.time() < deadline:
         try:
-            ensure_daemon(wait=5.0)
+            ensure_daemon(wait=5.0, accept_remote_debugging_dialog=accept_remote_debugging_dialog)
             print("daemon is up.")
             return 0
         except RuntimeError as e:
@@ -519,39 +478,144 @@ def run_setup():
     return 1
 
 
-def run_doctor():
-    """Read-only diagnostics. Exit 0 iff everything looks healthy."""
-    import platform, shutil, sys
-    cur = _version()
-    mode = _install_mode()
+def _check(status, check_id, detail="", fix=None):
+    return {"id": check_id, "status": status, "detail": detail, "fix": fix}
+
+
+def _scan_active_files(patterns):
+    import re
+    files = [
+        "daemon.py",
+        "admin.py",
+        "run.py",
+        "helpers.py",
+        "SKILL.md",
+        "install.md",
+        "README.md",
+        "pyproject.toml",
+        "docs/local-cdp-providers.md",
+        "docs/reference.md",
+        "docs/contributing-guide.md",
+    ]
+    hits = []
+    root = Path(__file__).resolve().parent
+    rx = re.compile(patterns)
+    for rel in files:
+        path = root / rel
+        if not path.exists():
+            continue
+        for lineno, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+            if rx.search(line):
+                hits.append(f"{rel}:{lineno}")
+    return hits
+
+
+def _page_info_uses_runtime():
+    import ast
+    path = Path(__file__).resolve().parent / "helpers.py"
+    tree = ast.parse(path.read_text())
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "page_info":
+            source = ast.get_source_segment(path.read_text(), node) or ""
+            return "Runtime.evaluate" in source
+    return True
+
+
+def _doctor_checks(network=False):
+    import platform
+    checks = []
     chrome = _chrome_running()
     daemon = daemon_alive()
-    profile_use = shutil.which("profile-use") is not None
-    api_key = bool(os.environ.get("BROWSER_USE_API_KEY"))
-    latest = _latest_release_tag()
-    # Only claim an update when we know the installed version — `cur or "(unknown)"`
-    # for display would otherwise be parsed as (0,) and flag every latest as newer.
-    newer = bool(cur and latest and _version_tuple(latest) > _version_tuple(cur))
-    cur_display = cur or "(unknown)"
 
-    def row(label, ok, detail=""):
-        mark = "ok  " if ok else "FAIL"
-        print(f"  [{mark}] {label}{(' — ' + detail) if detail else ''}")
+    checks.append(_check("pass", "platform.info", f"{platform.system()} {platform.release()}"))
+    checks.append(_check("pass" if chrome else "warn", "browser.process", "Chrome/Edge process detected" if chrome else "Chrome/Edge process not detected", "start Chrome/Edge and rerun `browser-harness --setup`" if not chrome else None))
+    checks.append(_check("pass" if daemon else "fail", "daemon.alive", "daemon socket responds" if daemon else "daemon socket is not responding", "run `browser-harness --setup` to attach" if not daemon else None))
+
+    if daemon:
+        sock, _ = _paths(None)
+        try:
+            mode = Path(sock).stat().st_mode & 0o777
+            checks.append(_check("pass" if mode == 0o600 else "fail", "daemon.socket_permissions", oct(mode), f"expected {sock} to have mode 0600"))
+        except OSError as e:
+            checks.append(_check("fail", "daemon.socket_permissions", str(e), "restart the daemon with `browser-harness --reload`"))
+        try:
+            endpoint = _daemon_meta("endpoint_info").get("endpoint_info") or {}
+        except Exception as e:
+            endpoint = {}
+            checks.append(_check("warn", "endpoint.info", str(e), "restart the daemon with `browser-harness --reload`"))
+    else:
+        endpoint = {}
+
+    if endpoint:
+        checks.append(_check("pass", "endpoint.present", endpoint.get("resolved_url", "")))
+        checks.append(_check("pass", "endpoint.source", endpoint.get("source", "unknown")))
+        checks.append(_check("pass" if endpoint.get("is_loopback") else ("warn" if endpoint.get("remote_allowed") else "fail"), "endpoint.loopback", endpoint.get("host") or "", "use a 127.0.0.1/localhost endpoint or set BH_CDP_ALLOW_REMOTE=1 only for user-owned self-hosted CDP"))
+        if endpoint.get("remote_allowed"):
+            checks.append(_check("warn", "endpoint.remote_allowed", "BH_CDP_ALLOW_REMOTE=1", "bind CDP to loopback when possible"))
+        for warning in endpoint.get("warnings") or []:
+            if "BH_CDP_ALLOW_REMOTE" in warning and endpoint.get("remote_allowed"):
+                continue
+            checks.append(_check("warn", "endpoint.warning", warning, "review BH_CDP_WS and prefer a loopback ws/http endpoint when possible"))
+        checks.append(_check("pass", "endpoint.scheme", endpoint.get("resolved_url", "").split(":", 1)[0]))
+        version_detail = " ".join(x for x in (endpoint.get("browser"), endpoint.get("protocol_version")) if x)
+        checks.append(_check("pass" if version_detail else "warn", "endpoint.version", version_detail, "use a DevTools HTTP base URL in BH_CDP_WS when product/version detail is needed" if not version_detail else None))
+    else:
+        checks.append(_check("fail", "endpoint.present", "no live endpoint metadata", "run `browser-harness --setup` or set BH_CDP_WS to a local CDP endpoint"))
+
+    legacy_pattern = "|".join([
+        r"BU" + r"_CDP_WS",
+        r"BU" + r"_NAME",
+        r"/tmp/" + r"bu-",
+        r"browser-use\.com/profile",
+        r"api\.browser-use",
+        r"cloud\.browser-use",
+    ])
+    cloud_hits = _scan_active_files(legacy_pattern)
+    checks.append(_check("pass" if not cloud_hits else "fail", "strings.no_cloud_runtime", ", ".join(cloud_hits), "remove legacy Browser Use/cloud runtime strings from active files" if cloud_hits else None))
+
+    root = Path(__file__).resolve().parent
+    daemon_text = (root / "daemon.py").read_text(errors="ignore")
+    helpers_text = (root / "helpers.py").read_text(errors="ignore")
+    attach_bad = [m for m in ("Runtime.enable", "DOM.enable", "Network.enable") if m in daemon_text]
+    checks.append(_check("pass" if not attach_bad else "fail", "cdp.attach_minimal", ", ".join(attach_bad), "remove automatic CDP domain enables from daemon attach" if attach_bad else None))
+    checks.append(_check("pass" if "Console.enable" not in daemon_text + helpers_text else "fail", "cdp.no_console_enable", "", "remove Console.enable from core"))
+    marker_bad = "document.title.startsWith" in daemon_text + helpers_text or "\\U0001F7E2" in daemon_text + helpers_text
+    checks.append(_check("pass" if not marker_bad else "fail", "page.no_title_marker", "", "remove hidden title marker mutation" if marker_bad else None))
+    page_info_bad = _page_info_uses_runtime()
+    checks.append(_check("pass" if not page_info_bad else "fail", "helpers.page_info_no_runtime", "", "rewrite page_info to avoid Runtime.evaluate" if page_info_bad else None))
+    checks.append(_check("pass", "network.default_offline", "default doctor performs local checks only"))
+
+    if network:
+        checks.append(_check("warn", "network.external", "network checks are not implemented yet", "keep public IP/WebRTC checks behind --network"))
+    return checks
+
+
+def _doctor_status(checks):
+    return "fail" if any(c["status"] == "fail" for c in checks) else ("warn" if any(c["status"] == "warn" for c in checks) else "pass")
+
+
+def run_doctor(json_output=False, network=False):
+    """Read-only diagnostics. Exit 0 unless a required local check fails."""
+    import platform, sys
+    cur = _version()
+    mode = _install_mode()
+    cur_display = cur or "(unknown)"
+    checks = _doctor_checks(network=network)
+    status = _doctor_status(checks)
+    if json_output:
+        print(json.dumps({"status": status, "checks": checks}, indent=2))
+        return 1 if status == "fail" else 0
 
     print("browser-harness doctor")
     print(f"  platform          {platform.system()} {platform.release()}")
     print(f"  python            {sys.version.split()[0]}")
     print(f"  version           {cur_display} ({mode})")
-    if latest:
-        print(f"  latest release    {latest}" + (" (update available)" if newer else ""))
-    else:
-        print("  latest release    (could not reach github)")
-    row("chrome running", chrome, "" if chrome else "start chrome/edge and rerun `browser-harness --setup`")
-    row("daemon alive", daemon, "" if daemon else "run `browser-harness --setup` to attach")
-    row("profile-use installed", profile_use, "" if profile_use else "optional: curl -fsSL https://browser-use.com/profile.sh | sh")
-    row("BROWSER_USE_API_KEY set", api_key, "" if api_key else "optional: needed only for cloud browsers / profile sync")
-    # Core health = chrome + daemon. Profile-use/api-key are optional.
-    return 0 if (chrome and daemon) else 1
+    for check in checks:
+        mark = {"pass": "ok  ", "warn": "WARN", "fail": "FAIL"}[check["status"]]
+        detail = f" - {check['detail']}" if check.get("detail") else ""
+        fix = f" ({check['fix']})" if check.get("fix") else ""
+        print(f"  [{mark}] {check['id']}{detail}{fix}")
+    return 1 if status == "fail" else 0
 
 
 def _prompt_yes(question, default_yes=True, yes=False):

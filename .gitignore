@@ -1,6 +1,58 @@
 __pycache__/
 *.pyc
 *.log
+
+# Local environment and secret material.
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cert
+*.token
+*.secret
+*credentials*
+*credential*
+*secrets*
+*secret*
+
+# Browser profiles and auth/session state. Never publish logged-in sessions.
+user-data-dir/
+chrome-profile/
+chrome-profiles/
+browser-profile/
+browser-profiles/
+profiles/
+auth-state/
+session-state/
+cookies/
+storage-state/
+**/Cookies
+**/Cookies-journal
+**/Login Data
+**/Login Data-journal
+**/Local State
+**/Preferences
+**/Network/Cookies
+**/Network/Cookies-journal
+*.har
+
+# Build, packaging, caches, and generated reports.
 uv.lock
 *.egg-info/
+.venv/
+.pytest_cache/
+.cursor/
+.beads/
+.claude/
+domain-skills/*/.session-store/
+domain-skills/*/.private-data/
+domain-skills/*/outputs/
+domain-skills/*/auth-state/
+domain-skills/*/session-state/
+domain-skills/*/browser-profile/
+domain-skills/*/chrome-profile/
+outputs/

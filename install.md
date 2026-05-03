@@ -43,6 +43,18 @@ That makes new Codex or Claude Code sessions in other folders load the runtime b
 
 Prefer `browser-harness --setup` — it runs the full attach-and-escalate flow below as one interactive command. The manual steps that follow are only for when `--setup` is unavailable or you need to debug a specific failure.
 
+On macOS, if the user explicitly approves keyboard automation for Chrome's
+remote-debugging consent dialog, use:
+
+```bash
+browser-harness --setup --accept-remote-debugging-dialog
+```
+
+That opens `chrome://inspect/#remote-debugging` when needed and sends the native
+keyboard sequence `Tab`, `Space`, `Tab`, `Return`. It requires macOS
+Accessibility permission for the controlling terminal/app. Do not use it
+silently; remote debugging consent is a browser-control permission.
+
 1. Run `uv sync`.
    If `browser-harness` is still missing after that, run `command -v browser-harness >/dev/null || uv tool install -e .`.
 2. First try the harness directly. If this works, skip manual browser setup:
@@ -53,7 +65,7 @@ print(page_info())
 PY
 ```
 
-   Reuse an existing healthy daemon if it is already responding. Do not kill it during setup unless the attach is clearly stale and you are confident no other agent is using the same `BU_NAME`. For parallel agents, use distinct `BU_NAME`s so they do not fight over the same default session.
+   Reuse an existing healthy daemon if it is already responding. Do not kill it during setup unless the attach is clearly stale and you are confident no other agent is using the same `BH_NAME`. For parallel agents, use distinct `BH_NAME`s so they do not fight over the same default session.
 
 3. If it failed, **read the error and escalate from there — do not assume you need `chrome://inspect`**. The remote-debugging checkbox is per-profile sticky in Chrome, so any profile that has had it toggled on once will auto-enable CDP on every future launch; the inspect page is only needed the first time per profile.
 
@@ -71,7 +83,7 @@ osascript -e 'tell application "Google Chrome" to activate' \
 
    On Linux: open that URL manually in the existing Chrome window.
    If Chrome shows the profile picker first, tell the user to choose their normal profile, *then* (only if `DevToolsActivePort` is still missing) open the inspect page in that profile. Keep polling instead of waiting for the user to type a follow-up.
-4. Be explicit with the user about the two possible Chrome actions: choose their normal profile if the profile picker is open, and in the remote-debugging tab tick the checkbox and click `Allow` once if Chrome shows it.
+4. Be explicit with the user about the two possible Chrome actions: choose their normal profile if the profile picker is open, and in the remote-debugging tab tick the checkbox and click `Allow` once if Chrome shows it. On macOS, `browser-harness --setup --accept-remote-debugging-dialog` can send the checkbox/Allow keyboard sequence after the user has explicitly approved that automation.
 5. Try to do everything yourself. Only ask the user to do something if it is truly necessary, like selecting the Chrome profile or clicking `Allow`. While the user is doing that, sleep and check every 3 seconds whether it is completed. After asking, keep retrying for at least 30 seconds even if you see connection-refused, stale websocket, or other weird transient attach errors.
 6. If setup still lands on the profile picker, have the user choose their normal profile, then (only if `DevToolsActivePort` is still missing) open `chrome://inspect/#remote-debugging` in that profile and keep polling instead of restarting the explanation. As soon as attach succeeds, continue immediately with the verification task without asking again.
 7. Verify with:
@@ -97,7 +109,7 @@ If restart_daemon() also hangs, kill Chrome entirely, clean sockets, and reopen:
 
 ```bash
 pkill -9 -f "Google Chrome"
-rm -f /tmp/bu-default.sock /tmp/bu-default.pid
+rm -f /tmp/bh-default.sock /tmp/bh-default.pid
 open -a "Google Chrome"
 ```
 
@@ -107,29 +119,31 @@ Wait 5 seconds, then reconnect. This resets all CDP state.
 
 ## Maintenance commands
 
-- browser-harness --doctor — show version, install mode, daemon and Chrome state, and whether an update is pending.
+- browser-harness --doctor - show local daemon, endpoint, and CDP hygiene.
 - browser-harness --setup — re-run the full interactive browser-attach flow.
-- browser-harness --update -y — pull the latest version and restart the daemon. Run this yourself when you see the `[browser-harness] update available: X -> Y` banner — don't ask the user. The banner is rate-limited to once per day.
+- browser-harness --setup --accept-remote-debugging-dialog — macOS opt-in keyboard consent automation for the Chrome remote-debugging dialog.
+- browser-harness --launch-profile PATH --port 9222 — launch visible Chrome with a loopback CDP endpoint and an explicit user-data-dir.
+- browser-harness --skill-learning-gate CANDIDATE.json — validate a skill-learning candidate from any current working directory.
+- browser-harness --update -y - explicitly check for an update, pull it, and restart the daemon.
+
+For self-hosted CDP endpoints, see `docs/local-cdp-providers.md`.
 
 ## Architecture
 
 ```text
-Chrome / Browser Use cloud -> CDP WS -> daemon.py -> /tmp/bu-<NAME>.sock -> run.py
+Chrome -> CDP WS -> daemon.py -> /tmp/bh-<NAME>.sock -> run.py
 ```
 
 - Protocol is one JSON line each way.
 - Requests are {method, params, session_id} for CDP or {meta: ...} for daemon control.
 - Responses are {result} / {error} / {events} / {session_id}.
-- BU_NAME namespaces socket, pid, and log files.
-- BU_CDP_WS overrides local Chrome discovery for remote browsers.
-- BU_BROWSER_ID + BROWSER_USE_API_KEY lets the daemon stop a Browser Use cloud browser on shutdown.
+- BH_NAME namespaces socket, pid, and log files.
 
 ## Keeping the harness current
 
-- On each run, `browser-harness` prints `[browser-harness] update available: X -> Y` (once per day) when a newer GitHub release exists.
-- When you see that banner, run `browser-harness --update -y` yourself — don't ask the user. It pulls the new code (`git pull --ff-only` for editable clones, `uv tool upgrade browser-harness` for PyPI installs) and stops the running daemon so the next call picks up the new code. With `-y` it won't prompt.
+- Run `browser-harness --update -y` when the user explicitly asks to update. It pulls the new code (`git pull --ff-only` for editable clones, `uv tool upgrade browser-harness` for PyPI installs) and stops the running daemon so the next call picks up the new code. With `-y` it won't prompt.
 - `--update` refuses to run on an editable clone with uncommitted changes. If that happens, tell the user and let them resolve the dirty worktree.
-- Use `browser-harness --doctor` any time to see version, install mode, daemon and Chrome state, and whether an update is pending.
+- Use `browser-harness --doctor` any time to see local daemon, endpoint, and CDP hygiene.
 
 ## Cold-start reminders
 
