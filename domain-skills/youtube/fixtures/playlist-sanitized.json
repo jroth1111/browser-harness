@@ -1,0 +1,43 @@
+{
+  "fixture": "youtube-playlist-sanitized",
+  "source": "synthetic shape fixture based on playlist browse renderer inventory",
+  "redactions": [
+    "visitorData",
+    "apiKey",
+    "trackingParams"
+  ],
+  "metadata": {
+    "playlistId": "PL_SAMPLE",
+    "title": {"simpleText": "Sample playlist"},
+    "owner": {"simpleText": "Sample Channel"},
+    "videoCountText": {"simpleText": "2 videos"},
+    "playlistKind": "user_playlist"
+  },
+  "playlistVideoListRenderer": {
+    "contents": [
+      {
+        "playlistVideoRenderer": {
+          "videoId": "VIDEO12345A",
+          "title": {"runs": [{"text": "Sample playlist video"}]},
+          "lengthText": {"simpleText": "12:34"}
+        }
+      },
+      {
+        "playlistVideoRenderer": {
+          "videoId": "VIDEO67890B",
+          "title": {"runs": [{"text": "Second playlist video"}]},
+          "lengthText": {"simpleText": "10:00"}
+        }
+      },
+      {
+        "continuationItemRenderer": {
+          "continuationEndpoint": {
+            "continuationCommand": {
+              "token": "REDACTED_PLAYLIST_CONTINUATION"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

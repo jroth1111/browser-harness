@@ -1,0 +1,108 @@
+{
+  "blocked_surfaces": [],
+  "conditional_surfaces": [
+    {
+      "primitive_id": "api_search_continuation",
+      "status": "conditional",
+      "terminal_reason": "route renderer evidence captured"
+    },
+    {
+      "primitive_id": "api_trending",
+      "status": "conditional",
+      "terminal_reason": "signed-out trending may redirect or return empty state"
+    },
+    {
+      "primitive_id": "browser_transcript_panel",
+      "status": "conditional",
+      "terminal_reason": "transcript entry point not visible in bounded route smoke"
+    }
+  ],
+  "domain": "youtube.com",
+  "drift_notes": [
+    {
+      "id": "api_comments",
+      "last_live_observation": null,
+      "reason": "Comments and reply continuations can be disabled or absent per video.",
+      "status": "conditional"
+    },
+    {
+      "id": "api_hashtag",
+      "last_live_observation": null,
+      "reason": "Hashtag grids can be empty or region/client dependent.",
+      "status": "conditional"
+    },
+    {
+      "id": "api_trending",
+      "last_live_observation": null,
+      "reason": "Signed-out /feed/trending may redirect, block, or return empty state; record that as terminal evidence.",
+      "status": "terminal_probe"
+    },
+    {
+      "id": "browser_transcript_panel",
+      "last_live_observation": null,
+      "reason": "The visible transcript panel depends on captions, UI availability, region, and video access state.",
+      "status": "conditional"
+    },
+    {
+      "id": "static_channel_rss",
+      "last_live_observation": "2026-04-28: sibling ../youtube live probes reported RSS 404 across current fixture channels.",
+      "reason": "Public RSS is opportunistic and may return 404 for otherwise available channels; RSS failure must not mark channel browse surfaces unavailable.",
+      "status": "conditional"
+    },
+    {
+      "id": "static_playlist_rss",
+      "last_live_observation": "2026-04-28: keep as opportunistic only after a feed probe succeeds.",
+      "reason": "Playlist RSS is independent of playlist browse availability and should be treated as a probe, not a reliable happy path.",
+      "status": "conditional"
+    },
+    {
+      "id": "timedtext_non_empty_body_probe",
+      "last_live_observation": null,
+      "reason": "Requires safe caption metadata and a non-empty timedtext response body.",
+      "status": "conditional"
+    },
+    {
+      "id": "ytdlp_comments",
+      "last_live_observation": null,
+      "reason": "Optional Tier 4 comments fallback; reply shape may differ from Innertube fixtures.",
+      "status": "degraded"
+    },
+    {
+      "id": "ytdlp_dump_json",
+      "last_live_observation": null,
+      "reason": "Optional Tier 4 metadata fallback; never download media or import browser cookies.",
+      "status": "degraded"
+    },
+    {
+      "id": "ytdlp_flat_playlist",
+      "last_live_observation": null,
+      "reason": "Optional Tier 4 flat listing fallback; metadata and renderer coverage may be incomplete.",
+      "status": "degraded"
+    },
+    {
+      "id": "ytdlp_write_sub",
+      "last_live_observation": null,
+      "reason": "Optional Tier 4 subtitle fallback; requires --skip-download and no raw caption URL logging.",
+      "status": "degraded"
+    },
+    {
+      "id": "ytdlp_ytsearch",
+      "last_live_observation": null,
+      "reason": "Optional Tier 4 video-oriented search fallback; not equivalent to mixed-renderer search.",
+      "status": "degraded"
+    }
+  ],
+  "generated_at": "2026-04-28T07:10:38.652593+00:00",
+  "latest_live_receipt": "receipts/live-smoke-20260428T071103Z.json",
+  "live_primitive_count": 12,
+  "live_status_counts": {
+    "conditional": 3,
+    "pass": 9
+  },
+  "report_version": 1,
+  "surface_map": {
+    "availability_default": "happy_path",
+    "primitive_count": 32,
+    "schema_version": 2
+  }
+}

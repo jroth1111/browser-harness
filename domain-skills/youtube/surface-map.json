@@ -1,0 +1,2452 @@
+{
+  "schema_version": 2,
+  "domain": "youtube.com",
+  "field_tested": {
+    "date": "2026-04-28",
+    "profile": "clean signed-out browser-harness Chrome profile",
+    "web_client": "WEB 2.20260427.01.00",
+    "hl": "en-GB",
+    "gl": "US",
+    "contract_updated": "2026-04-28"
+  },
+  "path_types": [
+    "api",
+    "browser",
+    "hybrid",
+    "static",
+    "local"
+  ],
+  "forbidden": [
+    "official YouTube Data API",
+    "Google OAuth credential flow",
+    "silent browser cookie reads for committed artifacts",
+    "raw playback URLs",
+    "signatureCipher",
+    "caption baseUrl in logs",
+    "visitorData in logs",
+    "account mutation without explicit user request",
+    "yt-dlp media download modes",
+    "yt-dlp browser cookie import for committed artifacts",
+    "unredacted Innertube request keys in fixtures or receipts"
+  ],
+  "execution_policy": {
+    "stop_on": [
+      "success"
+    ],
+    "fallback_on": [
+      "not_available",
+      "not_found",
+      "empty_result",
+      "parse_error",
+      "blocked",
+      "timeout",
+      "unsupported_shape"
+    ],
+    "never_fallback_to": [
+      "official YouTube Data API",
+      "OAuth flow",
+      "silent browser cookie read",
+      "account mutation",
+      "media download unless explicitly requested",
+      "yt-dlp media download mode",
+      "yt-dlp browser-cookie import"
+    ],
+    "receipt_required": [
+      "primitive_id",
+      "path_type",
+      "source_url_or_endpoint_shape",
+      "status_or_exit_code",
+      "fallback_attempts",
+      "renderer_types",
+      "redaction_check",
+      "negative_probe"
+    ],
+    "terminate_on": [
+      "login_required",
+      "members_only",
+      "age_restricted"
+    ],
+    "degraded_fallbacks": {
+      "ytdlp_ytsearch": "video-only search fallback; does not satisfy mixed-renderer search contract unless caller accepts degraded results",
+      "ytdlp_flat_playlist": "flat video listing fallback; playlist/channel metadata may be incomplete",
+      "ytdlp_comments": "comment fallback; reply shape can differ from Innertube renderer fixtures",
+      "ytdlp_write_sub": "subtitle fallback with --skip-download; never download media"
+    }
+  },
+  "fallback_nodes": [
+    {
+      "id": "direct_search_html",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_search_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "screenshot_search_state",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_filter_dialog",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_search_html_filter_renderers",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_click_chip_and_capture_request",
+      "path_type": "browser"
+    },
+    {
+      "id": "api_google_youtube_suggest",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_searchbox_suggestions",
+      "path_type": "browser"
+    },
+    {
+      "id": "api_browse_channel_search",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_channel_search_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_watch_player_global",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_watch_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_watch_initial_data",
+      "path_type": "api"
+    },
+    {
+      "id": "screenshot_panel_state",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_comments_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "raw_entity_key_capture",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_transcript_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "timedtext_non_empty_body_probe",
+      "path_type": "api"
+    },
+    {
+      "id": "unavailable_with_caption_metadata",
+      "path_type": "local"
+    },
+    {
+      "id": "browser_related_rail_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_chapter_panel_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_share_dialog_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "screenshot_action_state",
+      "path_type": "browser"
+    },
+    {
+      "id": "legacy_user_rss",
+      "path_type": "static"
+    },
+    {
+      "id": "api_browse_channel",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_channel_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "thumbnail_maxresdefault",
+      "path_type": "static"
+    },
+    {
+      "id": "thumbnail_hqdefault",
+      "path_type": "static"
+    },
+    {
+      "id": "thumbnail_mqdefault",
+      "path_type": "static"
+    },
+    {
+      "id": "thumbnail_default",
+      "path_type": "static"
+    },
+    {
+      "id": "browser_search_scroll",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_channel_html",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_channel_about_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_channel_videos_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_channel_shorts_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_channel_playlists_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_channel_community_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "browser_channel_streams_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_playlist_html",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_playlist_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_trending_html",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_trending_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_hashtag_html",
+      "path_type": "api"
+    },
+    {
+      "id": "browser_hashtag_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "direct_watch_storyboards",
+      "path_type": "api"
+    },
+    {
+      "id": "direct_watch_live_status",
+      "path_type": "api"
+    },
+    {
+      "id": "static_playlist_feed",
+      "path_type": "static"
+    },
+    {
+      "id": "ytdlp_dump_json",
+      "path_type": "local"
+    },
+    {
+      "id": "ytdlp_flat_playlist",
+      "path_type": "local"
+    },
+    {
+      "id": "ytdlp_comments",
+      "path_type": "local"
+    },
+    {
+      "id": "ytdlp_write_sub",
+      "path_type": "local"
+    },
+    {
+      "id": "ytdlp_ytsearch",
+      "path_type": "local"
+    },
+    {
+      "id": "ytdlp_channel_dump",
+      "path_type": "local"
+    }
+  ],
+  "browser_harness_primitives": [
+    {
+      "name": "endpoint_info",
+      "path_type": "local",
+      "use": "record connected backend"
+    },
+    {
+      "name": "browser_backend_info",
+      "path_type": "local",
+      "use": "record browser capability"
+    },
+    {
+      "name": "diagnose_url_capability",
+      "path_type": "browser",
+      "use": "detect blank, blocked, or challenged YouTube pages"
+    },
+    {
+      "name": "detect_block_page",
+      "path_type": "local",
+      "use": "classify fetched HTML/text as usable, blank, denied, or challenged"
+    },
+    {
+      "name": "discover_local_cdp_endpoints",
+      "path_type": "local",
+      "use": "setup/debug helper when the browser endpoint is unknown"
+    },
+    {
+      "name": "http_get",
+      "path_type": "api",
+      "use": "public static pages, oEmbed, RSS, thumbnails, initial HTML"
+    },
+    {
+      "name": "seed_browser_session",
+      "path_type": "browser",
+      "use": "establish same-domain browser state without logging cookies"
+    },
+    {
+      "name": "http_get_browser_session",
+      "path_type": "hybrid",
+      "use": "same-domain HTTP with browser-established cookies; do not log cookie headers"
+    },
+    {
+      "name": "http_get_browser_session_response",
+      "path_type": "hybrid",
+      "use": "same-domain HTTP with status/header receipt"
+    },
+    {
+      "name": "fetch_with_browser_session",
+      "path_type": "hybrid",
+      "use": "same-domain HTTP using browser-established state"
+    },
+    {
+      "name": "new_tab",
+      "path_type": "browser",
+      "use": "first navigation without overwriting user's active tab"
+    },
+    {
+      "name": "goto_url",
+      "path_type": "browser",
+      "use": "same-tab navigation only after the agent owns the active YouTube tab"
+    },
+    {
+      "name": "wait_for_load",
+      "path_type": "browser",
+      "use": "navigation load gate"
+    },
+    {
+      "name": "wait_for_load_js",
+      "path_type": "browser",
+      "use": "JavaScript load-state fallback"
+    },
+    {
+      "name": "wait",
+      "path_type": "browser",
+      "use": "short hydration wait after YouTube load"
+    },
+    {
+      "name": "wait_for_content",
+      "path_type": "browser",
+      "use": "distinguish usable content from challenge shells"
+    },
+    {
+      "name": "capture_screenshot",
+      "path_type": "browser",
+      "use": "verify visible state before and after actions"
+    },
+    {
+      "name": "capture_screenshot_trace",
+      "path_type": "browser",
+      "use": "debug transient menus, panels, and hydration changes"
+    },
+    {
+      "name": "click_at_xy",
+      "path_type": "browser",
+      "use": "operate visible controls through compositor-level events"
+    },
+    {
+      "name": "type_text",
+      "path_type": "browser",
+      "use": "search boxes and UI inputs"
+    },
+    {
+      "name": "press_key",
+      "path_type": "browser",
+      "use": "keyboard commit and navigation"
+    },
+    {
+      "name": "dispatch_key",
+      "path_type": "browser",
+      "use": "selector-targeted keyboard fallback"
+    },
+    {
+      "name": "scroll",
+      "path_type": "browser",
+      "use": "hydrate comments, related rails, and long panels"
+    },
+    {
+      "name": "js",
+      "path_type": "browser",
+      "use": "read ytcfg, ytInitialPlayerResponse, ytInitialData, and DOM state"
+    },
+    {
+      "name": "page_info",
+      "path_type": "browser",
+      "use": "receipt for active URL/title/viewport"
+    },
+    {
+      "name": "page_info_js",
+      "path_type": "browser",
+      "use": "JavaScript-backed page receipt when target metadata is insufficient"
+    },
+    {
+      "name": "page_content_status",
+      "path_type": "browser",
+      "use": "blank/challenge/content health check"
+    },
+    {
+      "name": "cdp",
+      "path_type": "browser",
+      "use": "Network.enable and raw request/response body capture"
+    },
+    {
+      "name": "drain_events",
+      "path_type": "browser",
+      "use": "observe page-generated /youtubei/v1/* requests"
+    },
+    {
+      "name": "ax_snapshot",
+      "path_type": "browser",
+      "use": "accessibility fallback for visible controls"
+    },
+    {
+      "name": "ensure_real_tab",
+      "path_type": "browser",
+      "use": "recover from stale/internal targets before YouTube work"
+    },
+    {
+      "name": "list_tabs",
+      "path_type": "browser",
+      "use": "find agent-owned YouTube tabs"
+    },
+    {
+      "name": "current_tab",
+      "path_type": "browser",
+      "use": "receipt for the active tab before mutation-free reads"
+    },
+    {
+      "name": "switch_tab",
+      "path_type": "browser",
+      "use": "return to the intended YouTube target"
+    },
+    {
+      "name": "close_tab",
+      "path_type": "browser",
+      "use": "close one agent-owned YouTube tab after verification"
+    },
+    {
+      "name": "close_tabs",
+      "path_type": "browser",
+      "use": "cleanup bounded tab batches"
+    },
+    {
+      "name": "iframe_target",
+      "path_type": "browser",
+      "use": "inspect YouTube embeds only when an iframe target is required"
+    },
+    {
+      "name": "browser_cookies",
+      "path_type": "local",
+      "use": "local same-domain session helper only; never commit output"
+    },
+    {
+      "name": "browser_cookie_header",
+      "path_type": "local",
+      "use": "local same-domain session helper only; never commit output"
+    },
+    {
+      "name": "login_session_manifest",
+      "path_type": "browser",
+      "use": "auth-wall manifest only after explicit user login request"
+    },
+    {
+      "name": "prompt_user_login",
+      "path_type": "browser",
+      "use": "open login page and wait for user only when explicitly requested"
+    },
+    {
+      "name": "upload_file",
+      "path_type": "browser",
+      "use": "out of extraction scope; YouTube upload/Studio requires a separate explicit mutating task"
+    }
+  ],
+  "primitives": [
+    {
+      "id": "static_oembed_video_card",
+      "path_type": "static",
+      "primary": "GET /oembed?url=<watch_url>&format=json",
+      "fallback_chain": [
+        "static_embed_page",
+        "api_player_metadata",
+        "browser_watch_dom"
+      ],
+      "inputs": [
+        "watch_url"
+      ],
+      "outputs": [
+        "title",
+        "author_name",
+        "author_url",
+        "thumbnail_url",
+        "iframe_html"
+      ],
+      "evidence": [
+        "status_code",
+        "response_json_keys",
+        "source_url"
+      ]
+    },
+    {
+      "id": "static_thumbnails",
+      "path_type": "static",
+      "primary": "GET https://i.ytimg.com/vi/<videoId>/<size>.jpg",
+      "fallback_chain": [
+        "thumbnail_maxresdefault",
+        "thumbnail_hqdefault",
+        "thumbnail_mqdefault",
+        "thumbnail_default"
+      ],
+      "inputs": [
+        "video_id",
+        "size"
+      ],
+      "outputs": [
+        "image_bytes",
+        "content_type",
+        "dimensions_by_url_pattern"
+      ],
+      "evidence": [
+        "status_code_per_size",
+        "selected_size"
+      ]
+    },
+    {
+      "id": "static_channel_rss",
+      "path_type": "static",
+      "primary": "GET /feeds/videos.xml?channel_id=<UC...>",
+      "fallback_chain": [
+        "legacy_user_rss",
+        "api_browse_channel",
+        "browser_channel_dom"
+      ],
+      "inputs": [
+        "channel_id"
+      ],
+      "outputs": [
+        "recent_upload_video_ids",
+        "titles",
+        "published",
+        "updated",
+        "rss_terminal_state"
+      ],
+      "evidence": [
+        "feed_url",
+        "status_code",
+        "entry_count"
+      ]
+    },
+    {
+      "id": "api_autocomplete",
+      "path_type": "api",
+      "primary": "GET suggestqueries-clients6.youtube.com/complete/search",
+      "fallback_chain": [
+        "api_google_youtube_suggest",
+        "browser_searchbox_suggestions"
+      ],
+      "inputs": [
+        "q",
+        "client",
+        "ds",
+        "hl",
+        "gl"
+      ],
+      "outputs": [
+        "suggestion_text",
+        "ranking_metadata",
+        "tags"
+      ],
+      "evidence": [
+        "endpoint",
+        "query",
+        "suggestion_count"
+      ]
+    },
+    {
+      "id": "api_global_search",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/search with {context, query, params?}",
+      "fallback_chain": [
+        "api_search_continuation",
+        "direct_search_html",
+        "browser_search_dom",
+        "browser_search_scroll",
+        "screenshot_search_state",
+        "ytdlp_ytsearch"
+      ],
+      "inputs": [
+        "context",
+        "query",
+        "params"
+      ],
+      "outputs": [
+        "renderers",
+        "estimatedResults",
+        "filters",
+        "chips",
+        "continuations",
+        "mixed_renderer_results"
+      ],
+      "evidence": [
+        "query",
+        "params",
+        "status_code",
+        "renderer_types",
+        "continuation_present",
+        "degraded_fallback_declared"
+      ]
+    },
+    {
+      "id": "api_search_filters",
+      "path_type": "hybrid",
+      "primary": "read searchFilterRenderer params from live filter state",
+      "fallback_chain": [
+        "browser_filter_dialog",
+        "direct_search_html_filter_renderers"
+      ],
+      "inputs": [
+        "query",
+        "selected_state"
+      ],
+      "outputs": [
+        "filter_group",
+        "label",
+        "params",
+        "status"
+      ],
+      "evidence": [
+        "selected_filters",
+        "disabled_filters",
+        "token_source"
+      ]
+    },
+    {
+      "id": "api_search_chips",
+      "path_type": "hybrid",
+      "primary": "chipCloudChipRenderer continuation tokens",
+      "fallback_chain": [
+        "browser_click_chip_and_capture_request"
+      ],
+      "inputs": [
+        "query",
+        "chip_label"
+      ],
+      "outputs": [
+        "chip_label",
+        "continuation"
+      ],
+      "evidence": [
+        "visible_chip_labels",
+        "continuation_token_present"
+      ]
+    },
+    {
+      "id": "browser_channel_local_search",
+      "path_type": "browser",
+      "primary": "GET /@<handle>/search?query=<query> in browser",
+      "fallback_chain": [
+        "api_browse_channel_search",
+        "browser_channel_search_dom"
+      ],
+      "inputs": [
+        "handle",
+        "query"
+      ],
+      "outputs": [
+        "channel_scoped_renderers",
+        "browseId",
+        "search_tab_params"
+      ],
+      "evidence": [
+        "resolved_handle",
+        "browseId",
+        "renderer_types"
+      ]
+    },
+    {
+      "id": "api_player_metadata",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/player with {context, videoId}",
+      "fallback_chain": [
+        "direct_watch_player_global",
+        "static_oembed_video_card",
+        "browser_watch_dom",
+        "ytdlp_dump_json"
+      ],
+      "inputs": [
+        "context",
+        "video_id"
+      ],
+      "outputs": [
+        "playabilityStatus",
+        "videoDetails",
+        "streamingData_shape",
+        "captions",
+        "microformat",
+        "storyboards",
+        "liveBroadcastDetails",
+        "isLiveContent"
+      ],
+      "evidence": [
+        "status_code",
+        "playabilityStatus.status",
+        "videoDetails.videoId"
+      ]
+    },
+    {
+      "id": "api_watch_next_detail",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/next with {context, videoId}",
+      "fallback_chain": [
+        "direct_watch_initial_data",
+        "browser_watch_dom"
+      ],
+      "inputs": [
+        "context",
+        "video_id",
+        "continuation"
+      ],
+      "outputs": [
+        "primary_info",
+        "secondary_info",
+        "panels",
+        "related",
+        "comments_root",
+        "continuations"
+      ],
+      "evidence": [
+        "status_code",
+        "top_level_keys",
+        "panel_types"
+      ]
+    },
+    {
+      "id": "api_comments",
+      "path_type": "hybrid",
+      "primary": "/youtubei/v1/next continuations from watch response",
+      "fallback_chain": [
+        "browser_comments_dom",
+        "raw_entity_key_capture",
+        "ytdlp_comments"
+      ],
+      "inputs": [
+        "context",
+        "comment_continuation",
+        "sort_continuation",
+        "max_threads",
+        "expand_replies",
+        "max_reply_threads"
+      ],
+      "outputs": [
+        "comment_count",
+        "sort_options",
+        "threads",
+        "author",
+        "text",
+        "votes",
+        "time_text",
+        "reply_continuations",
+        "reply_threads",
+        "bounded_reply_expansion"
+      ],
+      "evidence": [
+        "continuation_source",
+        "thread_count",
+        "raw_refs_preserved",
+        "reply_continuation_source",
+        "reply_expansion_bound"
+      ]
+    },
+    {
+      "id": "browser_transcript_panel",
+      "path_type": "hybrid",
+      "primary": "browser click Show transcript and capture /youtubei/v1/get_transcript",
+      "fallback_chain": [
+        "browser_transcript_dom",
+        "timedtext_non_empty_body_probe",
+        "ytdlp_write_sub",
+        "unavailable_with_caption_metadata"
+      ],
+      "inputs": [
+        "video_id",
+        "language",
+        "ui_generated_body"
+      ],
+      "outputs": [
+        "segments",
+        "start_time",
+        "duration",
+        "language",
+        "transcript_source"
+      ],
+      "evidence": [
+        "ui_action_receipt",
+        "request_captured",
+        "segment_count",
+        "direct_minimal_400_not_absence",
+        "no_media_download"
+      ]
+    },
+    {
+      "id": "api_related_videos",
+      "path_type": "hybrid",
+      "primary": "watch ytInitialData or /youtubei/v1/next",
+      "fallback_chain": [
+        "browser_related_rail_dom"
+      ],
+      "inputs": [
+        "context",
+        "video_id"
+      ],
+      "outputs": [
+        "lockupViewModel",
+        "compactVideoRenderer",
+        "titles",
+        "urls",
+        "metadata_rows"
+      ],
+      "evidence": [
+        "renderer_types",
+        "related_count"
+      ]
+    },
+    {
+      "id": "api_chapters_key_moments",
+      "path_type": "hybrid",
+      "primary": "watch panels and macroMarkersListItemRenderer",
+      "fallback_chain": [
+        "browser_chapter_panel_dom"
+      ],
+      "inputs": [
+        "context",
+        "video_id"
+      ],
+      "outputs": [
+        "title",
+        "start_seconds",
+        "time_text",
+        "url"
+      ],
+      "evidence": [
+        "chapter_count",
+        "panel_source"
+      ]
+    },
+    {
+      "id": "browser_share_panel",
+      "path_type": "hybrid",
+      "primary": "click Share and capture /youtubei/v1/share/get_share_panel",
+      "fallback_chain": [
+        "browser_share_dialog_dom"
+      ],
+      "inputs": [
+        "video_id",
+        "page_generated_body"
+      ],
+      "outputs": [
+        "embed",
+        "copy",
+        "start_at",
+        "social_options"
+      ],
+      "evidence": [
+        "dialog_visible",
+        "endpoint_status_code",
+        "options_count"
+      ]
+    },
+    {
+      "id": "browser_action_surfaces",
+      "path_type": "browser",
+      "primary": "visible More actions, Save, Report, sign-in wall",
+      "fallback_chain": [
+        "screenshot_action_state"
+      ],
+      "inputs": [
+        "video_id"
+      ],
+      "outputs": [
+        "action_label",
+        "availability",
+        "auth_wall"
+      ],
+      "evidence": [
+        "screenshot_state",
+        "no_mutation_endpoint_called"
+      ]
+    },
+    {
+      "id": "static_embed_page",
+      "path_type": "static",
+      "primary": "GET /embed/<videoId>",
+      "fallback_chain": [
+        "api_player_metadata",
+        "direct_watch_player_global"
+      ],
+      "inputs": [
+        "video_id"
+      ],
+      "outputs": [
+        "embeddability",
+        "iframe_route",
+        "player_metadata_shape"
+      ],
+      "evidence": [
+        "status_code",
+        "embed_url"
+      ]
+    },
+    {
+      "id": "local_video_id_extraction",
+      "path_type": "local",
+      "primary": "parse canonical YouTube video ID from watch, youtu.be, shorts, embed, or raw ID input",
+      "fallback_chain": [],
+      "inputs": [
+        "url_or_id"
+      ],
+      "outputs": [
+        "video_id",
+        "source_pattern",
+        "terminal_reason"
+      ],
+      "evidence": [
+        "positive_url_examples",
+        "negative_invalid_examples"
+      ]
+    },
+    {
+      "id": "api_channel_resolution",
+      "path_type": "hybrid",
+      "primary": "resolve @handle, /channel/UC..., /c/, /user/, watch owner, or channel URL to browseId/channelId",
+      "fallback_chain": [
+        "direct_channel_html",
+        "api_browse_channel",
+        "browser_channel_dom",
+        "ytdlp_channel_dump"
+      ],
+      "inputs": [
+        "handle_or_url",
+        "context"
+      ],
+      "outputs": [
+        "browseId",
+        "channel_id",
+        "canonical_handle",
+        "title",
+        "resolution_source"
+      ],
+      "evidence": [
+        "input_kind",
+        "resolved_browse_id",
+        "fallback_attempts"
+      ]
+    },
+    {
+      "id": "api_search_continuation",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/search with {context, continuation}",
+      "fallback_chain": [
+        "browser_search_scroll",
+        "screenshot_search_state"
+      ],
+      "inputs": [
+        "context",
+        "continuation"
+      ],
+      "outputs": [
+        "renderers",
+        "continuations",
+        "terminal_empty_state"
+      ],
+      "evidence": [
+        "continuation_source",
+        "status_code",
+        "renderer_types"
+      ]
+    },
+    {
+      "id": "api_storyboard_spec",
+      "path_type": "api",
+      "primary": "parse playerStoryboardSpecRenderer.spec from /youtubei/v1/player or ytInitialPlayerResponse",
+      "fallback_chain": [
+        "direct_watch_storyboards",
+        "browser_watch_dom",
+        "ytdlp_dump_json"
+      ],
+      "inputs": [
+        "context",
+        "video_id"
+      ],
+      "outputs": [
+        "spec",
+        "levels",
+        "url_template",
+        "thumbnail_dimensions",
+        "tile_counts"
+      ],
+      "evidence": [
+        "player_response_source",
+        "level_count",
+        "redacted_template"
+      ]
+    },
+    {
+      "id": "api_video_live_status",
+      "path_type": "api",
+      "primary": "parse live and premiere status from player response playability, videoDetails, and microformat",
+      "fallback_chain": [
+        "direct_watch_live_status",
+        "browser_watch_dom",
+        "ytdlp_dump_json"
+      ],
+      "inputs": [
+        "context",
+        "video_id"
+      ],
+      "outputs": [
+        "is_live_content",
+        "is_live_now",
+        "is_upcoming",
+        "premiere_state",
+        "start_timestamp",
+        "end_timestamp"
+      ],
+      "evidence": [
+        "player_response_source",
+        "status_fields_present"
+      ]
+    },
+    {
+      "id": "static_playlist_rss",
+      "path_type": "static",
+      "primary": "GET /feeds/videos.xml?playlist_id=<PL...>",
+      "fallback_chain": [
+        "api_playlist_contents",
+        "direct_playlist_html"
+      ],
+      "inputs": [
+        "playlist_id"
+      ],
+      "outputs": [
+        "recent_playlist_video_ids",
+        "titles",
+        "published",
+        "updated",
+        "terminal_state"
+      ],
+      "evidence": [
+        "feed_url",
+        "status_code",
+        "entry_count"
+      ]
+    },
+    {
+      "id": "api_channel_about",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/browse with channel browseId and page-provided about tab params",
+      "fallback_chain": [
+        "direct_channel_html",
+        "browser_channel_about_dom",
+        "ytdlp_channel_dump"
+      ],
+      "inputs": [
+        "context",
+        "browseId",
+        "about_params"
+      ],
+      "outputs": [
+        "description",
+        "links",
+        "joined_date",
+        "view_count_text",
+        "country",
+        "canonical_handle"
+      ],
+      "evidence": [
+        "browseId",
+        "params_source",
+        "renderer_types"
+      ]
+    },
+    {
+      "id": "api_channel_videos",
+      "path_type": "hybrid",
+      "primary": "POST /youtubei/v1/browse with channel browseId and videos tab params",
+      "fallback_chain": [
+        "static_channel_rss",
+        "direct_channel_html",
+        "browser_channel_videos_dom",
+        "ytdlp_flat_playlist"
+      ],
+      "inputs": [
+        "context",
+        "browseId",
+        "videos_params",
+        "sort",
+        "max_results"
+      ],
+      "outputs": [
+        "video_ids",
+        "titles",
+        "published_or_time_text",
+        "views",
+        "continuations",
+        "sort_tokens"
+      ],
+      "evidence": [
+        "browseId",
+        "params_source",
+        "renderer_types",
+        "continuation_present"
+      ]
+    },
+    {
+      "id": "api_channel_shorts",
+      "path_type": "hybrid",
+      "primary": "POST /youtubei/v1/browse with channel browseId and shorts tab params",
+      "fallback_chain": [
+        "direct_channel_html",
+        "browser_channel_shorts_dom"
+      ],
+      "inputs": [
+        "context",
+        "browseId",
+        "shorts_params",
+        "max_results"
+      ],
+      "outputs": [
+        "video_ids",
+        "titles",
+        "shorts_urls",
+        "thumbnail_models",
+        "continuations"
+      ],
+      "evidence": [
+        "browseId",
+        "params_source",
+        "renderer_types"
+      ]
+    },
+    {
+      "id": "api_channel_playlists",
+      "path_type": "hybrid",
+      "primary": "POST /youtubei/v1/browse with channel browseId and playlists tab params",
+      "fallback_chain": [
+        "direct_channel_html",
+        "browser_channel_playlists_dom",
+        "ytdlp_flat_playlist"
+      ],
+      "inputs": [
+        "context",
+        "browseId",
+        "playlists_params"
+      ],
+      "outputs": [
+        "playlist_ids",
+        "titles",
+        "item_counts",
+        "owners",
+        "continuations"
+      ],
+      "evidence": [
+        "browseId",
+        "params_source",
+        "renderer_types"
+      ]
+    },
+    {
+      "id": "api_channel_community",
+      "path_type": "hybrid",
+      "primary": "POST /youtubei/v1/browse with channel browseId and community tab params",
+      "fallback_chain": [
+        "direct_channel_html",
+        "browser_channel_community_dom"
+      ],
+      "inputs": [
+        "context",
+        "browseId",
+        "community_params",
+        "max_results"
+      ],
+      "outputs": [
+        "post_ids",
+        "text",
+        "polls",
+        "images",
+        "video_links",
+        "continuations",
+        "terminal_state"
+      ],
+      "evidence": [
+        "browseId",
+        "params_source",
+        "renderer_types",
+        "signed_out_availability"
+      ]
+    },
+    {
+      "id": "api_channel_streams",
+      "path_type": "hybrid",
+      "primary": "POST /youtubei/v1/browse with channel browseId and streams tab params",
+      "fallback_chain": [
+        "direct_channel_html",
+        "browser_channel_streams_dom",
+        "ytdlp_flat_playlist"
+      ],
+      "inputs": [
+        "context",
+        "browseId",
+        "streams_params",
+        "max_results"
+      ],
+      "outputs": [
+        "video_ids",
+        "titles",
+        "live_or_stream_state",
+        "dates",
+        "continuations"
+      ],
+      "evidence": [
+        "browseId",
+        "params_source",
+        "renderer_types"
+      ]
+    },
+    {
+      "id": "api_playlist_contents",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/browse with playlist browseId VL<playlist_id> or page-provided continuation",
+      "fallback_chain": [
+        "static_playlist_rss",
+        "direct_playlist_html",
+        "browser_playlist_dom",
+        "ytdlp_flat_playlist"
+      ],
+      "inputs": [
+        "context",
+        "playlist_id",
+        "continuation",
+        "max_results"
+      ],
+      "outputs": [
+        "playlist_title",
+        "description",
+        "owner",
+        "video_count",
+        "total_duration_text",
+        "last_updated_text",
+        "privacy_state",
+        "videos",
+        "continuations",
+        "playlist_kind"
+      ],
+      "evidence": [
+        "playlist_id",
+        "renderer_types",
+        "video_count",
+        "privacy_state"
+      ]
+    },
+    {
+      "id": "api_trending",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/browse with trending browseId or GET /feed/trending HTML state",
+      "fallback_chain": [
+        "direct_trending_html",
+        "browser_trending_dom"
+      ],
+      "inputs": [
+        "context",
+        "category",
+        "bp"
+      ],
+      "outputs": [
+        "category",
+        "video_ids",
+        "titles",
+        "renderer_types",
+        "terminal_state"
+      ],
+      "evidence": [
+        "route",
+        "category_or_bp",
+        "signed_out_availability"
+      ]
+    },
+    {
+      "id": "api_hashtag",
+      "path_type": "api",
+      "primary": "POST /youtubei/v1/browse with hashtag browseId or direct /hashtag/<tag> HTML state",
+      "fallback_chain": [
+        "direct_hashtag_html",
+        "browser_hashtag_dom"
+      ],
+      "inputs": [
+        "context",
+        "tag",
+        "continuation",
+        "max_results"
+      ],
+      "outputs": [
+        "tag",
+        "video_ids",
+        "titles",
+        "renderer_types",
+        "continuations",
+        "terminal_state"
+      ],
+      "evidence": [
+        "tag",
+        "renderer_types",
+        "continuation_present"
+      ]
+    }
+  ],
+  "search": {
+    "surface_modes": [
+      {
+        "id": "global_search",
+        "path_type": "api",
+        "route": "/youtubei/v1/search",
+        "required": [
+          "context",
+          "query"
+        ]
+      },
+      {
+        "id": "filtered_global_search",
+        "path_type": "api",
+        "route": "/youtubei/v1/search",
+        "required": [
+          "context",
+          "query",
+          "params"
+        ]
+      },
+      {
+        "id": "search_continuation",
+        "path_type": "api",
+        "route": "/youtubei/v1/search",
+        "required": [
+          "context",
+          "continuation"
+        ]
+      },
+      {
+        "id": "search_chip",
+        "path_type": "hybrid",
+        "route": "chipCloudChipRenderer continuation or browser click",
+        "required": [
+          "chip_label",
+          "continuation"
+        ]
+      },
+      {
+        "id": "search_filter_dialog",
+        "path_type": "hybrid",
+        "route": "searchFilterRenderer from live filter state",
+        "required": [
+          "query",
+          "filter_group",
+          "status"
+        ]
+      },
+      {
+        "id": "channel_local_search",
+        "path_type": "browser",
+        "route": "/@<handle>/search?query=<query>",
+        "required": [
+          "handle",
+          "query"
+        ]
+      },
+      {
+        "id": "channel_browse_search",
+        "path_type": "api",
+        "route": "/youtubei/v1/browse",
+        "required": [
+          "context",
+          "browseId",
+          "params"
+        ]
+      },
+      {
+        "id": "autocomplete",
+        "path_type": "api",
+        "route": "suggestqueries-clients6.youtube.com/complete/search",
+        "required": [
+          "q"
+        ]
+      }
+    ],
+    "url_patterns": [
+      "https://www.youtube.com/results?search_query=<query>",
+      "https://www.youtube.com/results?search_query=<query>&sp=<filter_state>",
+      "https://www.youtube.com/@<handle>/search?query=<query>"
+    ],
+    "url_parameters": [
+      {
+        "name": "search_query",
+        "required": true,
+        "paths": [
+          "browser",
+          "direct_html"
+        ],
+        "meaning": "global search query"
+      },
+      {
+        "name": "sp",
+        "required": false,
+        "paths": [
+          "browser",
+          "direct_html",
+          "api_params"
+        ],
+        "meaning": "YouTube-provided filter state token"
+      },
+      {
+        "name": "hl",
+        "required": false,
+        "paths": [
+          "browser",
+          "api_context"
+        ],
+        "meaning": "language/locale"
+      },
+      {
+        "name": "gl",
+        "required": false,
+        "paths": [
+          "browser",
+          "api_context"
+        ],
+        "meaning": "geo market"
+      },
+      {
+        "name": "persist_gl",
+        "required": false,
+        "paths": [
+          "browser"
+        ],
+        "meaning": "keep requested geo state when YouTube supplies it"
+      },
+      {
+        "name": "query",
+        "required": true,
+        "paths": [
+          "channel_local_search"
+        ],
+        "meaning": "channel-scoped search query"
+      }
+    ],
+    "innertube_query_parameters": [
+      {
+        "name": "prettyPrint",
+        "required": false,
+        "meaning": "usually false"
+      },
+      {
+        "name": "key",
+        "required": true,
+        "meaning": "page-provided Innertube key from ytcfg; not the official YouTube Data API key"
+      }
+    ],
+    "innertube_body_parameters": [
+      {
+        "name": "context",
+        "required": true,
+        "meaning": "ytcfg INNERTUBE_CONTEXT"
+      },
+      {
+        "name": "query",
+        "required": true,
+        "meaning": "initial search query; mutually exclusive with continuation"
+      },
+      {
+        "name": "params",
+        "required": false,
+        "meaning": "selected filter token, same semantic state as URL sp"
+      },
+      {
+        "name": "continuation",
+        "required": false,
+        "meaning": "next page or chip token; mutually exclusive with query"
+      },
+      {
+        "name": "webSearchboxStatsUrl",
+        "required": false,
+        "meaning": "page-supplied stats URL when emitted by the browser client"
+      }
+    ],
+    "filter_groups": [
+      {
+        "group": "Type",
+        "filters": [
+          {
+            "label": "Videos",
+            "token": "EgIQAQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Shorts",
+            "token": "EgIQCQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Channels",
+            "token": "EgIQAg%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Playlists",
+            "token": "EgIQAw%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Movies",
+            "token": "EgIQBA%3D%3D",
+            "status": "available"
+          }
+        ]
+      },
+      {
+        "group": "Duration",
+        "filters": [
+          {
+            "label": "Under 3 minutes",
+            "token": "EgIYBA%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "3-20 minutes",
+            "token": "EgIYBQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Over 20 minutes",
+            "token": "EgIYAg%3D%3D",
+            "status": "available"
+          }
+        ]
+      },
+      {
+        "group": "Upload date",
+        "filters": [
+          {
+            "label": "Last hour",
+            "token": "EgIIAQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Today",
+            "token": "EgIIAg%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "This week",
+            "token": "EgIIAw%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "This month",
+            "token": "EgIIBA%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "This year",
+            "token": "EgIIBQ%3D%3D",
+            "status": "available"
+          }
+        ]
+      },
+      {
+        "group": "Features",
+        "filters": [
+          {
+            "label": "Live",
+            "token": "EgJAAQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "4K",
+            "token": "EgJwAQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "HD",
+            "token": "EgIgAQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Subtitles/CC",
+            "token": "EgIoAQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "Creative Commons",
+            "token": "EgIwAQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "360 deg",
+            "token": "EgJ4AQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "VR180",
+            "token": "EgPQAQE%3D",
+            "status": "available"
+          },
+          {
+            "label": "3D",
+            "token": "EgI4AQ%3D%3D",
+            "status": "available"
+          },
+          {
+            "label": "HDR",
+            "token": "EgPIAQE%3D",
+            "status": "available"
+          },
+          {
+            "label": "Location",
+            "token": "EgO4AQE%3D",
+            "status": "available"
+          },
+          {
+            "label": "Purchased",
+            "token": "EgJIAQ%3D%3D",
+            "status": "available"
+          }
+        ]
+      },
+      {
+        "group": "Sort",
+        "filters": [
+          {
+            "label": "Relevance",
+            "token": null,
+            "status": "default"
+          },
+          {
+            "label": "Upload date",
+            "token": "CAI%3D",
+            "status": "available"
+          },
+          {
+            "label": "View count",
+            "token": "CAM%3D",
+            "status": "available"
+          },
+          {
+            "label": "Rating",
+            "token": "CAE%3D",
+            "status": "available"
+          }
+        ]
+      }
+    ],
+    "chips": [
+      "All",
+      "Shorts",
+      "Unwatched",
+      "Watched",
+      "Videos",
+      "Recently uploaded",
+      "Live"
+    ],
+    "result_surfaces": [
+      {
+        "renderer": "videoRenderer",
+        "fields": [
+          "videoId",
+          "title",
+          "watch_url",
+          "owner",
+          "channel_id",
+          "canonical_channel_url",
+          "publish_time_text",
+          "duration_text",
+          "view_count_text",
+          "metadata_snippets",
+          "thumbnails",
+          "badges",
+          "menu",
+          "tracking_params"
+        ]
+      },
+      {
+        "renderer": "channelRenderer",
+        "fields": [
+          "channel_id",
+          "title",
+          "handle",
+          "subscriber_text",
+          "video_count_text",
+          "description_snippet",
+          "avatar",
+          "subscribe_state",
+          "browse_endpoint",
+          "canonical_url"
+        ]
+      },
+      {
+        "renderer": "shortsLockupViewModel",
+        "fields": [
+          "entity_id",
+          "video_id",
+          "title",
+          "shorts_url",
+          "thumbnail_model",
+          "menu",
+          "tracking_params"
+        ]
+      },
+      {
+        "renderer": "playlistRenderer",
+        "fields": [
+          "playlist_id",
+          "title",
+          "owner",
+          "metadata_rows",
+          "thumbnail_model",
+          "playlist_url",
+          "item_count"
+        ]
+      },
+      {
+        "renderer": "lockupViewModel",
+        "fields": [
+          "content_id",
+          "content_type",
+          "title",
+          "metadata_rows",
+          "thumbnail_model",
+          "url"
+        ]
+      },
+      {
+        "renderer": "ad_or_shelf_renderer",
+        "fields": [
+          "searchPyvRenderer",
+          "adSlotRenderer",
+          "inFeedAdLayoutRenderer",
+          "shelfRenderer",
+          "gridShelfViewModel",
+          "verticalListRenderer"
+        ]
+      },
+      {
+        "renderer": "continuationItemRenderer",
+        "fields": [
+          "continuation_token"
+        ]
+      },
+      {
+        "renderer": "backgroundPromoRenderer",
+        "fields": [
+          "empty_state_text",
+          "no_result_reason"
+        ]
+      }
+    ],
+    "continuation_contract": {
+      "primitive_id": "api_search_continuation",
+      "body_shape": [
+        "context",
+        "continuation"
+      ],
+      "terminal_states": [
+        "additional_items",
+        "empty_result",
+        "unsupported_shape"
+      ],
+      "negative_probe": "scroll/browser continuation must not be silently treated as initial search results"
+    }
+  },
+  "video_detail": {
+    "url_parameters": [
+      {
+        "name": "v",
+        "required": true,
+        "meaning": "video ID"
+      },
+      {
+        "name": "t",
+        "required": false,
+        "meaning": "start time"
+      },
+      {
+        "name": "list",
+        "required": false,
+        "meaning": "playlist ID"
+      },
+      {
+        "name": "index",
+        "required": false,
+        "meaning": "playlist position"
+      },
+      {
+        "name": "pp",
+        "required": false,
+        "meaning": "YouTube-provided navigation/state token"
+      },
+      {
+        "name": "start_radio",
+        "required": false,
+        "meaning": "radio or playlist flow flag"
+      }
+    ],
+    "browser_globals": [
+      "ytcfg.data_",
+      "ytInitialPlayerResponse",
+      "ytInitialData"
+    ],
+    "innertube_endpoints": [
+      {
+        "endpoint": "/youtubei/v1/player",
+        "path_type": "api",
+        "body": [
+          "context",
+          "videoId"
+        ],
+        "use": "player metadata and playability"
+      },
+      {
+        "endpoint": "/youtubei/v1/next",
+        "path_type": "api",
+        "body": [
+          "context",
+          "videoId",
+          "continuation"
+        ],
+        "use": "watch detail, related videos, comments continuations"
+      },
+      {
+        "endpoint": "/youtubei/v1/search",
+        "path_type": "api",
+        "body": [
+          "context",
+          "query",
+          "params",
+          "continuation"
+        ],
+        "use": "search results, filters, chips"
+      },
+      {
+        "endpoint": "/youtubei/v1/browse",
+        "path_type": "api",
+        "body": [
+          "context",
+          "browseId",
+          "params"
+        ],
+        "use": "channels, tabs, hashtags, browse surfaces"
+      },
+      {
+        "endpoint": "/youtubei/v1/get_transcript",
+        "path_type": "hybrid",
+        "body": [
+          "context",
+          "params",
+          "languageCode",
+          "externalVideoId"
+        ],
+        "use": "UI-generated transcript segments"
+      },
+      {
+        "endpoint": "/youtubei/v1/share/get_share_panel",
+        "path_type": "hybrid",
+        "body": [
+          "page_generated_body"
+        ],
+        "use": "share dialog metadata"
+      }
+    ],
+    "player_response_fields": [
+      "playabilityStatus",
+      "videoDetails",
+      "streamingData_shape",
+      "captions",
+      "microformat",
+      "storyboards",
+      "cards",
+      "endscreen",
+      "playbackTracking",
+      "playerConfig",
+      "ad_metadata",
+      "storyboards.playerStoryboardSpecRenderer.spec",
+      "videoDetails.isLiveContent",
+      "microformat.playerMicroformatRenderer.liveBroadcastDetails"
+    ],
+    "watch_initial_data_fields": [
+      "videoPrimaryInfoRenderer",
+      "videoSecondaryInfoRenderer",
+      "engagement_panels",
+      "comments_root",
+      "commentViewModel_refs",
+      "related_lockupViewModel",
+      "macroMarkersListItemRenderer",
+      "structured_description",
+      "searchable_transcript_panel",
+      "top_level_actions"
+    ],
+    "transcript_fields": [
+      "segment_text",
+      "start_time",
+      "duration",
+      "language",
+      "source_request",
+      "renderer_type"
+    ],
+    "comment_fields": [
+      "count",
+      "sort_options",
+      "thread_refs",
+      "author",
+      "text",
+      "votes",
+      "time_text",
+      "continuations",
+      "reply_continuations",
+      "commentRepliesRenderer",
+      "bounded_reply_expansion"
+    ],
+    "related_video_fields": [
+      "content_id",
+      "title",
+      "url",
+      "metadata_rows",
+      "thumbnail_model",
+      "renderer_type"
+    ],
+    "share_fields": [
+      "embed",
+      "copy",
+      "start_at",
+      "social_options"
+    ],
+    "action_fields": [
+      "save_available",
+      "report_available",
+      "auth_wall",
+      "mutation_endpoint_not_called"
+    ],
+    "storyboard_fields": [
+      "spec",
+      "level_count",
+      "url_template_redacted",
+      "thumbnail_width",
+      "thumbnail_height",
+      "tile_count"
+    ],
+    "live_status_fields": [
+      "playabilityStatus.status",
+      "videoDetails.isLiveContent",
+      "isLiveNow",
+      "isUpcoming",
+      "liveBroadcastDetails"
+    ]
+  },
+  "fallback_dags": {
+    "search_results": [
+      "api_global_search",
+      "api_search_continuation",
+      "direct_search_html",
+      "browser_search_dom",
+      "browser_search_scroll",
+      "screenshot_search_state",
+      "ytdlp_ytsearch"
+    ],
+    "search_filters": [
+      "api_search_filters",
+      "browser_filter_dialog",
+      "direct_search_html_filter_renderers"
+    ],
+    "search_chips": [
+      "api_search_chips",
+      "browser_click_chip_and_capture_request"
+    ],
+    "video_metadata": [
+      "static_oembed_video_card",
+      "api_player_metadata",
+      "direct_watch_player_global",
+      "browser_watch_dom",
+      "ytdlp_dump_json"
+    ],
+    "watch_detail": [
+      "api_watch_next_detail",
+      "direct_watch_initial_data",
+      "browser_watch_dom",
+      "screenshot_panel_state"
+    ],
+    "comments": [
+      "api_comments",
+      "browser_comments_dom",
+      "raw_entity_key_capture",
+      "ytdlp_comments"
+    ],
+    "transcript": [
+      "browser_transcript_panel",
+      "browser_transcript_dom",
+      "timedtext_non_empty_body_probe",
+      "ytdlp_write_sub",
+      "unavailable_with_caption_metadata"
+    ],
+    "channel_uploads": [
+      "static_channel_rss",
+      "legacy_user_rss",
+      "api_browse_channel",
+      "browser_channel_dom"
+    ],
+    "thumbnails": [
+      "thumbnail_maxresdefault",
+      "thumbnail_hqdefault",
+      "thumbnail_mqdefault",
+      "thumbnail_default"
+    ],
+    "search_continuation": [
+      "api_search_continuation",
+      "browser_search_scroll",
+      "screenshot_search_state"
+    ],
+    "storyboards": [
+      "api_storyboard_spec",
+      "api_player_metadata",
+      "direct_watch_storyboards",
+      "browser_watch_dom",
+      "ytdlp_dump_json"
+    ],
+    "live_status": [
+      "api_video_live_status",
+      "api_player_metadata",
+      "direct_watch_live_status",
+      "browser_watch_dom",
+      "ytdlp_dump_json"
+    ],
+    "channel_resolution": [
+      "api_channel_resolution",
+      "direct_channel_html",
+      "api_browse_channel",
+      "browser_channel_dom",
+      "ytdlp_channel_dump"
+    ],
+    "channel_about": [
+      "api_channel_about",
+      "direct_channel_html",
+      "browser_channel_about_dom",
+      "ytdlp_channel_dump"
+    ],
+    "channel_videos": [
+      "api_channel_videos",
+      "static_channel_rss",
+      "direct_channel_html",
+      "browser_channel_videos_dom",
+      "ytdlp_flat_playlist"
+    ],
+    "channel_shorts": [
+      "api_channel_shorts",
+      "direct_channel_html",
+      "browser_channel_shorts_dom"
+    ],
+    "channel_playlists": [
+      "api_channel_playlists",
+      "direct_channel_html",
+      "browser_channel_playlists_dom",
+      "ytdlp_flat_playlist"
+    ],
+    "channel_community": [
+      "api_channel_community",
+      "direct_channel_html",
+      "browser_channel_community_dom"
+    ],
+    "channel_streams": [
+      "api_channel_streams",
+      "direct_channel_html",
+      "browser_channel_streams_dom",
+      "ytdlp_flat_playlist"
+    ],
+    "playlist_contents": [
+      "api_playlist_contents",
+      "static_playlist_rss",
+      "direct_playlist_html",
+      "browser_playlist_dom",
+      "ytdlp_flat_playlist"
+    ],
+    "playlist_rss": [
+      "static_playlist_rss",
+      "api_playlist_contents",
+      "direct_playlist_html"
+    ],
+    "trending": [
+      "api_trending",
+      "direct_trending_html",
+      "browser_trending_dom"
+    ],
+    "hashtag": [
+      "api_hashtag",
+      "direct_hashtag_html",
+      "browser_hashtag_dom"
+    ],
+    "video_id_extraction": [
+      "local_video_id_extraction"
+    ]
+  },
+  "verification_probes": {
+    "search": {
+      "positive": [
+        "search API returns 200 for {context, query}",
+        "at least one params token from each required filter group returns 200",
+        "continuation token returns additional items or terminal empty state"
+      ],
+      "negative": [
+        "parser reports non-video renderers instead of dropping them",
+        "combined filters are read from live filter state, not manually composed"
+      ]
+    },
+    "watch": {
+      "positive": [
+        "player endpoint returns playabilityStatus.status",
+        "next endpoint or ytInitialData exposes primary/secondary info, panels, and related/comment entry points"
+      ],
+      "negative": [
+        "raw playback URLs, signature ciphers, cookies, API keys, and visitor IDs are redacted",
+        "related parser supports lockupViewModel and does not require compactVideoRenderer"
+      ]
+    },
+    "transcript": {
+      "positive": [
+        "Show transcript triggers page-generated get_transcript request and segment renderers",
+        "DOM fallback yields visible segments when response-body capture is unavailable"
+      ],
+      "negative": [
+        "direct minimal get_transcript 400 is not treated as transcript absence",
+        "timedtext is accepted only when body length is non-zero"
+      ]
+    },
+    "static": {
+      "positive": [
+        "oEmbed returns 200 for a public video",
+        "thumbnail fallback reaches at least hqdefault",
+        "RSS success/failure is independent of channel browse availability"
+      ],
+      "negative": [
+        "RSS 404 does not mark the channel unavailable"
+      ]
+    },
+    "channel": {
+      "positive": [
+        "channel resolution yields a UC browseId or explicit terminal state",
+        "each mapped tab records params source and renderer types or terminal state"
+      ],
+      "negative": [
+        "tab params are captured from live page state and not hand-composed",
+        "RSS failure does not mark browse surfaces unavailable"
+      ]
+    },
+    "playlist": {
+      "positive": [
+        "playlist browse or HTML exposes playlist metadata plus video entries or terminal state",
+        "playlist RSS returns entries or independent RSS terminal state"
+      ],
+      "negative": [
+        "Mix/radio playlists are labelled degraded instead of treated as ordinary user playlists"
+      ]
+    },
+    "discovery": {
+      "positive": [
+        "trending and hashtag routes expose renderers or signed-out terminal state"
+      ],
+      "negative": [
+        "empty signed-out trending is recorded as empty_result, not parser failure"
+      ]
+    },
+    "utilities": {
+      "positive": [
+        "video ID extraction accepts watch, youtu.be, shorts, embed, and raw ID forms",
+        "channel resolution handles @handle and UC ID inputs"
+      ],
+      "negative": [
+        "invalid ID-like strings are rejected before network calls"
+      ]
+    },
+    "yt_dlp": {
+      "positive": [
+        "absence of yt-dlp returns not_available and advances the chain when allowed",
+        "present yt-dlp command shapes include --skip-download for subtitle/json fallbacks"
+      ],
+      "negative": [
+        "yt-dlp fallbacks never import browser cookies or emit raw playback URLs"
+      ]
+    }
+  },
+  "availability": {
+    "default": "happy_path",
+    "statuses": [
+      "happy_path",
+      "conditional",
+      "degraded",
+      "terminal_probe"
+    ],
+    "primitives": {
+      "static_channel_rss": {
+        "status": "conditional",
+        "conditional_reason": "Public RSS is opportunistic and may return 404 for otherwise available channels; RSS failure must not mark channel browse surfaces unavailable.",
+        "last_live_observation": "2026-04-28: sibling ../youtube live probes reported RSS 404 across current fixture channels."
+      },
+      "static_playlist_rss": {
+        "status": "conditional",
+        "conditional_reason": "Playlist RSS is independent of playlist browse availability and should be treated as a probe, not a reliable happy path.",
+        "last_live_observation": "2026-04-28: keep as opportunistic only after a feed probe succeeds."
+      },
+      "browser_transcript_panel": {
+        "status": "conditional",
+        "conditional_reason": "The visible transcript panel depends on captions, UI availability, region, and video access state."
+      },
+      "api_comments": {
+        "status": "conditional",
+        "conditional_reason": "Comments and reply continuations can be disabled or absent per video."
+      },
+      "api_trending": {
+        "status": "terminal_probe",
+        "conditional_reason": "Signed-out /feed/trending may redirect, block, or return empty state; record that as terminal evidence."
+      },
+      "api_hashtag": {
+        "status": "conditional",
+        "conditional_reason": "Hashtag grids can be empty or region/client dependent."
+      }
+    },
+    "fallback_nodes": {
+      "timedtext_non_empty_body_probe": {
+        "status": "conditional",
+        "conditional_reason": "Requires safe caption metadata and a non-empty timedtext response body."
+      },
+      "ytdlp_dump_json": {
+        "status": "degraded",
+        "conditional_reason": "Optional Tier 4 metadata fallback; never download media or import browser cookies."
+      },
+      "ytdlp_flat_playlist": {
+        "status": "degraded",
+        "conditional_reason": "Optional Tier 4 flat listing fallback; metadata and renderer coverage may be incomplete."
+      },
+      "ytdlp_comments": {
+        "status": "degraded",
+        "conditional_reason": "Optional Tier 4 comments fallback; reply shape may differ from Innertube fixtures."
+      },
+      "ytdlp_write_sub": {
+        "status": "degraded",
+        "conditional_reason": "Optional Tier 4 subtitle fallback; requires --skip-download and no raw caption URL logging."
+      },
+      "ytdlp_ytsearch": {
+        "status": "degraded",
+        "conditional_reason": "Optional Tier 4 video-oriented search fallback; not equivalent to mixed-renderer search."
+      }
+    }
+  },
+  "yt_dlp_policy": {
+    "optional": true,
+    "availability_check": "shutil.which(\"yt-dlp\")",
+    "allowed_modes": [
+      "--skip-download",
+      "--dump-single-json",
+      "--flat-playlist",
+      "--write-subs",
+      "--write-auto-subs"
+    ],
+    "forbidden_modes": [
+      "media download",
+      "browser cookie import",
+      "raw playback URL logging"
+    ],
+    "result_status_when_absent": "not_available",
+    "receipt_requirements": [
+      "command_shape",
+      "exit_code",
+      "no_media_download",
+      "redaction_check"
+    ]
+  },
+  "channel": {
+    "url_patterns": [
+      "/@<handle>",
+      "/channel/<UC...>",
+      "/@<handle>/videos",
+      "/@<handle>/shorts",
+      "/@<handle>/playlists",
+      "/@<handle>/community",
+      "/@<handle>/streams",
+      "/@<handle>/about"
+    ],
+    "resolution": {
+      "primitive_id": "api_channel_resolution",
+      "accepted_inputs": [
+        "@handle",
+        "channel URL",
+        "UC channel ID",
+        "watch owner link"
+      ]
+    },
+    "tabs": [
+      {
+        "id": "about",
+        "primitive_id": "api_channel_about",
+        "expected_renderers": [
+          "channelAboutFullMetadataRenderer",
+          "metadataRowContainerRenderer"
+        ]
+      },
+      {
+        "id": "videos",
+        "primitive_id": "api_channel_videos",
+        "expected_renderers": [
+          "richGridRenderer",
+          "videoRenderer",
+          "richItemRenderer"
+        ]
+      },
+      {
+        "id": "shorts",
+        "primitive_id": "api_channel_shorts",
+        "expected_renderers": [
+          "richGridRenderer",
+          "shortsLockupViewModel",
+          "richItemRenderer"
+        ]
+      },
+      {
+        "id": "playlists",
+        "primitive_id": "api_channel_playlists",
+        "expected_renderers": [
+          "gridPlaylistRenderer",
+          "playlistRenderer",
+          "lockupViewModel"
+        ]
+      },
+      {
+        "id": "community",
+        "primitive_id": "api_channel_community",
+        "expected_renderers": [
+          "backstagePostThreadRenderer",
+          "postRenderer",
+          "pollRenderer"
+        ]
+      },
+      {
+        "id": "streams",
+        "primitive_id": "api_channel_streams",
+        "expected_renderers": [
+          "videoRenderer",
+          "lockupViewModel",
+          "richItemRenderer"
+        ]
+      }
+    ],
+    "continuation_endpoint": "/youtubei/v1/browse",
+    "params_rule": "read tab params from live channel page or captured browse request; do not invent params"
+  },
+  "playlist": {
+    "url_patterns": [
+      "/playlist?list=<playlist_id>",
+      "/watch?v=<video_id>&list=<playlist_id>"
+    ],
+    "contents_primitive_id": "api_playlist_contents",
+    "rss_primitive_id": "static_playlist_rss",
+    "browse_id_rule": "use VL<playlist_id> when accepted, otherwise use page-provided browseId/continuation",
+    "playlist_kinds": [
+      "user_playlist",
+      "mix_or_radio",
+      "generated_playlist"
+    ],
+    "terminal_states": [
+      "not_found",
+      "empty_result",
+      "login_required",
+      "unsupported_shape"
+    ]
+  },
+  "discovery": {
+    "trending": {
+      "primitive_id": "api_trending",
+      "route": "/feed/trending",
+      "category_state": "bp query parameter when present"
+    },
+    "hashtag": {
+      "primitive_id": "api_hashtag",
+      "route": "/hashtag/<tag>",
+      "continuation_endpoint": "/youtubei/v1/browse"
+    },
+    "signed_out_rule": "record empty or blocked signed-out states as terminal evidence rather than forcing browser fallback success"
+  },
+  "innertube": {
+    "context_sources": [
+      "ytcfg.data_.INNERTUBE_CONTEXT",
+      "ytcfg.data_.INNERTUBE_API_KEY",
+      "ytcfg data embedded in HTML"
+    ],
+    "endpoints": [
+      "/youtubei/v1/search",
+      "/youtubei/v1/player",
+      "/youtubei/v1/next",
+      "/youtubei/v1/browse",
+      "/youtubei/v1/get_transcript",
+      "/youtubei/v1/share/get_share_panel"
+    ],
+    "redact_fields": [
+      "INNERTUBE_API_KEY",
+      "VISITOR_DATA",
+      "visitorData",
+      "X-Goog-Visitor-Id",
+      "Authorization",
+      "Cookie",
+      "baseUrl",
+      "signatureCipher"
+    ],
+    "continuation_rule": "continuation bodies are mutually exclusive with initial query/browse params unless captured request proves otherwise"
+  },
+  "utilities": {
+    "video_id_extraction": {
+      "primitive_id": "local_video_id_extraction",
+      "valid_length": 11
+    },
+    "channel_resolution": {
+      "primitive_id": "api_channel_resolution"
+    }
+  }
+}

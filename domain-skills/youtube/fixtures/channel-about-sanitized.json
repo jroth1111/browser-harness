@@ -1,0 +1,32 @@
+{
+  "fixture": "youtube-channel-about-sanitized",
+  "source": "synthetic shape fixture based on channel about browse renderer inventory",
+  "redactions": [
+    "visitorData",
+    "apiKey",
+    "trackingParams"
+  ],
+  "trackingParams": "REDACTED_TRACKING_PARAMS",
+  "channelAboutFullMetadataRenderer": {
+    "description": {"simpleText": "Sample channel description"},
+    "country": {"simpleText": "United States"},
+    "joinedDateText": {"runs": [{"text": "Joined Jan 1, 2020"}]},
+    "viewCountText": {"simpleText": "123,456 views"},
+    "primaryLinks": [
+      {
+        "title": {"simpleText": "Website"},
+        "navigationEndpoint": {
+          "urlEndpoint": {
+            "url": "https://example.com"
+          }
+        }
+      }
+    ],
+    "navigationEndpoint": {
+      "browseEndpoint": {
+        "browseId": "UC_SAMPLE_CHANNEL",
+        "canonicalBaseUrl": "/@SampleChannel"
+      }
+    }
+  }
+}

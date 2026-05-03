@@ -1,0 +1,21 @@
+{
+  "receipt_version": 1,
+  "domain": "youtube.com",
+  "date": "2026-04-28",
+  "browser_profile": "clean signed-out browser-harness Chrome profile",
+  "web_client": "WEB 2.20260427.01.00",
+  "locale": {"hl": "en-GB", "gl": "US"},
+  "redactions_applied": ["visitorData", "apiKey", "cookies", "raw playback URLs", "signatureCipher", "caption baseUrl"],
+  "observations": [
+    {"surface": "global_search", "result": "returned mixed renderer payload and continuations"},
+    {"surface": "search_filters", "result": "single-filter tokens returned 200; combined filters were rewritten by live state"},
+    {"surface": "search_chips", "result": "All, Shorts, Unwatched, Watched, Videos, Recently uploaded, Live observed"},
+    {"surface": "channel_local_search", "result": "used browse state and mixed video/playlist renderers"},
+    {"surface": "player", "result": "public watch player returned OK and metadata/caption shape"},
+    {"surface": "transcript", "result": "UI-triggered get_transcript returned segment renderers; direct minimal body returned 400"},
+    {"surface": "comments", "result": "comment header, sort controls, thread refs, and continuations observed"},
+    {"surface": "share", "result": "share panel endpoint returned 200 and rendered options"},
+    {"surface": "actions", "result": "signed-out Save opened sign-in modal; no mutation endpoint executed"},
+    {"surface": "static", "result": "oEmbed/embed/thumbnails returned 200 for public videos; RSS varied by channel route"}
+  ]
+}

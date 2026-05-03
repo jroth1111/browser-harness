@@ -1,0 +1,46 @@
+{
+  "fixture": "youtube-comments-replies-sanitized",
+  "source": "synthetic shape fixture based on /youtubei/v1/next comment reply continuation inventory",
+  "redactions": [
+    "visitorData",
+    "apiKey",
+    "trackingParams"
+  ],
+  "comment_surface": {
+    "commentThreadRenderer": {
+      "comment": {
+        "commentRenderer": {
+          "commentId": "COMMENT_PARENT",
+          "authorText": {"simpleText": "Sample viewer"},
+          "contentText": {"runs": [{"text": "A useful top-level comment"}]},
+          "voteCount": {"simpleText": "12"},
+          "publishedTimeText": {"runs": [{"text": "2 days ago"}]}
+        }
+      },
+      "replies": {
+        "commentRepliesRenderer": {
+          "contents": [
+            {
+              "commentRenderer": {
+                "commentId": "COMMENT_REPLY",
+                "authorText": {"simpleText": "Reply viewer"},
+                "contentText": {"runs": [{"text": "A useful reply"}]},
+                "voteCount": {"simpleText": "3"},
+                "publishedTimeText": {"runs": [{"text": "1 day ago"}]}
+              }
+            },
+            {
+              "continuationItemRenderer": {
+                "continuationEndpoint": {
+                  "continuationCommand": {
+                    "token": "REDACTED_REPLY_CONTINUATION"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

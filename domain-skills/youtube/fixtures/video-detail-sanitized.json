@@ -1,0 +1,53 @@
+{
+  "fixture": "youtube-video-detail-sanitized",
+  "source": "synthetic shape fixture based on 2026-04-28 mapped watch/player inventory",
+  "redactions": ["streamingData.formats[].url", "signatureCipher", "captionTracks[].baseUrl", "visitorData", "apiKey"],
+  "ytInitialPlayerResponse": {
+    "playabilityStatus": {"status": "OK"},
+    "videoDetails": {
+      "videoId": "VIDEO12345A",
+      "title": "Sample video result",
+      "author": "Sample Channel",
+      "channelId": "UC_SAMPLE_CHANNEL",
+      "lengthSeconds": "754",
+      "viewCount": "1234",
+      "shortDescription": "Sample description"
+    },
+    "captions": {
+      "playerCaptionsTracklistRenderer": {
+        "captionTracks": [
+          {"languageCode": "en", "kind": "manual", "vssId": ".en", "baseUrl": "REDACTED_BASE_URL"}
+        ],
+        "translationLanguages": [{"languageCode": "es"}]
+      }
+    },
+    "microformat": {
+      "playerMicroformatRenderer": {
+        "uploadDate": "2026-04-28",
+        "publishDate": "2026-04-28",
+        "ownerChannelName": "Sample Channel",
+        "externalChannelId": "UC_SAMPLE_CHANNEL",
+        "liveBroadcastDetails": {
+          "isLiveNow": false,
+          "isUpcoming": false,
+          "startTimestamp": "2026-04-28T00:00:00Z"
+        }
+      }
+    },
+    "storyboards": {
+      "playerStoryboardSpecRenderer": {
+        "spec": "https://i.ytimg.com/sb/VIDEO12345A/storyboard3_L$L/$N.jpg?sigh=REDACTED|160#90#10#5#5#2000#M$M"
+      }
+    }
+  },
+  "ytInitialData": {
+    "videoPrimaryInfoRenderer": {"title": {"runs": [{"text": "Sample video result"}]}},
+    "videoSecondaryInfoRenderer": {"owner": {"videoOwnerRenderer": {"title": {"runs": [{"text": "Sample Channel"}]}}}},
+    "engagementPanels": [
+      {"engagementPanelSectionListRenderer": {"targetId": "engagement-panel-searchable-transcript"}}
+    ],
+    "related": {
+      "lockupViewModel": {"contentId": "RELATED1234", "metadata": {"title": {"content": "Related sample"}}}
+    }
+  }
+}

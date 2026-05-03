@@ -1,0 +1,498 @@
+{
+  "schema_version": 1,
+  "source": "domain-skills/youtube/workflows.md",
+  "workflows": [
+    {
+      "id": "single_video_metadata",
+      "goal": "Collect public watch/player metadata for one video.",
+      "primary_chain": [
+        "local_video_id_extraction",
+        "api_player_metadata",
+        "api_watch_next_detail"
+      ],
+      "optional_primitives": [
+        "api_video_live_status",
+        "api_storyboard_spec",
+        "api_chapters_key_moments",
+        "static_oembed_video_card",
+        "static_thumbnails"
+      ],
+      "terminal_states": [
+        "login_required",
+        "members_only",
+        "age_restricted"
+      ],
+      "expected_outputs": [
+        "video_id",
+        "title",
+        "owner",
+        "playability_status",
+        "renderer_types"
+      ],
+      "fallback_chain": [
+        "api_player_metadata",
+        "api_watch_next_detail"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "raw_playback_url_logging",
+        "signatureCipher_leakage",
+        "account_gated_escalation"
+      ],
+      "stop_rules": [
+        "login_required",
+        "members_only",
+        "age_restricted"
+      ]
+    },
+    {
+      "id": "single_video_transcript_discovery",
+      "goal": "Find visible transcript availability and normalize safe transcript payloads.",
+      "primary_chain": [
+        "browser_transcript_panel",
+        "timedtext_non_empty_body_probe",
+        "unavailable_with_caption_metadata",
+        "ytdlp_write_sub"
+      ],
+      "terminal_states": [
+        "not_available",
+        "empty_result",
+        "login_required",
+        "members_only",
+        "age_restricted",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "segments",
+        "language",
+        "terminal_reason"
+      ],
+      "fallback_chain": [
+        "timedtext_non_empty_body_probe",
+        "unavailable_with_caption_metadata",
+        "ytdlp_write_sub"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "raw_caption_baseUrl_logging",
+        "media_download",
+        "silent_cookies",
+        "browser_cookie_import"
+      ],
+      "stop_rules": [
+        "not_available",
+        "empty_result",
+        "login_required",
+        "members_only",
+        "age_restricted",
+        "unsupported_shape"
+      ]
+    },
+    {
+      "id": "search_and_filtered_search",
+      "goal": "Map public search renderers, filters, chips, and continuations.",
+      "primary_chain": [
+        "api_global_search",
+        "direct_search_html",
+        "browser_search_dom",
+        "screenshot_search_state",
+        "ytdlp_ytsearch"
+      ],
+      "terminal_states": [
+        "blocked",
+        "empty_result",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "renderer_types",
+        "results_by_renderer",
+        "filter_tokens",
+        "continuations"
+      ],
+      "fallback_chain": [
+        "direct_search_html",
+        "browser_search_dom",
+        "screenshot_search_state",
+        "ytdlp_ytsearch"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "official_search_api",
+        "hand_composed_sp_tokens",
+        "dropping_non_video_renderers"
+      ],
+      "stop_rules": [
+        "blocked",
+        "empty_result",
+        "unsupported_shape"
+      ]
+    },
+    {
+      "id": "channel_resolution",
+      "goal": "Resolve channel identifiers to a public browseId before tab workflows run.",
+      "primary_chain": [
+        "api_channel_resolution",
+        "direct_channel_html",
+        "api_browse_channel",
+        "browser_channel_dom",
+        "ytdlp_channel_dump"
+      ],
+      "fallback_chain": [
+        "direct_channel_html",
+        "api_browse_channel",
+        "browser_channel_dom",
+        "ytdlp_channel_dump"
+      ],
+      "terminal_states": [
+        "not_found",
+        "login_required",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "browse_id",
+        "canonical_url",
+        "handle",
+        "candidates",
+        "terminal_reason"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "search_candidate_as_identity_proof",
+        "account_cookies_for_resolution",
+        "rss_failure_as_channel_failure"
+      ],
+      "stop_rules": [
+        "ambiguous_identity",
+        "terminal_access_state",
+        "candidate_identity_checks_failed"
+      ]
+    },
+    {
+      "id": "channel_tab_browsing",
+      "goal": "Inspect public channel tabs after channel resolution.",
+      "primary_chain": [
+        "api_channel_about",
+        "api_channel_videos",
+        "api_channel_shorts",
+        "api_channel_playlists",
+        "api_channel_community",
+        "api_channel_streams"
+      ],
+      "fallback_chain": [
+        "direct_channel_html",
+        "browser_channel_about_dom",
+        "browser_channel_videos_dom",
+        "browser_channel_shorts_dom",
+        "browser_channel_playlists_dom",
+        "browser_channel_community_dom",
+        "browser_channel_streams_dom",
+        "ytdlp_flat_playlist"
+      ],
+      "terminal_states": [
+        "empty_result",
+        "login_required",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "tab_id",
+        "params_source",
+        "renderer_types",
+        "continuations",
+        "terminal_reason"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "invented_tab_params",
+        "account_cookies_for_signed_out_gaps",
+        "single_empty_tab_as_channel_failure"
+      ],
+      "stop_rules": [
+        "tab_unavailable_signed_out",
+        "terminal_access_state",
+        "unsupported_renderer_after_bounded_fallback"
+      ]
+    },
+    {
+      "id": "playlist_enumeration",
+      "goal": "Enumerate public playlist metadata and videos.",
+      "primary_chain": [
+        "api_playlist_contents",
+        "direct_playlist_html",
+        "browser_playlist_dom",
+        "ytdlp_flat_playlist"
+      ],
+      "terminal_states": [
+        "not_found",
+        "empty_result",
+        "login_required",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "playlist_id",
+        "playlist_kind",
+        "video_count",
+        "videos",
+        "continuations"
+      ],
+      "fallback_chain": [
+        "direct_playlist_html",
+        "browser_playlist_dom",
+        "ytdlp_flat_playlist"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "mix_as_user_playlist",
+        "unbounded_continuation_paging",
+        "media_download"
+      ],
+      "stop_rules": [
+        "not_found",
+        "empty_result",
+        "login_required",
+        "unsupported_shape"
+      ]
+    },
+    {
+      "id": "comments_and_replies",
+      "goal": "Capture top-level comment threads and bounded replies.",
+      "primary_chain": [
+        "api_comments",
+        "browser_comments_dom",
+        "ytdlp_comments"
+      ],
+      "terminal_states": [
+        "not_available",
+        "empty_result",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "threads",
+        "reply_continuations",
+        "expanded_replies"
+      ],
+      "fallback_chain": [
+        "browser_comments_dom",
+        "ytdlp_comments"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "comment_write_endpoints",
+        "account_identity_reads",
+        "unbounded_reply_expansion"
+      ],
+      "stop_rules": [
+        "not_available",
+        "empty_result",
+        "unsupported_shape"
+      ]
+    },
+    {
+      "id": "storyboards_and_live_status",
+      "goal": "Extract storyboard and live/premiere metadata from public player fields.",
+      "primary_chain": [
+        "api_player_metadata",
+        "api_storyboard_spec",
+        "api_video_live_status"
+      ],
+      "terminal_states": [
+        "not_available",
+        "parse_error",
+        "login_required",
+        "members_only",
+        "age_restricted"
+      ],
+      "expected_outputs": [
+        "storyboard_level_count",
+        "live_status",
+        "playability_status"
+      ],
+      "fallback_chain": [
+        "api_storyboard_spec",
+        "api_video_live_status"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "raw_storyboard_or_playback_url_leakage",
+        "private_livestream_inference"
+      ],
+      "stop_rules": [
+        "not_available",
+        "parse_error",
+        "login_required",
+        "members_only",
+        "age_restricted"
+      ]
+    },
+    {
+      "id": "trending_and_hashtags",
+      "goal": "Record public discovery route behavior.",
+      "primary_chain": [
+        "api_trending",
+        "api_hashtag",
+        "direct_trending_html",
+        "direct_hashtag_html",
+        "browser_trending_dom",
+        "browser_hashtag_dom"
+      ],
+      "terminal_states": [
+        "empty_result",
+        "blocked",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "route",
+        "landed_url",
+        "renderer_types",
+        "terminal_reason"
+      ],
+      "fallback_chain": [
+        "api_hashtag",
+        "direct_trending_html",
+        "direct_hashtag_html",
+        "browser_trending_dom",
+        "browser_hashtag_dom"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "forcing_account_cookies",
+        "personalized_feeds",
+        "treating_home_redirect_as_trending_content"
+      ],
+      "stop_rules": [
+        "empty_result",
+        "blocked",
+        "unsupported_shape"
+      ]
+    },
+    {
+      "id": "safe_ytdlp_tier4",
+      "goal": "Use optional yt-dlp degraded fallbacks with auditable no-media command shapes.",
+      "primary_chain": [
+        "ytdlp_dump_json",
+        "ytdlp_flat_playlist",
+        "ytdlp_comments",
+        "ytdlp_write_sub",
+        "ytdlp_ytsearch"
+      ],
+      "terminal_states": [
+        "not_available",
+        "blocked",
+        "unsupported_shape"
+      ],
+      "expected_outputs": [
+        "availability",
+        "command_shape",
+        "degraded_status",
+        "exit_code"
+      ],
+      "fallback_chain": [
+        "ytdlp_flat_playlist",
+        "ytdlp_comments",
+        "ytdlp_write_sub",
+        "ytdlp_ytsearch"
+      ],
+      "receipt_requirements": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "unsafe_paths": [
+        "browser_cookie_import",
+        "media_extraction",
+        "unbounded_commands",
+        "raw_url_dumps"
+      ],
+      "stop_rules": [
+        "not_available",
+        "blocked",
+        "unsupported_shape"
+      ]
+    }
+  ]
+}

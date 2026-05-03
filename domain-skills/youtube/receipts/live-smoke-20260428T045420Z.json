@@ -1,0 +1,381 @@
+{
+  "backend": {
+    "js": {
+      "platform": "MacIntel",
+      "plugins": 5,
+      "webdriver": false
+    },
+    "kind": "chromium",
+    "risks": []
+  },
+  "checks": [
+    {
+      "name": "surface_map_contract",
+      "status": "success"
+    },
+    {
+      "name": "route_content",
+      "status": "success"
+    }
+  ],
+  "cleanup": {
+    "all_closed": true,
+    "closed_tabs": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "created_at": "2026-04-28T04:54:02.820688+00:00",
+  "domain": "youtube.com",
+  "endpoint_info": {
+    "keys": [
+      "browser",
+      "host",
+      "http_base",
+      "input",
+      "is_loopback",
+      "port",
+      "protocol_version",
+      "remote_allowed",
+      "resolved_url",
+      "source",
+      "warnings"
+    ]
+  },
+  "receipt_version": 1,
+  "redactions_applied": [
+    "visitorData",
+    "apiKey",
+    "cookies",
+    "playback URLs",
+    "signatureCipher",
+    "caption baseUrl"
+  ],
+  "route_checks": [
+    {
+      "content_status": {
+        "block": {
+          "blocked": false,
+          "evidence": [],
+          "kind": null
+        },
+        "htmlLength": 4132158,
+        "readyState": "complete",
+        "textLength": 11443,
+        "title": "openai - YouTube",
+        "url": "https://www.youtube.com/results?search_query=openai"
+      },
+      "name": "search",
+      "page_info": {
+        "h": 937,
+        "ph": 11664,
+        "pw": 1675,
+        "sx": 0,
+        "sy": 0,
+        "title": "openai - YouTube",
+        "url": "https://www.youtube.com/results?search_query=openai",
+        "w": 1690
+      },
+      "renderer_types": {
+        "accessibilityRenderer": 60,
+        "adButtonViewModel": 8,
+        "avatarViewModel": 55,
+        "badgeViewModel": 11,
+        "buttonRenderer": 48,
+        "buttonViewModel": 124,
+        "channelThumbnailWithLinkRenderer": 37,
+        "chipCloudChipRenderer": 7,
+        "decoratedAvatarViewModel": 35,
+        "defaultButtonViewModel": 48,
+        "dialogHeaderViewModel": 9,
+        "dialogViewModel": 9,
+        "dislikeButtonViewModel": 12,
+        "expandableMetadataRenderer": 12,
+        "hotkeyDialogSectionOptionRenderer": 28,
+        "likeButtonViewModel": 12,
+        "listItemViewModel": 136,
+        "listViewModel": 68,
+        "macroMarkersListItemRenderer": 79,
+        "menuNavigationItemRenderer": 37,
+        "menuRenderer": 37,
+        "menuServiceItemDownloadRenderer": 37,
+        "menuServiceItemRenderer": 74,
+        "metadataBadgeRenderer": 73,
+        "movingThumbnailRenderer": 36,
+        "reelPlayerOverlayRenderer": 60,
+        "reelWatchAccessibilityRenderer": 60,
+        "searchFilterRenderer": 25,
+        "sheetViewModel": 60,
+        "shortsLockupViewModel": 60,
+        "thumbnailOverlayLoadingPreviewRenderer": 37,
+        "thumbnailOverlayNowPlayingRenderer": 37,
+        "thumbnailOverlayTimeStatusRenderer": 37,
+        "thumbnailOverlayToggleButtonRenderer": 74,
+        "thumbnailViewModel": 124,
+        "toggleButtonViewModel": 60,
+        "toggledButtonViewModel": 48,
+        "unifiedSharePanelRenderer": 37,
+        "videoRenderer": 37,
+        "videoSummaryContentViewModel": 6
+      },
+      "route_changed": false,
+      "status": "success",
+      "url": "https://www.youtube.com/results?search_query=openai",
+      "ytcfg_has_context": true,
+      "ytcfg_key_count": 107
+    },
+    {
+      "content_status": {
+        "block": {
+          "blocked": false,
+          "evidence": [],
+          "kind": null
+        },
+        "htmlLength": 3009744,
+        "readyState": "complete",
+        "textLength": 15838,
+        "title": "3Blue1Brown - YouTube",
+        "url": "https://www.youtube.com/@3blue1brown/about"
+      },
+      "name": "channel_about",
+      "page_info": {
+        "h": 937,
+        "ph": 3972,
+        "pw": 1675,
+        "sx": 0,
+        "sy": 0,
+        "title": "3Blue1Brown - YouTube",
+        "url": "https://www.youtube.com/@3blue1brown/about",
+        "w": 1690
+      },
+      "renderer_types": {
+        "avatarViewModel": 21,
+        "bubbleHintRenderer": 12,
+        "buttonRenderer": 100,
+        "collectionThumbnailViewModel": 10,
+        "commentActionButtonsRenderer": 12,
+        "contentMetadataViewModel": 11,
+        "dialogHeaderViewModel": 11,
+        "dialogViewModel": 11,
+        "engagementPanelSectionListRenderer": 10,
+        "engagementPanelTitleHeaderRenderer": 10,
+        "gridChannelRenderer": 12,
+        "gridVideoRenderer": 71,
+        "hintRenderer": 24,
+        "horizontalListRenderer": 11,
+        "hotkeyDialogSectionOptionRenderer": 28,
+        "itemSectionRenderer": 21,
+        "listItemViewModel": 20,
+        "listViewModel": 10,
+        "lockupMetadataViewModel": 10,
+        "lockupViewModel": 10,
+        "menuNavigationItemRenderer": 71,
+        "menuRenderer": 84,
+        "menuServiceItemDownloadRenderer": 71,
+        "menuServiceItemRenderer": 144,
+        "metadataBadgeRenderer": 133,
+        "modalWithTitleAndButtonRenderer": 13,
+        "movingThumbnailRenderer": 71,
+        "postRenderer": 12,
+        "sectionListRenderer": 11,
+        "shelfRenderer": 11,
+        "textViewModel": 10,
+        "thumbnailBadgeViewModel": 10,
+        "thumbnailHoverOverlayViewModel": 10,
+        "thumbnailOverlayBadgeViewModel": 10,
+        "thumbnailOverlayNowPlayingRenderer": 71,
+        "thumbnailOverlayTimeStatusRenderer": 71,
+        "thumbnailOverlayToggleButtonRenderer": 142,
+        "thumbnailViewModel": 10,
+        "toggleButtonRenderer": 24,
+        "unifiedSharePanelRenderer": 84
+      },
+      "route_changed": false,
+      "status": "success",
+      "url": "https://www.youtube.com/@3blue1brown/about",
+      "ytcfg_has_context": true,
+      "ytcfg_key_count": 105
+    },
+    {
+      "content_status": {
+        "block": {
+          "blocked": false,
+          "evidence": [],
+          "kind": null
+        },
+        "htmlLength": 1417877,
+        "readyState": "complete",
+        "textLength": 1917,
+        "title": "Essence of linear algebra - YouTube",
+        "url": "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab"
+      },
+      "name": "playlist",
+      "page_info": {
+        "h": 937,
+        "ph": 2213,
+        "pw": 1675,
+        "sx": 0,
+        "sy": 0,
+        "title": "Essence of linear algebra - YouTube",
+        "url": "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab",
+        "w": 1690
+      },
+      "renderer_types": {
+        "basicContentViewModel": 1,
+        "buttonRenderer": 22,
+        "buttonViewModel": 2,
+        "cinematicContainerRenderer": 1,
+        "continuationItemRenderer": 2,
+        "desktopTopbarRenderer": 1,
+        "dialogHeaderViewModel": 1,
+        "dialogViewModel": 1,
+        "engagementPanelSectionListRenderer": 2,
+        "engagementPanelTitleHeaderRenderer": 2,
+        "expandableVideoDescriptionBodyRenderer": 2,
+        "factoidRenderer": 3,
+        "fusionSearchboxRenderer": 1,
+        "heroPlaylistThumbnailRenderer": 1,
+        "hotkeyDialogSectionOptionRenderer": 28,
+        "hotkeyDialogSectionRenderer": 4,
+        "itemSectionRenderer": 7,
+        "listItemViewModel": 2,
+        "menuNavigationItemRenderer": 17,
+        "menuRenderer": 17,
+        "menuServiceItemDownloadRenderer": 16,
+        "menuServiceItemRenderer": 32,
+        "metadataBadgeRenderer": 1,
+        "modalWithTitleAndButtonRenderer": 4,
+        "panelFooterViewModel": 1,
+        "playlistBylineRenderer": 2,
+        "playlistHeaderRenderer": 1,
+        "playlistMetadataRenderer": 1,
+        "playlistVideoListRenderer": 1,
+        "playlistVideoRenderer": 16,
+        "sectionListRenderer": 3,
+        "tabRenderer": 1,
+        "thumbnailOverlayHoverTextRenderer": 1,
+        "thumbnailOverlayNowPlayingRenderer": 16,
+        "thumbnailOverlayTimeStatusRenderer": 16,
+        "toggleButtonRenderer": 2,
+        "topbarLogoRenderer": 1,
+        "topbarMenuButtonRenderer": 1,
+        "twoColumnBrowseResultsRenderer": 1,
+        "unifiedSharePanelRenderer": 18
+      },
+      "route_changed": false,
+      "status": "success",
+      "url": "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab",
+      "ytcfg_has_context": true,
+      "ytcfg_key_count": 102
+    },
+    {
+      "content_status": {
+        "block": {
+          "blocked": false,
+          "evidence": [],
+          "kind": null
+        },
+        "htmlLength": 958115,
+        "readyState": "complete",
+        "textLength": 477,
+        "title": "Home - YouTube",
+        "url": "https://www.youtube.com/"
+      },
+      "name": "trending",
+      "page_info": {
+        "h": 937,
+        "ph": 937,
+        "pw": 1675,
+        "sx": 0,
+        "sy": 0,
+        "title": "Home - YouTube",
+        "url": "https://www.youtube.com/",
+        "w": 1690
+      },
+      "renderer_types": {
+        "basicContentViewModel": 1,
+        "buttonRenderer": 8,
+        "buttonViewModel": 2,
+        "desktopTopbarRenderer": 1,
+        "dialogHeaderViewModel": 1,
+        "dialogViewModel": 1,
+        "feedNudgeRenderer": 1,
+        "feedTabbedHeaderRenderer": 1,
+        "fusionSearchboxRenderer": 1,
+        "hotkeyDialogRenderer": 1,
+        "hotkeyDialogSectionOptionRenderer": 28,
+        "hotkeyDialogSectionRenderer": 4,
+        "multiPageMenuRenderer": 1,
+        "panelFooterViewModel": 1,
+        "richGridRenderer": 1,
+        "richSectionRenderer": 1,
+        "tabRenderer": 1,
+        "topbarLogoRenderer": 1,
+        "topbarMenuButtonRenderer": 1,
+        "twoColumnBrowseResultsRenderer": 1,
+        "voiceSearchDialogRenderer": 1
+      },
+      "route_changed": true,
+      "status": "redirected",
+      "url": "https://www.youtube.com/feed/trending",
+      "ytcfg_has_context": true,
+      "ytcfg_key_count": 102
+    }
+  ],
+  "status": "success",
+  "surface_map": {
+    "has_channel_contract": true,
+    "has_discovery_contract": true,
+    "has_playlist_contract": true,
+    "missing_required_primitives": [],
+    "primitive_count": 32,
+    "schema_version": 2,
+    "search_contract": {
+      "fallback_chain": [
+        "api_search_continuation",
+        "direct_search_html",
+        "browser_search_dom",
+        "browser_search_scroll",
+        "screenshot_search_state",
+        "ytdlp_ytsearch"
+      ],
+      "path_type": "api",
+      "primitive_id": "api_global_search",
+      "receipt_required": [
+        "primitive_id",
+        "path_type",
+        "source_url_or_endpoint_shape",
+        "status_or_exit_code",
+        "fallback_attempts",
+        "renderer_types",
+        "redaction_check",
+        "negative_probe"
+      ],
+      "required": [
+        "context",
+        "query"
+      ]
+    },
+    "yt_dlp_optional": true
+  },
+  "targets": [
+    {
+      "name": "search",
+      "url": "https://www.youtube.com/results?search_query=openai"
+    },
+    {
+      "name": "channel_about",
+      "url": "https://www.youtube.com/@3blue1brown/about"
+    },
+    {
+      "name": "playlist",
+      "url": "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab"
+    },
+    {
+      "name": "trending",
+      "url": "https://www.youtube.com/feed/trending"
+    }
+  ]
+}

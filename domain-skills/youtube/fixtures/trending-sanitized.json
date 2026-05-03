@@ -1,0 +1,48 @@
+{
+  "fixture": "youtube-trending-sanitized",
+  "source": "synthetic shape fixture based on trending and hashtag browse inventory",
+  "redactions": [
+    "visitorData",
+    "apiKey",
+    "trackingParams"
+  ],
+  "trending": {
+    "route": "/feed/trending",
+    "signed_out_state": "available",
+    "contents": [
+      {
+        "videoRenderer": {
+          "videoId": "TREND12345A",
+          "title": {"runs": [{"text": "Sample trending video"}]},
+          "viewCountText": {"simpleText": "123,456 views"}
+        }
+      },
+      {
+        "continuationItemRenderer": {
+          "continuationEndpoint": {
+            "continuationCommand": {
+              "token": "REDACTED_TRENDING_CONTINUATION"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "hashtag": {
+    "tag": "python",
+    "contents": [
+      {
+        "lockupViewModel": {
+          "contentId": "HASH12345AB",
+          "metadata": {
+            "lockupMetadataViewModel": {
+              "title": {
+                "content": "Sample hashtag video"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

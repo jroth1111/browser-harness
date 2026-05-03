@@ -1,0 +1,42 @@
+{
+  "fixture": "youtube-channel-videos-sanitized",
+  "source": "synthetic shape fixture based on channel videos tab browse inventory",
+  "redactions": [
+    "visitorData",
+    "apiKey",
+    "trackingParams"
+  ],
+  "contents": {
+    "richGridRenderer": {
+      "contents": [
+        {
+          "richItemRenderer": {
+            "content": {
+              "videoRenderer": {
+                "videoId": "VIDEO12345A",
+                "title": {"runs": [{"text": "Sample upload"}]},
+                "lengthText": {"simpleText": "12:34"},
+                "viewCountText": {"simpleText": "1,234 views"},
+                "publishedTimeText": {"simpleText": "1 day ago"}
+              }
+            }
+          }
+        },
+        {
+          "continuationItemRenderer": {
+            "continuationEndpoint": {
+              "continuationCommand": {
+                "token": "REDACTED_CHANNEL_CONTINUATION"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "sort_tokens": {
+    "newest": "REDACTED_SORT_NEWEST",
+    "popular": "REDACTED_SORT_POPULAR",
+    "oldest": "REDACTED_SORT_OLDEST"
+  }
+}

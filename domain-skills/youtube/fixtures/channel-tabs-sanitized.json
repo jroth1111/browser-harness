@@ -1,0 +1,59 @@
+{
+  "fixture": "youtube-channel-tabs-sanitized",
+  "source": "synthetic shape fixture based on channel shorts/playlists/community/streams tab inventory",
+  "redactions": [
+    "visitorData",
+    "apiKey",
+    "trackingParams"
+  ],
+  "trackingParams": "REDACTED_TRACKING_PARAMS",
+  "shorts": {
+    "richGridRenderer": {
+      "contents": [
+        {
+          "richItemRenderer": {
+            "content": {
+              "shortsLockupViewModel": {
+                "entityId": "shorts-sample",
+                "onTap": {
+                  "innertubeCommand": {
+                    "reelWatchEndpoint": {
+                      "videoId": "SHORT12345B"
+                    }
+                  }
+                },
+                "accessibilityText": "Sample short"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "playlists": {
+    "playlistRenderer": {
+      "playlistId": "PL_SAMPLE",
+      "title": {"simpleText": "Sample playlist"},
+      "videoCount": "7"
+    }
+  },
+  "community": {
+    "backstagePostThreadRenderer": {
+      "post": {
+        "backstagePostRenderer": {
+          "contentText": {"runs": [{"text": "Sample community post"}]},
+          "pollRenderer": {
+            "choices": []
+          }
+        }
+      }
+    }
+  },
+  "streams": {
+    "videoRenderer": {
+      "videoId": "STREAM1234A",
+      "title": {"runs": [{"text": "Sample past stream"}]},
+      "publishedTimeText": {"simpleText": "Streamed 2 weeks ago"}
+    }
+  }
+}
