@@ -521,14 +521,15 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
         cmd.append(f"--disable-extensions-except={ext_list}")
     cmd.append("about:blank")
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL, start_new_session=True)
+                            stderr=subprocess.PIPE, start_new_session=True)
     deadline = time.time() + 15
     dap_path = Path(user_data_dir) / "DevToolsActivePort"
     while time.time() < deadline:
         if proc.poll() is not None:
+            stderr = (proc.stderr.read().decode(errors="replace")[:500]) if proc.stderr else ""
             if is_temp:
                 shutil.rmtree(user_data_dir, ignore_errors=True)
-            raise RuntimeError(f"Chrome exited immediately (pid {proc.pid})")
+            raise RuntimeError(f"Chrome exited immediately (pid {proc.pid}): {stderr}")
         if dap_path.exists():
             break
         time.sleep(0.3)
@@ -538,7 +539,13 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
             shutil.rmtree(user_data_dir, ignore_errors=True)
         raise RuntimeError("Chrome did not write DevToolsActivePort within 15s")
     dap_lines = dap_path.read_text().strip().split("\n")
-    actual_port = int(dap_lines[0].strip())
+    try:
+        actual_port = int(dap_lines[0].strip())
+    except (ValueError, IndexError) as e:
+        proc.kill()
+        if is_temp:
+            shutil.rmtree(user_data_dir, ignore_errors=True)
+        raise RuntimeError(f"unexpected DevToolsActivePort format: {dap_lines!r}") from e
     ws_path = dap_lines[1].strip() if len(dap_lines) > 1 else ""
     env_ws = f"ws://127.0.0.1:{actual_port}{ws_path}"
     os.environ["BH_CDP_WS"] = env_ws

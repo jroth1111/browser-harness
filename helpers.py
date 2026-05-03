@@ -189,31 +189,33 @@ def _wait_until_load(strategy, timeout=15.0):
 
 def _wait_until_network_idle(timeout=15.0):
     """Wait until no network requests are in flight for 500ms."""
-    cdp("Network.enable")
-    drain_events()
     pending = set()
     deadline = time.time() + timeout
     idle_since = None
     result = {"ok": False, "reason": "timeout"}
-    while time.time() < deadline:
-        for ev in drain_events():
-            m = ev.get("method", "")
-            rid = (ev.get("params") or {}).get("requestId")
-            if m == "Network.requestWillBeSent" and rid:
-                pending.add(rid)
+    try:
+        cdp("Network.enable")
+        drain_events()
+        while time.time() < deadline:
+            for ev in drain_events():
+                m = ev.get("method", "")
+                rid = (ev.get("params") or {}).get("requestId")
+                if m == "Network.requestWillBeSent" and rid:
+                    pending.add(rid)
+                    idle_since = None
+                elif m in ("Network.loadingFinished", "Network.loadingFailed") and rid:
+                    pending.discard(rid)
+            if not pending:
+                if idle_since is None:
+                    idle_since = time.time()
+                elif time.time() - idle_since >= 0.5:
+                    result = {"ok": True, "reason": "networkidle"}
+                    break
+            else:
                 idle_since = None
-            elif m in ("Network.loadingFinished", "Network.loadingFailed") and rid:
-                pending.discard(rid)
-        if not pending:
-            if idle_since is None:
-                idle_since = time.time()
-            elif time.time() - idle_since >= 0.5:
-                result = {"ok": True, "reason": "networkidle"}
-                break
-        else:
-            idle_since = None
-        time.sleep(0.1)
-    cdp("Network.disable")
+            time.sleep(0.1)
+    finally:
+        cdp("Network.disable")
     if not result["ok"]:
         result["pending_requests"] = len(pending)
     return result
@@ -1747,6 +1749,10 @@ class NetworkCapture:
     Call ``start()`` before navigation, ``poll()`` after to drain buffered CDP
     events and populate the log.  Response body capture is opt-in via
     *capture_bodies=True* (calls ``Network.getResponseBody`` per response).
+
+    **Do not** call ``smart_wait()`` or ``_wait_until_network_idle()`` while
+    NetworkCapture is active — they call ``drain_events()`` (stealing events)
+    and ``Network.disable`` (killing the event stream).
     """
 
     def __init__(self, capture_bodies=False, max_entries=1000):
@@ -1986,8 +1992,9 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
                 resp = http_get_browser_session_response(url, timeout=timeout)
                 replay_status, replay_ct = resp.get("status", 0), resp.get("headers", {}).get("content-type", "")
             else:
-                http_get(url, timeout=timeout)
-                replay_status, replay_ct = 200, ""
+                req = urllib.request.Request(url, headers={"User-Agent": _real_user_agent()})
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    replay_status, replay_ct = r.status, r.headers.get("Content-Type", "")
             orig_status = ep.get("status", 0)
             orig_ct = ep.get("content_type", "")
             ct_match = (replay_ct.split(";")[0].strip().lower()
