@@ -4,23 +4,24 @@
 
 When Chrome opens fresh, the only CDP `type: "page"` targets are `chrome://inspect` and `chrome://omnibox-popup.top-chrome/` (a 1px invisible viewport). If the daemon attaches to the omnibox popup, all subsequent work — including `new_tab()` and `goto_url()` — happens on tabs that exist in CDP but may not be visible in the Chrome UI.
 
-The daemon's `attach_first_page()` handles this by creating an `about:blank` tab when no real pages exist. If you still end up on an invisible tab, use `switch_tab()` which calls `Target.activateTarget` to bring the tab to front.
+The daemon handles this internally by creating an `about:blank` tab when no real pages exist. If you still end up on an invisible tab, use `switch_tab()` which calls `Target.activateTarget` to bring the tab to front.
 
 ## Startup sequence
 
-1. Check if a daemon is already running with `daemon_alive()`
-2. If stale sockets exist but daemon is dead, clean them up
-3. List open tabs with `list_tabs()` to see what's available
-4. `ensure_real_tab()` attaches to a real page
-5. `switch_tab(target_id)` both attaches AND activates (brings to front)
+`run.py` starts the daemon automatically before executing any code — you never call
+`ensure_daemon()` or `daemon_alive()` yourself. If `browser-harness --doctor` reports
+problems, the daemon socket may be stale. The socket lives at `/tmp/bh-default.sock`
+(or `/tmp/bh-{name}.sock` when `BH_NAME` is set).
+
+If you need to recover from a stale daemon manually:
+
+```bash
+browser-harness --doctor
+```
+
+For tab-level recovery from a helper script:
 
 ```python
-if not daemon_alive():
-    import os
-    for f in ["/tmp/bu-default.sock", "/tmp/bu-default.pid"]:
-        if os.path.exists(f): os.unlink(f)
-    ensure_daemon()
-
 tabs = list_tabs()
 for t in tabs:
     print(t["url"][:60])
