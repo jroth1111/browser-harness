@@ -1,22 +1,30 @@
 """Response wrapper with lazy lxml parsing for CSS/XPath queries."""
 
+_MAX_RESPONSE_CHARS = 2 * 1024 * 1024  # 2MB
+
 
 class Response:
     """Query wrapper around fetched HTML.
 
     Returned by ``fetch()`` in helpers.py. Lazily parses HTML on first
     ``.css()`` / ``.xpath()`` call so plain-text-only usage pays zero
-    lxml overhead.
+    lxml overhead. HTML and text are truncated at 2MB; set ``truncated``
+    when either field was cut.
     """
 
-    def __init__(self, html, text, url, status, source, headers=None, encoding="utf-8"):
-        self.html = html or ""
-        self.text = text or ""
-        self.url = url
+    def __init__(self, html, text, url, status, source, headers=None,
+                 encoding="utf-8", turnstile_solved=False):
+        raw_html = html or ""
+        raw_text = text or ""
+        self.html = raw_html[:_MAX_RESPONSE_CHARS]
+        self.text = raw_text[:_MAX_RESPONSE_CHARS]
+        self.truncated = len(raw_html) > _MAX_RESPONSE_CHARS or len(raw_text) > _MAX_RESPONSE_CHARS
+        self.url = url or ""
         self.status = status
         self.source = source  # "http" | "session" | "browser" | "auto"
         self.headers = headers or {}
         self.encoding = encoding
+        self.turnstile_solved = turnstile_solved
         self._tree = None
 
     @property
@@ -24,11 +32,16 @@ class Response:
         """Parsed lxml tree. Built on first access."""
         if self._tree is None:
             from lxml.html import fromstring, HTMLParser
-
-            self._tree = fromstring(
-                self.html or "<html><body></body></html>",
-                parser=HTMLParser(recover=True, encoding="utf-8"),
-            )
+            try:
+                self._tree = fromstring(
+                    self.html.strip() or "<html><body></body></html>",
+                    parser=HTMLParser(recover=True, encoding="utf-8"),
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"HTML parse failed for {self.url} (source={self.source}, "
+                    f"html={len(self.html)} chars): {e}"
+                ) from e
         return self._tree
 
     def css(self, selector):
@@ -50,8 +63,12 @@ class Response:
             for el in self.xpath(expr)
         ]
 
-    def __repr__(self):
+    def summary(self):
         return (
             f"Response(url={self.url!r}, status={self.status}, "
-            f"source={self.source!r}, html={len(self.html)}, text={len(self.text)})"
+            f"source={self.source!r}, html={len(self.html)}, text={len(self.text)}"
+            f"{', truncated' if self.truncated else ''})"
         )
+
+    def __repr__(self):
+        return self.summary()
