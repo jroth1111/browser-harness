@@ -12,6 +12,7 @@ from admin import (
     run_update,
 )
 from helpers import *
+from response import Response
 
 HELP = """Browser Harness
 
@@ -77,18 +78,35 @@ def main():
         sys.exit(run_setup(accept_remote_debugging_dialog="--accept-remote-debugging-dialog" in args[1:]))
     if args and args[0] == "--launch-profile":
         if len(args) < 2 or args[1].startswith("-"):
-            sys.exit("Usage: browser-harness --launch-profile PATH [--port PORT] [--url URL] [--chrome PATH] [--json]")
+            sys.exit("Usage: browser-harness --launch-profile PATH [--port PORT] [--url URL] [--chrome PATH] [--headless] [--window-size WxH] [--json]")
         profile_path = args[1]
         port = 9222
         url = "about:blank"
         chrome_path = None
         json_output = False
+        headless = False
+        window_size = None
         i = 2
         while i < len(args):
             flag = args[i]
             if flag == "--json":
                 json_output = True
                 i += 1
+                continue
+            if flag == "--headless":
+                headless = True
+                i += 1
+                continue
+            if flag == "--window-size":
+                if i + 1 >= len(args):
+                    print("--window-size requires WxH value", file=sys.stderr)
+                    sys.exit(2)
+                parts = args[i + 1].split("x")
+                if len(parts) != 2 or not all(p.isdigit() for p in parts):
+                    print(f"invalid --window-size value: {args[i + 1]} (expected WxH)", file=sys.stderr)
+                    sys.exit(2)
+                window_size = (int(parts[0]), int(parts[1]))
+                i += 2
                 continue
             if flag not in {"--port", "--url", "--chrome"} or i + 1 >= len(args):
                 print(f"unsupported --launch-profile flag: {flag}", file=sys.stderr)
@@ -105,7 +123,8 @@ def main():
             elif flag == "--chrome":
                 chrome_path = value
             i += 2
-        sys.exit(run_launch_profile(profile_path, port=port, url=url, chrome_path=chrome_path, json_output=json_output))
+        sys.exit(run_launch_profile(profile_path, port=port, url=url, chrome_path=chrome_path,
+                                    headless=headless, window_size=window_size, json_output=json_output))
     if args and args[0] == "--skill-learning-gate":
         _skill_learning_gate_main()(args[1:])
         return

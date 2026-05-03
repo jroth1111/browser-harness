@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 dependencies = [
     "cdp-use==1.4.5",
     "websockets==16.0",
+    "lxml>=5.0",
+    "cssselect>=1.2",
 ]
 
 [dependency-groups]
@@ -22,7 +24,7 @@ browser-harness = "run:main"
 browser-harness-skill-learning-gate = "skill_learning_gate:main"
 
 [tool.setuptools]
-py-modules = ["run", "helpers", "daemon", "admin", "login_session", "lightpanda_control", "data_display", "skill_learning_gate"]
+py-modules = ["run", "helpers", "response", "daemon", "admin", "login_session", "lightpanda_control", "data_display", "skill_learning_gate"]
 packages = ["browser_harness_domain_skills", "browser_harness_interaction_skills", "browser_harness_docs", "browser_harness_assets"]
 
 [tool.setuptools.package-dir]
@@ -41,6 +43,7 @@ browser_harness_assets = ["*.js"]
 browser_harness_domain_skills = [
     "**/.private-data/**",
     "**/.session-store/**",
+    "**/outputs/**",
     "**/__pycache__/**",
     "**/*.pyc",
 ]

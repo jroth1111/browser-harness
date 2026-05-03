@@ -1,5 +1,5 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
-import base64, json, os, socket, time, urllib.request
+import atexit, base64, json, os, socket, time, urllib.request
 from importlib.resources import files
 from pathlib import Path
 from urllib.parse import urlparse
@@ -24,6 +24,8 @@ NAME = os.environ.get("BH_NAME", "default")
 SOCK = f"/tmp/bh-{NAME}.sock"
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
 
+_sock = None
+
 
 def _asset_dir(local_name, package_name):
     local = Path(__file__).parent / local_name
@@ -35,14 +37,38 @@ def _asset_dir(local_name, package_name):
         return local
 
 
+def _reconnect():
+    global _sock
+    if _sock is not None:
+        try:
+            _sock.close()
+        except OSError:
+            pass
+    _sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    _sock.connect(SOCK)
+
+
 def _send(req):
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-        s.connect(SOCK)
-        s.sendall((json.dumps(req) + "\n").encode())
+    global _sock
+    if _sock is None:
+        _reconnect()
+    payload = (json.dumps(req) + "\n").encode()
+    try:
+        _sock.sendall(payload)
         data = b""
         while not data.endswith(b"\n"):
-            chunk = s.recv(1 << 20)
-            if not chunk: break
+            chunk = _sock.recv(1 << 20)
+            if not chunk:
+                break
+            data += chunk
+    except OSError:
+        _reconnect()
+        _sock.sendall(payload)
+        data = b""
+        while not data.endswith(b"\n"):
+            chunk = _sock.recv(1 << 20)
+            if not chunk:
+                break
             data += chunk
     r = json.loads(data)
     if "error" in r: raise RuntimeError(r["error"])
@@ -777,3 +803,128 @@ def http_get(url, headers=None, timeout=20.0):
             except (OSError, EOFError):
                 pass
         return data.decode()
+
+
+def detect_turnstile(timeout=5.0):
+    """Check if a Cloudflare Turnstile challenge iframe is present on the current page.
+
+    Returns ``{"found": bool, "iframe_target_id": str|None}``.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for t in cdp("Target.getTargets").get("targetInfos", []):
+            if t.get("type") == "iframe" and "challenges.cloudflare.com" in t.get("url", ""):
+                return {"found": True, "iframe_target_id": t["targetId"]}
+        # Also check for turnstile script in DOM
+        has_script = js("""!!document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]')""")
+        if has_script:
+            return {"found": True, "iframe_target_id": None}
+        time.sleep(0.5)
+    return {"found": False, "iframe_target_id": None}
+
+
+def solve_turnstile(timeout=30.0, poll=1.0):
+    """Click the Cloudflare Turnstile checkbox and wait for challenge completion.
+
+    Requires a visible browser (headful or headless with virtual display).
+    Returns ``{"solved": bool, "reason": str}``.
+    """
+    detection = detect_turnstile(timeout=5.0)
+    if not detection["found"]:
+        return {"solved": False, "reason": "no_turnstile_found"}
+
+    # The Turnstile checkbox is inside a nested iframe. click_at_xy handles
+    # cross-origin hit-testing through Chrome's browser process, so we just
+    # need the checkbox bounding box from the main frame's perspective.
+    # The checkbox is typically ~28x28px in the top-right area of the widget.
+    checkbox = js("""(() => {
+        const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+        if (!iframe) return null;
+        const r = iframe.getBoundingClientRect();
+        // The checkbox is offset from the iframe's top-left corner
+        return {x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height};
+    })()""")
+    if not checkbox:
+        return {"solved": False, "reason": "iframe_bbox_not_found"}
+
+    x, y = float(checkbox["x"]), float(checkbox["y"])
+    click_at_xy(x, y)
+
+    # Wait for content to appear after solving
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status = page_content_status()
+        if status.get("ok") or (int(status.get("textLength") or 0) >= 200 and
+                                 not status.get("block", {}).get("blocked")):
+            return {"solved": True, "reason": "content_appeared"}
+        time.sleep(poll)
+    return {"solved": False, "reason": "timeout"}
+
+
+def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
+    """Fetch URL and return a ``Response`` with CSS/XPath query support.
+
+    *source* selects the fetch strategy:
+
+    - ``"http"``: plain HTTP via ``http_get()`` — fastest, no browser state.
+    - ``"session"``: HTTP with browser cookies via ``http_get_browser_session()``.
+    - ``"browser"``: real browser navigation via ``new_tab()`` + ``wait_for_content()``.
+    - ``"auto"`` (default): tries HTTP, then session, then browser.
+    """
+    from response import Response
+
+    def _make(text, url_, status, src):
+        return Response(html=text, text=text, url=url_, status=status, source=src)
+
+    if source == "http":
+        text = http_get(url, headers=headers, timeout=timeout)
+        return _make(text, url, 200, "http")
+
+    if source == "session":
+        result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
+        return _make(result.get("text", ""), result.get("url", url), result.get("status", 0), "session")
+
+    if source == "browser":
+        tid = None
+        try:
+            tid = new_tab(url)
+            wait_for_load(timeout=timeout)
+            status = wait_for_content(min_text=min_text, timeout=timeout)
+            html = js("document.documentElement.outerHTML") or ""
+            return Response(html=html, text=status.get("text", ""), url=status.get("url", url),
+                            status=200 if status.get("ok") else 0, source="browser")
+        finally:
+            if tid:
+                close_tab(tid)
+
+    # source="auto": cascade http → session → browser
+    text = None
+    try:
+        text = http_get(url, headers=headers, timeout=timeout)
+        block = detect_block_page(html=text, text=text, url=url)
+        if not block.get("blocked") and len(text.strip()) >= min_text:
+            return _make(text, url, 200, "http")
+    except Exception:
+        pass
+
+    try:
+        result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
+        if result.get("ok"):
+            return _make(result.get("text", ""), result.get("url", url), result.get("status", 0), "session")
+    except Exception:
+        pass
+
+    return fetch(url, source="browser", headers=headers, timeout=timeout, min_text=min_text)
+
+
+def _close_sock():
+    global _sock
+    if _sock is not None:
+        try:
+            _sock.close()
+        except OSError:
+            pass
+        _sock = None
+
+
+atexit.register(_close_sock)

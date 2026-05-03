@@ -375,8 +375,9 @@ def _validate_port(port):
     return port
 
 
-def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_path=None):
-    """Launch visible Chrome with a loopback CDP endpoint and explicit profile."""
+def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_path=None,
+                           headless=False, window_size=None):
+    """Launch Chrome with a loopback CDP endpoint and explicit profile."""
     import subprocess
     profile = Path(profile_path).expanduser()
     profile.mkdir(parents=True, exist_ok=True)
@@ -392,8 +393,12 @@ def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_pa
         "--no-first-run",
         "--no-default-browser-check",
         "--new-window",
-        url,
     ]
+    if headless:
+        cmd.append("--headless=new")
+    if window_size:
+        cmd.append(f"--window-size={window_size[0]},{window_size[1]}")
+    cmd.append(url)
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     return {
         "pid": proc.pid,
@@ -404,11 +409,13 @@ def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_pa
     }
 
 
-def run_launch_profile(profile_path, port=9222, url="about:blank", chrome_path=None, json_output=False):
-    """CLI wrapper for launching an agent-owned headful Chrome profile."""
+def run_launch_profile(profile_path, port=9222, url="about:blank", chrome_path=None,
+                       headless=False, window_size=None, json_output=False):
+    """CLI wrapper for launching an agent-owned Chrome profile."""
     import sys
     try:
-        result = launch_headful_profile(profile_path, port=port, url=url, chrome_path=chrome_path)
+        result = launch_headful_profile(profile_path, port=port, url=url, chrome_path=chrome_path,
+                                        headless=headless, window_size=window_size)
     except Exception as e:
         print(f"launch failed: {e}", file=sys.stderr)
         return 1
@@ -494,6 +501,8 @@ def _scan_active_files(patterns):
         "README.md",
         "pyproject.toml",
         "docs/local-cdp-providers.md",
+        "docs/reference.md",
+        "docs/contributing-guide.md",
     ]
     hits = []
     root = Path(__file__).resolve().parent
