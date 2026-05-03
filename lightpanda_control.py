@@ -7,7 +7,6 @@ shape used by login_session.py.
 """
 import json
 import os
-import signal
 import socket
 import subprocess
 import time
@@ -207,7 +206,7 @@ class LightpandaServer:
             self.client = None
         if self.proc:
             try:
-                os.kill(self.proc.pid, signal.SIGTERM)
+                self.proc.terminate()
                 self.proc.wait(timeout=5)
             except Exception:
                 try:

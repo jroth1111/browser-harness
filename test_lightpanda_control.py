@@ -117,8 +117,7 @@ def test_lightpanda_server_launches_serve_and_closes_process(tmp_path):
 
     with patch("subprocess.Popen", return_value=proc) as popen, \
          patch("lightpanda_control.wait_json_version", return_value={"webSocketDebuggerUrl": "ws://127.0.0.1:9222/"}) as wait_version, \
-         patch("lightpanda_control.LightpandaCDP") as cdp_class, \
-         patch("os.kill") as kill:
+         patch("lightpanda_control.LightpandaCDP") as cdp_class:
         cdp_class.return_value.ensure_page.return_value = "SID-1"
         server = lightpanda_control.LightpandaServer("/bin/lightpanda", port=9222, log_path=tmp_path / "lp.log")
         server.start()
@@ -137,5 +136,5 @@ def test_lightpanda_server_launches_serve_and_closes_process(tmp_path):
     cdp_class.assert_called_once_with("ws://127.0.0.1:9222/")
     cdp_class.return_value.ensure_page.assert_called_once_with()
     cdp_class.return_value.close.assert_called_once_with()
-    kill.assert_called_once()
+    proc.terminate.assert_called_once()
     proc.wait.assert_called_once_with(timeout=5)
