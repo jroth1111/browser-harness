@@ -126,6 +126,9 @@ def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog
             else:
                 print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
             restart_daemon(name)
+            if p.poll() is None:
+                try: p.wait(timeout=3)
+                except Exception: pass
             continue
         if p.poll() is None:
             try: p.wait(timeout=3)
