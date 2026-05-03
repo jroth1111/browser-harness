@@ -65,6 +65,8 @@ If nothing matches: scan `domain-skills/` with `rg --files domain-skills/<site>`
 - Structured fetching: `fetch(url)` returns a `Response` with `.css(selector)`, `.css_text(selector)`, `.xpath(expr)`, `.text`, `.html`. Use `source="http"` for static pages, `source="session"` after seeding, `source="browser"` for JS-required pages, `source="auto"` (default) to cascade.
 - Cloudflare Turnstile: when `wait_for_content()` reports a blocked page on a Cloudflare site, try `detect_turnstile()` → `solve_turnstile()`. Requires a visible browser.
 - Resource blocking: `block_resources()` installs a CDP route to block ad domains and/or resource types on the current page. Call after navigation.
+- Google referrer trick: `navigate_via_google(url)` opens Google first, then redirects to the target. Some WAF systems treat search-engine referrals as organic traffic.
+- Block detection: `detect_block_page()` now identifies Kasada, Akamai, PerimeterX, Imperva, and generic WAF challenge shells (not just Kasada).
 
 ## Search domain-skills/ first
 

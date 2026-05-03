@@ -98,6 +98,20 @@ def goto_url(url):
     d = (_asset_dir("domain-skills", "browser_harness_domain_skills") / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
     return {**r, "domain_skills": sorted(p.name for p in d.rglob("*.md"))[:10]} if d.is_dir() else r
 
+def navigate_via_google(url, google_base="https://www.google.com"):
+    """Navigate to URL with Google as the HTTP Referer.
+
+    Opens Google first, then redirects to the target URL. Some WAF systems
+    (Cloudflare, Akamai) treat search-engine referrals as organic traffic and
+    apply lighter challenge requirements. Returns the goto_url() result dict.
+    """
+    goto_url(google_base)
+    wait_for_load(timeout=10.0)
+    # Use JS navigation so the browser sends Google as the referrer
+    js(f"location.href = {json.dumps(url)}")
+    wait_for_load(timeout=15.0)
+    return page_info()
+
 def page_info():
     """{url, title, w, h, sx, sy, pw, ph} - viewport + scroll + page size.
 
@@ -142,19 +156,59 @@ def detect_block_page(html="", text="", url=""):
     text = text or ""
     url = url or ""
     haystack = "\n".join((html, text, url)).lower()
+    html_len = len(html)
     stripped_text = text.strip()
     evidence = []
     kind = None
 
+    # Kasada/KPSDK
     kpsdk_hits = [s for s in ("window.kpsdk", "x-kpsdk", "kp_uidz", "/ips.js") if s in haystack]
-    if len(kpsdk_hits) >= 2 and (not stripped_text or len(html) < 8000):
+    if len(kpsdk_hits) >= 2 and (not stripped_text or html_len < 8000):
         kind = "kasada_kpsdk"
         evidence.extend(kpsdk_hits)
 
-    akamai_hits = [s for s in ("access denied", "errors.edgesuite.net", "failover-waf") if s in haystack]
-    if not kind and len(akamai_hits) >= 2:
-        kind = "akamai_access_denied"
-        evidence.extend(akamai_hits)
+    # Akamai — expanded with Crawl4AI's Reference # patterns
+    if not kind:
+        akamai_hits = [s for s in (
+            "reference #", "pardon our interruption", "errors.edgesuite.net",
+            "failover-waf", "access denied", "akamai",
+            "_abck", "akamai_sw",
+        ) if s in haystack]
+        if len(akamai_hits) >= 2 or ("reference #" in haystack and html_len < 10000):
+            kind = "akamai"
+            evidence.extend(akamai_hits[:3])
+
+    # PerimeterX
+    if not kind:
+        px_hits = [s for s in (
+            "_pxappid", "window._px", "collector.perimeterx.net",
+            "captcha.px-cdn.net", "human security challenge",
+            "px-cdn.net", "_pxmvid",
+        ) if s in haystack]
+        if len(px_hits) >= 2 or ("_pxappid" in haystack and html_len < 10000):
+            kind = "perimeterx"
+            evidence.extend(px_hits[:3])
+
+    # Imperva/Incapsula
+    if not kind:
+        imperva_hits = [s for s in (
+            "_incapsula_resource", "incident id", "x-iinfo",
+            "imperva", "incapsula",
+        ) if s in haystack]
+        if len(imperva_hits) >= 2:
+            kind = "imperva"
+            evidence.extend(imperva_hits[:3])
+
+    # Generic WAF shell — small page with block indicators (Crawl4AI tier 2/3)
+    if not kind and html_len < 10000:
+        generic_hits = [s for s in (
+            "checking your browser", "just a moment",
+            "please verify you are human", "are you a robot",
+            "blocked by security", "request blocked",
+        ) if s in haystack]
+        if generic_hits:
+            kind = "waf_generic"
+            evidence.extend(generic_hits[:2])
 
     if not kind:
         return {"blocked": False, "kind": None, "evidence": []}
@@ -536,12 +590,21 @@ def click_at_xy(x, y, button="left", clicks=1, humanize=False, steps=12):
             print(f"[debug_click] overlay failed: {e}")
         _debug_click_counter += 1
     if humanize:
-        start_x = max(0, x - 40)
-        start_y = y
+        import random
+        # Randomize final click position within ±5px to avoid pixel-exact repetition
+        jitter_x = random.uniform(-5, 5)
+        jitter_y = random.uniform(-5, 5)
+        target_x, target_y = x + jitter_x, y + jitter_y
+        # Move from a random starting position with eased interpolation
+        start_x = max(0, x - random.randint(30, 60))
+        start_y = y + random.randint(-20, 20)
         for i in range(1, max(2, steps) + 1):
             t = i / max(2, steps)
             eased = t * t * (3 - 2 * t)
-            cdp("Input.dispatchMouseEvent", type="mouseMoved", x=start_x + (x - start_x) * eased, y=start_y + (y - start_y) * eased)
+            cdp("Input.dispatchMouseEvent", type="mouseMoved",
+                x=start_x + (target_x - start_x) * eased,
+                y=start_y + (target_y - start_y) * eased)
+        x, y = target_x, target_y
     cdp("Input.dispatchMouseEvent", type="mousePressed", x=x, y=y, button=button, clickCount=clicks)
     cdp("Input.dispatchMouseEvent", type="mouseReleased", x=x, y=y, button=button, clickCount=clicks)
 
