@@ -1,25 +1,37 @@
 # DoorDash — Platform Guide
 
-Field-testing status: PENDING. Selectors and URL patterns below are anticipated
-and must be confirmed during first live session.
+Field-tested against doordash.com on 2026-05-04.
+
+**Cloudflare Turnstile**: DoorDash uses Cloudflare Turnstile on all pages. The home
+page loads as a marketing/landing page with Turnstile running in background.
+Search and store pages show a full-page Cloudflare challenge ("Verify you are human").
+Use `detect_turnstile()` → `solve_turnstile()` from browser-harness after navigation.
+If Turnstile fails, the page shows "Verification failed" and blocks further access.
 
 ## URLs
 
 | Page | URL | Notes |
 |---|---|---|
-| Home / feed | `https://www.doordash.com/` | Requires location; may prompt for address |
-| Search | `https://www.doordash.com/search/store/{query}` | Direct URL (pattern to confirm) |
+| Home / feed | `https://www.doordash.com/` | Landing page when logged out; Cloudflare Turnstile present |
+| Search | `https://www.doordash.com/search/store/{query}` | CONFIRMED: triggers full-page Cloudflare challenge when logged out |
 | Restaurant menu | `https://www.doordash.com/store/{restaurant-slug}-{store_id}` | Slug + numeric ID |
 | Cart / checkout | `https://www.doordash.com/checkout` | After adding items |
 | Order tracking | `https://www.doordash.com/orders/{order_id}/track` | Live order status |
-| Order history | `https://www.doordash.com/orders` | Past orders list |
+| Order history | `https://www.doordash.com/orders/` | CONFIRMED URL from footer link |
 | Account | `https://www.doordash.com/account` | Address, payment, DashPass |
 
 ## Auth detection
 
 - **Logged in**: delivery address in header, user avatar present, no "Sign in" prompt.
-- **Not logged in**: "Sign In" / "Sign Up" buttons prominent, may redirect to auth wall.
+- **Not logged out (CONFIRMED)**: login modal appears as dialog overlay with iframe to `identity.doordash.com/auth`. Contains Google/Facebook/Apple OAuth + email/password form. Dismissible via close button — reveals marketing landing page.
+- **Not logged in footer**: "Sign In" link points to `identity.doordash.com/auth`.
 - **DashPass indicator**: DashPass logo or badge visible when subscribed (affects pricing display).
+
+Landing page elements (CONFIRMED):
+- `combobox "Enter delivery address"` — address input
+- `button "Find Restaurants"` — triggers search after address entry
+- `button "Use current Location"` — geolocation alternative
+- Tabs: "Top Cities", "Top Cuisines", "Top Chains"
 
 ## Navigation
 
@@ -27,8 +39,11 @@ and must be confirmed during first live session.
 tid = new_tab("https://www.doordash.com/")
 result = wait_for_content()
 if result["block"]:
+    # Cloudflare Turnstile challenge likely
     capture_screenshot()
-    # stop and notify user
+    detect_turnstile()
+    solve_turnstile()
+    # stop and ask user if still blocked
 ```
 
 ## Restaurant list extraction — STATUS: NEEDS_FIELD_TESTING
@@ -140,7 +155,8 @@ Target fields per order:
 
 ## Anti-detection notes
 
-- Same principles as Uber Eats: variable timing, natural browsing patterns, session limits.
-- DoorDash has been known to use PerimeterX bot detection.
+- **CONFIRMED: Cloudflare Turnstile** on all pages. Home page loads with Turnstile iframe; search/store pages show full challenge.
+- DoorDash also known to use PerimeterX on some routes.
 - If `wait_for_content()` reports a block, follow `safety.md` and `interaction-skills/waf-bypass.md`.
+- The logged-out landing page loads without challenge but restaurant listings require passing Turnstile.
 - Respect session limits in `safety.md`.

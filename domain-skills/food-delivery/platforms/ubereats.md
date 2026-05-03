@@ -1,7 +1,11 @@
 # Uber Eats — Platform Guide
 
-Field-testing status: PENDING. Selectors and URL patterns below are anticipated
-and must be confirmed during first live session.
+Field-tested against ubereats.com on 2026-05-04.
+
+**Hard block**: Navigating to `ubereats.com` returns "access denied" immediately —
+no page content renders. Likely WAF/bot detection at the CDN layer. Requires a
+seeded browser session (user logged in via their real Chrome) or alternative
+approach (see Anti-detection notes).
 
 ## URLs
 
@@ -23,11 +27,14 @@ and must be confirmed during first live session.
 ## Navigation
 
 ```python
-# Always use new_tab() for first visit in a session
+# CONFIRMED: direct navigation returns "access denied" in unauthenticated CDP sessions.
+# Must use a seeded user browser session.
 tid = new_tab("https://www.ubereats.com/")
 result = wait_for_content()
 if result["block"]:
-    # stop and notify user
+    # "access denied" — user must be logged into Uber Eats in their Chrome
+    # Try: seed_browser_session("https://www.ubereats.com/") first
+    # Or ask user to open Uber Eats in their browser and navigate there
     capture_screenshot()
 ```
 
@@ -131,7 +138,10 @@ Target fields per order:
 
 ## Anti-detection notes
 
-- Both platforms actively detect automated browsing.
+- **CONFIRMED: hard WAF block**. `ubereats.com` returns "access denied" for CDP-connected browsers that aren't authenticated. No Turnstile challenge — just flat denial.
+- Requires user to be logged into Uber Eats in their running Chrome before automation begins.
+- Try `seed_browser_session("https://www.ubereats.com/")` to establish a valid session.
+- If `seed_browser_session` fails, the user must manually visit Uber Eats and log in first.
 - Vary timing between navigations (2-5s between restaurant pages).
 - Do not scrape all restaurants in a feed sequentially — browse naturally.
 - Take breaks after 15-20 page loads.
