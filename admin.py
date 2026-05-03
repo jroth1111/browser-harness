@@ -551,6 +551,9 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
     os.environ["BH_CDP_WS"] = env_ws
     restart_daemon()
     ensure_daemon()
+    # Close stderr pipe to avoid leaking the file descriptor
+    if proc.stderr:
+        proc.stderr.close()
     return {
         "pid": proc.pid,
         "port": actual_port,
@@ -563,20 +566,27 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
 
 def close_browser(launch_info):
     """Close a browser launched by launch_browser()."""
-    import signal
+    import signal, shutil
     restart_daemon()
     pid = launch_info.get("pid")
+    proc = launch_info.get("_proc")
     if pid:
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
             pass
+        else:
+            # Wait for the process to actually exit so file handles are released
+            if proc is not None:
+                try:
+                    proc.wait(timeout=10)
+                except Exception:
+                    proc.kill()
     if launch_info.get("temp_profile"):
-        import shutil
         shutil.rmtree(launch_info["profile_path"], ignore_errors=True)
 
 
-
+def run_setup(accept_remote_debugging_dialog=False):
     """Interactive bootstrap: attach to the running browser, guiding the user through chrome://inspect if needed.
 
     Exit code 0 on success, 1 on failure."""
