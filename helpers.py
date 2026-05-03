@@ -3,7 +3,7 @@ import atexit, base64, json, os, re, socket, time, urllib.error, urllib.request
 from collections import deque
 from importlib.resources import files
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 import login_session
 
 
@@ -883,27 +883,110 @@ def upload_file(selector, path):
     if not nid: raise RuntimeError(f"no element for {selector}")
     cdp("DOM.setFileInputFiles", files=[path] if isinstance(path, str) else list(path), nodeId=nid)
 
+INTERACTIVE_ROLES = frozenset((
+    "button", "link", "textbox", "checkbox", "radio", "combobox",
+    "listbox", "menuitem", "menuitemcheckbox", "menuitemradio",
+    "option", "searchbox", "slider", "spinbutton", "switch",
+    "tab", "treeitem", "Iframe",
+))
+
+CONTENT_ROLES = frozenset((
+    "heading", "cell", "gridcell", "columnheader", "rowheader",
+    "listitem", "article", "region", "main", "navigation",
+))
+
+STRUCTURAL_ROLES = frozenset((
+    "generic", "group", "list", "table", "row", "rowgroup",
+    "grid", "treegrid", "menu", "menubar", "toolbar", "tablist",
+    "tree", "directory", "document", "application", "presentation",
+    "none", "WebArea", "RootWebArea",
+))
+
+_PROPS_OF_INTEREST = frozenset(("checked", "expanded", "selected", "disabled", "required", "level"))
+
+_ref_map = {}
+_ref_seq = 0
+
+
 def _ax_value(field):
     if isinstance(field, dict):
         return field.get("value", "")
     return field or ""
 
-def ax_snapshot(max_nodes=120):
-    """Explicit accessibility-tree snapshot. Not enabled or collected on attach."""
+
+def _ax_props(node):
+    props = node.get("properties") or []
+    out = {}
+    for p in props:
+        name = p.get("name")
+        if name in _PROPS_OF_INTEREST:
+            val = p.get("value", {})
+            out[name] = val.get("value") if isinstance(val, dict) else val
+    return out
+
+
+def ax_snapshot(max_nodes=120, compact=False):
+    """Accessibility-tree snapshot.
+
+    compact=True returns only interactive + named content nodes as compact
+    strings with stable eN refs (e.g. ``button "Login" [ref=e0]``). The ref
+    map is populated for use with click_ref(). Default mode returns the
+    original list-of-dicts format.
+    """
+    global _ref_map, _ref_seq
     nodes = cdp("Accessibility.getFullAXTree").get("nodes", [])
+    if not compact:
+        out = []
+        for node in nodes[:max_nodes]:
+            role = _ax_value(node.get("role"))
+            name = _ax_value(node.get("name"))
+            value = _ax_value(node.get("value"))
+            if not role and not name and not value:
+                continue
+            out.append({
+                "ref": node.get("backendDOMNodeId") or node.get("nodeId"),
+                "role": role,
+                "name": name,
+                "value": value,
+            })
+        return out
+    # Compact mode: filtered, token-efficient output with stable refs
+    _ref_map = {}
+    _ref_seq = 0
     out = []
-    for node in nodes[:max_nodes]:
+    for node in nodes:
         role = _ax_value(node.get("role"))
         name = _ax_value(node.get("name"))
         value = _ax_value(node.get("value"))
-        if not role and not name and not value:
+        if role in STRUCTURAL_ROLES:
             continue
-        out.append({
-            "ref": node.get("backendDOMNodeId") or node.get("nodeId"),
+        if role == "StaticText" and not name:
+            continue
+        is_interactive = role in INTERACTIVE_ROLES
+        is_content = role in CONTENT_ROLES and name
+        if not is_interactive and not is_content:
+            continue
+        ref = f"e{_ref_seq}"
+        _ref_map[ref] = {
+            "backend_node_id": node.get("backendDOMNodeId"),
             "role": role,
             "name": name,
-            "value": value,
-        })
+            "nth": _ref_seq,
+        }
+        _ref_seq += 1
+        parts = [role]
+        if name:
+            parts.append(f'"{name}"')
+        attrs = [f"ref={ref}"]
+        for k, v in _ax_props(node).items():
+            if v is not None and v is not False:
+                attrs.append(f"{k}={v}")
+        parts.append(f"[{', '.join(attrs)}]")
+        if value and value != name:
+            parts.append(f": {value}")
+        out.append(" ".join(parts))
+        if len(out) >= max_nodes:
+            break
     return out
 
 
@@ -969,8 +1052,116 @@ class CrawlState:
             "estimated_unseen": self.estimated_unseen(),
         }
 
+    def save(self, path):
+        """Serialize crawl state to JSON. Returns *path* for chaining."""
+        data = {
+            "key_field": self.key_field,
+            "marginal_window": self._marginal.maxlen,
+            "occurrences": self._occurrences,
+            "records": self._records,
+            "dup_attempts": self._dup_attempts,
+            "blocked": self._blocked,
+            "scope_totals": self._scope_totals,
+            "marginal": list(self._marginal),
+        }
+        Path(path).write_text(json.dumps(data, default=str))
+        return path
 
-def field_triage(records):
+    @staticmethod
+    def load(path):
+        """Deserialize crawl state from JSON. Returns a new CrawlState."""
+        data = json.loads(Path(path).read_text())
+        cs = CrawlState(data["key_field"], marginal_window=data.get("marginal_window", 5))
+        cs._occurrences = data.get("occurrences", {})
+        cs._records = data.get("records", [])
+        cs._dup_attempts = data.get("dup_attempts", 0)
+        cs._blocked = data.get("blocked", [])
+        cs._scope_totals = data.get("scope_totals", {})
+        cs._marginal = deque(data.get("marginal", []), maxlen=cs._marginal.maxlen)
+        return cs
+
+
+class SafetyGate:
+    """Configurable safety limits for crawl sessions.
+
+    Call ``gate.ok()`` before each request, ``gate.record(status)`` after.
+    When limits are hit, ``ok()`` returns False (or raises RuntimeError if
+    *raise_on_fail* was set).
+    """
+
+    def __init__(self, max_requests=None, max_seconds=None,
+                 consecutive_block_threshold=None, backoff_on_429=True,
+                 raise_on_fail=False):
+        self._max_requests = max_requests
+        self._max_seconds = max_seconds
+        self._block_threshold = consecutive_block_threshold
+        self._backoff_on_429 = backoff_on_429
+        self._raise = raise_on_fail
+        self._count = 0
+        self._start = time.time()
+        self._consecutive_blocks = 0
+        self._429_count = 0
+        self._backoff_until = 0.0
+        self._backoff_dur = 1.0
+
+    def ok(self):
+        """Return True if another request is within budget."""
+        if self._max_requests is not None and self._count >= self._max_requests:
+            return self._fail("max_requests")
+        if self._max_seconds is not None and time.time() - self._start >= self._max_seconds:
+            return self._fail("max_seconds")
+        if self._block_threshold is not None and self._consecutive_blocks >= self._block_threshold:
+            return self._fail("consecutive_blocks")
+        if time.time() < self._backoff_until:
+            return self._fail("backoff")
+        self._count += 1
+        return True
+
+    def record(self, status_code, blocked=False):
+        if blocked:
+            self._consecutive_blocks += 1
+        else:
+            self._consecutive_blocks = 0
+        if status_code == 429 and self._backoff_on_429:
+            self._429_count += 1
+            self._backoff_until = time.time() + self._backoff_dur
+            self._backoff_dur = min(self._backoff_dur * 2, 60.0)
+
+    def summary(self):
+        return {
+            "requests": self._count,
+            "elapsed_seconds": round(time.time() - self._start, 1),
+            "consecutive_blocks": self._consecutive_blocks,
+            "429_count": self._429_count,
+            "limits_reached": self._limits_reached(),
+            "backoff_until": self._backoff_until if self._backoff_until > time.time() else None,
+        }
+
+    def reset(self):
+        self._count = 0
+        self._start = time.time()
+        self._consecutive_blocks = 0
+        self._429_count = 0
+        self._backoff_until = 0.0
+        self._backoff_dur = 1.0
+
+    def _fail(self, reason):
+        if self._raise:
+            raise RuntimeError(f"SafetyGate limit: {reason}")
+        return False
+
+    def _limits_reached(self):
+        hit = []
+        if self._max_requests is not None and self._count >= self._max_requests:
+            hit.append("max_requests")
+        if self._max_seconds is not None and time.time() - self._start >= self._max_seconds:
+            hit.append("max_seconds")
+        if self._block_threshold is not None and self._consecutive_blocks >= self._block_threshold:
+            hit.append("consecutive_blocks")
+        return hit
+
+
+def fill_rate_triage(records):
     """Compute fill-rate triage for extracted records.
 
     Returns dict mapping field_name -> {present, null, unobservable, omitted,
@@ -1289,6 +1480,283 @@ def block_resources(ad_domains=True, extra_domains=None, resource_types=None):
         count += len(resource_types)
 
     return count
+
+
+# --- network capture ---
+
+class NetworkCapture:
+    """In-memory request/response log built from CDP Network events.
+
+    Call ``start()`` before navigation, ``poll()`` after to drain buffered CDP
+    events and populate the log.  Response body capture is opt-in via
+    *capture_bodies=True* (calls ``Network.getResponseBody`` per response).
+    """
+
+    def __init__(self, capture_bodies=False, max_entries=1000):
+        self._capture_bodies = capture_bodies
+        self._max = max_entries
+        self._active = False
+        self.clear()
+
+    def start(self):
+        cdp("Network.enable")
+        self.clear()
+        self._active = True
+
+    def stop(self):
+        try:
+            cdp("Network.disable")
+        except Exception:
+            pass
+        self._active = False
+
+    def poll(self):
+        """Drain CDP events and process network events. Returns new entry count."""
+        n = 0
+        for ev in drain_events():
+            m = ev.get("method", "")
+            p = ev.get("params", {})
+            rid = p.get("requestId")
+            if not rid:
+                continue
+            if m == "Network.requestWillBeSent":
+                redir = p.get("redirectResponse")
+                if redir and rid in self._requests:
+                    self._finalize(rid, redir.get("status"),
+                                   redir.get("headers", {}),
+                                   redir.get("mimeType", ""))
+                self._requests[rid] = {
+                    "url": p.get("request", {}).get("url", ""),
+                    "method": p.get("request", {}).get("method", "GET"),
+                    "headers": p.get("request", {}).get("headers", {}),
+                    "resource_type": p.get("type", ""),
+                }
+                n += 1
+            elif m == "Network.responseReceived":
+                resp = p.get("response", {})
+                self._responses[rid] = {
+                    "status": resp.get("status", 0),
+                    "headers": resp.get("headers", {}),
+                    "content_type": resp.get("mimeType", ""),
+                }
+                if self._capture_bodies:
+                    try:
+                        body = cdp("Network.getResponseBody", requestId=rid)
+                        self._responses[rid]["body"] = body.get("body", "")
+                    except Exception:
+                        pass
+                if rid in self._requests:
+                    self._finalize(rid,
+                                   resp.get("status", 0),
+                                   resp.get("headers", {}),
+                                   resp.get("mimeType", ""))
+                    n += 1
+            elif m == "Network.loadingFailed":
+                if rid in self._requests:
+                    self._requests[rid]["failed"] = True
+        return n
+
+    def endpoints(self, normalize_fn=None):
+        """Deduplicated list of URLs seen.  Returns [{url, method, resource_type, count}]."""
+        agg = {}
+        for e in self._entries:
+            key = normalize_fn(e["url"]) if normalize_fn else e["url"]
+            if key not in agg:
+                agg[key] = {"url": e["url"], "method": e["method"],
+                            "resource_type": e.get("resource_type", ""), "count": 0}
+            agg[key]["count"] += 1
+        return sorted(agg.values(), key=lambda x: -x["count"])
+
+    def responses_for(self, pattern):
+        """Full request/response pairs where URL matches *pattern* regex."""
+        return [e for e in self._entries if re.search(pattern, e["url"])]
+
+    def summary(self):
+        by_rt, by_status = {}, {}
+        for e in self._entries:
+            rt = e.get("resource_type", "?")
+            by_rt[rt] = by_rt.get(rt, 0) + 1
+            s = e.get("status", 0)
+            by_status[s] = by_status.get(s, 0) + 1
+        return {
+            "total_requests": len(self._requests) + len(self._entries),
+            "total_responses": len(self._entries),
+            "by_resource_type": by_rt,
+            "by_status": by_status,
+            "pending_requests": len(self._requests),
+        }
+
+    def clear(self):
+        self._requests = {}
+        self._responses = {}
+        self._entries = []
+
+    def _finalize(self, rid, status, resp_headers, content_type):
+        req = self._requests.pop(rid, None)
+        if not req:
+            return
+        entry = {**req, "status": status, "response_headers": resp_headers,
+                 "content_type": content_type}
+        resp = self._responses.pop(rid, {})
+        if "body" in resp:
+            entry["body"] = resp["body"]
+        self._entries.append(entry)
+        while len(self._entries) > self._max:
+            self._entries.pop(0)
+
+
+def url_cluster(urls):
+    """Normalize URL path segments and group by pattern.
+
+    Numbers → ``{id}``, UUIDs → ``{uuid}``, hex hashes → ``{hash}``.
+    Returns ``[{pattern, urls, count}]`` sorted by count descending.
+    """
+    _NUM = re.compile(r"^\d{2,}$")
+    _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+    _HEX = re.compile(r"^[0-9a-f]{16,}$", re.I)
+    _SLUG_NUM = re.compile(r"^(.*[-_])\d{2,}$")
+
+    def _norm(url):
+        p = urlparse(url)
+        segs = []
+        for s in p.path.split("/"):
+            if _NUM.match(s):
+                s = "{id}"
+            elif _UUID.match(s):
+                s = "{uuid}"
+            elif _HEX.match(s):
+                s = "{hash}"
+            else:
+                m = _SLUG_NUM.match(s)
+                if m:
+                    s = m.group(1) + "{id}"
+            segs.append(s)
+        return p._replace(path="/".join(segs)).geturl()
+
+    groups = {}
+    for u in urls:
+        key = _norm(u)
+        groups.setdefault(key, []).append(u)
+    return sorted(
+        [{"pattern": k, "urls": v, "count": len(v)} for k, v in groups.items()],
+        key=lambda x: -x["count"],
+    )
+
+
+def discover_api_endpoints(url, timeout=20.0):
+    """Fetch page HTML, extract API URL patterns from JS assets.
+
+    Returns ``{endpoints: [{url, source}], script_count, errors}``.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    errors = []
+    html = ""
+    try:
+        html = http_get(url, timeout=timeout)
+    except Exception:
+        try:
+            r = http_get_browser_session_response(url, timeout=timeout)
+            html = r.get("text", "")
+        except Exception as exc:
+            errors.append(f"fetch failed: {exc}")
+            return {"endpoints": [], "script_count": 0, "errors": errors}
+
+    src_urls = re.findall(r'<script[^>]*src=["\']([^"\']+)["\']', html, re.I)
+    src_urls = [urljoin(url, s) for s in src_urls][:20]
+    inline = re.findall(r'<script[^>]*>(.*?)</script>', html, re.I | re.DOTALL)
+
+    js_sources = list(inline)
+    fetched = 0
+
+    def _fetch_js(js_url):
+        try:
+            return http_get(js_url, timeout=timeout)
+        except Exception:
+            return ""
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for text in pool.map(_fetch_js, src_urls):
+            if text:
+                js_sources.append(text)
+                fetched += 1
+
+    patterns = [
+        (re.compile(r'''fetch\(\s*["'`]([^"'`]+)["'`]'''), None, "fetch"),
+        (re.compile(r'''axios\.\w+\(\s*["'`]([^"'`]+)["'`]'''), None, "axios"),
+        (re.compile(r'''\.open\(\s*["']\w+["']\s*,\s*["'`]([^"'`]+)["'`]'''), None, "xhr"),
+        (re.compile(r'''["'`](/api/[^"'`]+)["'`]'''), None, "api_path"),
+    ]
+    seen = set()
+    endpoints = []
+    for src in js_sources:
+        for regex, group, source in patterns:
+            for m in regex.finditer(src):
+                raw = m.group(group) if group else m.group(1)
+                if not raw or raw.startswith(("${", "javascript:", "data:")):
+                    continue
+                resolved = urljoin(url, raw)
+                norm = resolved.split("?")[0]
+                if norm in seen:
+                    continue
+                seen.add(norm)
+                endpoints.append({"url": resolved, "source": source})
+
+    return {
+        "endpoints": sorted(endpoints, key=lambda e: e["url"]),
+        "script_count": fetched + len(inline),
+        "errors": errors,
+    }
+
+
+def replay_endpoints(capture, use_session=False, timeout=20.0):
+    """Re-issue captured GET requests as plain HTTP and compare responses.
+
+    Returns ``{results: [{...}], summary: {total, matched, mismatched, errors}}``.
+    """
+    results = []
+    for ep in capture.endpoints():
+        url, method = ep["url"], ep.get("method", "GET")
+        if method.upper() != "GET":
+            results.append({"url": url, "skipped": True, "reason": "non-GET"})
+            continue
+        try:
+            if use_session:
+                resp = http_get_browser_session_response(url, timeout=timeout)
+                replay_status, replay_ct = resp.get("status", 0), resp.get("headers", {}).get("content-type", "")
+            else:
+                http_get(url, timeout=timeout)
+                replay_status, replay_ct = 200, ""
+            orig_status = ep.get("status", 0)
+            orig_ct = ep.get("content_type", "")
+            ct_match = (replay_ct.split(";")[0].strip().lower()
+                        == orig_ct.split(";")[0].strip().lower())
+            results.append({
+                "url": url,
+                "original_status": orig_status,
+                "replay_status": replay_status,
+                "status_match": orig_status == replay_status,
+                "content_type_match": ct_match,
+            })
+        except urllib.error.HTTPError as e:
+            results.append({
+                "url": url,
+                "original_status": ep.get("status", 0),
+                "replay_status": e.code,
+                "status_match": False,
+                "error": str(e),
+            })
+        except Exception as exc:
+            results.append({"url": url, "error": str(exc)})
+        time.sleep(0.1)
+
+    matched = sum(1 for r in results if r.get("status_match"))
+    errors = sum(1 for r in results if "error" in r)
+    return {
+        "results": results,
+        "summary": {"total": len(results), "matched": matched,
+                    "mismatched": len(results) - matched - errors, "errors": errors},
+    }
 
 
 _AD_DOMAINS = (

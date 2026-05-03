@@ -97,32 +97,102 @@ def test_switch_tab_does_not_mutate_title():
     assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2"}
 
 
-def test_send_closes_socket_on_transport_error():
-    class TrackingSocket:
-        closed = False
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
+def test_send_reconnects_on_transport_error():
+    class BrokenSocket:
+        def __init__(self):
+            self.closed = False
+        def close(self):
             self.closed = True
-            return False
-
         def connect(self, path):
             pass
-
+        def settimeout(self, t):
+            pass
         def sendall(self, data):
             raise BrokenPipeError("closed")
+        def recv(self, size):
+            return b""
 
-    sock = TrackingSocket()
-    with patch("socket.socket", return_value=sock):
-        try:
-            helpers._send({"meta": "session"})
-        except BrokenPipeError:
+    class WorkingSocket:
+        def __init__(self):
+            self.closed = False
+        def close(self):
+            self.closed = True
+        def connect(self, path):
             pass
-        else:
-            raise AssertionError("expected BrokenPipeError")
-    assert sock.closed
+        def settimeout(self, t):
+            pass
+        def sendall(self, data):
+            pass
+        def recv(self, size):
+            return b'{"result":{}}\n'
+
+    broken = BrokenSocket()
+    working = WorkingSocket()
+    old_sock = helpers._sock
+    helpers._sock = broken
+    try:
+        with patch("socket.socket", return_value=working):
+            helpers._send({"meta": "session"})
+        assert broken.closed
+        assert helpers._sock is working
+    finally:
+        helpers._sock = None
+
+
+def test_send_reuses_persistent_socket():
+    class TrackingSocket:
+        connect_count = 0
+        def __init__(self):
+            self.closed = False
+        def close(self):
+            self.closed = True
+        def connect(self, path):
+            TrackingSocket.connect_count += 1
+        def settimeout(self, t):
+            pass
+        def sendall(self, data):
+            pass
+        def recv(self, size):
+            return b'{"result":{}}\n'
+
+    TrackingSocket.connect_count = 0
+    sock = TrackingSocket()
+    helpers._sock = None
+    try:
+        with patch("socket.socket", return_value=sock):
+            helpers._send({"method": "Target.getTargets", "params": {}})
+            helpers._send({"method": "Target.getTargets", "params": {}})
+        assert TrackingSocket.connect_count == 1
+        assert helpers._sock is sock
+    finally:
+        helpers._sock = None
+
+
+def test_send_propagates_error_after_reconnect_fails():
+    class BrokenSocket:
+        def close(self):
+            pass
+        def connect(self, path):
+            raise ConnectionRefusedError("no daemon")
+        def settimeout(self, t):
+            pass
+        def sendall(self, data):
+            raise BrokenPipeError("closed")
+        def recv(self, size):
+            return b""
+
+    old_sock = helpers._sock
+    helpers._sock = BrokenSocket()
+    try:
+        with patch("socket.socket", return_value=BrokenSocket()):
+            try:
+                helpers._send({"meta": "session"})
+            except (BrokenPipeError, ConnectionRefusedError):
+                pass
+            else:
+                raise AssertionError("expected socket error")
+    finally:
+        helpers._sock = None
 
 
 def test_switch_tab_reports_missing_session_id():
@@ -166,6 +236,7 @@ def test_close_tab_closes_current_and_switches_to_remaining_real_tab():
         ("Target.getTargets", {}),
         ("Target.activateTarget", {"targetId": "target-2"}),
         ("Target.attachToTarget", {"targetId": "target-2", "flatten": True}),
+        ("Target.getTargetInfo", {}),  # post-switch internal-URL check
     ]
     assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2"}
 
@@ -335,6 +406,60 @@ def test_ax_snapshot_compacts_accessibility_tree():
         assert helpers.ax_snapshot() == [{"ref": "1", "role": "button", "name": "Save", "value": ""}]
 
 
+def test_ax_snapshot_compact_filters_structural_roles():
+    nodes = [
+        {"backendDOMNodeId": 1, "role": {"value": "button"}, "name": {"value": "OK"}},
+        {"backendDOMNodeId": 2, "role": {"value": "generic"}, "name": {"value": ""}},
+        {"backendDOMNodeId": 3, "role": {"value": "heading"}, "name": {"value": "Title"}, "properties": [{"name": "level", "value": {"value": 1}}]},
+        {"backendDOMNodeId": 4, "role": {"value": "StaticText"}, "name": {"value": ""}},
+        {"backendDOMNodeId": 5, "role": {"value": "link"}, "name": {"value": "Home"}},
+    ]
+    with patch("helpers.cdp", return_value={"nodes": nodes}):
+        result = helpers.ax_snapshot(compact=True)
+    assert len(result) == 3
+    assert result[0].startswith("button")
+    assert result[1].startswith("heading")
+    assert result[2].startswith("link")
+
+
+def test_ax_snapshot_compact_assigns_sequential_refs():
+    nodes = [
+        {"backendDOMNodeId": 10, "role": {"value": "button"}, "name": {"value": "A"}},
+        {"backendDOMNodeId": 20, "role": {"value": "textbox"}, "name": {"value": "Email"}},
+        {"backendDOMNodeId": 30, "role": {"value": "link"}, "name": {"value": "Help"}},
+    ]
+    with patch("helpers.cdp", return_value={"nodes": nodes}):
+        result = helpers.ax_snapshot(compact=True)
+    assert "[ref=e0]" in result[0]
+    assert "[ref=e1]" in result[1]
+    assert "[ref=e2]" in result[2]
+    assert helpers._ref_map == {
+        "e0": {"backend_node_id": 10, "role": "button", "name": "A", "nth": 0},
+        "e1": {"backend_node_id": 20, "role": "textbox", "name": "Email", "nth": 1},
+        "e2": {"backend_node_id": 30, "role": "link", "name": "Help", "nth": 2},
+    }
+
+
+def test_ax_snapshot_compact_includes_props():
+    nodes = [
+        {"backendDOMNodeId": 1, "role": {"value": "checkbox"}, "name": {"value": "Agree"},
+         "properties": [{"name": "checked", "value": {"value": True}}]},
+    ]
+    with patch("helpers.cdp", return_value={"nodes": nodes}):
+        result = helpers.ax_snapshot(compact=True)
+    assert "checked=True" in result[0]
+
+
+def test_ax_snapshot_default_unchanged():
+    nodes = [
+        {"nodeId": "1", "role": {"value": "button"}, "name": {"value": "Save"}},
+        {"nodeId": "2", "role": {"value": ""}, "name": {"value": ""}},
+    ]
+    with patch("helpers.cdp", return_value={"nodes": nodes}):
+        result = helpers.ax_snapshot()
+    assert result == [{"ref": "1", "role": "button", "name": "Save", "value": ""}]
+
+
 def test_screenshot_trace_is_opt_in(tmp_path):
     trace_dir = tmp_path / "trace"
     with patch("helpers.capture_screenshot", side_effect=lambda path, full=False: path) as capture, \
@@ -462,7 +587,7 @@ def test_detect_block_page_does_not_flag_normal_content_with_kpsdk_marker():
 
 def test_detect_block_page_identifies_akamai_denial():
     html = "Access Denied https://errors.edgesuite.net/18.abc failover-waf"
-    assert helpers.detect_block_page(html=html)["kind"] == "akamai_access_denied"
+    assert helpers.detect_block_page(html=html)["kind"] == "akamai"
 
 
 def test_page_content_status_reports_block_state():
@@ -568,7 +693,7 @@ def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
 
     with patch("login_session.browser_user_agent", return_value="Browser UA"), \
          patch("login_session.cookie_header", return_value="KP_UIDz=rea"), \
-         patch("urllib.request.urlopen", side_effect=fake_open):
+         patch("urllib.request.OpenerDirector.open", side_effect=fake_open):
         assert helpers.http_get_browser_session("https://www.realestate.com.au/property/1") == "<html>ok</html>"
 
     req, timeout = opened[0]
@@ -648,76 +773,6 @@ def test_seed_browser_session_closes_tab_and_returns_cookie_names():
     assert result["ok"] is True
     assert result["targetId"] == "target-1"
     assert result["cookieNames"] == ["KP_UIDz"]
-
-
-def test_fetch_with_browser_session_reseeds_and_retries_blocked_fetch():
-    blocked = {
-        "ok": False,
-        "http_ok": True,
-        "status": 200,
-        "url": "https://www.realestate.com.au/property/1",
-        "text": "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>",
-        "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": ["window.kpsdk"]},
-        "headers": {},
-    }
-    served = {
-        "ok": True,
-        "http_ok": True,
-        "status": 200,
-        "url": "https://www.realestate.com.au/property/1",
-        "text": "<html>property</html>",
-        "block": {"blocked": False, "kind": None, "evidence": []},
-        "headers": {},
-    }
-
-    with patch("helpers.http_get_browser_session_response", side_effect=[blocked, served]) as fetch, \
-         patch("helpers.seed_browser_session", return_value={
-             "ok": True,
-             "reason": "content",
-             "block": {"blocked": False, "kind": None, "evidence": []},
-             "cookieNames": ["KP_UIDz"],
-             "textLength": 900,
-         }) as seed:
-        result = helpers.fetch_with_browser_session(
-            "https://www.realestate.com.au/property/1",
-            seed_url="https://www.realestate.com.au/",
-            retries=1,
-            timeout=5,
-        )
-
-    assert result["ok"] is True
-    assert result["reason"] == "content"
-    assert result["text"] == "<html>property</html>"
-    assert [a["stage"] for a in result["attempts"]] == ["fetch", "seed", "fetch"]
-    seed.assert_called_once_with("https://www.realestate.com.au/", min_text=500, timeout=5, close=True)
-    assert fetch.call_count == 2
-
-
-def test_fetch_with_browser_session_reports_seed_failure():
-    blocked = {
-        "ok": False,
-        "http_ok": True,
-        "status": 200,
-        "url": "https://www.realestate.com.au/property/1",
-        "text": "blocked",
-        "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": []},
-        "headers": {},
-    }
-    with patch("helpers.http_get_browser_session_response", return_value=blocked), \
-         patch("helpers.seed_browser_session", return_value={
-             "ok": False,
-             "reason": "blocked",
-             "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": []},
-         }):
-        result = helpers.fetch_with_browser_session(
-            "https://www.realestate.com.au/property/1",
-            seed_url="https://www.realestate.com.au/",
-            retries=1,
-        )
-
-    assert result["ok"] is False
-    assert result["reason"] == "seed_blocked"
-    assert [a["stage"] for a in result["attempts"]] == ["fetch", "seed"]
 
 
 def test_browser_backend_info_detects_lightpanda_risks():
@@ -856,3 +911,234 @@ def test_http_get_falls_back_when_gzip_header_lies():
 
     with patch("urllib.request.urlopen", return_value=Response()):
         assert helpers.http_get("https://example.com") == "plain text"
+
+
+def test_detect_block_page_identifies_auth_gate():
+    assert helpers.detect_block_page(
+        html='<p>Please sign in to continue</p>',
+        text='Please sign in to continue',
+        url='https://example.com/login?redirect=/dashboard',
+    )["blocked"] is True
+    assert helpers.detect_block_page(
+        html='<p>Please sign in to continue</p>',
+        text='Please sign in to continue',
+        url='https://example.com/login?redirect=/dashboard',
+    )["kind"] == "auth_gate"
+
+
+def test_detect_block_page_identifies_cloudflare_challenge():
+    result = helpers.detect_block_page(
+        html='<html><head><title>Just a moment...</title></head><body></body></html>',
+        text='',
+        url='https://example.com/page',
+    )
+    assert result["blocked"] is True
+    assert result["kind"] == "waf_generic"
+
+
+def test_detect_block_page_passes_normal_content():
+    result = helpers.detect_block_page(
+        html='<html><body><h1>Welcome</h1><p>Article content here</p></body></html>',
+        text='Welcome Article content here',
+        url='https://example.com/article',
+    )
+    assert result["blocked"] is False
+
+
+def test_js_returns_undefined_dict_for_undefined():
+    with patch("helpers.cdp", return_value={"result": {"type": "undefined"}}):
+        assert helpers.js("void 0") == {"_js_undefined": True}
+
+
+def test_js_returns_error_dict_for_exception():
+    with patch("helpers.cdp", return_value={
+        "result": {"type": "undefined"},
+        "exceptionDetails": {"text": "SyntaxError", "exception": {"description": "SyntaxError: bad"}},
+    }):
+        result = helpers.js("bad syntax }}}")
+        assert result.get("_js_error")
+
+
+def test_detect_turnstile_returns_not_found_when_no_targets():
+    with patch("helpers.cdp", return_value={"targetInfos": []}), \
+         patch("helpers.js", return_value=None), \
+         patch("time.sleep"):
+        result = helpers.detect_turnstile(timeout=0.1)
+        assert result["found"] is False
+        assert result["challenge_type"] is None
+
+
+def test_detect_turnstile_finds_cloudflare_iframe():
+    with patch("helpers.cdp", return_value={"targetInfos": [
+        {"type": "iframe", "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/turnstile", "targetId": "abc123"},
+    ]}):
+        result = helpers.detect_turnstile(timeout=0.1)
+        assert result["found"] is True
+        assert result["challenge_type"] == "turnstile_iframe"
+        assert result["iframe_target_id"] == "abc123"
+
+
+def test_response_turnstile_solved_flag():
+    from response import Response
+    r = Response(html="<html></html>", text="", url="https://example.com",
+                 status=200, source="browser", turnstile_solved=True)
+    assert r.turnstile_solved is True
+    r2 = Response(html="<html></html>", text="", url="https://example.com",
+                  status=200, source="browser")
+    assert r2.turnstile_solved is False
+
+
+def test_response_repr():
+    from response import Response
+    r = Response(html="<html></html>", text="content", url="https://example.com",
+                 status=200, source="http")
+    assert "example.com" in repr(r)
+    assert "status=200" in repr(r)
+
+
+def test_send_passes_timeout_to_recv():
+    import helpers
+    calls = []
+    original_send = helpers._send
+
+    def fake_send(req, timeout=30):
+        calls.append(timeout)
+        return {"result": {}}
+
+    with patch("helpers._send", side_effect=fake_send):
+        helpers.cdp("Page.navigate", url="https://example.com", timeout=60)
+    assert 60 in calls
+
+
+def test_crawl_state_add_returns_true_for_new_keys():
+    state = helpers.CrawlState(key_field="id")
+    assert state.add({"id": "a", "name": "Alice"}) is True
+    assert state.add({"id": "b", "name": "Bob"}) is True
+    assert state.summary()["records"] == 2
+
+
+def test_crawl_state_add_returns_false_for_duplicates():
+    state = helpers.CrawlState(key_field="id")
+    state.add({"id": "a", "name": "Alice"})
+    assert state.add({"id": "a", "name": "Alice v2"}) is False
+    assert state.summary()["records"] == 1
+    assert state.summary()["deduped"] == 1
+
+
+def test_crawl_state_add_skips_none_key():
+    state = helpers.CrawlState(key_field="id")
+    assert state.add({"name": "No ID"}) is False
+    assert state.summary()["records"] == 0
+
+
+def test_crawl_state_saturation_reached():
+    state = helpers.CrawlState(key_field="id")
+    assert state.saturation_reached(k=3) is False
+    state.page_done(5)
+    assert state.saturation_reached(k=3) is False
+    state.page_done(0)
+    state.page_done(0)
+    state.page_done(0)
+    assert state.saturation_reached(k=3) is True
+
+
+def test_crawl_state_saturation_not_reached_with_mixed_counts():
+    state = helpers.CrawlState(key_field="id")
+    state.page_done(0)
+    state.page_done(1)
+    state.page_done(0)
+    assert state.saturation_reached(k=3) is False
+
+
+def test_crawl_state_scope_totals_accumulate():
+    state = helpers.CrawlState(key_field="id")
+    state.record_scope_total("cat_a", 10)
+    state.record_scope_total("cat_a", 5)
+    state.record_scope_total("cat_b", 20)
+    assert state.summary()["scope_totals"] == {"cat_a": 15, "cat_b": 20}
+
+
+def test_crawl_state_record_blocked():
+    state = helpers.CrawlState(key_field="id")
+    state.record_blocked("https://example.com/page1", "WAF")
+    state.record_blocked("https://example.com/page2", "timeout")
+    assert state.summary()["blocked"] == 2
+
+
+def test_crawl_state_summary_reports_saturation():
+    state = helpers.CrawlState(key_field="id")
+    assert state.summary()["saturated"] is False
+    state.page_done(0)
+    state.page_done(0)
+    state.page_done(0)
+    assert state.summary()["saturated"] is True
+
+
+def test_crawl_state_occurrence_tracking():
+    state = helpers.CrawlState(key_field="id")
+    state.add({"id": "a"})
+    state.add({"id": "b"})
+    state.add({"id": "a"})  # dup, occurrence -> 2
+    state.add({"id": "a"})  # dup, occurrence -> 3
+    assert state._occurrences == {"a": 3, "b": 1}
+
+
+def test_crawl_state_estimated_unseen_no_singletons():
+    state = helpers.CrawlState(key_field="id")
+    state.add({"id": "a"})
+    state.add({"id": "a"})  # seen twice
+    assert state.estimated_unseen() == 0
+
+
+def test_crawl_state_estimated_unseen_with_singletons():
+    state = helpers.CrawlState(key_field="id")
+    for c in "abcdef":  # 6 singletons
+        state.add({"id": c})
+    # f1=6, f2=0 → estimated = 6*5/2 = 15
+    assert state.estimated_unseen() == 15
+
+
+def test_crawl_state_estimated_unseen_mixed():
+    state = helpers.CrawlState(key_field="id")
+    state.add({"id": "a"})
+    state.add({"id": "b"})
+    state.add({"id": "c"})
+    state.add({"id": "c"})  # seen twice
+    # f1=2 (a,b), f2=1 (c) → 2*2/(2*1) = 2
+    assert state.estimated_unseen() == 2
+
+
+def test_crawl_state_summary_includes_estimated_unseen():
+    state = helpers.CrawlState(key_field="id")
+    state.add({"id": "a"})
+    assert "estimated_unseen" in state.summary()
+
+
+def test_field_triage_returns_empty_for_no_records():
+    assert helpers.field_triage([]) == {}
+
+
+def test_field_triage_computes_fill_rates():
+    records = [
+        {"name": "Alice", "age": 30, "city": None},
+        {"name": "Bob", "age": None, "city": None},
+        {"name": "Carol", "age": 25, "city": "__UNOBSERVABLE__"},
+    ]
+    triage = helpers.field_triage(records)
+    assert triage["name"]["status"] == "OK"
+    assert triage["name"]["fill_rate"] == 1.0
+    assert triage["age"]["fill_rate"] == round(2 / 3, 3)
+    assert triage["age"]["status"] == "LOW"
+    assert triage["city"]["status"] == "BLOCKED"
+
+
+def test_field_triage_all_null_is_ok():
+    records = [{"name": "Alice", "seller": None}, {"name": "Bob", "seller": None}]
+    triage = helpers.field_triage(records)
+    assert triage["seller"]["status"] == "OK"
+
+
+def test_field_triage_broken_selector():
+    records = [{"name": "A", "price": 10}, {"name": "B", "price": None}, {"name": "C", "price": None}]
+    triage = helpers.field_triage(records)
+    assert triage["price"]["status"] == "BROKEN"
