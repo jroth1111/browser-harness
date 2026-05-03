@@ -143,18 +143,90 @@ def close_browser(launch_info):
 
 
 # --- navigation / page ---
-def goto_url(url):
-    """Navigate the current tab to *url* and return CDP result.
+def _wait_until_load(strategy, timeout=15.0):
+    """Wait for a specific load event strategy. Returns {ok, reason}."""
+    if strategy == "load":
+        target_event = "Page.loadEventFired"
+    elif strategy == "domcontentloaded":
+        target_event = "Page.domContentLoadedEventFired"
+    elif strategy == "networkidle":
+        return _wait_until_network_idle(timeout)
+    else:
+        return {"ok": True, "reason": "unknown_strategy"}
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for ev in drain_events():
+            if ev.get("method") == target_event:
+                return {"ok": True, "reason": strategy}
+        time.sleep(0.3)
+    return {"ok": False, "reason": "timeout"}
 
-    If a domain-skills folder matching the URL hostname exists, also returns
-    ``domain_skills`` listing the first 10 .md files in that folder. This is
-    a read-only filesystem check — no network side effects.
+
+def _wait_until_network_idle(timeout=15.0):
+    """Wait until no network requests are in flight for 500ms."""
+    cdp("Network.enable")
+    drain_events()
+    pending = set()
+    deadline = time.time() + timeout
+    idle_since = None
+    while time.time() < deadline:
+        for ev in drain_events():
+            m = ev.get("method", "")
+            rid = (ev.get("params") or {}).get("requestId")
+            if m == "Network.requestWillBeSent" and rid:
+                pending.add(rid)
+                idle_since = None
+            elif m in ("Network.loadingFinished", "Network.loadingFailed") and rid:
+                pending.discard(rid)
+        if not pending:
+            if idle_since is None:
+                idle_since = time.time()
+            elif time.time() - idle_since >= 0.5:
+                return {"ok": True, "reason": "networkidle"}
+        else:
+            idle_since = None
+        time.sleep(0.1)
+    return {"ok": False, "reason": "timeout", "pending_requests": len(pending)}
+
+
+def goto_url(url, wait_until=None):
+    """Navigate the current tab to *url*.
+
+    wait_until: "load" | "domcontentloaded" | "networkidle" | "content" | None.
+    When None (default), returns raw CDP result (backward compatible).
+    When set, returns structured {ok, reason, url, title, frameId, domain_skills}.
     """
     cdp("Page.enable")
     drain_events()
     r = cdp("Page.navigate", url=url)
     d = (_asset_dir("domain-skills", "browser_harness_domain_skills") / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
-    return {**r, "domain_skills": sorted(p.name for p in d.rglob("*.md"))[:10]} if d.is_dir() else r
+    ds = sorted(p.name for p in d.rglob("*.md"))[:10] if d.is_dir() else []
+
+    if wait_until is None:
+        return {**r, "domain_skills": ds} if ds else r
+
+    if wait_until == "content":
+        status = wait_for_content(timeout=15.0)
+        info = page_info()
+        return {
+            "ok": status.get("ok", False),
+            "reason": status.get("reason"),
+            "url": info.get("url", url),
+            "title": info.get("title", ""),
+            "frameId": r.get("frameId"),
+            "domain_skills": ds,
+        }
+
+    wait_result = _wait_until_load(wait_until)
+    info = page_info()
+    return {
+        "ok": wait_result.get("ok", False),
+        "reason": wait_result.get("reason"),
+        "url": info.get("url", url),
+        "title": info.get("title", ""),
+        "frameId": r.get("frameId"),
+        "domain_skills": ds,
+    }
 
 def navigate_via_google(url, google_base="https://www.google.com"):
     """Navigate to URL with Google as the HTTP Referer.
@@ -778,10 +850,23 @@ def close_tabs(targets):
             switch_tab(tabs[0])
     return out
 
+_MAX_TABS = int(os.environ.get("BH_MAX_TABS", "5"))
+
+
+def _enforce_tab_limit():
+    tab_count = len(list_tabs(include_chrome=False))
+    if tab_count >= _MAX_TABS:
+        raise RuntimeError(
+            f"tab limit reached ({tab_count}/{_MAX_TABS}). "
+            f"Close a tab first or set BH_MAX_TABS to raise the limit."
+        )
+
+
 def new_tab(url="about:blank"):
     # Always create blank, then goto: passing url to createTarget races with
     # attach, so the brief about:blank is "complete" by the time the caller
     # polls and wait_for_load() returns before navigation actually starts.
+    _enforce_tab_limit()
     tid = _require_key(cdp("Target.createTarget", url="about:blank"), "targetId", "Target.createTarget response")
     try:
         switch_tab(tid)
@@ -1643,13 +1728,16 @@ class NetworkCapture:
         return n
 
     def endpoints(self, normalize_fn=None):
-        """Deduplicated list of URLs seen.  Returns [{url, method, resource_type, count}]."""
+        """Deduplicated list of URLs seen.  Returns [{url, method, resource_type, status, content_type, count}]."""
         agg = {}
         for e in self._entries:
             key = normalize_fn(e["url"]) if normalize_fn else e["url"]
             if key not in agg:
                 agg[key] = {"url": e["url"], "method": e["method"],
-                            "resource_type": e.get("resource_type", ""), "count": 0}
+                            "resource_type": e.get("resource_type", ""),
+                            "status": e.get("status", 0),
+                            "content_type": e.get("content_type", ""),
+                            "count": 0}
             agg[key]["count"] += 1
         return sorted(agg.values(), key=lambda x: -x["count"])
 
