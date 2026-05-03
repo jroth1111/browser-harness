@@ -1,0 +1,506 @@
+{
+  "schema_version": 2,
+  "domain": "dating-platforms",
+  "field_tested": {
+    "date": "2026-05-03",
+    "note": "Tinder selectors partially field-tested in transcript 70fbfcd8-2a6f-468c-a65c-5eae4b248e16. Hinge and Feeld remain deferred pending feasibility testing."
+  },
+  "path_types": [
+    "browser",
+    "hybrid"
+  ],
+  "forbidden": [
+    "automated account creation",
+    "credential entry from screenshots",
+    "bypassing CAPTCHA without user consent",
+    "sending messages without passing consent gate",
+    "modifying account settings without user request",
+    "extracting or storing other users' photos",
+    "creating fake profiles or misrepresenting identity",
+    "unmatching without explicit user request",
+    "making purchases or using premium features without request"
+  ],
+  "execution_policy": {
+    "stop_on": [
+      "success",
+      "block_detected",
+      "captcha",
+      "auth_required",
+      "user_cancelled",
+      "session_limit_reached"
+    ],
+    "fallback_on": [
+      "selector_drift",
+      "slow_load",
+      "partial_content",
+      "api_token_unavailable"
+    ],
+    "never_fallback_to": [
+      "credential_entry",
+      "account_creation",
+      "unconfirmed_message_send",
+      "bypassing_captcha",
+      "ignoring_block"
+    ],
+    "receipt_required": [
+      "primitive_id",
+      "platform",
+      "path_type",
+      "status",
+      "action_count",
+      "block_or_captcha_encountered"
+    ]
+  },
+  "primitives": [
+    {
+      "id": "browser_read_profile_card",
+      "path_type": "browser",
+      "primary": "capture_screenshot() plus js() DOM extraction from current card",
+      "fallback_chain": [
+        "capture_screenshot only"
+      ],
+      "inputs": [
+        "platform",
+        "current_tab"
+      ],
+      "outputs": [
+        "name",
+        "age",
+        "bio",
+        "photos_count",
+        "prompts",
+        "job",
+        "education",
+        "distance",
+        "lifestyle_tags"
+      ],
+      "evidence": [
+        "screenshot captured",
+        "visible text fields extracted"
+      ],
+      "platform_details": {
+        "tinder": {
+          "status": "PARTIALLY_CONFIRMED",
+          "mechanism": "capture_screenshot() + js() extraction",
+          "selectors": {
+            "card_container": "region \"Card stack\"",
+            "name_age": "button \"{name} {age} Open profile\"",
+            "photos_carousel": "region \"{name}'s photos\"",
+            "photo_tabs": "tab \"Photo {N}\"",
+            "photo_nav_prev": "button \"Previous Photo\"",
+            "photo_nav_next": "button \"Next photo\"",
+            "profile_detail": "TO_BE_FIELD_TESTED"
+          },
+          "notes": "Card name/age and photo carousel confirmed. Profile details (bio, prompts, job, education, distance, lifestyle) need field testing after expanding profile card."
+        },
+        "hinge": {
+          "status": "DEFERRED",
+          "mechanism": "Mobile-first platform. No confirmed web interface.",
+          "notes": "Feasibility test required before building selectors."
+        },
+        "feeld": {
+          "status": "DEFERRED",
+          "mechanism": "Web interface exists but may be limited.",
+          "notes": "Feasibility test required before building selectors."
+        }
+      }
+    },
+    {
+      "id": "browser_swipe_decision",
+      "path_type": "browser",
+      "primary": "keyboard shortcut or visible like/pass/super-like control",
+      "fallback_chain": [
+        "click_at_xy on visible action button"
+      ],
+      "inputs": [
+        "platform",
+        "direction"
+      ],
+      "outputs": [
+        "success",
+        "match",
+        "match_id"
+      ],
+      "evidence": [
+        "screenshot after swipe",
+        "match notification checked"
+      ],
+      "platform_details": {
+        "tinder": {
+          "status": "CONFIRMED",
+          "mechanism": "Keyboard shortcut (preferred) or button click",
+          "selectors": {
+            "like_button": "button \"LIKE\"",
+            "nope_button": "button \"NOPE\"",
+            "super_like_button": "button \"SUPER LIKE\"",
+            "keyboard_like": "Right arrow",
+            "keyboard_nope": "Left arrow",
+            "keyboard_super_like": "Enter"
+          },
+          "notes": "Keyboard shortcuts preferred — more reliable and human-like."
+        },
+        "hinge": {
+          "status": "DEFERRED"
+        },
+        "feeld": {
+          "status": "DEFERRED"
+        }
+      }
+    },
+    {
+      "id": "browser_read_chat_list",
+      "path_type": "browser",
+      "primary": "js() extraction from chat sidebar DOM",
+      "fallback_chain": [
+        "capture_screenshot with sidebar scroll"
+      ],
+      "inputs": [
+        "platform"
+      ],
+      "outputs": [
+        "conversations"
+      ],
+      "evidence": [
+        "extracted chat entries with names, match IDs, last messages, unread/new-match flags"
+      ],
+      "platform_details": {
+        "tinder": {
+          "status": "CONFIRMED",
+          "mechanism": "DOM extraction from sidebar",
+          "selectors": {
+            "sidebar": "complementary role container",
+            "match_entry": "link \"{name} {optional_badge} {name}\"",
+            "avatar": "image \"{name}\"",
+            "new_match_badge": "image \"New match\"",
+            "likes_received": "link \"Prioritised likes {N} likes\"",
+            "likes_sent": "link \"Likes sent\""
+          },
+          "notes": "Sidebar shows subset — may need to scroll to load more entries."
+        },
+        "hinge": {
+          "status": "DEFERRED"
+        },
+        "feeld": {
+          "status": "DEFERRED"
+        }
+      }
+    },
+    {
+      "id": "hybrid_read_conversation",
+      "path_type": "hybrid",
+      "primary": "Tinder API using fresh browser localStorage auth token when available",
+      "fallback_chain": [
+        "browser_read_conversation_dom"
+      ],
+      "inputs": [
+        "platform",
+        "match_id"
+      ],
+      "outputs": [
+        "messages"
+      ],
+      "evidence": [
+        "message list extracted with sender, text, timestamp, and order"
+      ],
+      "platform_details": {
+        "tinder": {
+          "status": "CONFIRMED_VIA_API",
+          "mechanism": "API preferred (faster, more reliable). DOM as fallback.",
+          "selectors": {
+            "api_endpoint": "https://api.gotinder.com/v2/matches/{match_id}/messages?count=100",
+            "api_auth": "X-Auth-Token from localStorage.getItem('TinderWeb/APIToken')",
+            "dom_container": "[role=\"log\"] inside main",
+            "dom_message": "[role=\"article\"]",
+            "dom_sender": "strong.Hidden (\"You:\" or match name)",
+            "dom_text": "span.text or span[class*=\"text\"]",
+            "dom_timestamp": "time[datetime]"
+          },
+          "notes": "API tokens expire and refresh on page reload. Always read fresh token before API calls. Rate limit API calls 200ms+ apart."
+        },
+        "hinge": {
+          "status": "DEFERRED"
+        },
+        "feeld": {
+          "status": "DEFERRED"
+        }
+      }
+    },
+    {
+      "id": "browser_read_conversation_dom",
+      "path_type": "browser",
+      "primary": "js() extraction from [role=\"log\"] [role=\"article\"] conversation DOM",
+      "fallback_chain": [
+        "capture_screenshot with scroll"
+      ],
+      "inputs": [
+        "platform",
+        "match_id"
+      ],
+      "outputs": [
+        "messages"
+      ],
+      "evidence": [
+        "DOM message list extracted with sender, text, timestamp, and order"
+      ],
+      "platform_details": {
+        "tinder": {
+          "status": "CONFIRMED_VIA_API",
+          "mechanism": "API preferred (faster, more reliable). DOM as fallback.",
+          "selectors": {
+            "api_endpoint": "https://api.gotinder.com/v2/matches/{match_id}/messages?count=100",
+            "api_auth": "X-Auth-Token from localStorage.getItem('TinderWeb/APIToken')",
+            "dom_container": "[role=\"log\"] inside main",
+            "dom_message": "[role=\"article\"]",
+            "dom_sender": "strong.Hidden (\"You:\" or match name)",
+            "dom_text": "span.text or span[class*=\"text\"]",
+            "dom_timestamp": "time[datetime]"
+          },
+          "notes": "API tokens expire and refresh on page reload. Always read fresh token before API calls. Rate limit API calls 200ms+ apart."
+        },
+        "hinge": {
+          "status": "DEFERRED"
+        },
+        "feeld": {
+          "status": "DEFERRED"
+        }
+      }
+    },
+    {
+      "id": "browser_send_message",
+      "path_type": "browser",
+      "primary": "type into message textbox, then dispatch Enter or click SEND",
+      "fallback_chain": [
+        "click_at_xy on send button"
+      ],
+      "inputs": [
+        "platform",
+        "message"
+      ],
+      "outputs": [
+        "success",
+        "sent_text"
+      ],
+      "evidence": [
+        "sent message visible in chat thread",
+        "input field cleared"
+      ],
+      "consent_gate": true,
+      "platform_details": {
+        "tinder": {
+          "status": "CONFIRMED",
+          "mechanism": "Type into input field, then dispatch Enter or click send button",
+          "selectors": {
+            "message_input": "textbox \"Type a message ...\"",
+            "send_button": "button \"SEND\""
+          },
+          "notes": "Input is multiline. Send button is disabled when empty."
+        },
+        "hinge": {
+          "status": "DEFERRED"
+        },
+        "feeld": {
+          "status": "DEFERRED"
+        }
+      }
+    },
+    {
+      "id": "browser_navigate_to_platform",
+      "path_type": "browser",
+      "primary": "new_tab(platform_url) plus wait_for_content() and logged-in indicator check",
+      "fallback_chain": [],
+      "inputs": [
+        "platform"
+      ],
+      "outputs": [
+        "logged_in",
+        "url"
+      ],
+      "evidence": [
+        "url",
+        "screenshot",
+        "logged-in or not-logged-in indicators"
+      ],
+      "platform_details": {
+        "tinder": {
+          "status": "CONFIRMED",
+          "urls": {
+            "recs": "https://tinder.com/app/recs",
+            "messages": "https://tinder.com/app/messages",
+            "likes_you": "https://tinder.com/app/likes-you",
+            "my_likes": "https://tinder.com/app/my-likes",
+            "explore": "https://tinder.com/app/explore",
+            "profile": "https://tinder.com/app/profile"
+          },
+          "logged_in_indicators": [
+            "navigation \"Navigation bar\" present with link \"Profile photo You\"",
+            "tab \"Matches\" and tab \"Messages\" in sidebar",
+            "region \"Card stack\" visible on /app/recs",
+            "Page title format: \"(N) Tinder\""
+          ],
+          "not_logged_in_indicators": [
+            "Redirect to tinder.com landing/login page",
+            "\"Get started\" modal or phone number entry form"
+          ]
+        },
+        "hinge": {
+          "status": "DEFERRED",
+          "urls": {}
+        },
+        "feeld": {
+          "status": "DEFERRED",
+          "urls": {
+            "web": "https://feeld.com"
+          }
+        }
+      }
+    },
+    {
+      "id": "browser_detect_match",
+      "path_type": "browser",
+      "primary": "capture_screenshot plus match overlay detection after like",
+      "fallback_chain": [
+        "js() DOM check for match element"
+      ],
+      "inputs": [
+        "platform"
+      ],
+      "outputs": [
+        "matched",
+        "match_name",
+        "match_id"
+      ],
+      "evidence": [
+        "screenshot or DOM evidence of match notification"
+      ],
+      "platform_details": {
+        "tinder": {
+          "status": "NEEDS_FIELD_TESTING",
+          "mechanism": "Watch for modal/overlay after LIKE that produces a match",
+          "selectors": {
+            "match_overlay": "TO_BE_FIELD_TESTED — \"It's a Match!\" modal"
+          },
+          "notes": "Trigger a match to capture exact DOM structure and auto-dismiss behavior."
+        },
+        "hinge": {
+          "status": "DEFERRED"
+        },
+        "feeld": {
+          "status": "DEFERRED"
+        }
+      }
+    }
+  ],
+  "fallback_nodes": [
+    {
+      "id": "tinder_profile_card",
+      "path_type": "browser"
+    },
+    {
+      "id": "tinder_swipe_buttons",
+      "path_type": "browser"
+    },
+    {
+      "id": "tinder_chat_list",
+      "path_type": "browser"
+    },
+    {
+      "id": "tinder_conversation_api",
+      "path_type": "hybrid"
+    },
+    {
+      "id": "tinder_conversation_dom",
+      "path_type": "browser"
+    },
+    {
+      "id": "tinder_message_input",
+      "path_type": "browser"
+    },
+    {
+      "id": "tinder_match_overlay",
+      "path_type": "browser"
+    },
+    {
+      "id": "hinge_profile_card",
+      "path_type": "browser"
+    },
+    {
+      "id": "hinge_swipe_buttons",
+      "path_type": "browser"
+    },
+    {
+      "id": "feeld_profile_card",
+      "path_type": "browser"
+    },
+    {
+      "id": "feeld_swipe_buttons",
+      "path_type": "browser"
+    }
+  ],
+  "fallback_dags": {
+    "read_profile": [
+      "browser_read_profile_card"
+    ],
+    "execute_swipe": [
+      "browser_swipe_decision"
+    ],
+    "detect_match": [
+      "browser_detect_match"
+    ],
+    "read_chats": [
+      "browser_read_chat_list",
+      "hybrid_read_conversation",
+      "browser_read_conversation_dom"
+    ],
+    "send_message": [
+      "browser_send_message"
+    ],
+    "connect_platform": [
+      "browser_navigate_to_platform"
+    ]
+  },
+  "verification_probes": {
+    "platform_loaded": {
+      "positive": [
+        "url contains platform domain",
+        "profile cards or matches visible"
+      ],
+      "negative": [
+        "login page visible",
+        "block page visible",
+        "blank page"
+      ]
+    },
+    "profile_readable": {
+      "positive": [
+        "name visible",
+        "age visible",
+        "profile text or photo carousel visible"
+      ],
+      "negative": [
+        "empty profile card",
+        "blurred content",
+        "loading spinner"
+      ]
+    },
+    "message_sent": {
+      "positive": [
+        "sent message visible in chat thread",
+        "input field cleared"
+      ],
+      "negative": [
+        "input field still contains text",
+        "error toast visible"
+      ]
+    },
+    "match_detected": {
+      "positive": [
+        "match overlay or notification visible",
+        "new match in chat list"
+      ],
+      "negative": [
+        "no overlay",
+        "standard next profile showing"
+      ]
+    }
+  }
+}

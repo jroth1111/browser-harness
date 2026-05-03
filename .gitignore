@@ -1,8 +1,11 @@
 __pycache__/
 *.pyc
 *.log
+.DS_Store
+**/.DS_Store
 
 # Local environment and secret material.
+.private-data/
 .env
 .env.*
 !.env.example
