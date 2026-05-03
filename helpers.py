@@ -1,5 +1,6 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
-import atexit, base64, json, os, socket, time, urllib.request
+import atexit, base64, json, os, re, socket, time, urllib.error, urllib.request
+from collections import deque
 from importlib.resources import files
 from pathlib import Path
 from urllib.parse import urlparse
@@ -38,40 +39,79 @@ def _asset_dir(local_name, package_name):
 
 
 def _reconnect():
-    global _sock
+    global _sock, _BROWSER_UA
     if _sock is not None:
         try:
             _sock.close()
         except OSError:
             pass
     _sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    _sock.connect(SOCK)
+    _sock.settimeout(30)
+    try:
+        _sock.connect(SOCK)
+    except Exception:
+        _sock.close()
+        _sock = None
+        raise
+    _BROWSER_UA = None  # invalidate cached UA on reconnect
 
 
-def _send(req):
+def _recv(timeout=30):
+    deadline = time.time() + timeout
+    data = b""
+    while not data.endswith(b"\n"):
+        if time.time() > deadline:
+            raise RuntimeError(f"_recv() timeout — no newline within {timeout}s")
+        if len(data) > 10 << 20:
+            raise RuntimeError(f"_recv() oversized response: {len(data)} bytes")
+        chunk = _sock.recv(1 << 20)
+        if not chunk:
+            break
+        data += chunk
+    return data
+
+
+# CDP methods that mutate browser state — don't auto-retry on socket errors.
+_MUTATING_CDP = frozenset((
+    "Page.navigate", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
+    "Input.insertText", "DOM.setFileInputFiles", "Page.captureScreenshot",
+    "Network.setBlockedURLs", "Target.closeTarget", "Target.createTarget",
+))
+
+
+def _send(req, timeout=30):
     global _sock
     if _sock is None:
         _reconnect()
     payload = (json.dumps(req) + "\n").encode()
+    method = req.get("method", "")
     try:
         _sock.sendall(payload)
-        data = b""
-        while not data.endswith(b"\n"):
-            chunk = _sock.recv(1 << 20)
-            if not chunk:
-                break
-            data += chunk
-    except OSError:
+        data = _recv(timeout)
+    except (OSError, ConnectionResetError) as e:
+        if method in _MUTATING_CDP:
+            raise RuntimeError(f"socket error during {method}: {e}") from e
         _reconnect()
         _sock.sendall(payload)
-        data = b""
-        while not data.endswith(b"\n"):
-            chunk = _sock.recv(1 << 20)
-            if not chunk:
-                break
-            data += chunk
-    r = json.loads(data)
-    if "error" in r: raise RuntimeError(r["error"])
+        data = _recv(timeout)
+    except (RuntimeError, ValueError):
+        # _recv() timeout/oversize — socket state is corrupt
+        try: _sock.close()
+        except OSError: pass
+        _sock = None
+        raise
+    try:
+        r = json.loads(data)
+    except (ValueError, json.JSONDecodeError) as e:
+        # Malformed response — socket stream is misaligned, force reconnect
+        try: _sock.close()
+        except OSError: pass
+        _sock = None
+        raise RuntimeError(f"invalid CDP response ({len(data)} bytes): {e}") from e
+    if "error" in r:
+        err = r["error"]
+        msg = err["message"] if isinstance(err, dict) and "message" in err else err
+        raise RuntimeError(msg)
     return r
 
 
@@ -81,17 +121,23 @@ def _require_key(mapping, key, context):
     return mapping[key]
 
 
-def cdp(method, session_id=None, **params):
+def cdp(method, session_id=None, timeout=30, **params):
     """Raw CDP. cdp('Page.navigate', url='...'), cdp('DOM.getDocument', depth=-1)."""
-    return _send({"method": method, "params": params, "session_id": session_id}).get("result", {})
+    return _send({"method": method, "params": params, "session_id": session_id}, timeout=timeout).get("result", {})
 
 
-def drain_events():  return _send({"meta": "drain_events"})["events"]
+def drain_events():  return _send({"meta": "drain_events"}).get("events", [])
 def endpoint_info(): return _send({"meta": "endpoint_info"}).get("endpoint_info", {})
 
 
 # --- navigation / page ---
 def goto_url(url):
+    """Navigate the current tab to *url* and return CDP result.
+
+    If a domain-skills folder matching the URL hostname exists, also returns
+    ``domain_skills`` listing the first 10 .md files in that folder. This is
+    a read-only filesystem check — no network side effects.
+    """
     cdp("Page.enable")
     drain_events()
     r = cdp("Page.navigate", url=url)
@@ -103,14 +149,18 @@ def navigate_via_google(url, google_base="https://www.google.com"):
 
     Opens Google first, then redirects to the target URL. Some WAF systems
     (Cloudflare, Akamai) treat search-engine referrals as organic traffic and
-    apply lighter challenge requirements. Returns the goto_url() result dict.
+    apply lighter challenge requirements.
+
+    Returns a dict with content health status (ok, reason, block, textLength)
+    plus viewport metrics (url, title, w, h). Check ``ok`` before extracting.
     """
     goto_url(google_base)
     wait_for_load(timeout=10.0)
     # Use JS navigation so the browser sends Google as the referrer
     js(f"location.href = {json.dumps(url)}")
-    wait_for_load(timeout=15.0)
-    return page_info()
+    status = wait_for_content(min_text=200, timeout=15.0)
+    info = page_info()
+    return {**status, "w": info.get("w", 0), "h": info.get("h", 0)}
 
 def page_info():
     """{url, title, w, h, sx, sy, pw, ph} - viewport + scroll + page size.
@@ -155,60 +205,97 @@ def detect_block_page(html="", text="", url=""):
     html = html or ""
     text = text or ""
     url = url or ""
-    haystack = "\n".join((html, text, url)).lower()
+    # Single lowercased copy for substring matching — avoids per-needle regex.
+    haystack = (html + "\n" + text + "\n" + url).lower()
     html_len = len(html)
     stripped_text = text.strip()
     evidence = []
     kind = None
 
+    def _has(needle):
+        return needle in haystack
+
+    def _matches(needles):
+        return [n for n in needles if n in haystack]
+
     # Kasada/KPSDK
-    kpsdk_hits = [s for s in ("window.kpsdk", "x-kpsdk", "kp_uidz", "/ips.js") if s in haystack]
+    kpsdk_hits = _matches(("window.kpsdk", "x-kpsdk", "kp_uidz", "/ips.js"))
     if len(kpsdk_hits) >= 2 and (not stripped_text or html_len < 8000):
         kind = "kasada_kpsdk"
         evidence.extend(kpsdk_hits)
 
     # Akamai — expanded with Crawl4AI's Reference # patterns
     if not kind:
-        akamai_hits = [s for s in (
+        akamai_hits = _matches((
             "reference #", "pardon our interruption", "errors.edgesuite.net",
             "failover-waf", "access denied", "akamai",
             "_abck", "akamai_sw",
-        ) if s in haystack]
-        if len(akamai_hits) >= 2 or ("reference #" in haystack and html_len < 10000):
+        ))
+        if len(akamai_hits) >= 2 or (_has("reference #") and html_len < 10000):
             kind = "akamai"
             evidence.extend(akamai_hits[:3])
 
     # PerimeterX
     if not kind:
-        px_hits = [s for s in (
+        px_hits = _matches((
             "_pxappid", "window._px", "collector.perimeterx.net",
             "captcha.px-cdn.net", "human security challenge",
             "px-cdn.net", "_pxmvid",
-        ) if s in haystack]
-        if len(px_hits) >= 2 or ("_pxappid" in haystack and html_len < 10000):
+        ))
+        if len(px_hits) >= 2 or (_has("_pxappid") and html_len < 10000):
             kind = "perimeterx"
             evidence.extend(px_hits[:3])
 
     # Imperva/Incapsula
     if not kind:
-        imperva_hits = [s for s in (
+        imperva_hits = _matches((
             "_incapsula_resource", "incident id", "x-iinfo",
             "imperva", "incapsula",
-        ) if s in haystack]
+        ))
         if len(imperva_hits) >= 2:
             kind = "imperva"
             evidence.extend(imperva_hits[:3])
 
+    # DataDome
+    if not kind:
+        dd_hits = _matches((
+            "window.dd", "dd.key", "datadome.co",
+            "dd_tracker", "_dd_l", "ddjskey",
+        ))
+        if len(dd_hits) >= 2 or (_has("datadome.co") and html_len < 10000):
+            kind = "datadome"
+            evidence.extend(dd_hits[:3])
+
     # Generic WAF shell — small page with block indicators (Crawl4AI tier 2/3)
     if not kind and html_len < 10000:
-        generic_hits = [s for s in (
+        generic_hits = _matches((
             "checking your browser", "just a moment",
             "please verify you are human", "are you a robot",
             "blocked by security", "request blocked",
-        ) if s in haystack]
+        ))
         if generic_hits:
             kind = "waf_generic"
             evidence.extend(generic_hits[:2])
+
+    # Auth gate / login redirect — page is an auth wall, not the requested content
+    if not kind:
+        url_lower = url.lower()
+        # Path-segment matching to avoid false positives like "/products/login-guide"
+        auth_url_hits = [p for p in (
+            "/login", "/signin", "/sign-in", "/auth/login", "/authenticate",
+            "/accounts/login", "/account/login", "/sso/login",
+        ) if url_lower.rstrip("/").endswith(p) or f"{p}?" in url_lower or f"{p}&" in url_lower]
+        auth_text_hits = _matches((
+            "sign in to continue", "log in to continue",
+            "please sign in", "please log in",
+            "login to access", "authentication required",
+            "you need to sign in", "you must be logged in",
+            "create an account to continue", "register to continue",
+        ))
+        if auth_url_hits or (auth_text_hits and html_len < 30000):
+            kind = "auth_gate"
+            evidence.extend(auth_url_hits[:2])
+            evidence.extend(auth_text_hits[:2])
 
     if not kind:
         return {"blocked": False, "kind": None, "evidence": []}
@@ -255,6 +342,9 @@ def wait_for_content(min_text=200, timeout=15.0, poll=0.5):
     last = {}
     while time.time() < deadline:
         last = page_content_status()
+        # Tab detached or JS error — stop polling immediately
+        if last.get("_js_undefined") or last.get("_js_error"):
+            return {**last, "ok": False, "reason": "js_error"}
         if last.get("block", {}).get("blocked"):
             return {**last, "ok": False, "reason": "blocked"}
         if int(last.get("textLength") or 0) >= min_text:
@@ -358,54 +448,8 @@ def seed_browser_session(url, min_text=500, timeout=20.0, close=True):
         return {**status, "targetId": tid, "seedUrl": url, "cookieNames": cookie_names}
     finally:
         if close and tid:
-            close_tab(tid)
-
-def fetch_with_browser_session(url, seed_url=None, retries=1, min_text=500, timeout=20.0, headers=None):
-    """Fetch `url` with browser cookies, optionally re-seeding and retrying.
-
-    Use this when a persistent headful profile can satisfy a site challenge but
-    direct HTTP may have stale/missing cookies. The returned dict includes the
-    final response text plus compact attempt evidence.
-    """
-    attempts = []
-    cookie_urls = [url]
-    if seed_url and _origin_url(seed_url) != _origin_url(url):
-        cookie_urls.append(seed_url)
-    for attempt in range(max(0, retries) + 1):
-        response = http_get_browser_session_response(url, headers=headers, cookie_urls=cookie_urls, timeout=timeout)
-        attempts.append({
-            "stage": "fetch",
-            "attempt": attempt + 1,
-            "status": response.get("status"),
-            "url": response.get("url"),
-            "ok": response.get("ok"),
-            "http_ok": response.get("http_ok"),
-            "block": response.get("block"),
-            "textLength": len(response.get("text") or ""),
-        })
-        if response.get("ok"):
-            return {**response, "attempts": attempts, "reason": "content"}
-        if not seed_url or attempt >= max(0, retries):
-            reason = "blocked" if response.get("block", {}).get("blocked") else "http_error"
-            return {**response, "attempts": attempts, "reason": reason}
-        seed = seed_browser_session(seed_url, min_text=min_text, timeout=timeout, close=True)
-        attempts.append({
-            "stage": "seed",
-            "attempt": attempt + 1,
-            "ok": seed.get("ok"),
-            "reason": seed.get("reason"),
-            "block": seed.get("block"),
-            "cookieNames": seed.get("cookieNames", []),
-            "textLength": seed.get("textLength"),
-        })
-        if not seed.get("ok"):
-            return {
-                **response,
-                "ok": False,
-                "attempts": attempts,
-                "reason": f"seed_{seed.get('reason', 'failed')}",
-                "seed": seed,
-            }
+            try: close_tab(tid)
+            except Exception: pass
 
 def browser_backend_info():
     """Diagnose the attached CDP backend. Explicitly runs JS for page-level facts."""
@@ -494,7 +538,8 @@ def diagnose_url_capability(url, min_text=500, timeout=20.0, close=True):
         }
     finally:
         if close and tid:
-            close_tab(tid)
+            try: close_tab(tid)
+            except Exception: pass
 
 def _extract_json_assignment(html, name):
     marker = f"window.{name}="
@@ -517,7 +562,7 @@ def _extract_json_assignment(html, name):
             elif ch == quote:
                 quote = None
             continue
-        if ch in {"'", '"'}:
+        if ch in {"'", '"', '`'}:
             quote = ch
         elif ch == "{":
             depth += 1
@@ -527,19 +572,21 @@ def _extract_json_assignment(html, name):
                 return html[i:pos + 1]
     return None
 
-def _decode_nested_json_strings(value):
+def _decode_nested_json_strings(value, _depth=0):
+    if _depth > 10:
+        return value
     if isinstance(value, str):
         stripped = value.strip()
         if stripped.startswith(("{", "[")):
             try:
-                return _decode_nested_json_strings(json.loads(stripped))
+                return _decode_nested_json_strings(json.loads(stripped), _depth + 1)
             except (TypeError, ValueError):
                 return value
         return value
     if isinstance(value, list):
-        return [_decode_nested_json_strings(item) for item in value]
+        return [_decode_nested_json_strings(item, _depth + 1) for item in value]
     if isinstance(value, dict):
-        return {k: _decode_nested_json_strings(v) for k, v in value.items()}
+        return {k: _decode_nested_json_strings(v, _depth + 1) for k, v in value.items()}
     return value
 
 def extract_argonaut_exchange(html=None, decode_json_strings=True):
@@ -598,12 +645,16 @@ def click_at_xy(x, y, button="left", clicks=1, humanize=False, steps=12):
         # Move from a random starting position with eased interpolation
         start_x = max(0, x - random.randint(30, 60))
         start_y = y + random.randint(-20, 20)
+        total_ms = random.uniform(80, 160)
+        step_sleep = total_ms / (max(2, steps) * 1000)
         for i in range(1, max(2, steps) + 1):
             t = i / max(2, steps)
             eased = t * t * (3 - 2 * t)
             cdp("Input.dispatchMouseEvent", type="mouseMoved",
                 x=start_x + (target_x - start_x) * eased,
                 y=start_y + (target_y - start_y) * eased)
+            if i < max(2, steps):
+                time.sleep(step_sleep)
         x, y = target_x, target_y
     cdp("Input.dispatchMouseEvent", type="mousePressed", x=x, y=y, button=button, clickCount=clicks)
     cdp("Input.dispatchMouseEvent", type="mouseReleased", x=x, y=y, button=button, clickCount=clicks)
@@ -613,7 +664,11 @@ def type_text(text, delay=0):
         cdp("Input.insertText", text=text)
         return
     for ch in text:
-        cdp("Input.insertText", text=ch)
+        vk = ord(ch) if len(ch) == 1 else 0
+        base = {"key": ch, "code": ch, "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk}
+        cdp("Input.dispatchKeyEvent", type="keyDown", **base)
+        cdp("Input.dispatchKeyEvent", type="char", text=ch, **base)
+        cdp("Input.dispatchKeyEvent", type="keyUp", **base)
         time.sleep(delay)
 
 _KEYS = {  # key → (windowsVirtualKeyCode, code, text)
@@ -687,6 +742,9 @@ def close_tab(target=None):
         tabs = list_tabs(include_chrome=False) or list_tabs(include_chrome=True)
         if tabs:
             switch_tab(tabs[0])
+            cur = current_tab()
+            if cur.get("url", "").startswith(INTERNAL):
+                raise RuntimeError("no real browser tabs remaining — all tabs are internal chrome:// pages")
     return result.get("success", True)
 
 def close_tabs(targets):
@@ -713,9 +771,14 @@ def new_tab(url="about:blank"):
     # attach, so the brief about:blank is "complete" by the time the caller
     # polls and wait_for_load() returns before navigation actually starts.
     tid = _require_key(cdp("Target.createTarget", url="about:blank"), "targetId", "Target.createTarget response")
-    switch_tab(tid)
-    if url != "about:blank":
-        goto_url(url)
+    try:
+        switch_tab(tid)
+        if url != "about:blank":
+            goto_url(url)
+    except Exception:
+        try: cdp("Target.closeTarget", targetId=tid)
+        except Exception: pass
+        raise
     return tid
 
 def ensure_real_tab():
@@ -768,12 +831,35 @@ def js(expression, target_id=None):
 
     Expressions with top-level `return` are automatically wrapped in an IIFE, so both
     `document.title` and `const x = 1; return x` are valid inputs.
+
+    Returns the JS value on success. Returns structured dicts on failure:
+    - {"_js_error": message} — expression threw an exception
+    - {"_js_undefined": True} — expression returned undefined (tab may be detached)
     """
     sid = _require_key(cdp("Target.attachToTarget", targetId=target_id, flatten=True), "sessionId", "Target.attachToTarget response") if target_id else None
-    if "return " in expression and not expression.strip().startswith("("):
+    # Wrap in IIFE when expression contains a return keyword at statement level.
+    # Strip quoted strings first to avoid matching "return" inside selectors like '.return-to-top'.
+    stripped = re.sub(r'''('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)''', '', expression)
+    if re.search(r'\breturn\b', stripped) and not expression.strip().startswith("("):
         expression = f"(function(){{{expression}}})()"
     r = cdp("Runtime.evaluate", session_id=sid, expression=expression, returnByValue=True, awaitPromise=True)
-    return r.get("result", {}).get("value")
+    result = r.get("result") or {}
+    if not r.get("result"):
+        return {"_js_error": f"Runtime.evaluate returned no result: {r!r}"}
+    # Check for JS exception — return structured error instead of undefined
+    if result.get("type") == "undefined" and "exceptionDetails" in r:
+        exc = r["exceptionDetails"]
+        msg = ""
+        exc_text = exc.get("exception", {})
+        if isinstance(exc_text, dict):
+            msg = exc_text.get("description", "")
+        if not msg:
+            msg = exc.get("text", "unknown JS error")
+        return {"_js_error": msg}
+    # Distinguish "JS returned undefined" from error states
+    if result.get("type") == "undefined":
+        return {"_js_undefined": True}
+    return result.get("value")
 
 
 _KC = {"Enter": 13, "Tab": 9, "Escape": 27, "Backspace": 8, " ": 32, "ArrowLeft": 37, "ArrowUp": 38, "ArrowRight": 39, "ArrowDown": 40}
@@ -820,6 +906,114 @@ def ax_snapshot(max_nodes=120):
         })
     return out
 
+
+# --- crawl state ---
+class CrawlState:
+    """In-memory dedup/accumulator for browser crawls. Opt-in, no persistence."""
+
+    def __init__(self, key_field, marginal_window=5):
+        self.key_field = key_field
+        self._occurrences = {}  # key -> encounter count
+        self._records = []
+        self._dup_attempts = 0
+        self._blocked = []
+        self._scope_totals = {}
+        self._marginal = deque(maxlen=marginal_window)
+
+    def add(self, record):
+        """Add record if key_field value is new. Returns True if added."""
+        key = record.get(self.key_field)
+        if key is None:
+            return False
+        if key in self._occurrences:
+            self._occurrences[key] += 1
+            self._dup_attempts += 1
+            return False
+        self._occurrences[key] = 1
+        self._records.append(record)
+        return True
+
+    def record_blocked(self, url, reason=""):
+        self._blocked.append({"url": url, "reason": reason})
+
+    def record_scope_total(self, scope, expected):
+        self._scope_totals[scope] = self._scope_totals.get(scope, 0) + expected
+
+    def page_done(self, new_count):
+        """Record new items found on this page (call after each page)."""
+        self._marginal.append(new_count)
+
+    def saturation_reached(self, k=3):
+        """True when last k page-new-item counts are all 0."""
+        if len(self._marginal) < k:
+            return False
+        return all(c == 0 for c in list(self._marginal)[-k:])
+
+    def estimated_unseen(self):
+        """Chao1 lower-bound estimate of unseen items from occurrence counts."""
+        f1 = sum(1 for c in self._occurrences.values() if c == 1)
+        f2 = sum(1 for c in self._occurrences.values() if c == 2)
+        if f1 == 0:
+            return 0
+        if f2 == 0:
+            return f1 * (f1 - 1) // 2
+        return f1 * f1 // (2 * f2)
+
+    def summary(self):
+        return {
+            "records": len(self._records),
+            "deduped": self._dup_attempts,
+            "blocked": len(self._blocked),
+            "scope_totals": dict(self._scope_totals),
+            "saturated": self.saturation_reached(),
+            "estimated_unseen": self.estimated_unseen(),
+        }
+
+
+def field_triage(records):
+    """Compute fill-rate triage for extracted records.
+
+    Returns dict mapping field_name -> {present, null, unobservable, omitted,
+    total, fill_rate, status} with status one of OK/LOW/BROKEN/BLOCKED.
+    """
+    if not records:
+        return {}
+    all_keys = set()
+    for r in records:
+        all_keys.update(r.keys())
+    triage = {}
+    for field in sorted(all_keys):
+        present = null = unobservable = omitted = 0
+        for r in records:
+            if field not in r:
+                omitted += 1
+            elif r[field] is None:
+                null += 1
+            elif r[field] == "__UNOBSERVABLE__":
+                unobservable += 1
+            else:
+                present += 1
+        n = len(records)
+        checked = n - omitted
+        fill = present / checked if checked > 0 else 0
+        if unobservable > 0:
+            status = "BLOCKED"
+        elif checked > 0 and present == 0 and null == checked:
+            status = "OK"
+        elif fill >= 1.0:
+            status = "OK"
+        elif fill >= 0.5:
+            status = "LOW"
+        else:
+            status = "BROKEN"
+        triage[field] = {
+            "present": present, "null": null,
+            "unobservable": unobservable, "omitted": omitted,
+            "total": n, "fill_rate": round(fill, 3), "status": status,
+        }
+    return triage
+
+
 def capture_screenshot_trace(directory="/tmp/bh-trace", frames=3, interval=0.5, full=False):
     """Opt-in screenshot timeline. Writes artifacts only when called."""
     directory = Path(directory)
@@ -853,20 +1047,50 @@ def discover_local_cdp_endpoints(ports=(9222, 3000, 5050), host="127.0.0.1", tim
         })
     return found
 
+_BROWSER_UA = None
+
+
+def _real_user_agent():
+    """Lazily read the attached browser's User-Agent. Falls back to a realistic full string."""
+    global _BROWSER_UA
+    if _BROWSER_UA is not None:
+        return _BROWSER_UA
+    try:
+        version = cdp("Browser.getVersion")
+        ua = version.get("userAgent", "")
+        if ua:
+            _BROWSER_UA = ua
+            return ua
+    except Exception:
+        pass
+    _BROWSER_UA = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    )
+    return _BROWSER_UA
+
+
 def http_get(url, headers=None, timeout=20.0):
     """Pure local HTTP -- no browser. Use for static pages / APIs. Wrap in ThreadPoolExecutor for bulk."""
     import gzip
-    h = {"User-Agent": "Mozilla/5.0", "Accept-Encoding": "gzip"}
+    h = {"User-Agent": _real_user_agent(), "Accept-Encoding": "gzip"}
     if headers: h.update(headers)
     with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
         data = r.read()
+        ct = r.headers.get("Content-Type", "")
         if r.headers.get("Content-Encoding") == "gzip":
             try:
                 data = gzip.decompress(data)
             except (OSError, EOFError):
-                pass
+                # Corrupt gzip — retry without Accept-Encoding: gzip
+                with urllib.request.urlopen(urllib.request.Request(url, headers={**h, "Accept-Encoding": "identity"}), timeout=timeout) as r2:
+                    data = r2.read()
+                    ct = r2.headers.get("Content-Type", "")
+        # Binary content — decode with replace so callers (detect_block_page, Response)
+        # always get str, never bytes (bytes + str concatenation raises TypeError)
+        if ct and not ct.startswith(("text/", "application/json", "application/javascript", "application/xml")):
+            return data.decode("utf-8", errors="replace")
         charset = "utf-8"
-        ct = r.headers.get("Content-Type", "")
         if "charset=" in ct:
             charset = ct.split("charset=")[1].split(";")[0].strip().strip('"')
         try:
@@ -940,6 +1164,28 @@ def solve_turnstile(timeout=30.0, poll=1.0, max_attempts=3):
                 time.sleep(1.0)
             return {"solved": False, "reason": "timeout", "attempts": attempt}
 
+        # Embedded Turnstile — widget is inside the page, no CF challenge page.
+        # Wait for the hidden input to receive a token (indicates completion).
+        if challenge_type == "embedded":
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                token = js("""(() => {
+                    const inp = document.querySelector('input[name="cf-turnstile-response"]');
+                    if (inp && inp.value && inp.value.length > 10) return inp.value;
+                    return null;
+                })()""")
+                if token:
+                    return {"solved": True, "reason": "embedded_token_received", "attempts": attempt}
+                # Some sites use a data-callback instead
+                callback_done = js("""!!(
+                    window.turnstile && window.turnstile.getResponse &&
+                    window.turnstile.getResponse()
+                )""")
+                if callback_done:
+                    return {"solved": True, "reason": "embedded_callback_fired", "attempts": attempt}
+                time.sleep(1.0)
+            return {"solved": False, "reason": "embedded_timeout", "attempts": attempt}
+
         # Find the Turnstile widget bounding box. Try iframe first, then CSS selectors.
         box = js("""(() => {
             // Method 1: CF iframe bounding box
@@ -980,10 +1226,11 @@ def solve_turnstile(timeout=30.0, poll=1.0, max_attempts=3):
         while time.time() < deadline:
             title = js("document.title") or ""
             if "just a moment" not in title.lower():
-                # Verify actual content appeared
+                # Verify actual content appeared (not still a WAF shell)
                 status = page_content_status()
-                if int(status.get("textLength") or 0) >= 100:
-                    return {"solved": True, "reason": "content_appeared", "attempts": attempt}
+                if int(status.get("textLength") or 0) >= 500:
+                    if not status.get("block", {}).get("blocked"):
+                        return {"solved": True, "reason": "content_appeared", "attempts": attempt}
             time.sleep(poll)
 
         # Challenge still present — retry if attempts remain
@@ -994,31 +1241,54 @@ def solve_turnstile(timeout=30.0, poll=1.0, max_attempts=3):
 
 
 def block_resources(ad_domains=True, extra_domains=None, resource_types=None):
-    """Install CDP route to block ad domains and/or resource types on the current page.
+    """Block ad domains and/or resource types on the current page.
 
-    Call after navigating to a page. Uses Fetch.enable to intercept and abort
-    matching requests. Returns the number of blocked domain patterns registered.
-    Set *ad_domains*=False to skip the built-in ad list. *resource_types*
-    accepts CDP resource types like ``["image", "font", "media", "stylesheet"]``.
+    Call after navigating. Domain blocking uses ``Network.setBlockedURLs`` and
+    persists until navigation. Resource-type blocking uses ``Fetch.enable`` and
+    flushes already-paused requests in a bounded loop — catches in-flight
+    requests but not future ones. Returns the total number of blocking rules.
     """
+    count = 0
     domains = set()
     if ad_domains:
         domains.update(_AD_DOMAINS)
     if extra_domains:
         domains.update(extra_domains)
 
-    if resource_types:
-        cdp("Fetch.enable", patterns=[{"resourceType": rt, "requestStage": "Request"} for rt in resource_types])
-        # Install handler via Fetch.requestPaused events
-        cdp("Fetch.enable", patterns=[{"urlPattern": "*", "requestStage": "Request"}])
-
-    # Register domain-blocking via CDP Network.setBlockedURLs (available since Chrome 81)
     if domains:
-        url_patterns = [f"*.{d}/*" for d in domains]
+        url_patterns = []
+        for d in domains:
+            url_patterns.append(f"*.{d}/*")
+            url_patterns.append(f"*://{d}/*")
         cdp("Network.setBlockedURLs", urls=url_patterns)
         cdp("Network.enable")
-        return len(url_patterns)
-    return 0
+        count += len(domains)
+
+    if resource_types:
+        cdp("Fetch.enable", patterns=[
+            {"resourceType": rt, "requestStage": "Request"} for rt in resource_types
+        ])
+        for _ in range(20):
+            paused = [e for e in drain_events()
+                      if e.get("method") == "Fetch.requestPaused"]
+            if not paused:
+                break
+            for ev in paused:
+                rid = ev.get("params", {}).get("requestId")
+                if rid:
+                    try:
+                        cdp("Fetch.failRequest", requestId=rid,
+                            errorReason="BlockedByClient")
+                    except Exception:
+                        pass
+            time.sleep(0.05)
+        try:
+            cdp("Fetch.disable")
+        except Exception:
+            pass
+        count += len(resource_types)
+
+    return count
 
 
 _AD_DOMAINS = (
@@ -1037,11 +1307,11 @@ _AD_DOMAINS = (
     "clicks.hurra.com", "cloudflare.com/cdn-cgi/scripts/", "criteo.com",
     "criteo.net", "cs.ecn.atomicmpc.com.au", "doubleclick.net",
     "e-merchant.com", "e2.enemygem.com", "eyeota.net", "facebook.com/tr",
-    "facebook.net/signals", "fonts.googleapis.com", "fonts.gstatic.com",
+    "facebook.net/signals",
     "google-analytics.com", "google.com/pagead", "googleadservices.com",
     "googlesyndication.com", "googletagmanager.com",
     "hotjar.com", "impact-ad.jp", "js.driftt.com", "liadm.com",
-    "linkedin.com/li/", "lix Baseline.com", "log.outbrain.com",
+    "linkedin.com/li/", "lixbaseline.com", "log.outbrain.com",
     "metrics.brightcove.com", "mixpanel.com", "moatads.com",
     "mxpnl.com", "netdice.hurra.com", "newegg.com/html", "newrelic.com",
     "nr-data.net", "optimizely.com", "outbrain.com", "owneriq.net",
@@ -1067,15 +1337,22 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
     *source* selects the fetch strategy:
 
     - ``"http"``: plain HTTP via ``http_get()`` — fastest, no browser state.
-    - ``"session"``: HTTP with browser cookies via ``http_get_browser_session()``.
+    - ``"session"``: HTTP with browser cookies via ``http_get_browser_session_response()``.
     - ``"browser"``: real browser navigation via ``new_tab()`` + ``wait_for_content()``.
-    - ``"auto"`` (default): tries HTTP, then session, then browser.
+    - ``"auto"`` (default): tries HTTP, then session, then browser (with Turnstile fallback).
+
+    The returned Response may include a ``turnstile_solved`` key set to True when
+    Cloudflare Turnstile was detected and solved during the browser fallback.
     """
     from response import Response
 
     if source == "http":
-        text = http_get(url, headers=headers, timeout=timeout)
-        return Response(html=text, text=text, url=url, status=200, source="http")
+        try:
+            text = http_get(url, headers=headers, timeout=timeout)
+            return Response(html=text, text=text, url=url, status=200, source="http")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            return Response(html=body, text=body, url=url, status=e.code, source="http")
 
     if source == "session":
         result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
@@ -1092,22 +1369,37 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
             wait_for_load(timeout=timeout)
             status = wait_for_content(min_text=min_text, timeout=timeout)
             html = js("document.documentElement.outerHTML") or ""
+            block = status.get("block") or {}
+            if status.get("ok"):
+                return Response(
+                    html=html, text=status.get("text", ""),
+                    url=status.get("url", url), status=200,
+                    source="browser",
+                )
+            reason = status.get("reason", "")
+            fallback_status = 403 if block.get("blocked") else (504 if reason == "timeout" else 502)
             return Response(
                 html=html, text=status.get("text", ""),
-                url=status.get("url", url), status=200 if status.get("ok") else 0,
+                url=status.get("url", url), status=fallback_status,
                 source="browser",
             )
         finally:
             if tid:
-                close_tab(tid)
-
-    # source="auto": cascade http → session → browser
+                try: close_tab(tid)
+                except Exception: pass
     try:
         text = http_get(url, headers=headers, timeout=timeout)
         block = detect_block_page(html=text, text=text, url=url)
         if not block.get("blocked") and len(text.strip()) >= min_text:
             return Response(html=text, text=text, url=url, status=200, source="http")
-    except Exception:
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        block = detect_block_page(html=body, text=body, url=url)
+        if block.get("blocked") or len(body.strip()) < min_text:
+            pass  # fall through to session/browser
+        else:
+            return Response(html=body, text=body, url=url, status=e.code, source="http")
+    except (urllib.error.URLError, OSError, ConnectionError, RuntimeError):
         pass
 
     try:
@@ -1119,10 +1411,45 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
                 url=result.get("url", url), status=result.get("status", 0),
                 source="session", headers=result.get("headers", {}),
             )
-    except Exception:
+    except (urllib.error.URLError, OSError, ConnectionError, RuntimeError):
         pass
-
-    return fetch(url, source="browser", headers=headers, timeout=timeout, min_text=min_text)
+    tid = None
+    try:
+        tid = new_tab(url)
+        wait_for_load(timeout=timeout)
+        status = wait_for_content(min_text=min_text, timeout=timeout)
+        html = js("document.documentElement.outerHTML") or ""
+        if status.get("ok"):
+            return Response(
+                html=html, text=status.get("text", ""),
+                url=status.get("url", url), status=200,
+                source="browser",
+            )
+        # Blocked — try Turnstile if Cloudflare challenge detected
+        if not status.get("ok"):
+            detection = detect_turnstile(timeout=3.0)
+            if detection["found"]:
+                result = solve_turnstile(timeout=timeout)
+                if result.get("solved"):
+                    status2 = wait_for_content(min_text=min_text, timeout=timeout)
+                    html = js("document.documentElement.outerHTML") or html
+                    return Response(
+                        html=html, text=status2.get("text", ""),
+                        url=status2.get("url", url),
+                        status=200 if status2.get("ok") else 403,
+                        source="browser",
+                        turnstile_solved=True,
+                    )
+        block = status.get("block") or {}
+        return Response(
+            html=html, text=status.get("text", ""),
+            url=status.get("url", url), status=403 if block.get("blocked") else 0,
+            source="browser",
+        )
+    finally:
+        if tid:
+            try: close_tab(tid)
+            except Exception: pass
 
 
 def _close_sock():
