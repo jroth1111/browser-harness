@@ -97,6 +97,8 @@ def test_launch_profile_passes_options():
         port=9333,
         url="https://example.com",
         chrome_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        headless=False,
+        window_size=None,
         json_output=True,
     )
 

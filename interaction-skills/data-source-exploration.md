@@ -14,7 +14,7 @@ Generalizable:
 - field inventory and provenance
 - network/API observation discipline
 - primitive registry shape
-- extraction coverage and tri-state field semantics (see `extraction-coverage.md`)
+- extraction coverage and four-state field semantics (see `extraction-coverage.md`)
 
 Site-specific details belong in `domain-skills/<site>/`:
 
@@ -32,13 +32,13 @@ Site-specific details belong in `domain-skills/<site>/`:
    required fields.
 3. Inventory public sources without authentication.
 4. Test the cheapest backend first with `diagnose_url_capability()`.
-5. If using browser extraction: probe CSS selectors via `evaluate_script`
+5. If using browser extraction: probe CSS selectors via `js()`
    before writing extraction JS. See `extraction-coverage.md` for selector
-   discovery, entity-type identification, and tri-state field semantics.
+   discovery, entity-type identification, and four-state field semantics.
 6. Inventory authenticated/exportable sources in a persistent browser profile.
-6. Prefer structured exports/downloads over UI text.
-7. Inspect network requests only after UI/export behavior is understood.
-8. Register primitives with source, scope, confidence, freshness, privacy class,
+7. Prefer structured exports/downloads over UI text.
+8. Inspect network requests only after UI/export behavior is understood.
+9. Register primitives with source, scope, confidence, freshness, privacy class,
    and target schema.
 
 ## Source classification

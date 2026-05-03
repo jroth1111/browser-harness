@@ -14,7 +14,7 @@ Handles both single-platform and cross-platform searches.
 |---|---|
 | Run a known product search on one platform | Steps 1-2 (platform scripts below) |
 | Run cross-platform search | Steps 1-5 |
-| Filter noise and verify coverage | Steps 4-5 |
+| Filter noise and verify coverage | Steps 4-5, or `extraction-coverage.md` for per-page selector/extraction verification |
 | Search for all products containing a chip/component | Marketplace Search Strategy → Maximum-coverage search |
 | Search for a product category (not a specific model) | Marketplace Search Strategy → Product search vs category search |
 | Deal with marketplace fraud/scams | Marketplace Trust and Fraud |
@@ -50,8 +50,11 @@ python3 domain-skills/aliexpress/scripts/search.py plan "{QUERY}" \
 **Workflow:**
 1. Run `search.py extract-js --reset` → execute reset JS via CDP
 2. Navigate to each URL from the plan
-3. After each page load, run extraction JS via CDP `evaluate_script`
-4. After all URLs, run dump JS → save JSON
+3. After each page load: `wait_for_content()` → check `block` field → if blocked, emit `__UNOBSERVABLE__` and continue; otherwise run extraction JS via `js()`
+4. After first page: validate primary key fields have non-null values — stop if selectors are broken
+5. After all URLs, run dump JS → save JSON
+6. Verify extraction coverage — see `extraction-coverage.md` for
+   per-page coverage probes and per-entity-type field triage
 
 **Extraction details:** See `domain-skills/aliexpress/scraping.md` for selectors,
 accumulation strategy, and platform-specific gotchas.
@@ -286,6 +289,9 @@ for single-product lookups.
 - After 3-4 queries with 0 new unique products, the product likely doesn't exist on that platform
 - Enterprise/data-center products are genuinely scarce on consumer marketplaces
 - Recognize absence rather than endlessly broadening queries
+- For category searches without page-declared counts, use saturation-based stopping
+  (see `coverage-accounting.md` → Saturation-based stopping) — stop after K consecutive
+  pages with 0 new items
 
 ---
 

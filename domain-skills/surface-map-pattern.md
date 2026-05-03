@@ -113,5 +113,9 @@ Every surface map should have tests that prove:
 - optional search filter groups have `label`, `token`, and `status`
 - entrypoint docs reference the map and focused docs
 
+For browser-extracted surfaces, also verify that extraction actually works per
+field. See `../interaction-skills/extraction-coverage.md` for selector discovery
+probes, four-state field semantics, and per-entity-type fill rate triage.
+
 Run tests through the repo environment first when available, then use host
 Python only as a secondary check.

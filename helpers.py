@@ -1504,6 +1504,11 @@ def fill_rate_triage(records):
     return triage
 
 
+def field_triage(records):
+    """Backward-compatible name for fill-rate triage in skill docs/tests."""
+    return fill_rate_triage(records)
+
+
 def capture_screenshot_trace(directory="/tmp/bh-trace", frames=3, interval=0.5, full=False):
     """Opt-in screenshot timeline. Writes artifacts only when called."""
     directory = Path(directory)

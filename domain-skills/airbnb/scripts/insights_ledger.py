@@ -214,9 +214,9 @@ def build_latest_ds_index(ledger_index, today=None, include_granularities=None, 
         if gran == SENTINEL_GRANULARITY:
             if not include_sentinels:
                 continue
+            span = int(row.get("_attempt_span_days") or 1)
             if not _sentinel_is_active(ds_date, row.get("observed_at"), today, span_days=span):
                 continue
-            span = int(row.get("_attempt_span_days") or 1)
         else:
             if include_granularities is not None and gran not in include_granularities:
                 continue

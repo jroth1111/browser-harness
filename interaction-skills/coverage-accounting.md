@@ -154,11 +154,85 @@ worst category, not by the average. A crawl that achieves 100% on 10 categories 
 | UNKNOWN | N/A | Coverage indeterminate (0/0 with failed count) |
 
 The overall rating is the worst rating across all categories, with UNKNOWN treated
-as MEDIUM (not clearly broken, but not verifiable).
+as MEDIUM for degraded analysis only. UNKNOWN blocks absence claims (you cannot
+assert a field is absent when coverage is indeterminate) and blocks crawl-complete
+declarations. Use UNKNOWN-rated data for exploratory analysis but not for definitive
+completeness statements.
+
+## Saturation-based stopping
+
+Use when page-declared counts are unavailable and you need a stopping signal based
+on diminishing returns rather than completeness.
+
+**Marginal discovery rate** — for each page crawled, count new items (not
+previously seen). Track the last K page new-item counts. When marginal discovery
+is 0 for K consecutive pages (default K=3), the crawl has saturated.
+
+**Saturation vs closure:**
+
+| Signal | Meaning | Authorization |
+|--------|---------|--------------|
+| Coverage ratio == 1.0 + page-declared count available | Completeness verified | Can emit ABSENT_PROVEN (see closure certificates in `extraction-coverage.md`) |
+| Saturation (0 new items for K pages) | Diminishing returns | Can stop exploring; cannot claim completeness |
+| Neither | Still discovering | Continue crawling |
+
+Saturation is an efficiency signal, not a completeness claim. It means "we have
+stopped finding new items." Closure means "we have found all items that exist."
+Only closure with coverage ratio 1.0 authorizes an absence claim.
+
+**Using CrawlState:**
+
+```python
+from helpers import CrawlState
+
+state = CrawlState(key_field="listing_id")
+for page_url in page_urls:
+    results = js(extraction_snippet)
+    new_count = 0
+    for record in results:
+        if state.add(record):
+            new_count += 1
+    state.page_done(new_count)
+    if state.saturation_reached(k=3):
+        print("Saturation: 0 new items for 3 consecutive pages")
+        break
+print(state.summary())
+```
+
+**Rating implications:**
+
+| Scenario | Rating | Reason |
+|----------|--------|--------|
+| Coverage ratio 1.0 + all triage OK | HIGH | Completeness verified |
+| Saturated + no page-declared count | UNKNOWN | Cannot verify completeness |
+| Saturated + partial page-declared count | MEDIUM | Partial verification available |
+
+## Metrics to report
+
+A crawl output should include these metrics alongside the extracted data:
+
+| Metric | How to compute | Why it matters |
+|---|---|---|
+| Coverage ratio | `extracted / page_declared_total` per scope | Completeness vs page's own count |
+| Coverage rating | Worst of HIGH/MEDIUM/LOW/UNKNOWN across scopes | Single health signal |
+| Dedup count | `CrawlState.summary()["deduped"]` | Overlap between pages and queries |
+| Blocked page count | `CrawlState.summary()["blocked"]` | Access reliability |
+| Unobservable fraction | `blocked / total_pages` | Whether coverage gaps are from blocks or extraction failures |
+| Field-state matrix | `field_triage(records)` — counts of present/null/__UNOBSERVABLE__ per field | Extraction health per field |
+| Marginal discovery curve | `CrawlState._marginal` deque values | Whether exploration is saturated |
+| Estimated unseen items | `CrawlState.estimated_unseen()` (Chao1 lower bound) | Statistical unseen-mass signal when page counts unavailable |
+| Closure certificate | Emitted when coverage ratio 1.0 + all triage OK + no unobservable required fields | Formal absence claim |
+
+Report these in the crawl output alongside the extracted dataset so downstream consumers
+can assess reliability without re-running the crawl.
 
 ## Cross-references
 
-- `extraction-coverage.md` — the broader coverage problem, tri-state fields, selector
+- `extraction-coverage.md` — the broader coverage problem, four-state fields, selector
   discovery, field triage
 - `api-schema-audit.md` — verifying API response schemas, data threading between
   crawl waves
+- **Saturation-based stopping** is implemented by `CrawlState` in `../helpers.py` — use
+  `CrawlState.saturation_reached()` when page-declared counts are unavailable.
+- **Closure certificates** in `extraction-coverage.md` — saturation is distinct from
+  closure. Saturation is an efficiency stop; closure is a completeness claim.

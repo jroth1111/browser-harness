@@ -9,31 +9,27 @@ Currency is AUD. Amazon AU shows "RRP" where US shows "List Price".
 ### Direct search URL (fastest, always use this)
 ```python
 goto_url("https://www.amazon.com.au/s?k=mechanical+keyboard")
-wait_for_load()
-wait(2)  # dynamic content needs ~2s after readyState=complete
+wait_for_content(min_text=200)  # polls for content + detects CAPTCHA/blocks
 ```
 
 ### Search box typing (use when you need category filtering)
 ```python
 goto_url("https://www.amazon.com.au")
-wait_for_load()
-wait(1)
+wait_for_content()
 js("document.querySelector('#twotabsearchtextbox').focus()")
 js("document.querySelector('#twotabsearchtextbox').click()")
 wait(0.3)
 type_text("wireless mouse")
 wait(0.3)
 press_key("Enter")
-wait_for_load()
-wait(2)
+wait_for_content(min_text=200)
 ```
 
 ### Direct product page
 ```python
 # URL pattern: /dp/{ASIN}  or  /dp/{ASIN}?th=1 (Amazon may redirect to add ?th=1)
 goto_url("https://www.amazon.com.au/dp/B08Z6X4NK3")
-wait_for_load()
-wait(2)
+wait_for_content(min_text=200)
 ```
 
 ## Session Gotcha
@@ -44,8 +40,7 @@ wait(2)
 
 ```python
 tid = new_tab("https://www.amazon.com.au/s?k=mechanical+keyboard")
-wait_for_load()
-wait(2)
+wait_for_content(min_text=200)
 ```
 
 After that, `goto_url()` works fine within the same Amazon session.
@@ -127,8 +122,7 @@ Note: The US format `/Best-Sellers-{Category}/zgbs/{slug}/` returns 404 on AU. U
 
 ```python
 goto_url("https://www.amazon.com.au/gp/bestsellers/electronics/")
-wait_for_load()
-wait(2)
+wait_for_content(min_text=200)
 
 items = js("""
   Array.from(document.querySelectorAll('[data-asin]')).map(el => {
@@ -153,8 +147,7 @@ Note: Title comes from the product image `alt` attribute — the text title elem
 next_url = js("document.querySelector('.s-pagination-next')?.href")
 if next_url:
     goto_url(next_url)
-    wait_for_load()
-    wait(2)
+    wait_for_content(min_text=200)
 
 # Or construct by page number
 goto_url("https://www.amazon.com.au/s?k=wireless+mouse&page=2")
@@ -201,7 +194,7 @@ Amazon may serve a CAPTCHA on fresh/anonymous sessions. Using the browser's exis
 - **Price split DOM**: `.a-price-whole` innerText includes a trailing `\n.` — strip it: `.replace(/[\n.]/g,'')`.
 - **ASIN from URL**: Use `/dp/([A-Z0-9]{10})/` regex on the product URL. `data-asin` on search results is always the canonical ASIN.
 - **`?th=1` redirect**: Amazon appends `?th=1` (and sometimes `?psc=1`) to product URLs after redirect. This is normal — `input[name="ASIN"]` always has the clean ASIN.
-- **Wait 2s after `wait_for_load()`**: Amazon search results load the listing cards asynchronously. `readyState=complete` fires before cards render. A hard 2s wait is required.
+- **Use `wait_for_content()` after navigation**: Amazon search results load listing cards asynchronously. `wait_for_load()` fires before cards render. `wait_for_content(min_text=200)` polls until content appears AND detects CAPTCHA/block pages.
 - **Product pages need longer on AU**: Product detail pages can take 4–5s to fully render on AU. If `#productTitle` is null, the page hasn't finished loading. Use `new_tab()` for the first product page visit.
 - **Product overview specs**: `#productOverview_feature_div table` provides structured key/value specs (brand, connectivity, etc.) — useful when bullet points are sparse.
 - **Search result titles are brand-only for computers/systems**: For desktops, laptops, and computer systems, `h2 span` returns just the brand name ("ASUS", "MSI") instead of the full product name. This doesn't affect GPUs, peripherals, or accessories — only system-level products. For these categories, search extraction can identify ASINs and prices, but `#productTitle` from the product detail page is required for the actual product name.

@@ -1,10 +1,11 @@
 # Domain Skills — Discovery Index
 
-This file is a discovery index, not a routing destination. SKILL.md routes
-directly to `domain-skills/<site>/overview.md` or the first .md file in a
-domain folder. Use this only when you need to discover which domain skills
-exist, find the cold-read path for a rich bundle, or understand the full
-folder inventory.
+This file serves two purposes: a discovery index for existing domain skills,
+and the routed destination for "Build a scraper for a new site" (see "Creating
+a New Domain Skill" below). SKILL.md also routes directly to
+`domain-skills/<site>/overview.md` or the first .md file in a domain folder for
+known sites. Use the discovery index when you need to find which domain skills
+exist, the cold-read path for a rich bundle, or the full folder inventory.
 
 ## Cold Start
 
@@ -15,6 +16,125 @@ folder inventory.
    selection, session continuity, data display, or skill-learning promotion.
 5. Keep `.private-data/`, `.session-store/`, `outputs/`, caches, and generated
    reports out of reusable guidance.
+
+## Creating a New Domain Skill
+
+Follow these phases in order. Each phase produces committed output before the
+next begins.
+
+### Phase 1: Explore
+
+Follow `../interaction-skills/data-source-exploration.md` — it defines the full
+source discovery order (backend testing, export/API candidates, browser
+extraction, selector discovery). Its step 5 covers selector discovery and
+four-state extraction for browser-based extraction.
+
+### Phase 2: Build
+
+1. Create `domain-skills/<site>/` with `overview.md` containing confirmed URL
+   patterns, source classification, DOM selectors, anti-bot notes, and gotchas.
+2. If the skill has scripts, create `scripts/search.py` (or equivalent) with
+   JS snippet generation, merge/filter, and CSV export commands. For the
+   localStorage accumulation pattern (accumulate results across paginated
+   page loads, dedup by URL), see `aliexpress/scripts/search.py` for the
+   plan/extract-js/merge command pattern, or `ebay/scripts/search.py`
+   for a self-contained batch orchestrator.
+3. Add a `scripts/README.md` documenting commands, CSV columns, and invocation.
+4. Add a `README.md` with quick-start usage examples.
+5. Add the site name to the "Full Domain Folder Inventory" list below, in
+   alphabetical order. This makes the site discoverable by future agents
+   scanning the index.
+
+### Phase 3: Test
+
+1. Run the skill end-to-end on a real query. Use `wait_for_content()` after
+   each navigation — check the `block` field before running extraction JS.
+2. After the first page of each type: validate primary key fields have non-null
+   values. Stop and redo selector discovery if the primary field is all-null.
+3. For browser-based extraction: run coverage probes and field triage per
+   `../interaction-skills/extraction-coverage.md` Phase 3 section. Fix BROKEN
+   selectors before declaring done.
+4. Verify CSV output has correct columns and filtering.
+
+### Phase 4: Extract Generalizable Lessons
+
+This phase runs after the skill is complete and tested. Its goal is to find
+improvements that apply to *any* future domain skill, not just the one you
+built.
+
+**Step 1: Inventory and group.** Review the full session transcript — this is
+the current conversation, or the JSONL file at
+`~/.claude/projects/<project-hash>/<session-id>.jsonl` if the session was
+compacted or resumed. List every mistake, discovery, and workaround. Then
+group related items that share a root cause into lesson clusters. Each cluster
+may contain multiple types:
+
+- **Conceptual insight** — a mental model or framing that changes how you
+  approach a class of problems (e.g., "empty string is ambiguous between
+  absent and failed")
+- **Procedural fix** — a step that should be added to an existing workflow
+  (e.g., "probe CSS selectors via js() before writing extraction JS")
+- **Gotcha** — a tool/API/platform-specific trap that will bite you again
+  (e.g., "js() args are element UIDs, not function parameters")
+
+A single root cause can produce all three types. Group them into one cluster
+rather than splitting across categories.
+
+For each cluster, ask: "Would this happen again when building a domain skill
+for a completely different site?" If it depends on this site's specific DOM
+structure, URL patterns, or page layout, mark it site-specific. If it applies
+regardless of the site, mark it generalizable.
+
+If nothing is generalizable, stop here. Document site-specific learnings in the
+domain skill files instead.
+
+**Step 2: Check existing coverage.** For each generalizable cluster, grep for
+keywords related to that lesson across `interaction-skills/`:
+
+```bash
+rg -i "keyword1\|keyword2" interaction-skills/
+```
+
+Check: is any part already covered? Does anything contradict it? Is there a
+natural home for it in an existing file? Also read `surface-map-pattern.md` if
+the lesson relates to surface maps or verification. Note what's already there
+before writing anything new.
+
+**Step 3: Write.** For each generalizable cluster not already covered, write
+one document per cluster regardless of how many types it contains:
+
+- If the cluster has a conceptual insight, it becomes a standalone document in
+  `interaction-skills/`. Structure: the problem, when it happens, how to
+  recognize it, the fix. Name the file after the problem domain, not the
+  solution. Include procedural fixes and gotchas from the same cluster as
+  sections within this document.
+- If the cluster is purely procedural (no conceptual insight), add it to the
+  existing workflow document where the step naturally fits (e.g.,
+  `data-source-exploration.md` for source discovery steps,
+  `product-search.md` for marketplace search steps).
+- If the cluster is purely a gotcha, add it to the most specific reference file
+  where the reader would encounter that tool/API. If no file fits, add to
+  `../interaction-skills/README.md`.
+
+**Step 4: Cold-read gate.** Before placing cross-references, cold-read
+everything you wrote. For each new document or edit, ask: "If I arrived at this
+file with zero context about the session that produced it, would I understand
+why this exists, when to apply it, and what to do?" If the answer is no for any
+piece, rewrite that piece. Do not proceed until every piece passes.
+
+**Step 5: Cross-reference.** Place short pointers (one sentence, file name
+only) in the existing files where a reader would naturally need this lesson. Do
+not inline the lesson content. Verify each cross-reference makes sense in
+context by reading the surrounding paragraph.
+
+**Step 6: Update indexes.** If you created a new file in
+`../interaction-skills/`, add it to the "Complete File Inventory" list in
+`../interaction-skills/README.md` and to the "Buckets" table if it fits a new
+or existing category. Also add it to the router table in `../SKILL.md` if it
+matches an existing task pattern.
+
+**Step 7: Commit.** One commit per new document, one commit for all
+cross-references and index updates together.
 
 For the exhaustive top-level inventory, run:
 
@@ -33,9 +153,9 @@ rg --files domain-skills/<site>
 | Bucket | Folders/files | Owns |
 |---|---|---|
 | Shared contracts | `surface-map-pattern.md`, `surface-map.schema.json`, `skill-learning-candidate.schema.json` | Cross-domain schema/process contracts |
-| Rich multi-file bundles | `airbnb/`, `youtube/` | Intent routers, workflows, scripts/helpers, fixtures, schemas, receipts, reports |
+| Rich multi-file bundles | `airbnb/`, `dating/`, `youtube/`, `ai-chat-archive/` | Intent routers, workflows, scripts/helpers, fixtures, schemas, receipts, reports |
 | Overview-led single bundle | `atlas/overview.md` | Authenticated Atlas routes, filters, GraphQL hints, auth caveats |
-| Multi-document small folders | `facebook/`, `github/`, `medium/` | Related task variants under one site family |
+| Multi-document small folders | `facebook/`, `github/`, `medium/`, `z2u/` | Related task variants or multi-file site skills with scripts |
 | Single-file site skills | Most remaining folders | One concise scraping/action workflow for the site |
 | Placeholders | `salesforce/`, `spreadshirt/` | Reserved folders with no reusable workflow yet |
 | Private/generated local state | `.private-data/`, `.session-store/`, `outputs/`, `__pycache__/` | Local run artifacts only; never authoritative reusable guidance |
@@ -68,12 +188,25 @@ When landing on a rich domain with no prior context, read progressively.
 ### Atlas (`atlas/`)
 1. `overview.md` — routes, filters, GraphQL bootstrap, auth notes
 
+### Dating (`dating/`)
+1. `overview.md` — intent router, pipeline summary, cold-start guide
+2. `references/copilot-instructions.md` — AI personality, objectives, quality contract
+3. `onboarding.md` — user interview flow (run before any platform automation)
+4. `chat-audit.md` — extract voiceprint and outcome patterns from existing Tinder/Hinge/Feeld conversations
+5. `references/research-user.md` — deep research prompt for user profiling from digital footprint
+6. `pipeline.md` — 7-stage pipeline definitions and state transitions
+7. `references/scoring.md` — rubric scoring for profiles and conversations
+8. `safety.md` — consent gates, rate limits, anti-detection protocols
+9. `platforms/tinder.md` — Tinder-specific selectors and flows
+10. `references/` — 12 copilot reference files for AI decision layer
+11. `evals/` — regression prompts for behavior testing
+
 ## Full Domain Folder Inventory
 
-`ai-chat-archive`, `airbnb`, `amazon`, `archive-org`, `arxiv`, `arxiv-bulk`, `atlas`,
-`booking-com`, `capterra`, `centilebrain`, `coingecko`, `coinmarketcap`,
-`coursera`, `craigslist`, `crossref`, `dev-to`, `duckduckgo`, `ebay`, `etsy`,
-`eventbrite`, `facebook`, `framer`, `fred`, `g2`, `genius`, `github`,
+`ai-chat-archive`, `airbnb`, `aliexpress`, `amazon`, `archive-org`, `arxiv`, `arxiv-bulk`, `atlas`,
+`booking-com`, `capterra`, `centilebrain`, `coingecko`, `coinmarketcap`, `coursera`, `craigslist`,
+`crossref`, `dating`, `dev-to`, `duckduckgo`, `ebay`, `etsy`,
+`eventbrite`, `facebook`, `framer`, `fred`, `g2`, `g2g`, `genius`, `github`,
 `glassdoor`, `gmail`, `goodreads`, `gutenberg`, `hackernews`, `howlongtobeat`,
 `imdb`, `itch-io`, `job-boards`, `letterboxd`, `linkedin`, `macrotrends`,
 `medium`, `metacritic`, `musicbrainz`, `nasa`, `news-aggregation`,
@@ -82,7 +215,7 @@ When landing on a rich domain with no prior context, read progressively.
 `reddit`, `rest-countries`, `salesforce`, `sec-edgar`, `soundcloud`,
 `spotify`, `spreadshirt`, `stackoverflow`, `steam`, `thetechgeeks`, `tiktok`,
 `tradingview`, `trello`, `trustpilot`, `walmart`, `wayback-machine`,
-`weather`, `wellfound`, `world-bank`, `youtube`, `zillow`.
+`weather`, `wellfound`, `world-bank`, `youtube`, `z2u`, `zillow`.
 
 ## Ownership Rules
 

@@ -263,7 +263,7 @@ structured data — no regex, no DOM parsing, no currency guessing.
 
 ### Combined extractor with filtering
 
-Run via CDP `evaluate_script` after page load. Accepts `keywords` for title
+Run via `js()` after page load. Accepts `keywords` for title
 relevance filtering and `priceFloor` to discard cheap accessories. Returns
 only relevant, adequately-priced items.
 
@@ -285,8 +285,8 @@ only relevant, adequately-priced items.
     const high = sale.maxPrice ?? null;
     const spread = (low && high && low > 0) ? +(high / low).toFixed(1) : null;
     const img = item.image || {};
-    const title = item.title?.displayTitle || '';
-    const tlc = title.toLowerCase();
+    const title = item.title?.displayTitle ?? null;
+    const tlc = (title || '').toLowerCase();
 
     // Price floor: discard cheap accessories
     if (low !== null && low < pf) continue;
@@ -296,16 +296,18 @@ only relevant, adequately-priced items.
 
     items.push({
       productId:       item.productId,
-      title:           title.substring(0, 150),
+      title:           title ? title.substring(0, 150) : null,
       salePrice:       low,
       maxPrice:        high,
       originalPrice:   orig?.minPrice ?? null,
-      discount:        sale.discount || null,
-      currency:        sale.currencyCode || null,
+      discount:        sale.discount ?? null,
+      currency:        sale.currencyCode ?? null,
       spread,
-      productType:     item.productType,
+      productType:     item.productType ?? null,
       thumbnailUrl:    img.imgUrl ? "https:" + img.imgUrl : null,
-      url:             "https://www.aliexpress.com" + (item.productDetailUrl || "").split("?")[0],
+      url:             item.productDetailUrl ? "https://www.aliexpress.com" + item.productDetailUrl.split("?")[0] : null,
+      _extracted_from: location.href,
+      _extracted_at:   new Date().toISOString(),
     });
   }
   return { count: items.length, items };
@@ -352,7 +354,7 @@ exception, for GPU listings.
 () => {
   const current = document.querySelector('[class*="price-default--current--"]')?.innerText?.trim();
   const extraEl = document.querySelector('[class*="price-default--priceExtra--"]');
-  const extraText = extraEl?.innerText?.trim() || '';
+  const extraText = extraEl?.innerText?.trim() ?? '';
   const extraPrices = [];
   const extraRx = /AU\$\s*([\d,]+\.?\d*)/g;
   let em;
@@ -410,7 +412,7 @@ exception, for GPU listings.
   return {
     currentPrice: current,
     wasPrice,
-    saveAmount: saveMatch?.[1] || null,
+    saveAmount: saveMatch?.[1] ?? null,
     variants: skus,
     variantProperties: skuProps,
     orders,
@@ -421,6 +423,8 @@ exception, for GPU listings.
     },
     trapRisk,          // "clean" | "suspicious" | "trap"
     trapFlags: flags,  // array of detected issues
+    _extracted_from: location.href,
+    _extracted_at:   new Date().toISOString(),
   };
 }
 ```

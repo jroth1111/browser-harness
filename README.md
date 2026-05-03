@@ -59,13 +59,16 @@ Live/E2E tests that hit Airbnb's API are gated behind environment flags:
 | `test_e2e_airbnb_insights_negative_controls.py` | `AIRBNB_E2E_NEGATIVE_429=1` |
 | `test_e2e_airbnb_insights_conversion_display.py` | Runs unconditionally against pre-collected fixtures |
 
-## How simple is it? (~592 lines of Python)
+## Project Map
 
-- `install.md` — first-time install and browser bootstrap
-- `SKILL.md` — day-to-day usage
-- `run.py` (~36 lines) — runs plain Python with helpers preloaded
-- `helpers.py` (~195 lines) — starting tool calls; the agent edits these
-- `admin.py` + `daemon.py` — daemon bootstrap plus the CDP websocket and socket bridge
+- `SKILL.md` — agent-facing router, workflow map, executable index, and usage rules.
+- `install.md` — first-time install, browser bootstrap, maintenance commands, and local architecture.
+- `run.py` — `browser-harness` CLI; runs plain Python with helpers preloaded and exposes setup/doctor/update commands.
+- `helpers.py` — browser primitives the agent uses inside `browser-harness`.
+- `admin.py` + `daemon.py` — daemon bootstrap plus the CDP websocket and socket bridge.
+- `interaction-skills/README.md` — reusable browser mechanics and cross-domain workflow index.
+- `domain-skills/README.md` — site-specific workflow and source-contract index.
+- `data_display.py`, `login_session.py`, `lightpanda_control.py`, `skill_learning_gate.py` — helper modules for reports, session continuity, backend capability, and empirical skill promotion.
 
 ## Contributing
 

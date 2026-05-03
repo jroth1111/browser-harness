@@ -1,98 +1,35 @@
-# WAF Bypass — Universal Fallback for Blocked Scraping
+# Handling WAF Blocks and Access Denied Responses
 
-When a domain skill's primary fetch method (browser, `http_get`, `curl`) returns
-403 / bot-detection pages, use cookie extraction + TLS impersonation as the
-universal fallback. This works against Akamai, Cloudflare, and other modern WAFs
-that fingerprint the TLS stack and browser session.
+When a site returns 403, bot-detection pages, or WAF challenge shells, the
+correct response is to diagnose the block, try authorized recovery paths, and
+stop if access is not authorized. Do not attempt to circumvent security controls.
 
-## Why Standard Clients Fail
+## Diagnose the block
 
-Sites with modern WAF fingerprint the TLS handshake, not just the User-Agent
-header. All of these return 403 on flagged sessions:
-
-| Client | Result | Reason |
-|--------|--------|--------|
-| `curl` | 403 | TLS fingerprint is `curl/libcurl` |
-| Python `requests` | 403 | TLS fingerprint is `urllib3/openssl` |
-| Python `httpx` (HTTP/2) | 403 | HTTP/2 doesn't help; TLS fingerprint still wrong |
-| `curl_cffi` without cookies | 403 | Correct TLS fingerprint but no valid session cookies |
-| `curl_cffi` + extracted cookies | **200** | Correct TLS + valid session from user's browser |
-
-The only combination that works is **TLS impersonation** (matching Chrome's exact
-handshake) **plus valid session cookies** (from a browser that has already passed
-the WAF challenge).
-
-## Prerequisites
-
-```bash
-pip install curl_cffi browser_cookie3
-```
-
-- `curl_cffi`: HTTP client using libcurl with browser TLS fingerprints
-- `browser_cookie3`: Reads and decrypts cookies from Chrome/Firefox profiles
-
-## Method: Cookie Extraction + TLS Impersonation
+Use `detect_block_page(html=html)` to identify the block type. It returns:
 
 ```python
-import browser_cookie3
-from curl_cffi import requests as cffi_requests
-
-# 1. Extract cookies from the user's browser for the target domain
-cj = browser_cookie3.chrome(domain_name="example.com.au")
-cookies = {c.name: c.value for c in cj}
-
-# 2. Build headers matching the impersonated browser version
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="8"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"macOS"',
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
-              "image/avif,image/webp,*/*;q=0.8",
-}
-
-# 3. Fetch with TLS impersonation + extracted cookies
-r = cffi_requests.get(
-    "https://www.example.com.au/protected/page",
-    headers=HEADERS,
-    cookies=cookies,
-    impersonate="chrome136",
-    timeout=15,
-)
+{"blocked": True, "kind": "kasada_kpsdk", "evidence": [...]}
 ```
 
-### Available impersonate values (curl_cffi 0.15+)
+Common block types and their signatures:
 
-Tested working: `chrome124`, `chrome131`, `chrome136`, `chrome142`.
+| WAF vendor | Typical signatures |
+|---|---|
+| Cloudflare | "Just a moment", `cf-browser-verification`, Turnstile iframe |
+| Kasada | `kadira`, `challenge-platform`, `kpsdk` cookies |
+| Akamai | "Access Denied", `errors.edgesuite.net` |
+| PerimeterX | `_px3`, `pxcaptcha`, Human Challenge |
+| Imperva/Incapsula | `incident_id`, `_incap_ses_` cookies |
 
-Use the version that matches your User-Agent header. If the User-Agent says
-Chrome 136, use `impersonate="chrome136"`.
+The helper `detect_block_page()` covers these and more — see `helpers.py` for
+the full signature list.
 
-## Recovery Strategy
-
-The scrape-then-block pattern is inevitable for live testing:
-
-```
-1. Primary method (http_get / browser)
-   ↓ returns 403 / bot page?
-2. Cookie extraction + curl_cffi fallback
-   ↓ cookies not found or also blocked?
-3. User must load site in their browser to seed cookies
-   then retry step 2
-```
-
-Domain skills should document their primary fetch method and link here for the
-fallback. Do not duplicate this technique in every domain skill.
-
-## WAF Detection
-
-Check for common block signatures before parsing:
+Also check response characteristics:
 
 ```python
 def is_waf_blocked(html):
-    """Generic WAF block detection."""
+    """Quick heuristic for common block pages."""
     if len(html) < 20_000:
         return True
     for sig in ("Pardon Our Interruption", "Access Denied",
@@ -103,41 +40,61 @@ def is_waf_blocked(html):
     return False
 ```
 
-Domain-specific `is_blocked()` functions can extend this with site-specific
-signatures.
+## Authorized recovery paths
 
-## Gotchas
+When a page is blocked, try these in order:
 
-- **Cookie extraction requires the user to have visited the site in Chrome.**
-  If they haven't, `browser_cookie3` returns an empty jar and the request
-  will still be blocked. The user must load the site once in their browser.
+1. **Seed the browser session.** `seed_browser_session(url)` opens a real
+   browser tab to the URL and waits for content. If the user's browser profile
+   has a valid session (they previously completed a challenge or logged in),
+   this refreshes cookies and returns `{"ok": True, ...}`.
 
-- **Chrome encrypts cookies on macOS using the Keychain.** `browser_cookie3`
-  handles decryption automatically but requires Keychain access (prompts on
-  first use).
+2. **Fetch with browser session cookies.** After seeding, use
+   `http_get_browser_session(url)` to fetch additional pages with the browser's
+   cookies and user agent. This works for same-domain pages that rely on
+   session cookies.
 
-- **The block is session-level, not IP-level.** Akamai fingerprints the
-  TLS/browser session. A fresh browser context on the same IP with different
-  cookies will still be blocked. Valid cookies from an established session
-  are required.
+3. **Check for alternative data sources.** Many sites offer APIs, data exports,
+   or structured backends that don't trigger WAF challenges. See
+   `data-source-exploration.md` for the source discovery workflow and
+   `api-schema-audit.md` for API schema discovery.
 
-- **Cookies expire.** If the user's browser session expires, extracted cookies
-  stop working. Re-extract after the user revisits the site.
+4. **Ask the user to complete login.** If the block is an auth wall or expired
+   session, ask the user to log in through their browser, then retry with
+   `seed_browser_session()`.
 
-- **Rate limiting still applies.** Cookie extraction bypasses the initial WAF
-  challenge, but aggressive scraping (10+ rapid requests) will trigger
-  secondary rate limiting. Use 3-5 second delays between requests.
+5. **Use `fetch()` with `source="auto"`.** The auto cascade tries HTTP, then
+   browser, and handles Cloudflare Turnstile challenges when a visible browser
+   is available. This covers the common case where a headless fetch fails but
+   a real browser session succeeds.
 
-- **`browser_cookie3` reads the default Chrome profile.** If the user's working
-  session is in a different profile, specify the profile path explicitly.
+## When to stop
+
+If none of the authorized recovery paths work:
+
+- **Report the block.** Include the block type, URL, and what was attempted.
+- **Emit `__UNOBSERVABLE__`** for extraction fields (see
+  `extraction-coverage.md`). A blocked page is not an empty source — it is an
+  unobservable source.
+- **Do not attempt to circumvent the WAF.** Do not extract cookies from the
+  user's browser for standalone HTTP clients, do not use TLS impersonation
+  libraries, and do not try to fool fingerprinting.
+- **Suggest the user obtain authorized access** (log in, use an API key,
+  request an export, etc.).
+
+## Cloudflare Turnstile
+
+For Cloudflare sites specifically, `detect_turnstile()` and `solve_turnstile()`
+handle interactive and non-interactive challenges through the attached browser.
+This is a browser-native interaction (clicking a checkbox or waiting for an
+automatic verification), not a bypass. Requires a visible (non-headless) browser.
 
 ## Relationship to Other Skills
 
-- `cookies.md`: Same-domain HTTP with browser cookies (for sites where the
-  browser is already connected via CDP). Use that when the browser works.
-  Use *this* document when the browser is blocked and you need a standalone
-  Python fallback.
-- `session-continuity.md`: Long-term auth state management. This document
-  is about one-shot WAF bypass, not persistent sessions.
-- Domain skills: Each domain skill documents site-specific block signatures,
-  headers, and extractors. They link here for the universal bypass method.
+- `session-continuity.md`: Long-term auth state management across sessions.
+- `cookies.md`: Cookie extraction and setting for same-domain HTTP.
+- `extraction-coverage.md`: The `__UNOBSERVABLE__` field state for blocked pages.
+- `data-source-exploration.md`: Finding alternative data sources when browser
+  access is blocked.
+- Domain skills: Each domain skill documents site-specific block signatures and
+  recovery notes.

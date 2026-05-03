@@ -70,7 +70,8 @@ SEARCH_REQUIRED_FIELDS = {'listing_id', 'title', 'price'}
 
 def extract_search_results(html: str) -> list[dict]:
     if 'Pardon Our Interruption' in html or 'Access Denied' in html or len(html) < 20_000:
-        return []
+        # Return structured unobservable result instead of empty list
+        return [{"_unobservable": True, "_block_reason": "WAF" if 'Pardon Our Interruption' in html else ("access_denied" if 'Access Denied' in html else "empty_page")}]
     cards = re.split(r'(?=<li[^>]+data-listingid=)', html)
     results = []
     seen = set()
@@ -96,7 +97,7 @@ def extract_search_results(html: str) -> list[dict]:
         price = float(price_m.group(1).replace(',', '')) if price_m else None
 
         loc_m = re.search(r'from\s+([^<]+?)(?:\s*</)', card)
-        location = loc_m.group(1).strip() if loc_m else 'Unknown'
+        location = loc_m.group(1).strip() if loc_m else None
 
         row = {
             'listing_id': lid,
@@ -244,8 +245,8 @@ class Session:
                     time.sleep(10)
                 else:
                     print(f"  ERROR: {e}", file=sys.stderr)
-                    return []
-        return []
+                    return [{"_unobservable": True, "_block_reason": "fetch_error"}]
+        return [{"_unobservable": True, "_block_reason": "fetch_error"}]
 
 
 HEADERS = {
@@ -439,16 +440,23 @@ def run_coverage_verification(chip: str, session: Session, all_listings: dict,
 
     # Determine coverage confidence based on gap ratio, not absolute count
     total = len(all_listings)
-    gap_ratio = report['new_from_gaps'] / max(total, 1)
-    if report['new_from_gaps'] == 0:
-        report['coverage'] = 'HIGH'
-        print(f"\n  Coverage: HIGH — {report['gaps_probed']} gap probes found 0 new listings", file=sys.stderr)
-    elif gap_ratio <= 0.03 or report['new_from_gaps'] <= 5:
-        report['coverage'] = 'MEDIUM'
-        print(f"\n  Coverage: MEDIUM — {report['new_from_gaps']} new from {report['gaps_probed']} probes ({gap_ratio:.1%} gap ratio)", file=sys.stderr)
+    if total == 0 and report['gaps_probed'] == 0:
+        report['coverage'] = 'UNKNOWN'
+        print(f"\n  Coverage: UNKNOWN — 0 listings collected, 0 gaps probed", file=sys.stderr)
+    elif total == 0:
+        report['coverage'] = 'UNKNOWN'
+        print(f"\n  Coverage: UNKNOWN — 0 listings but {report['gaps_probed']} gaps probed", file=sys.stderr)
     else:
-        report['coverage'] = 'LOW'
-        print(f"\n  Coverage: LOW — {report['new_from_gaps']} new from {report['gaps_probed']} probes ({gap_ratio:.1%} gap ratio), re-run recommended", file=sys.stderr)
+        gap_ratio = report['new_from_gaps'] / total
+        if report['new_from_gaps'] == 0:
+            report['coverage'] = 'HIGH'
+            print(f"\n  Coverage: HIGH — {report['gaps_probed']} gap probes found 0 new listings", file=sys.stderr)
+        elif gap_ratio <= 0.03 or report['new_from_gaps'] <= 5:
+            report['coverage'] = 'MEDIUM'
+            print(f"\n  Coverage: MEDIUM — {report['new_from_gaps']} new from {report['gaps_probed']} probes ({gap_ratio:.1%} gap ratio)", file=sys.stderr)
+        else:
+            report['coverage'] = 'LOW'
+            print(f"\n  Coverage: LOW — {report['new_from_gaps']} new from {report['gaps_probed']} probes ({gap_ratio:.1%} gap ratio), re-run recommended", file=sys.stderr)
 
     return report
 

@@ -30,7 +30,7 @@ browser-harness <<'PY'
 from data_display import render_dataset
 # Render a listing snapshot and open in browser
 print(render_dataset(
-    "domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-20260427T080658Z.json",
+    "outputs/example-listings.json",
     open_browser=True,
 ))
 PY
@@ -43,9 +43,9 @@ browser-harness <<'PY'
 from data_display import render_dataset
 print(render_dataset(
     [
-        ("Listings",  "domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-20260427T080658Z.json"),
-        ("Insights",  "domain-skills/airbnb/.private-data/insights-collections/airbnb-insights-20260427T084255Z.json"),
-        ("Daily raw", "domain-skills/airbnb/.private-data/insights-collections/airbnb-insights-20260427T094855Z-daily-chart-raw.jsonl"),
+        ("Listings",  "outputs/example-listings.json"),
+        ("Insights",  "outputs/example-insights.json"),
+        ("Daily raw", "outputs/example-daily-chart-raw.jsonl"),
     ],
     open_browser=True,
 ))
@@ -222,6 +222,6 @@ The report keeps interactive state in the URL hash for reload/share continuity:
 ## Cross-references
 
 - `data_display.render_dataset` — the renderer entry point
-- `interaction-skills/data-source-exploration.md` — use that to discover and
+- [data-source-exploration.md](data-source-exploration.md) — use that to discover and
   inventory data sources before displaying them
 - `domain-skills/<site>/` — site-specific schema and canonical file locations

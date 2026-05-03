@@ -28,6 +28,10 @@ Translate technical chip/component names to consumer-facing product names that
 sellers actually list. Searches for "GB10" return nothing; searches for
 "RTX 5070 laptop" return real results.
 
+These mappings are shared across all marketplace domain skills. They are
+component-vendor knowledge (NVIDIA/AMD product naming), not site-specific
+knowledge — they apply regardless of which marketplace is being searched.
+
 ### NVIDIA GPUs
 
 | Component | Architecture | Consumer products | Form factors |
@@ -242,6 +246,6 @@ the "is_system" count) is a known limitation — the heuristic works better for
 - `domain-skills/walmart/scraping.md` — Walmart extractors, `__NEXT_DATA__` pattern
 - `domain-skills/amazon/product-search.md` — Amazon CDP extraction
 - `domain-skills/aliexpress/scraping.md` — AliExpress CDP extraction, trap detection
-- `interaction-skills/data-source-exploration.md` — filtering strategy, marketplace fraud avoidance, product-vs-category search
+- `interaction-skills/product-search.md` — filtering strategy, marketplace fraud avoidance, product-vs-category search
 - `interaction-skills/cross-domain-control-flow.md` — backend routing, auth boundaries
 - `domain-skills/news-aggregation/multi-source.md` — ThreadPoolExecutor parallel fetch pattern

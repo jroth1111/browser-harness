@@ -52,11 +52,19 @@ EXTRACT_JS = r"""
     const cardText = card.innerText || '';
     const priceMatch = cardText.match(/AU\$([\d,]+\.?\d*)/);
     const price = priceMatch ? priceMatch[0] : '';
-    results.push({ product_id: pid, title, price });
+    results.push({ product_id: pid, title, price,
+      _extracted_from: location.href, _extracted_at: new Date().toISOString() });
     added++;
   }
-  localStorage.setItem('__ae_results', JSON.stringify(results));
-  return { total: results.length, added, url: location.href };
+  try {
+    localStorage.setItem('__ae_results', JSON.stringify(results));
+  } catch(e) {
+    return { total: results.length, added, url: location.href,
+             containers_found: cards.length, suspect: (added === 0 && cards.length > 0),
+             _quota_error: true, _message: 'localStorage quota exceeded — dump now' };
+  }
+  return { total: results.length, added, url: location.href,
+           containers_found: cards.length, suspect: (added === 0 && cards.length > 0) };
 }
 """.strip()
 
@@ -179,6 +187,11 @@ def cmd_merge(args):
     new_items = filtered_items
 
     # Classify
+    if not new_items:
+        print(f"Existing: {len(existing_ids)} | Input: {total_input} | Duplicates: {duplicates_removed} | Price filtered: {price_filtered} | Title filtered: {relevance_filtered} | New: 0", file=sys.stderr)
+        print("[]")
+        return
+
     classify_args = [sys.executable, str(SCRIPT_DIR / "classify_product_line.py"), "--input", "-"]
     proc = subprocess.run(classify_args, input=json.dumps(new_items), capture_output=True, text=True)
     classified = json.loads(proc.stdout)

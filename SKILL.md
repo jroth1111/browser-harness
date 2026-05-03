@@ -41,9 +41,12 @@ Match your task to one row. Open the file in "Go to" — that's your action file
 | Render data as HTML table/explorer | `interaction-skills/data-display.md` | — |
 | Build a scraper for a new site | `domain-skills/README.md` → Creating a New Domain Skill | `interaction-skills/extraction-coverage.md` for selector verification and four-state extraction |
 | Audit site APIs / find structured backends | `interaction-skills/api-schema-audit.md` | `interaction-skills/data-source-exploration.md` for source exploration workflow |
+| Capture / inspect browser network traffic | NetworkCapture class below | `interaction-skills/api-schema-audit.md` |
+| Replay captured requests as plain HTTP | `replay_endpoints()` below | `interaction-skills/api-schema-audit.md` |
 | Track crawl completeness metrics | `interaction-skills/coverage-accounting.md` | `interaction-skills/extraction-coverage.md` for field-level coverage |
 | Extract data from fetched HTML | `response.py` Response class via `fetch()` | `interaction-skills/data-source-exploration.md` for source strategy |
 | Work with a known site (see list below) | `domain-skills/<site>/overview.md` or first .md | `interaction-skills/data-source-exploration.md` if the domain skill lacks the field you need |
+| Dating platforms (Tinder, Hinge, Feeld) | `domain-skills/dating/overview.md` | `domain-skills/dating/safety.md` for consent, rate limits, anti-detection |
 | Promote learned rule into a skill | `interaction-skills/empirical-learning-gate.md` | — |
 | Clean up or reorganize a skill | `interaction-skills/cross-domain-control-flow.md` | — |
 
@@ -68,6 +71,12 @@ If nothing matches: scan `domain-skills/` with `rg --files domain-skills/<site>`
 - Structured fetching: `fetch(url)` returns a `Response` with `.css(selector)`, `.css_text(selector)`, `.xpath(expr)`, `.text`, `.html`. Use `source="http"` for static pages, `source="session"` after seeding, `source="browser"` for JS-required pages, `source="auto"` (default) to cascade. The auto cascade also attempts Turnstile solving when Cloudflare blocks the browser path.
 - Cloudflare Turnstile: when `wait_for_content()` reports a blocked page on a Cloudflare site, try `detect_turnstile()` → `solve_turnstile()`. Requires a visible browser. Handles non-interactive, interactive, and embedded challenge types.
 - Resource blocking: `block_resources()` blocks ad domains via `Network.setBlockedURLs` and optionally blocks resource types (image, font, etc.) via `Fetch.enable`. Call after navigation.
+- Network traffic capture: `NetworkCapture()` instruments CDP Network events. `start()` before navigation, `poll()` after to drain events, `endpoints()` for deduped URLs, `responses_for(pattern)` for full request/response pairs. Opt-in body capture with `capture_bodies=True`.
+- URL clustering: `url_cluster(urls)` normalizes path segments (numbers → `{id}`, UUIDs → `{uuid}`) and groups URLs by pattern for endpoint discovery.
+- API discovery: `discover_api_endpoints(url)` fetches a page's JS assets and extracts fetch/axios/XHR URL patterns without running the browser.
+- Request replay: `replay_endpoints(capture)` re-issues captured requests as plain HTTP and compares status/content-type. Promotes browser-discovered APIs to fast HTTP calls.
+- Crawl persistence: `state.save("path.json")` and `CrawlState.load("path.json")` serialize/deserialize CrawlState to JSON for resumable crawls.
+- Safety limits: `SafetyGate(max_requests=500, max_seconds=300)` enforces crawl budgets. Check `gate.ok()` before each request, call `gate.record(status)` after. Raises on limit hit with `raise_on_fail=True`.
 - Google referrer trick: `navigate_via_google(url)` opens Google first, then redirects to the target. Some WAF systems treat search-engine referrals as organic traffic.
 - Block detection: `detect_block_page()` now identifies Kasada, Akamai, PerimeterX, Imperva, and generic WAF challenge shells (not just Kasada).
 
@@ -80,6 +89,7 @@ Before inventing a new approach, check if a domain skill exists. A site is
 
 Rich domain bundles (read overview.md first):
 - `airbnb/` — host intelligence, comp analysis, pricing
+- `dating/` — automated dating pipeline (Tinder, Hinge, Feeld), user interview, rubric scoring, swipe/message automation
 - `youtube/` — extraction, playlists, channel workflows
 - `ai-chat-archive/` — multi-provider chat export
 

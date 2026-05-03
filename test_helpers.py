@@ -488,6 +488,9 @@ def test_smart_wait_returns_timeout_when_all_phases_fail():
     assert result["phase"] == "timeout"
     assert result["ok"] is False
     assert "elapsed_ms" in result
+
+
+def test_wait_for_load_uses_page_events_not_runtime():
     calls = []
 
     def fake_cdp(method, **params):
