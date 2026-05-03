@@ -47,6 +47,7 @@ Match your task to one row. Open the file in "Go to" — that's your action file
 | Extract data from fetched HTML | `response.py` Response class via `fetch()` | `interaction-skills/data-source-exploration.md` for source strategy |
 | Work with a known site (see list below) | `domain-skills/<site>/overview.md` or first .md | `interaction-skills/data-source-exploration.md` if the domain skill lacks the field you need |
 | Dating platforms (Tinder, Hinge, Feeld) | `domain-skills/dating/overview.md` | `domain-skills/dating/safety.md` for consent, rate limits, anti-detection |
+| Food delivery (Uber Eats, DoorDash) | `domain-skills/food-delivery/overview.md` | `domain-skills/food-delivery/safety.md` for order consent gates, rate limits |
 | Promote learned rule into a skill | `interaction-skills/empirical-learning-gate.md` | — |
 | Clean up or reorganize a skill | `interaction-skills/cross-domain-control-flow.md` | — |
 
@@ -90,6 +91,7 @@ Before inventing a new approach, check if a domain skill exists. A site is
 Rich domain bundles (read overview.md first):
 - `airbnb/` — host intelligence, comp analysis, pricing
 - `dating/` — automated dating pipeline (Tinder, Hinge, Feeld), user interview, rubric scoring, swipe/message automation
+- `food-delivery/` — restaurant browsing, menu extraction, order placement, delivery tracking, cross-platform price comparison (Uber Eats, DoorDash)
 - `youtube/` — extraction, playlists, channel workflows
 - `ai-chat-archive/` — multi-provider chat export
 

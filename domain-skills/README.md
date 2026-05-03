@@ -153,7 +153,7 @@ rg --files domain-skills/<site>
 | Bucket | Folders/files | Owns |
 |---|---|---|
 | Shared contracts | `surface-map-pattern.md`, `surface-map.schema.json`, `skill-learning-candidate.schema.json` | Cross-domain schema/process contracts |
-| Rich multi-file bundles | `airbnb/`, `dating/`, `youtube/`, `ai-chat-archive/` | Intent routers, workflows, scripts/helpers, fixtures, schemas, receipts, reports |
+| Rich multi-file bundles | `airbnb/`, `dating/`, `food-delivery/`, `youtube/`, `ai-chat-archive/` | Intent routers, workflows, scripts/helpers, fixtures, schemas, receipts, reports |
 | Overview-led single bundle | `atlas/overview.md` | Authenticated Atlas routes, filters, GraphQL hints, auth caveats |
 | Multi-document small folders | `facebook/`, `github/`, `medium/`, `z2u/` | Related task variants or multi-file site skills with scripts |
 | Single-file site skills | Most remaining folders | One concise scraping/action workflow for the site |
@@ -201,12 +201,18 @@ When landing on a rich domain with no prior context, read progressively.
 10. `references/` — 12 copilot reference files for AI decision layer
 11. `evals/` — regression prompts for behavior testing
 
+### Food Delivery (`food-delivery/`)
+1. `overview.md` — intent router, cross-platform comparison workflow, cold-start guide
+2. `safety.md` — consent gates for orders, rate limits, anti-detection
+3. `platforms/ubereats.md` — Uber Eats specific selectors and flows
+4. `platforms/doordash.md` — DoorDash specific selectors and flows
+
 ## Full Domain Folder Inventory
 
 `ai-chat-archive`, `airbnb`, `aliexpress`, `amazon`, `archive-org`, `arxiv`, `arxiv-bulk`, `atlas`,
 `booking-com`, `capterra`, `centilebrain`, `coingecko`, `coinmarketcap`, `coursera`, `craigslist`,
 `crossref`, `dating`, `dev-to`, `duckduckgo`, `ebay`, `etsy`,
-`eventbrite`, `facebook`, `framer`, `fred`, `g2`, `g2g`, `genius`, `github`,
+`eventbrite`, `facebook`, `food-delivery`, `framer`, `fred`, `g2`, `g2g`, `genius`, `github`,
 `glassdoor`, `gmail`, `goodreads`, `gutenberg`, `hackernews`, `howlongtobeat`,
 `imdb`, `itch-io`, `job-boards`, `letterboxd`, `linkedin`, `macrotrends`,
 `medium`, `metacritic`, `musicbrainz`, `nasa`, `news-aggregation`,
