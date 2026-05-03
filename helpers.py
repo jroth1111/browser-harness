@@ -1286,7 +1286,7 @@ def _resolve_ref_fallback(entry):
 def click_ref(ref, **kwargs):
     """Click element by eN ref from last ax_snapshot(compact=True)."""
     x, y = _resolve_ref_center(ref)
-    click_at_xy(x, y, **kwargs)
+    return click_at_xy(x, y, **kwargs)
 
 
 # --- crawl state ---

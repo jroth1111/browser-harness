@@ -197,12 +197,16 @@ def _resolve_cdp_endpoint_from_devtools_active_port(wait_for_port=True):
         port = port.strip()
         path = path.strip()
         if wait_for_port:
+            try:
+                port_num = int(port)
+            except (ValueError, TypeError):
+                continue
             deadline = time.time() + 30
             while True:
                 probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 probe.settimeout(1)
                 try:
-                    probe.connect(("127.0.0.1", int(port)))
+                    probe.connect(("127.0.0.1", port_num))
                     break
                 except OSError:
                     if time.time() >= deadline:
@@ -290,11 +294,17 @@ class Daemon:
                         await self.attach_first_page()
                     except Exception as e:
                         log(f"re-attach failed: {e}")
+                        self.session = None
+                        self._attached_target_id = None
             elif method == "Target.targetCreated":
                 t = (params or {}).get("targetInfo") or {}
                 if t.get("type") == "page" and not t.get("url", "").startswith(INTERNAL):
                     log(f"new page target: {t.get('targetId')} {t.get('url', '')[:80]}")
-            return await orig(method, params, session_id)
+            try:
+                return await orig(method, params, session_id)
+            except Exception as e:
+                log(f"event handler error for {method}: {e}")
+                return None
 
         self.cdp._event_registry.handle_event = tap
         await self.cdp.send_raw("Target.setDiscoverTargets", {"discover": True})
