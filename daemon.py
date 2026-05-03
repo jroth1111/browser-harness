@@ -238,6 +238,7 @@ class Daemon:
     def __init__(self):
         self.cdp = None
         self.session = None
+        self._attached_target_id = None
         self.endpoint_info = None
         self.events = deque(maxlen=BUF)
         self.dialog = None
@@ -254,6 +255,7 @@ class Daemon:
         self.session = (await self.cdp.send_raw(
             "Target.attachToTarget", {"targetId": pages[0]["targetId"], "flatten": True}
         ))["sessionId"]
+        self._attached_target_id = pages[0]["targetId"]
         log(f"attached {pages[0]['targetId']} ({pages[0].get('url','')[:80]}) session={self.session}")
         return pages[0]
 
@@ -273,6 +275,7 @@ class Daemon:
             raise RuntimeError(f"CDP WS handshake failed: {e} -- click Allow in Chrome if prompted, then retry")
         await self.attach_first_page()
         orig = self.cdp._event_registry.handle_event
+        attached_id = self._attached_target_id
 
         async def tap(method, params, session_id=None):
             self.events.append({"method": method, "params": params, "session_id": session_id})
@@ -280,9 +283,22 @@ class Daemon:
                 self.dialog = params
             elif method == "Page.javascriptDialogClosed":
                 self.dialog = None
+            elif method == "Target.targetDestroyed":
+                destroyed_id = (params or {}).get("targetId")
+                if destroyed_id and destroyed_id == self._attached_target_id:
+                    log(f"attached target {destroyed_id} destroyed, re-attaching")
+                    try:
+                        await self.attach_first_page()
+                    except Exception as e:
+                        log(f"re-attach failed: {e}")
+            elif method == "Target.targetCreated":
+                t = (params or {}).get("targetInfo") or {}
+                if t.get("type") == "page" and not t.get("url", "").startswith(INTERNAL):
+                    log(f"new page target: {t.get('targetId')} {t.get('url', '')[:80]}")
             return await orig(method, params, session_id)
 
         self.cdp._event_registry.handle_event = tap
+        await self.cdp.send_raw("Target.setDiscoverTargets", {"discover": True})
 
     async def handle(self, req):
         meta = req.get("meta")

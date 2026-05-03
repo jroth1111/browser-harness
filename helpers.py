@@ -815,6 +815,22 @@ def iframe_target(url_substr):
     return None
 
 
+def poll_for_new_tab(timeout=5.0, poll=0.3):
+    """Wait for a new page target to appear. Returns target dict or None."""
+    known = {t["targetId"] for t in list_tabs(include_chrome=False)}
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for _ in drain_events():
+            pass
+        current = {t["targetId"] for t in list_tabs(include_chrome=False)}
+        new = current - known
+        if new:
+            tid = new.pop()
+            return next(t for t in list_tabs() if t["targetId"] == tid)
+        time.sleep(poll)
+    return None
+
+
 # --- utility ---
 def wait(seconds=1.0):
     time.sleep(seconds)
@@ -1763,7 +1779,7 @@ def discover_api_endpoints(url, timeout=20.0):
         for regex, group, source in patterns:
             for m in regex.finditer(src):
                 raw = m.group(group) if group else m.group(1)
-                if not raw or raw.startswith(("${", "javascript:", "data:")):
+                if not raw or raw.startswith(("${", "javascript:", "data:")) or "${" in raw:
                     continue
                 resolved = urljoin(url, raw)
                 norm = resolved.split("?")[0]
