@@ -1,6 +1,6 @@
 # Onboarding — Structured Interview Flow
 
-Builds user model and voiceprint through a structured interview. Use as the primary safe option before any chat extraction (`chat-audit.md`) or deep research (`references/research-user.md`).
+Builds user model and voiceprint through a structured interview. Use as the fallback when GDPR export (`chat-audit.md` Path 1) and browser chat extraction (`chat-audit.md` Path 2) are unavailable or insufficient.
 
 ## When to use
 

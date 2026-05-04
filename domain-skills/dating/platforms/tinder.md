@@ -285,7 +285,7 @@ message_input: (not implemented — this project only swipes, no messaging)
 - Do not call Tinder private APIs or `api.gotinder.com`.
 - Do not read `localStorage`, cookies, or browser storage for auth tokens.
 - Full chat extraction is allowed through slow UI-only crawl with checkpointing (see `chat-audit.md`).
-- Live conversation review (during pipeline stages) is user-selected, UI-only, and capped at 3-5 per session.
+- Live conversation review (during pipeline stages) is user-selected, UI-only, 3 default / 5 max per session. Full chat extraction (see `chat-audit.md`) has no hard cap.
 - Rate limits: approximately 100 swipes before soft lock (free accounts). Stop well before this.
 - A/B tests may change DOM structure between sessions. Verify selectors each session.
 - Profile content may be lazy-loaded. Scroll or expand before extraction.

@@ -11,7 +11,7 @@ Automated dating pipeline that operates Tinder, Hinge, and Feeld on the user's b
 ## Cold-start sequence
 
 1. Read `references/copilot-instructions.md` for AI personality, objectives, and quality standards.
-2. Check for `.private-data/user-model.md`. If absent, offer shortcut: `references/research-user.md` (deep research) or `chat-audit.md` (existing chat analysis) before falling back to `onboarding.md` (manual interview).
+2. Check for `.private-data/user-model.md`. If absent, offer shortcuts in order: GDPR export (`chat-audit.md` Path 1, fastest), browser chat extraction (`chat-audit.md` Path 2), deep research (`references/research-user.md`), or manual interview (`onboarding.md`).
 3. Identify platform (Tinder / Hinge / Feeld). Read `platforms/<platform>.md`.
 4. Identify pipeline stage. Read `pipeline.md`.
 5. Execute.
@@ -50,7 +50,7 @@ Automated dating pipeline that operates Tinder, Hinge, and Feeld on the user's b
 overview.md              ← you are here
 pipeline.md              ← stage definitions and state transitions
 onboarding.md            ← user interview flow
-chat-audit.md            ← extract voiceprint + outcomes from existing chats
+chat-audit.md            ← extract voiceprint + outcomes (GDPR export, browser crawl, or manual paste)
 safety.md                ← consent gates, rate limits, anti-detection
 surface-map.json         ← machine-readable primitive contracts
 platforms/tinder.md      ← Tinder-specific selectors and flows
@@ -59,7 +59,7 @@ platforms/feeld.md       ← Feeld-specific selectors and flows (deferred)
 references/copilot-instructions.md  ← AI personality, objectives, quality contract
 references/scoring.md    ← rubric scoring for profiles and conversations
 references/research-user.md        ← deep research prompt for user profiling
-references/              ← 12 copilot reference files for AI decision layer
+references/              ← 15 copilot reference files for AI decision layer
 evals/                   ← regression prompts for behavior testing
 .private-data/           ← user-specific data (gitignored)
 ```

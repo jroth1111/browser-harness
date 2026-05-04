@@ -132,7 +132,7 @@ Iterate through the discovered chat list. One conversation per step.
 ```
 conversation_log:  "[role='log']"
 message_article:   "[role='log'] [role='article']"
-sender_primary:    "strong.Hidden"  →  textContent minus ":"
+sender:            "strong.Hidden"  →  textContent minus ":"
 sender_fallback:   Yahoo-style class — "Ta(e)" = sent by user, "Ta(start)" = received (less stable)
 message_text:      "span.text"  →  fallback: "span[class*='text']"  →  fallback: "div.msg > span"
 timestamp:         "time"  →  textContent + datetime attribute

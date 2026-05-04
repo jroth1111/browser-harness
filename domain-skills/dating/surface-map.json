@@ -396,50 +396,6 @@
   ],
   "fallback_nodes": [
     {
-      "id": "tinder_profile_card",
-      "path_type": "browser"
-    },
-    {
-      "id": "tinder_swipe_buttons",
-      "path_type": "browser"
-    },
-    {
-      "id": "tinder_chat_list",
-      "path_type": "browser"
-    },
-    {
-      "id": "tinder_conversation_dom",
-      "path_type": "browser"
-    },
-    {
-      "id": "tinder_chat_extraction",
-      "path_type": "browser"
-    },
-    {
-      "id": "tinder_message_input",
-      "path_type": "browser"
-    },
-    {
-      "id": "tinder_match_overlay",
-      "path_type": "browser"
-    },
-    {
-      "id": "hinge_profile_card",
-      "path_type": "browser"
-    },
-    {
-      "id": "hinge_swipe_buttons",
-      "path_type": "browser"
-    },
-    {
-      "id": "feeld_profile_card",
-      "path_type": "browser"
-    },
-    {
-      "id": "feeld_swipe_buttons",
-      "path_type": "browser"
-    },
-    {
       "id": "screenshot_profile_card_fallback",
       "path_type": "browser"
     },

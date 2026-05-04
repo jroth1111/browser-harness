@@ -55,10 +55,10 @@ These actions are never allowed:
 
 | Limit | Default | Maximum | Rationale |
 |---|---|---|---|
-| Swipes per session | 20 | 40 | Conservative account-safety cap |
+| Swipes per session | 80 | 200 | User-configurable in onboarding (see `onboarding.md`). Account-safety floor: never exceed 200. |
 | Messages per session | 10 | 20 | Avoid spam detection |
 | Existing conversations reviewed | 3 | 5 | User-selected sample for live review |
-| Chat extraction per session | No hard cap | No hard cap | Slow UI-only crawl with checkpointing (see `chat-audit.md`). Pacing rules self-limit. |
+| Chat extraction per session | No hard cap | No hard cap | Slow UI-only crawl with checkpointing (see `chat-audit.md`). Pacing rules self-limit. GDPR export (Path 1) is exempt from all limits — no browser interaction. |
 | Session duration | 20 min | 45 min | Avoid prolonged bot-like sessions |
 | Concurrent conversations | 3 | 5 | Quality over quantity |
 
