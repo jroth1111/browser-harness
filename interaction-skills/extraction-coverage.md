@@ -40,6 +40,11 @@ Solve the ambiguity at the source. Every extracted field uses four states:
 | `"__UNOBSERVABLE__"` | `(unobservable)` | Page blocked or broken — could not inspect |
 | key omitted | `(not checked)` | Field not applicable to this entity type |
 
+For Python-side parser or fixture checks, use
+`extraction_contracts.validate_extraction_record(...)` and
+`extraction_contracts.summarize_extraction_coverage(...)` to enforce these
+states before treating a result set as usable.
+
 Implementation in extraction JS:
 
 ```javascript

@@ -63,7 +63,8 @@ override generic preferences because backend capability is site-specific.
    solver.
 8. Store a capability receipt for every backend attempted: source context,
    backend kind, fields found, fields missing, block state, fallback reason, and
-   whether the output was canonical or diagnostic-only.
+   whether the output was canonical or diagnostic-only. Use
+   `source_receipts.build_source_receipt(...)` for the shared receipt shape.
 
 ## Provider Availability Preflight
 

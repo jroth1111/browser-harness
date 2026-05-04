@@ -28,7 +28,7 @@ case, or you want to understand the full file inventory.
 
 | Bucket | Files | Owns |
 |---|---|---|
-| Backend and source routing | `cross-domain-control-flow.md`, `backend-capability.md`, `data-source-exploration.md` | Source family choice, capability gates, source discovery |
+| Backend and source routing | `cross-domain-control-flow.md`, `backend-capability.md`, `data-source-exploration.md`, `source-selection-receipts.md` | Source family choice, capability gates, source discovery, source decision receipts |
 | Product search and marketplace | `product-search.md`, `marketplace-search.md` | Cross-platform product search, category search, marketplace fraud, seller trust |
 | Browser state | `connection.md`, `tabs.md` | Tab/session control, startup sequence |
 | UI mechanics | `dialogs.md`, `ui-mechanics.md` | Screenshots, scrolling, dropdowns, iframes, shadow DOM, uploads, downloads, drag-and-drop, viewport, print-as-PDF, network observation |
@@ -67,6 +67,7 @@ case, or you want to understand the full file inventory.
 - `marketplace-search.md`
 - `product-search.md`
 - `session-continuity.md`
+- `source-selection-receipts.md`
 - `tabs.md`
 - `ui-mechanics.md`
 - `waf-bypass.md`

@@ -95,7 +95,9 @@ For each target field:
 5. Compare counts and required fields against the best available UI/export
    truth source.
 6. Store a capability receipt with source, backend, fields found, fields missing,
-   pagination/count evidence, and fallback reason.
+   pagination/count evidence, and fallback reason. Use
+   `source_receipts.build_source_receipt(...)` for the shared source-selection
+   shape.
 
 Field-level parity decides the canonical source. Page-level success does not.
 
