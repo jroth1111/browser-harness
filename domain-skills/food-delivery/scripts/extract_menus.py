@@ -25,14 +25,15 @@ MAX_SCROLLS_NO_NEW = 5
 def extract_menu_from_next_data(sb):
     """Extract menu items from DoorDash's Next.js embedded JSON.
 
-    DoorDash embeds all menu data in self.__next_f.push() script tags.
-    Parse the itemLists from the page source — no DOM scraping needed.
+    DoorDash embeds menu data in self.__next_f.push() script tags.
+    Items appear as StorePageCarouselItem objects with name, description,
+    displayPrice, imgUrl fields, grouped in carousels by category.
     """
     page_source = sb.driver.page_source
 
-    # Find all self.__next_f.push calls containing itemLists
     pattern = r'self\.__next_f\.push\(\[1,"(.*?)"\]\)'
     menu_items = []
+    seen_ids = set()
 
     for match in re.finditer(pattern, page_source, re.DOTALL):
         raw = match.group(1)
@@ -41,65 +42,111 @@ def extract_menu_from_next_data(sb):
         except (UnicodeDecodeError, UnicodeEncodeError):
             continue
 
-        if "itemLists" not in decoded:
+        if "StorePageCarouselItem" not in decoded:
             continue
 
-        # Extract itemLists array from the decoded string
-        # Find "itemLists":[ and match brackets
-        idx = decoded.find('"itemLists"')
-        if idx == -1:
-            continue
+        # Extract individual item objects using regex
+        # Each item: {"__typename":"StorePageCarouselItem","id":"...","name":"...","description":"...","displayPrice":"...","imgUrl":"..."}
+        item_pattern = (
+            r'\{"__typename":"StorePageCarouselItem",'
+            r'"id":"(\d+)",'
+            r'"name":"((?:[^"\\]|\\.)*)",'
+            r'"description":"((?:[^"\\]|\\.)*)",'
+            r'"displayPrice":"((?:[^"\\]|\\.)*)",'
+            r'"displayStrikethroughPrice":"((?:[^"\\]|\\.)*)",'
+            r'"imgUrl":"((?:[^"\\]|\\.)*)"'
+        )
+        for im in re.finditer(item_pattern, decoded):
+            item_id = im.group(1)
+            if item_id in seen_ids:
+                continue
+            seen_ids.add(item_id)
 
-        # Find the opening [ after "itemLists":
-        bracket_start = decoded.find("[", idx)
-        if bracket_start == -1:
-            continue
+            name = im.group(2).encode("utf-8").decode("unicode_escape") if "\\u" in im.group(2) else im.group(2)
+            desc = im.group(3)
+            if "\\u" in desc:
+                desc = desc.encode("utf-8").decode("unicode_escape")
 
-        # Count brackets to find matching ]
-        depth = 0
-        bracket_end = bracket_start
-        for i in range(bracket_start, len(decoded)):
-            if decoded[i] == "[":
-                depth += 1
-            elif decoded[i] == "]":
-                depth -= 1
-                if depth == 0:
-                    bracket_end = i + 1
-                    break
+            menu_items.append({
+                "category": None,  # filled later by DOM headings
+                "item_name": name,
+                "item_price": im.group(4) or None,
+                "description": desc or None,
+                "popular_badge": False,
+                "customization_count": None,
+                "image_url": im.group(6) or None,
+            })
 
-        json_str = decoded[bracket_start:bracket_end]
-        try:
-            item_lists = json.loads(json_str)
-        except json.JSONDecodeError:
-            continue
-
-        for category_obj in item_lists:
-            category = category_obj.get("title", "Unknown")
-            # subtitle may contain item count like "10 items"
-            for item in category_obj.get("items", []):
-                name = item.get("name", "").strip()
-                if not name:
-                    continue
-
-                price = item.get("displayPrice", "")
-                if not price:
-                    price = str(item.get("price", ""))
-
-                menu_items.append({
-                    "category": category,
-                    "item_name": name,
-                    "item_price": price,
-                    "description": item.get("description", ""),
-                    "popular_badge": bool(item.get("isPopular") or item.get("mostOrdered")),
-                    "customization_count": None,
-                    "image_url": item.get("imageUrl") or item.get("imageSrc") or None,
-                })
-
-        # Only need the first match with itemLists
         if menu_items:
             break
 
+    # Assign categories by matching item names to DOM headings
+    if menu_items:
+        try:
+            _assign_categories_from_dom(sb, menu_items)
+        except Exception:
+            pass
+
     return menu_items
+
+
+def _assign_categories_from_dom(sb, menu_items):
+    """Use DOM headings (H2) to assign categories to menu items."""
+    js = """
+    var cats = [];
+    var h2s = document.querySelectorAll('h2');
+    var skipCats = ['Reviews', 'Top Pairings', 'Trending', 'Nearby', 'Get to Know', 'Let Us Help', 'Doing Business', 'Top Dishes'];
+    for (var i = 0; i < h2s.length; i++) {
+        var h2 = h2s[i];
+        var text = h2.textContent.trim();
+        if (!text || text.length > 50) continue;
+        var skip = false;
+        for (var j = 0; j < skipCats.length; j++) {
+            if (text.indexOf(skipCats[j]) >= 0) { skip = true; break; }
+        }
+        if (skip) continue;
+        var rect = h2.getBoundingClientRect();
+        cats.push({text: text, y: Math.round(rect.top + window.scrollY)});
+    }
+    return JSON.stringify(cats);
+    """
+    raw = sb.execute_script(js)
+    if not raw:
+        return
+    categories = json.loads(raw)
+
+    # Get Y positions of H3 elements (menu item names)
+    names_str = json.dumps([m["item_name"] for m in menu_items[:100]])
+    js2 = """
+    var targetNames = NAMES;
+    var positions = {};
+    var h3s = document.querySelectorAll('h3');
+    for (var i = 0; i < h3s.length; i++) {
+        var text = h3s[i].textContent.trim();
+        for (var j = 0; j < targetNames.length; j++) {
+            if (text === targetNames[j] || targetNames[j].indexOf(text) >= 0 || text.indexOf(targetNames[j]) >= 0) {
+                var rect = h3s[i].getBoundingClientRect();
+                positions[targetNames[j]] = Math.round(rect.top + window.scrollY);
+                break;
+            }
+        }
+    }
+    return JSON.stringify(positions);
+    """.replace("NAMES", names_str)
+    raw2 = sb.execute_script(js2)
+    if not raw2:
+        return
+    positions = json.loads(raw2)
+
+    # Assign categories based on Y position
+    for item in menu_items:
+        y = positions.get(item["item_name"])
+        if y is None:
+            continue
+        for cat in reversed(categories):
+            if cat["y"] <= y:
+                item["category"] = cat["text"]
+                break
 
 
 def extract_menu_from_dom(sb):
