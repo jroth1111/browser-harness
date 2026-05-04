@@ -7,11 +7,14 @@ groups results by hardware, computes multi-dimensional scores, and ranks
 hardware for local LLM inference.
 
 Usage:
-    python hardware-scorer.py                    # Full rankings
-    python hardware-scorer.py --class DISCRETE_GPU  # GPU only
-    python hardware-scorer.py --profile efficiency    # Efficiency-focused
-    python hardware-scorer.py --json                # Machine-readable output
-    python hardware-scorer.py --refresh             # Re-fetch from API
+    python hardware-scorer.py                          # Full rankings
+    python hardware-scorer.py --class DISCRETE_GPU     # GPU only
+    python hardware-scorer.py --profile efficiency     # Efficiency-focused
+    python hardware-scorer.py --model qwen3 --size 30  # Best hardware for Qwen3-30B
+    python hardware-scorer.py --model llama --budget 600  # Cheapest way to run Llama
+    python hardware-scorer.py --models                 # List all model families + sizes
+    python hardware-scorer.py --json                   # Machine-readable output
+    python hardware-scorer.py --refresh                # Re-fetch from API
 
 Scoring profiles:
     balanced     - Equal weight across all dimensions (default)
@@ -19,6 +22,11 @@ Scoring profiles:
     efficiency   - Maximize tok/s per GB of memory
     capability   - Maximize model size the hardware can run
     value        - Factor in approximate street price per tok/s
+
+Model-fit mode (--model):
+    Filters benchmarks to a specific model, then ranks hardware by actual
+    throughput on that workload. Answers: "what's the cheapest hardware
+    that can run model X at usable speed?"
 """
 
 import argparse
@@ -285,6 +293,119 @@ def format_details(hw):
     return "\n".join(lines)
 
 
+def list_models(rows):
+    """List all model families and parameter sizes in the data."""
+    families = defaultdict(set)
+    for r in rows:
+        m = r.get("model", {})
+        fam = m.get("family", "")
+        params = m.get("params")
+        hf_id = m.get("hfId", "")
+        if fam:
+            label = f"{params}B" if params else "?"
+            families[fam].add((label, hf_id))
+
+    lines = [f"{'Family':<20} {'Sizes':<30} Example HF ID"]
+    lines.append("-" * 80)
+    for fam in sorted(families):
+        sizes = sorted({s for s, _ in families[fam]})
+        examples = sorted({h for _, h in families[fam]})[:2]
+        lines.append(f"{fam:<20} {', '.join(sizes):<30} {examples[0]}")
+    return "\n".join(lines)
+
+
+def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budget=None):
+    """Rank hardware for a specific model workload.
+
+    Filters benchmarks to those matching model_query (case-insensitive substring
+    match on family and hfId), optionally filters by param size and quantization,
+    then groups by hardware and ranks by actual tok/s on that model.
+    """
+    model_query_lower = model_query.lower()
+
+    matched = []
+    for r in rows:
+        m = r.get("model", {})
+        family = (m.get("family") or "").lower()
+        hf_id = (m.get("hfId") or "").lower()
+        if model_query_lower not in family and model_query_lower not in hf_id:
+            continue
+        if size_filter is not None:
+            params = m.get("params")
+            if params != size_filter:
+                continue
+        if quant_filter is not None:
+            q = (r.get("engine", {}).get("quantization") or "").lower()
+            if quant_filter.lower() not in q:
+                continue
+        matched.append(r)
+
+    if not matched:
+        return [], []
+
+    # Group by hardware
+    groups = defaultdict(list)
+    for r in matched:
+        groups[hardware_key(r)].append(r)
+
+    hw_results = []
+    for key, benchmarks in groups.items():
+        hw = benchmarks[0].get("hardware", {})
+        price = STREET_PRICES.get(hw.get("gpuName"), STREET_PRICES.get(hw.get("chipVariant")))
+        if budget is not None and price is not None and price > budget:
+            continue
+
+        toks = [b["tokSOut"] for b in benchmarks if b.get("tokSOut")]
+        ttfts = [b["ttftMs"] for b in benchmarks if b.get("ttftMs") is not None]
+        quants = set(b.get("engine", {}).get("quantization") for b in benchmarks if b.get("engine", {}).get("quantization"))
+        mem_gb = hw.get("vramGb", 0) or hw.get("unifiedMemoryGb", 0) or hw.get("ramGb", 0) or 0
+
+        median_tok = statistics.median(toks) if toks else 0
+        median_ttft = statistics.median(ttfts) if ttfts else None
+        best_tok = max(toks) if toks else 0
+
+        display_name = key.split(":", 1)[1] if ":" in key else key
+
+        hw_results.append({
+            "display_name": display_name,
+            "hw_class": hw.get("hwClass", "UNKNOWN"),
+            "mem_gb": mem_gb,
+            "price": price,
+            "bench_count": len(benchmarks),
+            "median_tok_s": round(median_tok, 2),
+            "best_tok_s": round(best_tok, 2),
+            "median_ttft_ms": round(median_ttft, 1) if median_ttft else None,
+            "quantizations": sorted(quants),
+            "tok_per_dollar": round(median_tok / price, 2) if price and price > 0 else None,
+        })
+
+    ranked = sorted(hw_results, key=lambda x: x["median_tok_s"], reverse=True)
+    return ranked, matched
+
+
+def format_model_table(ranked, model_query, top_n=20):
+    """Format model-fit results."""
+    lines = [
+        f"Hardware rankings for model: {model_query}",
+        f"{'#':<4} {'Hardware':<40} {'Class':<15} {'tok/s':>8} {'Best':>8} {'TTFTms':>8} {'MemGB':>6} {'Price':>7} {'Quants':<20} {'Runs':>5}",
+        "-" * 130,
+    ]
+
+    for i, hw in enumerate(ranked[:top_n]):
+        name = hw["display_name"][:38]
+        cls = hw["hw_class"][:13]
+        tok = f"{hw['median_tok_s']:.1f}"
+        best = f"{hw['best_tok_s']:.1f}"
+        ttft = f"{hw['median_ttft_ms']:.0f}" if hw["median_ttft_ms"] else "-"
+        mem = f"{hw['mem_gb']:.0f}"
+        price = f"${hw['price']}" if hw["price"] else "?"
+        quants = ", ".join(hw["quantizations"][:3])
+        runs = str(hw["bench_count"])
+        lines.append(f"{i+1:<4} {name:<40} {cls:<15} {tok:>8} {best:>8} {ttft:>8} {mem:>6} {price:>7} {quants:<20} {runs:>5}")
+
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Localmaxxing hardware scorer")
     parser.add_argument("--class", dest="hw_class", choices=["DISCRETE_GPU", "UNIFIED", "CPU_ONLY"])
@@ -293,6 +414,11 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--refresh", action="store_true", help="Re-fetch data from API")
     parser.add_argument("--details", type=int, default=None, help="Show details for rank N")
+    parser.add_argument("--model", type=str, default=None, help="Model family name (e.g. qwen3, llama, gemma)")
+    parser.add_argument("--size", type=int, default=None, help="Model parameter size in billions (e.g. 8, 14, 70)")
+    parser.add_argument("--quant", type=str, default=None, help="Quantization filter (e.g. Q4_K_M, BF16)")
+    parser.add_argument("--budget", type=int, default=None, help="Max hardware price in USD")
+    parser.add_argument("--models", action="store_true", help="List all model families and sizes in data")
     args = parser.parse_args()
 
     rows = fetch_leaderboard() if args.refresh else load_data()
@@ -300,7 +426,44 @@ def main():
     if args.hw_class:
         rows = [r for r in rows if r.get("hardware", {}).get("hwClass") == args.hw_class]
 
+    if args.models:
+        print(list_models(rows))
+        return
+
+    if args.model:
+        ranked, matched = score_model_fit(rows, args.model, args.size, args.quant, args.budget)
+        if not matched:
+            print(f"No benchmarks found for model '{args.model}'"
+                  f"{f' size={args.size}B' if args.size else ''}"
+                  f"{f' quant={args.quant}' if args.quant else ''}")
+            print("Use --models to see available model families.")
+            return
+        if args.json:
+            print(json.dumps(ranked, indent=2))
+            return
+        print(format_model_table(ranked, args.model, top_n=args.top))
+        if ranked:
+            best = ranked[0]
+            print()
+            print(f"Cheapest option: ", end="")
+            with_price = [h for h in ranked if h["price"] is not None]
+            if with_price:
+                cheapest = min(with_price, key=lambda h: h["price"])
+                print(f"{cheapest['display_name']} at ${cheapest['price']} ({cheapest['median_tok_s']} tok/s)")
+            else:
+                print("no price data available")
+            print(f"Best value:      ", end="")
+            if with_price:
+                best_val = max(with_price, key=lambda h: h["tok_per_dollar"] or 0)
+                print(f"{best_val['display_name']} at ${best_val['price']} ({best_val['tok_per_dollar']} tok/s/$)")
+            else:
+                print("no price data available")
+        return
+
     ranked = score_hardware(rows, profile=args.profile)
+
+    if args.budget:
+        ranked = [r for r in ranked if r["price"] is None or r["price"] <= args.budget]
 
     if args.json:
         print(json.dumps(ranked, indent=2))
