@@ -196,9 +196,9 @@ class ChatGPTHTTPAPI:
     def extract_artifacts_from_mapping(detail: dict) -> list[dict]:
         """Extract artifact metadata from the conversation mapping tree.
 
-        Returns a list of artifact descriptors found by scanning all message
-        nodes for deep research markers, file references, canvas operations,
-        image generation, and agent/Operator paths.
+        Scans all message nodes for rich content parts and message-level content
+        types that represent LLM-generated artifacts: images, code execution,
+        Operator screenshots, canvas references, and deep research markers.
         """
         mapping = detail.get("mapping", {})
         artifacts = []
@@ -210,16 +210,35 @@ class ChatGPTHTTPAPI:
 
             role = msg.get("author", {}).get("role", "unknown")
             msg_id = msg.get("id", node_id)
-            content_parts = msg.get("content", {}).get("parts", [])
-            metadata = msg.get("metadata", {})
+            content = msg.get("content", {})
+            content_type = content.get("content_type", "")
+            content_parts = content.get("parts", [])
 
+            # --- Dict parts (image_asset_pointer, etc.) ---
             for part in content_parts:
                 if not isinstance(part, dict):
                     continue
 
-                path = part.get("path", "")
+                ct = part.get("content_type", "")
 
-                # Deep research
+                # Image assets (DALL-E generated or uploaded)
+                if ct == "image_asset_pointer":
+                    asset_pointer = part.get("asset_pointer", "")
+                    is_dalle = (part.get("metadata") or {}).get("dalle") is not None
+                    size_bytes = part.get("size_bytes", 0)
+                    w = part.get("width", 0)
+                    h = part.get("height", 0)
+                    artifacts.append({
+                        "artifact_type": "generated_image" if is_dalle or role == "tool" else "image",
+                        "provider_artifact_id": asset_pointer,
+                        "label": f"Image ({w}x{h})",
+                        "parent_message_id": msg_id,
+                        "rich_part": part,
+                        "size_bytes": size_bytes,
+                    })
+
+                # Path-based markers (deep research, canvas, agent)
+                path = part.get("path", "")
                 if "Deep Research" in path:
                     artifacts.append({
                         "artifact_type": "deep_research_report",
@@ -228,8 +247,6 @@ class ChatGPTHTTPAPI:
                         "parent_message_id": msg_id,
                         "rich_part": part,
                     })
-
-                # Canvas
                 if "canvas" in path.lower() or part.get("action") == "canvas":
                     artifacts.append({
                         "artifact_type": "canvas_document",
@@ -238,8 +255,6 @@ class ChatGPTHTTPAPI:
                         "parent_message_id": msg_id,
                         "rich_part": part,
                     })
-
-                # Agent / Operator
                 if "operator" in path.lower() or "agent" in path.lower():
                     artifacts.append({
                         "artifact_type": "agent_report",
@@ -249,28 +264,44 @@ class ChatGPTHTTPAPI:
                         "rich_part": part,
                     })
 
-            # File references in tool messages
-            if role == "tool":
-                for part in content_parts:
-                    if isinstance(part, dict):
-                        file_id = part.get("file_id")
-                        if file_id:
-                            artifacts.append({
-                                "artifact_type": "generated_file",
-                                "provider_artifact_id": file_id,
-                                "label": part.get("filename", file_id),
-                                "parent_message_id": msg_id,
-                                "rich_part": part,
-                            })
-                        # Image generation markers
-                        if "dall" in str(part).lower() or "image" in str(part.get("action", "")).lower():
-                            artifacts.append({
-                                "artifact_type": "generated_image",
-                                "provider_artifact_id": part.get("asset_pointer", msg_id),
-                                "label": "Generated Image",
-                                "parent_message_id": msg_id,
-                                "rich_part": part,
-                            })
+                # File references in tool messages
+                if role == "tool":
+                    file_id = part.get("file_id")
+                    if file_id:
+                        artifacts.append({
+                            "artifact_type": "generated_file",
+                            "provider_artifact_id": file_id,
+                            "label": part.get("filename", file_id),
+                            "parent_message_id": msg_id,
+                            "rich_part": part,
+                        })
+
+            # --- Message-level content types ---
+
+            # Operator/Computer use screenshots
+            if content_type == "computer_output":
+                screenshot = content.get("screenshot")
+                if screenshot:
+                    artifacts.append({
+                        "artifact_type": "agent_screenshot",
+                        "provider_artifact_id": content.get("tether_id", msg_id),
+                        "label": f"Agent Screenshot ({content.get('computer_id', '')})",
+                        "parent_message_id": msg_id,
+                        "rich_part": content,
+                    })
+
+            # Code execution
+            if content_type == "code" and content.get("text"):
+                lang = content.get("language", "")
+                code_text = content["text"]
+                if len(code_text) > 50:
+                    artifacts.append({
+                        "artifact_type": "code_execution",
+                        "provider_artifact_id": msg_id,
+                        "label": f"Code ({lang})",
+                        "parent_message_id": msg_id,
+                        "rich_part": {"content_type": "code", "language": lang, "text": code_text},
+                    })
 
         return artifacts
 
@@ -279,13 +310,13 @@ def _extract_artifact_refs(rich_parts: list[dict], metadata: dict, role: str) ->
     """Pull lightweight artifact references from rich content parts."""
     refs = []
     for part in rich_parts:
+        ct = part.get("content_type", "")
+        if ct == "image_asset_pointer":
+            refs.append({"image_asset": part.get("asset_pointer")})
         path = part.get("path", "")
         if path:
             refs.append({"path": path})
         file_id = part.get("file_id")
         if file_id:
             refs.append({"file_id": file_id})
-        asset = part.get("asset_pointer")
-        if asset:
-            refs.append({"asset_pointer": asset})
     return refs

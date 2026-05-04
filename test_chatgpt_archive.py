@@ -509,8 +509,10 @@ def test_extract_messages_preserves_rich_parts():
                     "author": {"role": "assistant"},
                     "content": {"parts": [
                         "Here is what I found.",
-                        {"path": "/Deep Research App/implicit_link::connector_openai_deep_research/start",
-                         "args": {"prompt_id": "dr-123"}},
+                        {"content_type": "image_asset_pointer",
+                         "asset_pointer": "sediment://abc#file_001#p.jpg",
+                         "size_bytes": 50000, "width": 512, "height": 512,
+                         "fovea": None, "metadata": None},
                     ]},
                     "metadata": {"model_slug": "gpt-5"},
                     "create_time": 200,
@@ -520,12 +522,10 @@ def test_extract_messages_preserves_rich_parts():
     }
     messages = ChatGPTHTTPAPI.extract_messages_from_mapping(detail)
     assert len(messages) == 2
-    assert messages[1]["rich_parts"] == [
-        {"path": "/Deep Research App/implicit_link::connector_openai_deep_research/start",
-         "args": {"prompt_id": "dr-123"}},
-    ]
+    assert len(messages[1]["rich_parts"]) == 1
+    assert messages[1]["rich_parts"][0]["content_type"] == "image_asset_pointer"
     assert len(messages[1]["artifact_refs"]) == 1
-    assert messages[1]["artifact_refs"][0]["path"] == "/Deep Research App/implicit_link::connector_openai_deep_research/start"
+    assert messages[1]["artifact_refs"][0]["image_asset"] == "sediment://abc#file_001#p.jpg"
 
 
 def test_extract_messages_keeps_tool_widget_messages():
@@ -639,7 +639,10 @@ def test_extract_artifacts_finds_images():
                     "id": "msg_1",
                     "author": {"role": "tool"},
                     "content": {"parts": [
-                        {"action": "image_generation", "asset_pointer": "img-xyz"},
+                        {"content_type": "image_asset_pointer",
+                         "asset_pointer": "sediment://f9a7018f14eff32#file_001#p_0.jpg",
+                         "size_bytes": 75516, "width": 768, "height": 1024,
+                         "fovea": 768, "metadata": {"dalle": {"prompt": "a cat"}}},
                     ]},
                     "create_time": 100,
                 },
@@ -649,6 +652,55 @@ def test_extract_artifacts_finds_images():
     artifacts = ChatGPTHTTPAPI.extract_artifacts_from_mapping(detail)
     assert len(artifacts) == 1
     assert artifacts[0]["artifact_type"] == "generated_image"
+    assert artifacts[0]["provider_artifact_id"].startswith("sediment://")
+    assert artifacts[0]["size_bytes"] == 75516
+
+
+def test_extract_artifacts_finds_agent_screenshot():
+    detail = {
+        "mapping": {
+            "n1": {
+                "message": {
+                    "id": "msg_1",
+                    "author": {"role": "tool"},
+                    "content": {
+                        "content_type": "computer_output",
+                        "screenshot": "base64data...",
+                        "computer_id": "comp-1",
+                        "tether_id": "tether-abc",
+                    },
+                    "create_time": 100,
+                },
+            },
+        }
+    }
+    artifacts = ChatGPTHTTPAPI.extract_artifacts_from_mapping(detail)
+    assert len(artifacts) == 1
+    assert artifacts[0]["artifact_type"] == "agent_screenshot"
+    assert artifacts[0]["provider_artifact_id"] == "tether-abc"
+
+
+def test_extract_artifacts_finds_code_execution():
+    detail = {
+        "mapping": {
+            "n1": {
+                "message": {
+                    "id": "msg_1",
+                    "author": {"role": "assistant"},
+                    "content": {
+                        "content_type": "code",
+                        "language": "python",
+                        "text": "import pandas as pd\ndf = pd.read_csv('data.csv')\nprint(df.head())",
+                    },
+                    "create_time": 100,
+                },
+            },
+        }
+    }
+    artifacts = ChatGPTHTTPAPI.extract_artifacts_from_mapping(detail)
+    assert len(artifacts) == 1
+    assert artifacts[0]["artifact_type"] == "code_execution"
+    assert artifacts[0]["label"] == "Code (python)"
 
 
 def test_extract_messages_skips_empty():
