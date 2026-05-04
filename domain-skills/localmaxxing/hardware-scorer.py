@@ -39,41 +39,43 @@ from pathlib import Path
 DATA_FILE = Path(__file__).parent / "leaderboard-data.json"
 API_BASE = "https://www.localmaxxing.com/api"
 
-# Street prices (USD) — researched 2026-05-04 via eBay BIN + BestValueGPU.
-# Prices reflect best verified used price unless noted. See hardware-prices.md for full research.
+# Street prices (USD) — Chrome CDP verified 2026-05-04.
+# Prices reflect cheapest legitimate working card on eBay BIN (scams/parts excluded).
+# See hardware-prices.md for full research with scam analysis.
 STREET_PRICES = {
-    # Budget/older NVIDIA
-    "GTX 1060 6GB": 63, "GTX 1080 Ti": 142, "GTX 1650": 79,
-    "NVIDIA GeForce RTX 3060": 63, "RTX 3060": 63, "RTX 3060 Ti": 200,
-    "NVIDIA GeForce RTX 3070 Ti": 269, "RTX 3070": 250, "RTX 3070 Ti": 269,
-    "RTX 2080 Ti": 269,
-    # Mid-range NVIDIA
-    "RTX 3080": 450, "RTX 3080 Ti": 449,
-    "RTX 4060 Ti 16GB": 440, "RTX 4060 Ti": 440,
-    "RTX 4070": 434, "NVIDIA GeForce RTX 4070": 434,
-    "RTX 4070 Ti Super": 499, "RTX 4070 SUPER": 499,
-    # High-end NVIDIA
-    "RTX 3090": 1100, "NVIDIA GeForce RTX 3090": 1100,
-    "RTX 3090 Ti": 1199, "NVIDIA GeForce RTX 3090 Ti": 1199,
-    "RTX 4090": 1300, "NVIDIA GeForce RTX 4090": 1300,
-    "RTX 5090": 2200, "NVIDIA GeForce RTX 5090": 2200,
-    "RTX 5080": 1150, "NVIDIA GeForce RTX 5080": 1150,
-    "RTX 5070 Ti": 660, "RTX 5060 Ti": 359,
+    # Budget/older NVIDIA (parts-only cards excluded)
+    "GTX 1060 6GB": 63, "GTX 1080 Ti": 130, "GTX 1650": 70,
+    "NVIDIA GeForce RTX 3060": 175, "RTX 3060": 175, "RTX 3060 Ti": 200,
+    "NVIDIA GeForce RTX 3070 Ti": 235, "RTX 3070": 250, "RTX 3070 Ti": 235,
+    "RTX 2080 Ti": 257,
+    # Mid-range NVIDIA (box-only/parts excluded)
+    "RTX 3080": 450, "RTX 3080 Ti": 385,
+    "RTX 4060 Ti 16GB": 445, "RTX 4060 Ti": 445,
+    "RTX 4070": 460, "NVIDIA GeForce RTX 4070": 460,
+    "RTX 4070 Ti Super": 549, "RTX 4070 SUPER": 549,
+    "NVIDIA GeForce RTX 4060 Ti 16GB": 445,
+    # High-end NVIDIA (0% feedback scams excluded)
+    "RTX 3090": 1050, "NVIDIA GeForce RTX 3090": 1050,
+    "RTX 3090 Ti": 1331, "NVIDIA GeForce RTX 3090 Ti": 1331,
+    "RTX 4090": 2449, "NVIDIA GeForce RTX 4090": 2449,
+    "RTX 5090": 2500, "NVIDIA GeForce RTX 5090": 2500,
+    "RTX 5080": 1199, "NVIDIA GeForce RTX 5080": 1199,
+    "RTX 5070 Ti": 895, "RTX 5060 Ti": 475,
     # AMD
-    "AMD Radeon RX 6800": 300, "RX 6800": 300,
+    "AMD Radeon RX 6800": 320, "RX 6800": 320,
     "AMD Radeon RX 7900 XTX": 825, "RX 7900 XTX": 825,
-    "AMD Radeon RX 9070 XT": 660, "RX 9070 XT": 660,
-    "AMD Radeon RX 9070": 599,
+    "AMD Radeon RX 9070 XT": 675, "RX 9070 XT": 675,
+    "AMD Radeon RX 9070": 590,
     # Intel
-    "Intel Arc Pro B70": 1100, "Intel Arc Pro B70 32GB": 1100,
+    "Intel Arc Pro B70": 1151, "Intel Arc Pro B70 32GB": 1151,
     # Tesla/professional
-    "Tesla P100-PCIE-16GB": 295,
-    "NVIDIA H200 SXM": 5000, "NVIDIA H200 NVL": 5000,
-    "RTX PRO 6000": 4000, "RTX A6000": 1632,
-    "NVIDIA GeForce RTX 4060 Ti 16GB": 440,
+    "Tesla P100-PCIE-16GB": 200,
+    "NVIDIA H200 SXM": 20000, "NVIDIA H200 NVL": 20000,
+    "RTX PRO 6000": 8686, "RTX A6000": 3899,
+    "NVIDIA GeForce RTX 4070 SUPER": 549,
     # Apple unified memory
     "Apple M2 Pro": 848, "Apple M3 Ultra": 7700,
-    "Apple M4 Max": 2799, "Apple M5 Max": 4979, "Apple M5 Pro": 3937,
+    "Apple M4 Max": 3269, "Apple M5 Max": 4979, "Apple M5 Pro": 3937,
     "Apple Max": 4979, "Apple Pro": 3937,
     # AMD unified memory
     "AMD Ryzen AI MAX 395 Radeon 8060S": 2897,

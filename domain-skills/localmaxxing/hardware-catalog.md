@@ -21,6 +21,8 @@ See `hardware-prices.md` for full researched prices (2026-05-04).
 3. `mcp__web-search-prime__web_search_prime` - Secondary for quick price lookups
 4. `WebSearch` - Last resort (frequent 400 API errors as of 2026-05)
 
+**CRITICAL: Browser contention.** Multiple agents using Chrome CDP simultaneously share one browser and fight over the active page. For price research, agents MUST be run sequentially (one at a time), NOT in parallel. Parallel agents will get cross-contaminated data from each other's navigations.
+
 ### Scam detection by platform
 
 **AliExpress scam indicators:**

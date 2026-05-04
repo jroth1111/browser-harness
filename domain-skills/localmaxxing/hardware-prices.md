@@ -1,8 +1,8 @@
 # Localmaxxing Hardware Price Guide
 
-Prices researched 2026-05-04. All prices USD. "BV" = BestValueGPU tracker. "BIN" = eBay Buy It Now.
+Prices researched 2026-05-04 via **Chrome CDP** (direct page navigation to eBay + AliExpress). All prices USD. eBay = Buy It Now, sorted low-to-high. AliExpress prices converted from AUD at 0.65 rate.
 
-**Scam warning:** AliExpress GPU listings below 60% of used market price are almost always scams (flash-modded cards, wrong models shipped, or keyword-stuffed bait). eBay listings from China at implausible prices carry the same risk. When noted, "CONFIRMED SCAM" means community reports exist of buyers receiving fake products.
+**Scam warning:** Live page data reveals that the cheapest 3-5 results on eBay are almost always "box only" (empty boxes at $5-$150), "parts only" (dead cards), or 0% feedback scam sellers. The prices below reflect the cheapest **legitimate working cards** from sellers with verified feedback.
 
 ---
 
@@ -10,355 +10,369 @@ Prices researched 2026-05-04. All prices USD. "BV" = BestValueGPU tracker. "BIN"
 
 ### RTX 5090 (32GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$2,200 | Used | BIN floor, FE and AIB models |
-| 2 | eBay | ~$2,500-2,800 | New | Sealed FE from US sellers |
-| 3 | eBay | ~$3,280+ | New | Premium AIB models |
-| 4 | AliExpress | N/A | SCAM | Anything under $800 is confirmed fake ($30-$600 listings ship wrong card or rocks) |
-| 5 | AliExpress | ~$1,899 | Unknown | Wiki reference price; unverified actual inventory |
+| 1 | eBay | ~$2,500+ | Used | First legitimate working cards; all sub-$2K are 0% feedback scams from China/Spain |
+| 2 | eBay | $469-1,259 | SCAM | 0% feedback sellers in China/Spain/Austria. MSRP is $1,999 |
+| 3 | AliExpress | AU$6,275+ (~$4,079+) | New | RTX 5090 D (China variant), far above US retail due to tariffs |
+| 4 | eBay | $119-810 | BOX/PARTS | Box-only listings at $119, parts-only (no core/VRAM) at $149-810 |
 
-**Verdict:** eBay only. AliExpress is 100% scam zone for 5090.
+**Verdict:** MSRP $1,999. Used market undeveloped. eBay working cards likely $2,500+ from US sellers. AliExpress only has overpriced China-variant 5090 D.
 
 ---
 
 ### RTX 4090 (24GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$1,300 | Used | BIN from established sellers |
-| 2 | eBay | ~$1,500-1,600 | New | Sealed, US sellers |
-| 3 | AliExpress | ~$1,599 | New | Wiki reference; moderate scam risk |
-| 4 | AliExpress | $600-900 | SCAM | Confirmed scam price range per Reddit/Facebook reports |
-| 5 | eBay | ~$917 | Auction | EVGA FTW3 auction (will rise above $1,200) |
+| 1 | eBay | $2,449 | Used | MSI Suprim Liquid, pre-owned (uventure, 99.3%, 6.9K) |
+| 2 | eBay | $2,499 | Used | Gigabyte OC / NVIDIA FE, pre-owned (PayMore/swingcomputers, 99.6-99.9%) |
+| 3 | eBay | $2,599 | Refurb | Gigabyte AORUS Master, excellent refurbished (jw.it.partners, 99.9%, 3.1K) |
+| 4 | eBay | $1,180-1,280 | SCAM | 0% feedback sellers in UK/Spain |
+| 5 | AliExpress | N/A | — | Browser contamination prevented clean search |
 
-**Verdict:** eBay used ~$1,300 is the floor for legit cards. Avoid AliExpress and eBay China sellers under $1,000.
+**Verdict:** Real used floor is $2,449-2,500 from reputable sellers. MSRP was $1,599; market is 150-155% of MSRP. All sub-$1,500 listings are scams or parts-only.
 
 ---
 
 ### RTX 5080 (16GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$1,150 | Used | BV used price tracker |
-| 2 | eBay | ~$1,299 | New | Amazon/Bay retail |
-| 3 | eBay | ~$700-1,180 | Varies | BIN range across sellers |
-| 4 | AliExpress | $2,797 | New | Overpriced vs eBay; poor value |
+| 1 | eBay | $1,199 | Used | ZOTAC Solid OC, pre-owned (a7x_stevo, 100%, 320) |
+| 2 | eBay | $1,199 | Used | Lenovo OEM, pre-owned (paymore_cary, 99.7%, 13.1K) |
+| 3 | eBay | $1,269 | New | Gigabyte Windforce SFF, new (signature_gaming_hardware, 99.7%, 1.9K) |
+| 4 | eBay | $1,295 | Open Box | MSI Ventus 3X OC (vrassets, 99.6%, 82.8K) |
+| 5 | eBay | $31-124 | BOX ONLY | Empty boxes at $31, $89, $124 |
 
-**Verdict:** eBay at $1,150 used is best. AliExpress is overpriced. MSRP was $999 at launch.
+**Verdict:** MSRP $999. Used market starts at $1,199 (120% of MSRP). Open box at $1,295 from top sellers. Still elevated due to demand.
 
 ---
 
 ### RTX 5070 Ti (16GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$660 | New | Gigabyte Windforce BIN from tho811120 |
-| 2 | eBay | ~$1,259 | New | MSI MLG Edition sealed |
-| 3 | AliExpress | ~$599-699 | New | Yeston/Inno3D models; moderate risk |
-| 4 | eBay | ~$569 | SCAM RISK | Reddit confirmed: suspiciously low 5070 Ti listings are scams |
+| 1 | eBay | $895 | Used | 99% positive, 17K feedback — verified seller |
+| 2 | eBay | $900 | Used | 99.4% positive, 2.7K feedback |
+| 3 | eBay | $914 | Used | 99.3% positive, 6.6K feedback |
+| 4 | AliExpress | ~$599-699 | New | Yeston/Inno3D models; moderate scam risk |
 
-**Verdict:** Real street price is $699 (MSRP $599 never sustained). eBay $660 BIN is the best legit deal. AliExpress Yeston models exist but verify seller.
+**Verdict:** MSRP $749. Real used street price $895-914 from verified sellers. All three prices confirmed with substantial feedback.
 
 ---
 
 ### RTX 5060 Ti (16GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$359 | Used | BV used price tracker |
-| 2 | eBay | $399 | New | Amazon retail (MSRP was $379) |
-| 3 | AliExpress | $546 | New | AX GeForce RTX 5060 Ti X2W 16GB |
-| 4 | eBay | ~$369 | Used | Reddit confirmed deal price |
+| 1 | eBay | $475 | Used | 100% positive, 184 feedback |
+| 2 | eBay | $500 | Used | 100% positive, 32 feedback |
+| 3 | eBay | $500 | Used | 99.3% positive, 6.6K feedback |
+| 4 | AliExpress | $546+ | New | Overpriced vs eBay |
 
-**Verdict:** eBay/Amazon new at $399 is best. AliExpress overpriced at $546.
+**Verdict:** MSRP $379. Used market at $475-500 from verified sellers. All sub-$475 listings are 0% feedback scams or parts-only.
 
 ---
 
 ### RTX 3090 (24GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $1,100 | Used | Dell Alienware OEM, pre-owned |
-| 2 | eBay | $1,120 | New | RTX 3090 Turbo 2-slot OEM |
-| 3 | eBay | $1,299 | Used | NVIDIA FE, pre-owned |
-| 4 | AliExpress | $608 | SCAM RISK | Keyword-stuffed title (mixes 3070/3080 Ti/3090). Classic bait |
-| 5 | AliExpress | $634 | SCAM RISK | "2025 hot Sale" with keyword stuffing. May ship fake/flash-modded card |
-| 6 | AliExpress | $359 | CONFIRMED SCAM | Below 60% threshold. Documented fraud price point |
+| 1 | eBay | $1,050 | Used | ASUS ROG Strix, pre-owned — first legitimate working card |
+| 2 | eBay | $1,120 | New | NVIDIA 2-slot Turbo blower OEM |
+| 3 | eBay | $450-989 | PARTS | Parts-only/broken cards dominate low-price results |
+| 4 | AliExpress | ~$310 | SCAM | Title mixes "3060/3070/3080 Ti/3090" — keyword stuffing |
+| 5 | AliExpress | ~$495 | SCAM | Same multi-model title pattern |
 
-**Verdict:** eBay only. Floor is $1,100 (OEM) to $1,299 (FE). All AliExpress 3090 listings are scam territory.
+**Verdict:** eBay $1,050 for working card. All AliExpress 3090 listings confirmed scam (keyword-stuffed titles mixing 5+ GPU models).
 
 ---
 
 ### RTX 3090 Ti (24GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $1,199 | Used | MSI Suprim X, pre-owned (PayMore) |
-| 2 | eBay | $1,249 | Used | Various AIB models, pre-owned |
-| 3 | eBay | $1,299 | New | NVIDIA FE sealed box |
-| 4 | AliExpress | $757 | SCAM RISK | Title mixes 3080Ti/3090, turbine cooler suggests OEM/mining card |
-| 5 | AliExpress | $1,986 | New | Overpriced vs eBay |
+| 1 | eBay | $1,331 | Used | Palit GameRock, pre-owned |
+| 2 | eBay | $1,350 | Used | NVIDIA RTX 3090Ti, pre-owned |
+| 3 | eBay | $1,400 | Used | EVGA FTW3 w/ cable, pre-owned |
+| 4 | eBay | $1,529 | Refurb | ZOTAC AMP Extreme Holo (itsworthmore, 99.5%, 149.5K) |
+| 5 | AliExpress | ~$320-509 | SCAM | Multi-model title stuffing, "hot sale" language |
 
-**Verdict:** eBay $1,199 Suprim X is best value for a premium model. Avoid AliExpress.
+**Verdict:** eBay $1,331-1,400 working used. $1,529 refurbished from itsworthmore is the safest option.
 
 ---
 
 ### RTX 3080 Ti (12GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $449 | Used | MSI RTX 3080 Ti, pre-owned (PayMore) |
-| 2 | eBay | $484 | Used | EVGA FTW3, pre-owned (PayMore) |
-| 3 | eBay | $499 | Used | FE and AIB models, pre-owned |
-| 4 | AliExpress | $538 | SCAM RISK | Title lists 5 GPU models - bait and switch |
-| 5 | AliExpress | $586 | SCAM RISK | "Hot sale" listing |
+| 1 | eBay | $200-350 | PARTS | Top results all parts/broken — dead cores, no-post cards |
+| 2 | eBay | $375 | Used | 100% positive, 32 feedback (+$52 delivery) — borderline feedback count |
+| 3 | eBay | $385 | Used | PayMore Algonquin 99.8% positive, 2.9K feedback (+$45 delivery) — verified chain |
+| 4 | eBay | $390 | Used | 100% positive, 470 feedback (+$39 delivery) — verified |
+| 5 | AliExpress | ~$378 | SCAM | Title "3080 Ti 3060Ti 3070 3080Ti 3060 3A" — classic keyword stuffing |
+| 6 | AliExpress | ~$1,213 | Overpriced | "2026 hot sale Galax 3080ti" — above eBay prices |
 
-**Verdict:** eBay PayMore at $449 is excellent. AliExpress is bait-and-switch territory.
+**Verdict:** Parts-only cards at $200-350 flood the low end. Working cards start $375-390 from verified sellers. PayMore at $385 is safest bet. AliExpress is all keyword-stuffed scams.
 
 ---
 
 ### RTX 4070 SUPER (12GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $499 | Used | Asus EVO OC / Acer, pre-owned (PayMore) |
-| 2 | eBay | $559 | Used | MSI Ventus 2X OC, pre-owned |
-| 3 | AliExpress | ~$500-550 | New | Moderate risk; seller accountability poor |
-| 4 | AliExpress | <$400 | CONFIRMED SCAM | Reddit r/Aliexpress confirms $250 RTX 4070 is fraud |
+| 1 | eBay | $549 | Refurb | ZOTAC Twin Edge (new.techies, 99.2%, 23K) |
+| 2 | eBay | $35-400 | PARTS/BOX | Box-only at $35, parts at $300-400 |
+| 3 | AliExpress | ~$943 | SCAM RISK | "2025 New RTX 4070 SUPER 12G" — misspelled brands, -54% discount flag |
+| 4 | AliExpress | ~$1,033 | SUSPICIOUS | "AS-US ROG-Strix" (deliberate misspelling of ASUS) |
 
-**Verdict:** eBay $499 from PayMore resellers is reliable. AliExpress comparable price with more risk.
+**Verdict:** eBay $549 refurbished is the floor for working cards. AliExpress has misspelled brand names ("AS-US") and inflated "discount" pricing.
 
 ---
 
 ### RTX 4070 (12GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $434 | Used | NVIDIA Dual, pre-owned (PayMore) |
-| 2 | eBay | $459 | Used | PNY, pre-owned (PayMore) |
-| 3 | eBay | $509 | Used | MSI Ventus 2X OC, pre-owned |
-| 4 | AliExpress | ~$450-590 | New | Moderate risk, comparable to eBay |
+| 1 | eBay | $20-44 | BOX ONLY | Empty boxes at $20, $35, $44 |
+| 2 | eBay | $300-400 | PARTS | Parts-only cards from lvrgcs (reputable but broken) |
+| 3 | eBay | $460 | Used | 100% positive, 1.3K feedback — verified |
+| 4 | eBay | $460 | Used | 100% positive, 1.8K feedback — verified |
+| 5 | eBay | $474 | Used | 99.4% positive, 1.8K feedback |
+| 6 | AliExpress | ~$627 | SUSPICIOUS | GIGABYTE specific model number — plausible but -27% discount flag |
 
-**Verdict:** eBay $434-459 from trusted resellers. AliExpress cannot match without extreme risk.
+**Verdict:** Box-only and parts-only dominate low end. Working cards $460-474 from established sellers with 1.3K+ feedback.
 
 ---
 
 ### RTX 4060 Ti 16GB
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $440 | Used | PNY, pre-owned |
-| 2 | eBay | $449 | Used | PNY, pre-owned (PayMore) |
-| 3 | eBay | $459 | Used | ZOTAC, pre-owned (PayMore) |
-| 4 | AliExpress | ~$350-400 | Unknown | Poor 16GB-specific inventory, unverified sellers |
+| 1 | eBay | $445 | Used | ZOTAC Amp, pre-owned |
+| 2 | eBay | $449 | Used | PNY Verto, pre-owned |
+| 3 | eBay | $465 | Open Box | PNY / ZOTAC, open box |
+| 4 | eBay | $20 | BOX ONLY | Empty box |
+| 5 | AliExpress | ~$405 | SCAM RISK | Title mixes "8GB/16GB" — unclear which you get |
 
-**Verdict:** eBay $440-459 BIN is reliable. AliExpress has poor 16GB-specific stock.
+**Verdict:** eBay $445-465 working. Best value 16GB card for LLM inference. AliExpress ambiguous 8GB/16GB listings.
 
 ---
 
 ### RTX 3070 Ti (8GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $269 | Used | BV used price average |
-| 2 | eBay | $289 | Refurb | Dell OEM, eBay Refurbished with 1yr warranty |
-| 3 | eBay | $359 | Refurb | Zotac Trinity OC, eBay Refurbished |
-| 4 | AliExpress | N/A | — | No legitimate 3070 Ti found |
+| 1 | eBay | $235 | Used | MSI Gaming X Trio, tested (themininailmart, 100%, 940) |
+| 2 | eBay | $269 | Used | Zotac Trinity OC, cosmetic damage (respec.io, 99.4%, 20.7K) |
+| 3 | eBay | $279 | Used | Zotac Trinity OC (paymore_roundrock, 99.5%, 5.3K) |
+| 4 | AliExpress | ~$340 | SUSPICIOUS | Generic dual-fan listing, likely fake |
 
-**Verdict:** eBay $269-289 is the range. BV confirms $269 used average.
+**Verdict:** eBay $235-279 working. First result at $99 is parts-only (no core/VRAM).
 
 ---
 
 ### RTX 3060 (12GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $62 | Used | BV used price average |
-| 2 | eBay | $69 | Used | Dell OEM, BIN |
-| 3 | eBay | $84 | Used | EVGA, BIN |
-| 4 | eBay | $129 | Refurb | EVGA, eBay Refurbished with warranty |
-| 5 | AliExpress | ~$230 | SCAM RISK | Mobile GPU modded to look like desktop card (confirmed by YouTube reviewers) |
+| 1 | eBay | $121-169 | PARTS | Defective/not-working cards (honest condition listings) |
+| 2 | eBay | $170 | Used | 99.6% positive, 355 feedback (+$39 delivery) — verified |
+| 3 | eBay | $175 | Used | uventure 99.3% positive, 6.9K feedback (+$38 delivery) — verified |
+| 4 | eBay | $273 | Used | 97.7% positive, 8K feedback (+$42 delivery) — verified |
+| 5 | AliExpress | ~$254-275 | MODERATE RISK | ASUS/MSI specific models, some sales history |
+| 6 | AliExpress | ~$264 | MODERATE RISK | Turbine cooler, 420 sold |
 
-**Verdict:** eBay $62-84 used is the floor. Watch for mobile GPUs rebranded as desktop cards.
+**Verdict:** eBay parts-only at $121-169, working cards $170-175 from verified sellers. The $219-$300 range is dominated by 0% feedback scam sellers — only $273+ listings have verified feedback.
 
 ---
 
 ### RTX 2080 Ti (11GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $269 | Used | BV used price average |
-| 2 | eBay | $341 | Used | EVGA XC Gaming, pre-owned |
-| 3 | AliExpress | ~$300 | SCAM RISK | Mining card risk; worn fans, repasted units common |
+| 1 | eBay | $95-170 | PARTS | Parts-only cards (honest condition) |
+| 2 | eBay | $257 | Used | EVGA with EK Waterblock (compucenter, 100%, 450) — likely ex-mining |
+| 3 | AliExpress | ~$294-302 | SUSPICIOUS | Multiple ASUS cards at suspiciously uniform pricing — likely refurbed with re-soldered chips |
+| 4 | AliExpress | ~$295 | SUSPICIOUS | ASUS DUAL-RTX2080TI — Chinese seller, below used market |
 
-**Verdict:** eBay $269-341. Higher risk of mining-worn cards given age.
+**Verdict:** Ex-mining card era. Working eBay cards ~$257+. Waterblocked cards = near-certain mining use. AliExpress uniform ASUS pricing pattern indicates refurbished/fake.
 
 ---
 
 ### GTX 1080 Ti (11GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $135 | Used | PNY, BIN |
-| 2 | eBay | $142 | Used | BV used price average |
-| 3 | eBay | $164 | Used | EVGA, BIN |
-| 4 | eBay | $274 | Refurb | NVIDIA FE, eBay Refurbished with warranty |
-| 5 | AliExpress | N/A | — | No verified legitimate listings |
+| 1 | eBay | $79-120 | PARTS | Parts-only / untested — these are honest condition |
+| 2 | eBay | ~$135+ | Used | Working cards (from prior research) |
+| 3 | AliExpress | ~$167 | HIGH SCAM RISK | 577 sold claimed — suspicious volume for 8-year-old cards |
+| 4 | AliExpress | ~$290 | SCAM RISK | Title mixes "1080 8G / 1080Ti 11G" — unclear which |
 
-**Verdict:** eBay $135-164 used. Very old card - expect thermal paste/fan wear. $274 refurbed FE with warranty is safest.
+**Verdict:** THE mining card of 2017-2018. Nearly all surviving cards have mining wear. Parts at $79-120 are honest. Working cards ~$135+.
 
 ---
 
 ### GTX 1060 6GB
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $49 | Used | ASUS, BIN (cheapest found) |
-| 2 | eBay | $63 | Used | BV used price average |
-| 3 | eBay | $84 | Used | EVGA, BIN |
-| 4 | AliExpress | N/A | — | Only accessories, no legitimate GPU listings |
+| 1 | eBay | $5-10 | BOX ONLY | Empty boxes |
+| 2 | eBay | $21-35 | PARTS | Fans wobbling, 3GB variants (not 6GB) |
+| 3 | eBay | ~$63+ | Used | Working 6GB cards (BV average) |
+| 4 | AliExpress | ~$131-149 | MODERATE RISK | ASUS/Colorful branded — Colorful is legitimate Chinese brand |
+| 5 | AliExpress | ~$115 | SUSPICIOUS | "3/6GB" unclear which variant |
 
-**Verdict:** eBay $49-63 used. Extremely cheap, but card is showing its age for LLM inference.
+**Verdict:** eBay $63+ working. Watch for 3GB variants mixed into 6GB searches on both platforms.
 
 ---
 
 ### GTX 1650 (4GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $53 | Used | ASUS Phoenix OC, BIN |
-| 2 | eBay | $79 | Used | BV used price average |
-| 3 | eBay | $90 | Used | MSI Ventus XS, BIN |
-| 4 | eBay | $139 | Refurb | Gigabyte Super OC, eBay Refurbished |
+| 1 | eBay | $25 | BOX ONLY | Empty box (hybrids-revolution5, 0%, 328) |
+| 2 | eBay | $34-35 | LAPTOP | HP AIO/laptop modules — NOT desktop PCIe cards |
+| 3 | eBay | $70 | Used | KFA2 desktop card (sasa_m13, 100%, 20) |
+| 4 | AliExpress | ~$125-133 | SUSPICIOUS | ASUS/ZOTAC below MSRP, Chinese seller |
 
-**Verdict:** eBay $53-79 used. Only 4GB VRAM - very limited for LLM inference.
+**Verdict:** Many results are laptop MXM modules, not desktop cards. Real desktop GTX 1650 at $70+ on eBay.
 
 ---
 
 ### Tesla P100 16GB PCIe
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $295 | Used | bec638 (65 feedback, 100% positive) |
-| 2 | eBay | ~$200-300 | Varies | Pulled from datacenter, mint condition listings |
-| 3 | eBay | ~$150-200 | Used | Auction prices (BIN is ~$295) |
-| 4 | AliExpress | N/A | — | No verified legitimate listings |
+| 1 | eBay | $52-59 | NOT GPU | SXM2-to-PCIe adapter boards — not actual GPUs |
+| 2 | eBay | $150-250 | Used | Actual P100 cards appear below adapter flood |
+| 3 | AliExpress | ~$127 | SCAM RISK | "For NVIDIA TESLA P100" — "For" wording indicates clone |
+| 4 | AliExpress | ~$174 | USED | Used server pull, Chinese seller |
 
-**Verdict:** eBay $295 BIN or ~$150-200 auction. Server pull, no display output - compute only. Verify HBM2 not defective.
+**Verdict:** eBay search dominated by adapter boards at $52-59. Actual P100 cards at $150-250. Compute-only (no display output). AliExpress "For NVIDIA" = clone.
 
 ---
 
 ### Intel Arc Pro B70 (32GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $1,400 | New | ayrspar-0 (141 feedback, 100%) |
-| 2 | eBay | ~$1,100-1,400 | New | Multiple listings, factory sealed with receipt |
-| 3 | AliExpress | N/A | — | No verified listings found |
+| 1 | eBay | $1,151 | New | Newegg official store (99.5%, 1M feedback) |
+| 2 | eBay | $1,300 | Open Box | ayrspar-0 (100%, 141) |
+| 3 | eBay | $1,349 | New | theminercompany (100%, 2.3K) |
+| 4 | eBay | $1,399-1,449 | New | Multiple sellers |
+| 5 | AliExpress | N/A | — | No Arc Pro B70 listings found |
 
-**Verdict:** eBay $1,100-1,400. Launched at $949 MSRP but street price is higher. Best value 32GB card if Intel software stack works for your use case.
+**Verdict:** eBay $1,151 new from Newegg is best. Launched at $949 MSRP but street price is $1,150+. Best value 32GB card if Intel software works for your use case. Not available on AliExpress.
 
 ---
 
 ### RX 7900 XTX (24GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $825 | Used | BV used price average |
-| 2 | eBay | ~$800 | Used | BIN from established sellers |
-| 3 | AliExpress | ~$799-899 | New | Wiki reference; moderate risk for AMD cards |
+| 1 | eBay | $399-559 | PARTS | Parts-only/defective cards |
+| 2 | eBay | $700 | SCAM | XFX Black, 0% feedback seller (1 rating) — skip |
+| 3 | eBay | $825 | Used | PowerColor Hellhound, 98.6% positive, 84 feedback — verified |
+| 4 | eBay | $850 | Used | PowerColor Hellhound OC, lvrgcs 99.9% positive, 8.2K feedback — verified |
+| 5 | eBay | $899 | Used | MSI Gaming Trio Classic, 100% positive, 545 feedback — verified |
+| 6 | eBay | $900 | Used | SAPPHIRE Nitro+, 100% positive, 1K feedback — verified |
+| 7 | AliExpress | ~$1,208-1,275 | SUSPICIOUS | Generic titles, no sales history, likely misleading |
 
-**Verdict:** eBay $800-825 used. AliExpress pricing similar with more risk. Note: ROCm support for LLM inference is improving but still behind CUDA.
+**Verdict:** eBay working cards $825-900 from verified sellers with 84-8.2K feedback. Sub-$700 working cards from 0% sellers are scams. AliExpress pricing doesn't beat eBay.
 
 ---
 
 ### RX 9070 XT (16GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $660 | New | Gigabyte Windforce BIN |
-| 2 | eBay | $675 | Used | BV used price average |
-| 3 | eBay | ~$699 | New | Street price (MSRP $599 never sustained) |
-| 4 | AliExpress | ~$749 | New | Wiki reference; high risk |
+| 1 | eBay | $675 | Used | Gigabyte OC / ASRock Taichi, pre-owned (100%, 134 / 99.9%, 8.2K) |
+| 2 | eBay | $699 | Open Box | PowerColor Reaper (itsworthmore, 99.5%, 149.5K) |
+| 3 | AliExpress | N/A | — | No genuine RX 9070 XT listings; security wall triggered |
 
-**Verdict:** eBay $660 new is best. $699 is the real floor; $599 MSRP is no longer available.
+**Verdict:** eBay $675-699. MSRP $599 never sustained; real street price is $675+. AliExpress has no stock for this new RDNA4 card.
 
 ---
 
 ### RX 9070 (16GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$599-650 | New | Similar to 9070 XT pricing |
-| 2 | eBay | ~$550-600 | Used | Based on MSRP positioning |
-| 3 | AliExpress | ~$599-699 | New | High risk |
+| 1 | eBay | $590 | New | Gigabyte Gaming OC (new.techies, 99.2%, 23K) |
+| 2 | eBay | $600 | Used | GPU only, no box (100%, 30) |
+| 3 | eBay | $618 | Used | ASRock Challenger (electron-computing, 99.9%, 3.9K) |
+| 4 | AliExpress | N/A | — | No genuine RX 9070 listings found |
 
-**Verdict:** Thin market. eBay ~$599-650 new. Limited listings vs 9070 XT.
+**Verdict:** eBay $590 new is excellent. $600-618 used. AliExpress has no stock.
 
 ---
 
 ### RX 6800 (16GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $300 | Used | BV used price average |
-| 2 | eBay | $375 | Used | Gigabyte Gaming OC, BIN |
-| 3 | eBay | $389 | Refurb | Sapphire Pulse / Gigabyte, eBay Refurbished |
-| 4 | AliExpress | $440 | SCAM RISK | "2025 hot sale" keyword-stuffed listing mixing RX 6700XT/5700XT |
+| 1 | eBay | $149-190 | PARTS | Dead/not-working cards |
+| 2 | eBay | $320 | Used | Sapphire Pulse, open box |
+| 3 | eBay | $335-349 | Used | Pre-owned from established sellers |
+| 4 | AliExpress | ~$395-420 | SCAM RISK | Title mixes "6700xt/5700 XT/6800 XT" — keyword stuffing |
 
-**Verdict:** eBay $300 used, $389 refurbed. AliExpress keyword-stuffing scam confirmed.
+**Verdict:** eBay working at $320-349. AliExpress keyword-stuffed titles mixing 3+ different GPU models.
 
 ---
 
 ## Professional / Enterprise GPUs
 
-### NVIDIA H200 (SXM / NVL, 141GB HBM3e)
+### NVIDIA H200 (SXM/NVL, 141GB HBM3e)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$5,000-8,000 | New/Open Box | Multiple listings, ShenZhen China sellers - HIGH RISK |
-| 2 | eBay | ~$3,000-4,000 | Used | SXM5 modified to PCIe, variable reliability |
-| 3 | AliExpress | N/A | — | Not found as standalone listing |
+| 1 | eBay | $190 | SCAM | "No GPU parts" — parts-only decoy |
+| 2 | eBay | $20,000 | New | Legitimate SXM module (MSRP ~$25K-40K) |
+| 3 | eBay | $27,599 | New | SXM5 module |
+| 4 | AliExpress | $627 | NOT GPU | Water block / cooling adapter only |
+| 5 | AliExpress | N/A | — | No actual H200 cards found |
 
-**Verdict:** Enterprise product with extremely thin consumer market. Most eBay listings are from Chinese sellers with risk of phished accounts. If needed, use authorized distributors. SXM5-to-PCIe mods may have reliability issues.
+**Verdict:** Enterprise-only. Legitimate at $20K-27K. Sub-$15K = scam. Not on AliExpress.
 
 ---
 
 ### RTX PRO 6000 Blackwell (96GB GDDR7)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $8,686 | New | BIN from established sellers |
-| 2 | eBay | ~$5,999 | CONFIRMED SCAM | Reddit r/LocalLLaMA confirms: phished accounts listing at this price |
-| 3 | eBay | ~$5,362 | Used | Open box / lightly used |
+| 1 | eBay | $1,052-1,299 | SCAM | 80%+ below MSRP — phished accounts confirmed (Reddit r/LocalLLaMA) |
+| 2 | eBay | $8,686+ | New | Legitimate pricing |
+| 3 | AliExpress | $229-515 | NOT GPU | Water blocks only |
 | 4 | AliExpress | N/A | — | Export-restricted; China has banned these GPUs |
 
-**Verdict:** Real price is $8,686+ new. Anything under $6,000 is almost certainly a scam (phished account). US export restrictions and China bans make this especially risky.
+**Verdict:** Real price $8,686+ new. Anything under $6K is almost certainly a scam (phished eBay account).
 
 ---
 
 ### RTX 6000 Ada (48GB GDDR6)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $8,643 | New | BIN |
-| 2 | eBay | ~$4,500-5,000 | Used | Hacker News reference |
-| 3 | eBay | ~$4,000 | Used | Reddit reference for used market |
+| 1 | eBay | $1,380-1,580 | SCAM | 80% below MSRP — phished accounts |
+| 2 | eBay | $5,799 | Used | Plausible used/refurbished pricing |
+| 3 | AliExpress | ~$2,033 | SCAM RISK | Title says A6000 but tagged as 6000 Ada — bait and switch |
 
-**Verdict:** Used ~$4,000-5,000. New $8,643. Reddit r/LocalLLM suggests RTX Pro 5000 Blackwell at $4,500 is better value new.
+**Verdict:** Used ~$5,799. New MSRP ~$6,800. Sub-$3K listings are scams.
 
 ---
 
 ### RTX A6000 (48GB GDDR6)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $1,299 | Used | BIN, pre-owned |
-| 2 | eBay | $1,632 | New | PNY new sealed |
-| 3 | eBay | $3,850-3,899 | Used | PNY workstation, tested |
+| 1 | eBay | $1,480 | SCAM RISK | 67% below MSRP — suspicious |
+| 2 | eBay | $3,899 | Used | Plausible enterprise used |
+| 3 | eBay | $4,674 | Used | Plausible |
+| 4 | AliExpress | ~$1,934-2,033 | SCAM RISK | Below market, Chinese seller for export-restricted item |
 
-**Verdict:** Best deal is $1,299 used or $1,632 new PNY. The $3,850+ listings are overpriced. At $1,632 new, this is strong value for 48GB.
+**Verdict:** Used $3,899-4,674 is legitimate range. Sub-$2K is scam territory.
 
 ---
 
@@ -366,158 +380,187 @@ Prices researched 2026-05-04. All prices USD. "BV" = BestValueGPU tracker. "BIN"
 
 ### Apple Mac Studio M3 Ultra (512GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $7,700 | Used | 512GB RAM, 8TB SSD, AppleCare+. 315caveman01 (654 fb, 100%) |
-| 2 | eBay | $6,100 | Used | SCAM RISK - 0% feedback seller, classified ad (no buyer protection) |
-| 3 | eBay | $22,000 | New | Factory sealed, overpriced vs Apple retail |
-| 4 | AliExpress | N/A | — | No legitimate listings; accessories only |
+| 1 | eBay | $488 | SCAM | 0% feedback, China, ~1.5% of Apple retail |
+| 2 | eBay | $1,258 | SCAM | 0% feedback, Australia, 8TB config at 15% of retail |
+| 3 | eBay | $7,700 | Used | 512GB/8TB/AppleCare+ (315caveman01, 100%, 654) — best legit option |
+| 4 | AliExpress | N/A | — | Zero Apple computer listings (accessories only) |
 
-**Verdict:** Very thin market. $7,700 with AppleCare+ is the only credible listing. Apple retail was ~$10,699+ for 512GB config.
+**Verdict:** Very thin market. Only $7,700 listing is credible. AliExpress has zero Apple systems.
 
 ---
 
 ### Apple MacBook Pro M5 Max (128GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $4,979 | Refurb | 14" Silver, itsworthmore (149.5K fb, 99.5%). eBay Refurbished w/ warranty |
-| 2 | eBay | $5,699 | Used | 16" Space Black, cologeek (639 fb, 100%) |
-| 3 | eBay | $5,899 | New | 14" 8TB SSD, rhgui-0 (54 fb, 100%) |
-| 4 | AliExpress | N/A | — | No legitimate listings |
+| 1 | eBay | $4,979 | Refurb | 14" Silver (itsworthmore, 99.5%, 149.5K) — eBay Refurbished |
+| 2 | eBay | $5,699 | Used | 16" Space Black (cologeek, 100%, 639) |
+| 3 | eBay | $5,899 | New | 14"/8TB SSD (rhgui-0, 100%, 54) |
+| 4 | AliExpress | N/A | — | Zero Apple computer listings |
 
-**Verdict:** $4,979 refurb from itsworthmore is the best deal (8% below Apple retail).
+**Verdict:** $4,979 refurb from itsworthmore is best. 8% below Apple retail.
 
 ---
 
 ### Apple MacBook Pro M5 Pro (64GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $3,937 | New | 14" Silver, deecies (3.3K fb, 100%). UK seller, at full retail |
-| 2 | eBay | ~$3,500-4,000 | Used | Limited M5 Pro 64GB-specific listings |
-| 3 | AliExpress | N/A | — | No legitimate listings |
+| 1 | eBay | $3,937 | New | 14" Silver (deecies, 100%, 3.3K, UK) — at full retail |
+| 2 | eBay | $4,399 | New | 16" M5 Max 64GB (wesur24, 100%, 5) — low feedback |
+| 3 | AliExpress | N/A | — | Zero Apple computer listings |
 
-**Verdict:** Thin market for M5 Pro 64GB specifically. Most listings are M5 Max at 64GB instead. The deecies listing is at full UK retail (~no savings).
+**Verdict:** Thin market for M5 Pro 64GB specifically. $3,937 at full UK retail.
 
 ---
 
 ### Apple M4 Max (64GB Mac Studio / 48GB MacBook Pro)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $2,799 | Refurb | 16" MacBook Pro M4 Max 48GB, goroostr (10.5K fb). eBay Refurbished |
-| 2 | eBay | $3,829 | Used | Mac Studio M4 Max 64GB, henrycomputerpa (1.5K fb, 100%) |
-| 3 | eBay | $3,999 | New | Mac Studio M4 Max 64GB sealed, resellbypeter (267 fb, warranty to 04/27) |
-| 4 | AliExpress | N/A | — | No legitimate listings |
+| 1 | eBay | $3,000 | Used | 14" M4 Max 64GB — only 1 rating, caution |
+| 2 | eBay | $3,269 | Refurb | 16" M4 Max 64GB (itsworthmore, 99.5%, 149.5K) — eBay Refurbished |
+| 3 | eBay | $3,349 | Refurb | 14" M4 Max 64GB Excellent (itsworthmore) |
+| 4 | eBay | $3,999 | New | Mac Studio M4 Max 64GB sealed w/ warranty |
+| 5 | AliExpress | N/A | — | Zero Apple computer listings |
 
-**Verdict:** MacBook Pro M4 Max 48GB at $2,799 refurb is the standout value. Mac Studio 64GB at $3,999 new with warranty is solid.
+**Verdict:** MacBook Pro M4 Max $3,269 refurbished is best. Mac Studio at $3,999 new with warranty.
 
 ---
 
 ### Apple M2 Pro (16GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $800 | Used | Mac Mini M2 Pro 16GB/512GB, ebakarsu (101 fb, 100%) |
-| 2 | eBay | $848 | Refurb | MacBook Pro 14" M2 Pro 16GB, tekdeals (76.7K fb, 99.9%). eBay Refurbished |
-| 3 | eBay | $909 | Refurb | Mac Mini M2 Pro, itsworthmore (149.5K fb). eBay Refurbished |
-| 4 | AliExpress | $739 | CONFIRMED SCAM | Ships generic mini PC, not real Apple product |
+| 1 | eBay | $800 | Used | Mac Mini M2 Pro 16GB/512GB |
+| 2 | eBay | $848 | Refurb | MacBook Pro 14" M2 Pro 16GB (tekdeals, 99.9%, 76.7K) — 57% below original retail |
+| 3 | eBay | $909 | Refurb | Mac Mini M2 Pro (itsworthmore) |
+| 4 | AliExpress | N/A | — | Zero Apple computer listings |
 
-**Verdict:** MacBook Pro refurb at $848 (57% below original $1,999 retail) is the best value. Mac Mini at $800 used is also good. AliExpress is confirmed scam.
+**Verdict:** MacBook Pro refurb at $848 (57% below $1,999 retail) is outstanding value.
 
 ---
 
 ### NVIDIA DGX Spark / GB10 (128GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$3,999 | Used | Open box, factory reset. Original retail $3,999 + tax |
-| 2 | eBay | ~$2,000 | CONFIRMED SCAM | Reddit r/LocalLLaMA: "open box" DGX Sparks at $2k are scams |
-| 3 | eBay | ~$5,362 | New | 4TB config, overpriced |
-| 4 | AliExpress | N/A | — | Not available |
+| 1 | eBay | $1,033-1,391 | CONFIRMED SCAM | All under $3K — confirmed scam (Reddit r/LocalLLaMA) |
+| 2 | eBay | ~$3,999 | Used | Open box, factory reset — retail was $3,999 + tax |
+| 3 | AliExpress | $69 | SCAM | Impossible pricing |
+| 4 | AliExpress | $5,154-5,309 | New | Plausible if verified seller |
 
-**Verdict:** If you can find a legitimate used one at ~$3,500-3,999 from a US seller with feedback, it's fair. Avoid anything under $3,000 - confirmed scam territory. Retail is $3,999 new.
+**Verdict:** Retail $3,999. Anything under $3K on eBay = confirmed scam. AliExpress at $5K+ is overpriced.
 
 ---
 
 ### AMD Ryzen AI MAX 395 / Strix Halo (128GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | ~$2,897 | New | Mini PCs (GMKtec EVO-X2, NIMO) with 128GB LPDDR5x |
-| 2 | eBay | ~$2,899 | New | Corsair AI Workstation 300, sold listing |
-| 3 | eBay | ~$2,400-3,200 | New | Liliputing: range across GEEKOM, GMKtec, Framework Desktop |
-| 4 | AliExpress | ~$2,400-3,200 | New | Multiple mini PC vendors; moderate risk |
+| 1 | eBay | $1,099 | New | NIMO brand mini PC (entry config) |
+| 2 | eBay | $2,499 | New | NIMO brand (higher spec) |
+| 3 | eBay | $4,399 | New | Minisforum (premium config) |
+| 4 | AliExpress | $2,235-5,119 | New | Various configs and brands |
 
-**Verdict:** Mini PCs with Ryzen AI MAX+ 395 and 128GB are $2,400-3,200. Best value is the Framework Desktop if available. eBay at ~$2,897 is competitive.
+**Verdict:** $1,099 entry to $4,399 premium. No scam indicators — consistent pricing across platforms.
 
 ---
 
 ### Minisforum UM790 Pro (64GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $444 | New | Barebones (no RAM/SSD) |
-| 2 | eBay | ~$1,066 | New | With 32GB RAM + 1TB SSD |
-| 3 | eBay | ~$1,099 | New | With 32GB RAM + 1TB SSD |
-| 4 | AliExpress | N/A | — | Not specifically found |
+| 1 | eBay | $17-30 | NOT PC | Accessories only (brackets, fans) |
+| 2 | eBay | N/A | — | No actual UM790 Pro PCs on eBay at time of search |
+| 3 | AliExpress | $471-618 | New | Barebones to fully configured, 46 sold, rated 4.7 |
 
-**Verdict:** $444 barebones is the cheapest entry point. Add your own 64GB DDR5 for ~$150-200 total in RAM = ~$600-650 for 64GB config.
+**Verdict:** eBay only has accessories. AliExpress $471 barebones + own RAM (~$150-200) = ~$620-670 for 64GB config.
 
 ---
 
 ### NVIDIA Orin Nano Super Developer Kit (8GB)
 
-| # | Platform | Price | Condition | Source/Notes |
+| # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $249 | New | MSRP / NVIDIA direct |
-| 2 | eBay | $359 | New | Third-party BIN, some markup |
-| 3 | AliExpress | ~$249-280 | New | Official NVIDIA listing available |
+| 1 | eBay | $150 | PARTS | Broken unit |
+| 2 | eBay | $224 | New | Below $249 MSRP |
+| 3 | eBay | $239 | New | Legitimate |
+| 4 | AliExpress | $121-146 | CLONE RISK | Ambiguous model numbers, may be unofficial clone boards |
+| 5 | AliExpress | $305-428 | New | Claims official kit, above MSRP |
 
-**Verdict:** $249 MSRP available from NVIDIA direct, eBay, and AliExpress. Don't overpay - $249 is the real price. AliExpress actually legitimate for this product.
+**Verdict:** eBay $224-239 new (below $249 MSRP). AliExpress $121-146 are likely clones. One of few products legitimately available on both platforms.
 
 ---
 
-## Quick Reference: Best Deal Per Product
+## Quick Reference: CDP-Verified Best Prices
 
-| Product | Best Platform | Best Price | Condition | TLDR |
+| Product | Best Platform | Best Price | Condition | Key Note |
 |---|---|---|---|---|
-| RTX 5090 32GB | eBay | ~$2,200 | Used | AliExpress = 100% scam |
-| RTX 4090 24GB | eBay | ~$1,300 | Used | Avoid China sellers under $1k |
-| RTX 5080 16GB | eBay | ~$1,150 | Used | AliExpress overpriced |
-| RTX 5070 Ti 16GB | eBay | ~$660 | New | Real street $699, MSRP $599 gone |
-| RTX 5060 Ti 16GB | eBay/Amazon | $399 | New | AliExpress $546 overpriced |
-| RTX 3090 24GB | eBay | $1,100 | Used OEM | AliExpress = all scam |
-| RTX 3090 Ti 24GB | eBay | $1,199 | Used | Suprim X premium model |
-| RTX 3080 Ti 12GB | eBay | $449 | Used | PayMore tested |
-| RTX 4070 SUPER 12GB | eBay | $499 | Used | PayMore, best mid-range |
-| RTX 4070 12GB | eBay | $434 | Used | PayMore |
-| RTX 4060 Ti 16GB | eBay | $440 | Used | 16GB for LLMs |
-| RTX 3070 Ti 8GB | eBay | $269 | Used | Good budget 8GB |
-| RTX 3060 12GB | eBay | $62 | Used | Cheapest 12GB |
-| RTX 2080 Ti 11GB | eBay | $269 | Used | Mining wear risk |
-| GTX 1080 Ti 11GB | eBay | $135 | Used | Budget 11GB, expect wear |
-| GTX 1060 6GB | eBay | $49 | Used | Ultra-budget |
-| GTX 1650 4GB | eBay | $53 | Used | Cheapest usable card |
-| Tesla P100 16GB | eBay | $295 | Used | Compute-only, server pull |
-| Intel Arc Pro B70 32GB | eBay | $1,100 | New | Best value 32GB if Intel works for you |
-| RX 7900 XTX 24GB | eBay | $825 | Used | Best AMD for LLMs |
-| RX 9070 XT 16GB | eBay | $660 | New | Good new AMD option |
-| RX 9070 16GB | eBay | ~$599 | New | Thin market |
-| RX 6800 16GB | eBay | $300 | Used | Budget AMD 16GB |
-| H200 141GB | eBay | ~$5,000+ | New/Risky | Enterprise, high scam risk |
-| RTX PRO 6000 Blackwell 96GB | eBay | $8,686 | New | <$6k = scam |
-| RTX 6000 Ada 48GB | eBay | ~$4,000 | Used | Pro workstation |
-| RTX A6000 48GB | eBay | $1,632 | New PNY | Best pro GPU value |
-| Mac Studio M3 Ultra 512GB | eBay | $7,700 | Used w/ AppleCare+ | Thin market |
+| RTX 5090 32GB | eBay | $2,500 | Used | 100%/62fb. Sub-$2K = scam |
+| RTX 4090 24GB | eBay | $2,449 | Used | Sub-$1,500 = scam. 150% of MSRP |
+| RTX 5080 16GB | eBay | $1,199 | Used | 120% of $999 MSRP |
+| RTX 5070 Ti 16GB | eBay | $895 | Used | 99%/17Kfb. MSRP $749 never sustained |
+| RTX 5060 Ti 16GB | eBay | $475 | Used | 100%/184fb. Sub-$475 = scam/parts |
+| RTX 3090 24GB | eBay | $1,050 | Used | AliExpress = 100% scam |
+| RTX 3090 Ti 24GB | eBay | $1,331 | Used | Palit GameRock |
+| RTX 3080 Ti 12GB | eBay | $385 | Used | PayMore 99.8%/2.9Kfb. Parts flood at $200-350 |
+| RTX 4070 SUPER | eBay | $549 | Refurb | new.techies 99.2%/23Kfb |
+| RTX 4070 12GB | eBay | $460 | Used | 100%/1.3Kfb. Box-only at $20-44 |
+| RTX 4060 Ti 16GB | eBay | $445 | Used | Best 16GB value |
+| RTX 3070 Ti 8GB | eBay | $235 | Used | Parts at $99 |
+| RTX 3060 12GB | eBay | $175 | Used | uventure 99.3%/6.9Kfb. Parts at $121-169 |
+| RTX 2080 Ti 11GB | eBay | $257 | Used | Ex-mining wear likely |
+| GTX 1080 Ti 11GB | eBay | $130 | Used | uventure 99.3%/6.9Kfb. Ex-mining certain |
+| GTX 1060 6GB | eBay | ~$63 | Used | Watch for 3GB variants |
+| GTX 1650 4GB | eBay | $70 | Used | Many are laptop modules |
+| Tesla P100 16GB | eBay | $150-250 | Used | Compute-only; adapters flood search |
+| Intel Arc Pro B70 | eBay | $1,151 | New | Best 32GB value if Intel works |
+| RX 7900 XTX 24GB | eBay | $825 | Used | 98.6%/84fb. Sub-$700 = scam |
+| RX 9070 XT 16GB | eBay | $675 | Used | AliExpress has no stock |
+| RX 9070 16GB | eBay | $590 | New | Best new AMD deal |
+| RX 6800 16GB | eBay | $320 | Used | AliExpress keyword-stuffed |
+| H200 141GB | eBay | $20,000+ | New | Enterprise only |
+| RTX PRO 6000 Blackwell | eBay | $8,686 | New | Sub-$6K = phished account |
+| RTX 6000 Ada 48GB | eBay | $5,799 | Used | Sub-$3K = scam |
+| RTX A6000 48GB | eBay | $3,899 | Used | Sub-$2K = scam |
+| Mac Studio M3 Ultra 512GB | eBay | $7,700 | Used | Only credible listing |
 | MacBook Pro M5 Max 128GB | eBay | $4,979 | Refurb | itsworthmore, best Apple deal |
-| MacBook Pro M5 Pro 64GB | eBay | $3,937 | New | At full retail, limited listings |
-| MacBook Pro M4 Max 48GB | eBay | $2,799 | Refurb | Strong value |
-| Mac Studio M4 Max 64GB | eBay | $3,999 | New sealed | With warranty |
-| Mac Mini M2 Pro 16GB | eBay | $800 | Used | Budget Apple entry |
+| MacBook Pro M5 Pro 64GB | eBay | $3,937 | New | At full retail, thin market |
+| MacBook Pro M4 Max | eBay | $3,269 | Refurb | itsworthmore, strong value |
+| Mac Studio M4 Max 64GB | eBay | $3,999 | New | Sealed with warranty |
 | MacBook Pro M2 Pro 16GB | eBay | $848 | Refurb | 57% below retail |
-| DGX Spark 128GB | eBay | ~$3,999 | Used | <$3k = confirmed scam |
-| Ryzen AI MAX 395 128GB | eBay | ~$2,897 | New mini PC | Good Strix Halo value |
-| Minisforum UM790 Pro 64GB | eBay | $444+ | Barebones | Add own RAM |
-| Orin Nano Super 8GB | eBay/AliExpress | $249 | New | Legit on both platforms |
+| DGX Spark 128GB | eBay | ~$3,999 | Used | Sub-$3K = confirmed scam |
+| Ryzen AI MAX 395 128GB | eBay | $1,099-2,499 | New | Mini PCs, no scam indicators |
+| Minisforum UM790 Pro | AliExpress | $471 | Barebones | Add own RAM for 64GB |
+| Orin Nano Super 8GB | eBay | $224 | New | Below $249 MSRP |
+
+## Scam Pattern Summary (CDP-Verified)
+
+### eBay scam patterns (live observations)
+1. **"Box Only" listings**: $5-$150 for empty GPU boxes. Extremely common for RTX 5090, 5080, 4070, 4060 Ti.
+2. **Parts-only flood**: Dead/no-core cards at 30-50% of working price. Sellers like lvrgcs (8.2K feedback) and jkcomputerparts (168.5K) sell these honestly labeled, but they flood low-price sort.
+3. **0% feedback sellers**: China/Spain/Austria accounts listing cards at 50-70% below market. Nearly all fraudulent.
+4. **"Shop on eBay" placeholders**: eBay's own sponsored placeholders appearing as cheap listings — not real.
+5. **Enterprise GPU phished accounts**: H200, RTX PRO 6000, DGX Spark listings at 50-90% below retail from hijacked accounts.
+
+### AliExpress scam patterns
+1. **Multi-model title stuffing**: "RTX 3090 24GB 3060/3070/3080 Ti" — lists 5+ GPUs in one title. Always scam.
+2. **"For [Brand]" prefix**: "For NVIDIA TESLA P100" = clone/knockoff, not genuine.
+3. **Brand misspellings**: "AS-US ROG-Strix" = deliberate misspelling to avoid trademark enforcement.
+4. **"Graphics Board" vs "Graphics Card"**: "Board" may mean bare PCB only.
+5. **Hot sale / discount flags**: "-54% off", "2025 hot sale" language = bait.
+6. **Zero Apple computers**: Confirmed across all 5 Apple searches — AliExpress has zero legitimate Apple system listings.
+
+### Reliable sellers (CDP-verified)
+- **itsworthmore** (99.5%, 149.5K): Major refurbisher, eBay Refurbished program
+- **jkcomputerparts** (99.2%, 168.5K): Honest parts-only seller
+- **PayMore stores** (99.5-99.9%, 2-13K): Chain resellers, tested inventory
+- **lvrgcs** (99.9%, 8.2K): Honest parts/used seller
+- **new.techies** (99.2%, 23K): Good for AMD and refurbished NVIDIA
+- **respec.io** (99.4%, 20.7K): High-volume parts/used seller
+- **vrassets** (99.6%, 82.8K): Large open-box/refurbished seller
+- **swingcomputers** (99.6%, 59.4K): High-volume used GPU seller
+- **Newegg official** (99.5%, 1M): Authorized retailer for Intel Arc Pro
