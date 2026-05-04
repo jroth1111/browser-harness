@@ -89,6 +89,40 @@ handle interactive and non-interactive challenges through the attached browser.
 This is a browser-native interaction (clicking a checkbox or waiting for an
 automatic verification), not a bypass. Requires a visible (non-headless) browser.
 
+## Dialog handling
+
+When a page shows alert/confirm/prompt/beforeunload dialogs that block the JS thread:
+
+1. **CDP dismiss (preferred, undetectable):** `dismiss_dialog(accept=True)` dismisses via
+   `Page.handleJavaScriptDialog` and returns `{type, message, url}`. Works even when
+   JS is frozen. No page JS is touched — invisible to antibot.
+2. **JS stub (proactive, detectable):** `capture_dialogs()` before the triggering action,
+   then `dialogs()` to read messages. Auto-approves all `confirm()` calls.
+   Detectable via `window.alert.toString()` — use only for known flows.
+3. **Detection:** `page_info()` returns `{dialog: {type, message, ...}}` when a native
+   dialog is open.
+
+## OS-native popup detection
+
+Use `pending_blockers()` to detect permission prompts, file pickers, print dialogs,
+and download bars that Chrome renders outside the page viewport. Returns
+`{cdp: [...], js: [...]}` combining CDP-side events with JS-side probe results.
+
+Call `install_blocker_probe()` to inject a diagnostic wrapper around permission-gated
+APIs (geolocation, notifications, mediaDevices, clipboard, bluetooth/usb/serial/hid,
+file pickers, print). This is a diagnostic tool — it observes API calls without
+changing behavior.
+
+## Permission pre-granting
+
+To prevent popups rather than detect them:
+
+- `grant_permissions(origin, permissions)` — wraps `Browser.grantPermissions`.
+  Common permissions: geolocation, notifications, microphone, camera, clipboard-read.
+- `set_geolocation(lat, lon, accuracy)` — wraps `Emulation.setGeolocationOverride`.
+  Pair with `grant_permissions` for geolocation — Chrome may still fall back to OS
+  Core Location without the override.
+
 ## Relationship to Other Skills
 
 - `session-continuity.md`: Long-term auth state management across sessions.
