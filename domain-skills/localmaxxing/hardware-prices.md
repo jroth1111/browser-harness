@@ -537,6 +537,32 @@ Prices researched 2026-05-04 via **Chrome CDP** (direct page navigation to eBay 
 | Minisforum UM790 Pro | AliExpress | $471 | Barebones | Add own RAM for 64GB |
 | Orin Nano Super 8GB | eBay | $224 | New | Below $249 MSRP |
 
+## Amazon AU Cross-Reference (AUD, 2026-05-04)
+
+Amazon AU prices are consistently 50-200% above eBay US used prices. AUD prices converted at 0.65 rate. Amazon AU is **not competitive** for GPU purchases vs eBay US — useful as a ceiling/retail reference only.
+
+| Product | Amazon AU (AUD) | Amazon AU (USD est.) | eBay US Used | Premium |
+|---|---|---|---|---|
+| RTX 5090 32GB | AU$5,899-7,061 | $3,834-4,590 | $2,500 | 53-84% |
+| RTX 4090 24GB | AU$9,700-14,599 | $6,305-9,490 | $2,449 | 157-288% |
+| RTX 5080 16GB | AU$1,799-2,059 | $1,169-1,338 | $1,199 | ~0-12% |
+| RTX 5070 Ti 16GB | AU$1,349-1,499 | $877-974 | $895 | ~0-9% |
+| RTX 5060 Ti 16GB | AU$749-789 | $487-513 | $475 | 3-8% |
+| RTX 4070 SUPER 12GB | AU$2,174-3,276 | $1,413-2,130 | $549 | 157-288% |
+| RTX 4070 12GB | AU$1,199-2,565 | $779-1,667 | $460 | 70-262% |
+| RTX 4060 Ti 16GB | AU$1,530 (only 16GB listing) | $995 | $445 | 123% |
+| RTX 3060 12GB | AU$733-902 | $476-586 | $175 | 172-235% |
+| RTX 3090 24GB | AU$4,277-8,911 | $2,780-5,792 | $1,050 | 165-452% |
+| RX 7900 XTX 24GB | AU$1,249-5,154 | $812-3,350 | $825 | ~0-306% |
+| RX 9070 XT 16GB | AU$899-1,148 | $584-746 | $675 | ~0-11% |
+
+**Key observations:**
+- **RTX 5080 and RX 9070 XT** are closest to parity — only ~0-12% above eBay US used
+- **RTX 4090 and RTX 4070 SUPER** show the largest premium (150-290%) — older stock heavily marked up
+- **RTX 3060** at AU$733+ is absurd vs eBay US $175 — reflects Australian retail markup on budget cards
+- **Amazon AU has no used/refurbished GPU market** — all prices are new retail
+- **XFX RX 7900 XTX at AU$1,249** ($812 USD) is the only Amazon AU price close to eBay US
+
 ## Scam Pattern Summary (CDP-Verified)
 
 ### eBay scam patterns (live observations)
