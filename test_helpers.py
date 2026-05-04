@@ -1142,6 +1142,66 @@ def test_response_turnstile_solved_flag():
     assert r2.turnstile_solved is False
 
 
+def test_response_preserves_readiness_reason_and_block_state():
+    from response import Response
+
+    block = {"blocked": True, "kind": "auth_gate", "evidence": ["/login"]}
+    r = Response(
+        html="<html>login</html>",
+        text="log in to continue",
+        url="https://example.com/login",
+        status=403,
+        source="browser",
+        reason="blocked",
+        block=block,
+    )
+
+    assert r.reason == "blocked"
+    assert r.block == block
+    assert "reason='blocked'" in r.summary()
+
+
+def test_fetch_browser_preserves_blocked_readiness_state():
+    block = {"blocked": True, "kind": "auth_gate", "evidence": ["/login"]}
+    with patch("helpers.new_tab", return_value="target-1"), \
+         patch("helpers.wait_for_load"), \
+         patch("helpers.wait_for_content", return_value={
+             "ok": False,
+             "reason": "blocked",
+             "url": "https://example.com/login",
+             "text": "log in to continue",
+             "block": block,
+         }), \
+         patch("helpers.js", return_value="<html>log in to continue</html>"), \
+         patch("helpers.close_tab") as close_tab:
+        response = helpers.fetch("https://example.com/private", source="browser")
+
+    assert response.status == 403
+    assert response.reason == "blocked"
+    assert response.block == block
+    assert response.text == "log in to continue"
+    close_tab.assert_called_once_with("target-1")
+
+
+def test_fetch_browser_timeout_is_not_reported_as_empty_success():
+    with patch("helpers.new_tab", return_value="target-1"), \
+         patch("helpers.wait_for_load"), \
+         patch("helpers.wait_for_content", return_value={
+             "ok": False,
+             "reason": "timeout",
+             "url": "https://example.com/slow",
+             "text": "",
+             "block": {"blocked": False, "kind": None, "evidence": []},
+         }), \
+         patch("helpers.js", return_value="<html></html>"), \
+         patch("helpers.close_tab"):
+        response = helpers.fetch("https://example.com/slow", source="browser")
+
+    assert response.status == 504
+    assert response.reason == "timeout"
+    assert response.block == {"blocked": False, "kind": None, "evidence": []}
+
+
 def test_response_repr():
     from response import Response
     r = Response(html="<html></html>", text="content", url="https://example.com",

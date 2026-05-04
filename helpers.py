@@ -2127,20 +2127,47 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
     """
     from response import Response
 
+    def _readiness_status_code(status):
+        if status.get("ok"):
+            return 200
+        block = status.get("block") or {}
+        if block.get("blocked"):
+            return 403
+        if status.get("reason") == "timeout":
+            return 504
+        return 502
+
     if source == "http":
         try:
             text = http_get(url, headers=headers, timeout=timeout)
-            return Response(html=text, text=text, url=url, status=200, source="http")
+            block = detect_block_page(html=text, text=text, url=url)
+            return Response(
+                html=text, text=text, url=url, status=200, source="http",
+                reason="blocked" if block.get("blocked") else "content",
+                block=block,
+            )
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")
-            return Response(html=body, text=body, url=url, status=e.code, source="http")
+            block = detect_block_page(html=body, text=body, url=url)
+            return Response(
+                html=body, text=body, url=url, status=e.code, source="http",
+                reason="blocked" if block.get("blocked") else "http_error",
+                block=block,
+            )
 
     if source == "session":
         result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
+        block = result.get("block") or detect_block_page(
+            html=result.get("text", ""),
+            text=result.get("text", ""),
+            url=result.get("url", url),
+        )
+        reason = "blocked" if block.get("blocked") else ("content" if result.get("ok") else "http_error")
         return Response(
             html=result.get("text", ""), text=result.get("text", ""),
             url=result.get("url", url), status=result.get("status", 0),
             source="session", headers=result.get("headers", {}),
+            reason=reason, block=block,
         )
 
     if source == "browser":
@@ -2155,14 +2182,13 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
                 return Response(
                     html=html, text=status.get("text", ""),
                     url=status.get("url", url), status=200,
-                    source="browser",
+                    source="browser", reason=status.get("reason"),
+                    block=status.get("block"),
                 )
-            reason = status.get("reason", "")
-            fallback_status = 403 if block.get("blocked") else (504 if reason == "timeout" else 502)
             return Response(
                 html=html, text=status.get("text", ""),
-                url=status.get("url", url), status=fallback_status,
-                source="browser",
+                url=status.get("url", url), status=_readiness_status_code(status),
+                source="browser", reason=status.get("reason"), block=block,
             )
         finally:
             if tid:
@@ -2204,7 +2230,8 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
             return Response(
                 html=html, text=status.get("text", ""),
                 url=status.get("url", url), status=200,
-                source="browser",
+                source="browser", reason=status.get("reason"),
+                block=status.get("block"),
             )
         # Blocked — try Turnstile if Cloudflare challenge detected
         if not status.get("ok"):
@@ -2217,15 +2244,17 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
                     return Response(
                         html=html, text=status2.get("text", ""),
                         url=status2.get("url", url),
-                        status=200 if status2.get("ok") else 403,
+                        status=_readiness_status_code(status2),
                         source="browser",
                         turnstile_solved=True,
+                        reason=status2.get("reason"),
+                        block=status2.get("block"),
                     )
         block = status.get("block") or {}
         return Response(
             html=html, text=status.get("text", ""),
-            url=status.get("url", url), status=403 if block.get("blocked") else 0,
-            source="browser",
+            url=status.get("url", url), status=_readiness_status_code(status),
+            source="browser", reason=status.get("reason"), block=block,
         )
     finally:
         if tid:

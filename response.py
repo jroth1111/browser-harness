@@ -13,7 +13,8 @@ class Response:
     """
 
     def __init__(self, html, text, url, status, source, headers=None,
-                 encoding="utf-8", turnstile_solved=False):
+                 encoding="utf-8", turnstile_solved=False, reason=None,
+                 block=None):
         raw_html = html or ""
         raw_text = text or ""
         self.html = raw_html[:_MAX_RESPONSE_CHARS]
@@ -25,6 +26,8 @@ class Response:
         self.headers = headers or {}
         self.encoding = encoding
         self.turnstile_solved = turnstile_solved
+        self.reason = reason
+        self.block = block or {"blocked": False, "kind": None, "evidence": []}
         self._tree = None
 
     @property
@@ -67,6 +70,7 @@ class Response:
         return (
             f"Response(url={self.url!r}, status={self.status}, "
             f"source={self.source!r}, html={len(self.html)}, text={len(self.text)}"
+            f"{', reason=' + repr(self.reason) if self.reason else ''}"
             f"{', truncated' if self.truncated else ''})"
         )
 
