@@ -1,11 +1,8 @@
 # DoorDash — Platform Guide
 
-Field-tested against doordash.com on 2026-05-04.
+Field-tested against doordash.com on 2026-05-04 (Melbourne, AU).
 
-**Cloudflare Turnstile**: DoorDash uses Cloudflare Turnstile on all pages. CDP-connected
-browsers (browser-harness, MCP DevTools) are detected via three signals: screenX/screenY
-coordinate bug in cross-origin iframes, Runtime.enable side effects, and debugger timing.
-JS-level stealth patches are themselves detectable. **Use SeleniumBase UC Mode** to bypass.
+**Cloudflare Turnstile** on all pages. CDP browsers detected via screenX/screenY bug, Runtime.enable side effects, debugger timing. Only SeleniumBase UC Mode bypasses.
 
 ## Access
 
@@ -16,178 +13,132 @@ import json, time
 with SB(uc=True, test=True) as sb:
     sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
     time.sleep(2)
-
-    # Restore saved session (skip if first-time — see overview.md)
-    with open("domain-skills/food-delivery/.private-data/doordash_cookies.json") as f:
-        for c in json.load(f):
-            try: sb.driver.add_cookie(c)
-            except: pass
+    # Restore session (see overview.md for first-time setup)
+    for c in json.load(open(".private-data/doordash_cookies.json")):
+        try: sb.driver.add_cookie(c)
+        except: pass
     sb.driver.refresh()
     time.sleep(3)
-
-    # If full-page Cloudflare challenge appears:
-    sb.uc_gui_click_captcha()
-
-    # Now authenticated — proceed with automation
+    # If Cloudflare challenge: sb.uc_gui_click_captcha()
 ```
-
-Run via: `.venv/bin/python3 <<'PY' ... PY`
 
 ## URLs
 
 | Page | URL | Notes |
 |---|---|---|
-| Home / feed | `https://www.doordash.com/` | Landing page when logged out; Cloudflare Turnstile present |
-| Search | `https://www.doordash.com/search/store/{query}` | CONFIRMED: triggers full-page Cloudflare challenge when logged out |
-| Restaurant menu | `https://www.doordash.com/store/{restaurant-slug}-{store_id}` | Slug + numeric ID |
-| Cart / checkout | `https://www.doordash.com/checkout` | After adding items |
-| Order tracking | `https://www.doordash.com/orders/{order_id}/track` | Live order status |
-| Order history | `https://www.doordash.com/orders/` | CONFIRMED URL from footer link |
-| Account | `https://www.doordash.com/account` | Address, payment, DashPass |
+| Home | `https://www.doordash.com/` | Cloudflare Turnstile present |
+| Browse all | `https://www.doordash.com/search/store/food` | Single query covers all categories |
+| Search | `https://www.doordash.com/search/store/{query}` | Cuisine-specific search |
+| Store page | `https://www.doordash.com/store/{store_id}` | Numeric ID only, no slug needed |
+| Checkout | `https://www.doordash.com/checkout` | Fee breakdown here |
+| Orders | `https://www.doordash.com/orders/` | Order history |
+
+## Restaurant enumeration — CONFIRMED WORKING
+
+**Browse-all approach**: Single `"food"` query covers restaurants, groceries, convenience, retail — everything for the delivery address. Scroll through infinite results until saturation.
+
+Results: 743 unique restaurants in 216s. 100% name fill, 100% delivery_fee, 60% rating, 47% delivery_time.
+
+### How it works
+
+1. Navigate to `https://www.doordash.com/search/store/food`
+2. Extract all `<a href*="/store/">` links from the page
+3. Dedup by store_id (multiple links per card — keep the one with most text)
+4. Parse card text: name before first `•` or rating, strip trailing distance/rating
+5. Scroll down, repeat until 8 consecutive scrolls yield 0 new restaurants
+
+### Store ID extraction (CONFIRMED regex patterns)
+
+DoorDash URLs use `/store/{numeric_id}` format (no slug):
+```javascript
+// Primary: /store/12345
+href.match(/\/store\/(\d+)$/)
+// Fallback: /store/slug-12345
+href.match(/\/store\/([\w-]+?)-(\d+)$/)
+```
+
+Strip query params from href before matching (`href.split('?')[0]`).
+
+### Name parsing gotchas
+
+Card text is concatenated: `"A25 Pizzeria4.5(200+)•1.4 mi•25 min•$0 delivery"`.
+- Split on `•` or `|`, take first segment
+- Strip trailing `\d+\.\d+\s*\(\d+` (rating like `4.5(200+)`)
+- Strip trailing `\d+\.\d+\s*(mi|km)` (distance like `1.4 mi`)
+- Name fill rate is 100% after these cleanups
+
+## Menu extraction — CONFIRMED WORKING
+
+**Primary method: Parse Next.js embedded data from page source.** No DOM scraping needed — all menu data is in `self.__next_f.push()` script tags as `StorePageCarouselItem` objects.
+
+Results: 100% fill on name, price, description, image. ~25 items per restaurant. ~13s per restaurant (no scrolling).
+
+### Data structure
+
+DoorDash is a Next.js SPA. All menu data is server-rendered into script tags:
+
+```javascript
+self.__next_f.push([1,"..."])
+```
+
+Inside one ~800KB script, items appear as `StorePageCarouselItem` objects:
+
+```json
+{
+  "__typename": "StorePageCarouselItem",
+  "id": "24985850677",
+  "name": "Butter Chicken",
+  "description": "Chicken pieces roasted in tandoor & simmered in tomato...",
+  "displayPrice": "A$22.50",
+  "displayStrikethroughPrice": "",
+  "imgUrl": "https://img.cdn4dd.com/cdn-cgi/image/..."
+}
+```
+
+### Extraction approach
+
+1. Get `sb.driver.page_source`
+2. Find all `self.__next_f.push([1,"..."])` calls via regex
+3. Decode each with `raw.encode("utf-8").decode("unicode_escape")`
+4. Find the script containing `"StorePageCarouselItem"` (typically ~800KB)
+5. Extract items via regex: `"__typename":"StorePageCarouselItem","id":"...","name":"...","description":"...","displayPrice":"...","imgUrl":"..."`
+6. Dedup by item id
+
+### Why not DOM scraping
+
+- DoorDash menu cards show **item names only** (H3 elements), no prices
+- Prices only appear in item detail modals (requires clicking each item)
+- Category headers are H2 elements (Combos, Starters, Classic Curries, etc.)
+- The Next.js data has everything in one parse — name, price, description, image URL
+
+### Why not React internals
+
+- `document.getElementById('__next')` returns null (Next.js 14 app router)
+- React fiber tree walk found 0 items with props matching menu data
+- The data is only in the raw page source, not accessible via JS runtime
 
 ## Auth detection
 
-- **Logged in**: delivery address in header, user avatar present, no "Sign in" prompt.
-- **Not logged in (CONFIRMED)**: login modal appears as dialog overlay with iframe to `identity.doordash.com/auth`. Contains Google/Facebook/Apple OAuth + email/password form. Dismissible via close button — reveals marketing landing page.
-- **Not logged in footer**: "Sign In" link points to `identity.doordash.com/auth`.
-- **DashPass indicator**: DashPass logo or badge visible when subscribed (affects pricing display).
+- Logged in: no "Sign In" in first 2000 chars of source, "DoorDash" in title
+- Not logged in: login modal with iframe to `identity.doordash.com/auth`
 
-Landing page elements (CONFIRMED):
-- `combobox "Enter delivery address"` — address input
-- `button "Find Restaurants"` — triggers search after address entry
-- `button "Use current Location"` — geolocation alternative
-- Tabs: "Top Cities", "Top Cuisines", "Top Chains"
+## Store page DOM structure (for reference)
 
-## Navigation
-
-```python
-# browser-harness CDP — BLOCKED by Turnstile. Use SeleniumBase UC Mode instead.
-tid = new_tab("https://www.doordash.com/")
-result = wait_for_content()
-if result["block"]:
-    # Cannot bypass Turnstile via CDP — use SB(uc=True) path above
-    capture_screenshot()
+```
+H2  Category headers: "Featured Items", "Most Ordered", "Combos", "Starters", ...
+H3  Individual item names: "Butter Chicken", "Lamb Seekh Kebab", ...
+    (NO prices visible in card listing — only in detail modals)
+button[aria-label]  Navigation buttons, NOT menu items
 ```
 
-## Restaurant list extraction — STATUS: NEEDS_FIELD_TESTING
-
-Target fields per restaurant card:
-
-| Field | Extraction | Notes |
-|---|---|---|
-| Restaurant name | NEEDS_FIELD_TESTING | |
-| Rating | NEEDS_FIELD_TESTING | Numeric + star count |
-| Delivery time | NEEDS_FIELD_TESTING | "20-35 min" format |
-| Delivery fee | NEEDS_FIELD_TESTING | "$2.99" or "Free" with DashPass |
-| Cuisine tags | NEEDS_FIELD_TESTING | |
-| DashPass badge | NEEDS_FIELD_TESTING | "$0 delivery" indicator for subscribers |
-| Promotional badge | NEEDS_FIELD_TESTING | "% off", deals |
-
-Extraction approach:
-1. `wait_for_content()` after search or feed load.
-2. `js()` to find container elements and extract text content.
-3. Prefer `data-*`, `aria-*`, `role` selectors over class names.
-4. Fallback: `capture_screenshot()` + visual parsing if DOM selectors fail.
-
-## Search mechanics
-
-```python
-# Direct URL (pattern to confirm during field testing)
-goto_url(f"https://www.doordash.com/search/store/{query}")
-wait_for_content()
-
-# Filters — confirm availability during field testing:
-# - Sort by: recommended, rating, delivery time, distance, popularity
-# - Cuisine type
-# - Price range ($, $$, $$$, $$$$)
-# - Dietary: vegetarian, vegan, gluten-free
-# - DashPass eligible
-# - Offers / deals / free delivery
-# - Pickup vs delivery toggle
-```
-
-## Menu extraction — STATUS: NEEDS_FIELD_TESTING
-
-Target fields per menu item:
-
-| Field | Extraction | Notes |
-|---|---|---|
-| Category name | NEEDS_FIELD_TESTING | Section headings (Popular Items, Mains, Sides, etc.) |
-| Item name | NEEDS_FIELD_TESTING | |
-| Item price | NEEDS_FIELD_TESTING | |
-| Item description | NEEDS_FIELD_TESTING | May be truncated |
-| Item image | NEEDS_FIELD_TESTING | Optional |
-| Popular badge | NEEDS_FIELD_TESTING | "Most Ordered" etc. |
-| Customization count | NEEDS_FIELD_TESTING | "Required: choose 1" etc. |
-
-DoorDash menu items often open a customization modal/popup when clicked.
-Items may be grouped under collapsible category headers.
-
-## Order flow — STATUS: NEEDS_FIELD_TESTING
-
-1. Click menu item to open detail modal.
-2. Select required customizations ( DoorDash enforces "required choice" selections).
-3. Adjust quantity if needed.
-4. Click "Add to Cart" or "Add Item".
-5. Navigate to cart: verify items, quantities, and special instructions.
-6. Navigate to checkout: extract full fee breakdown.
-7. Present full summary to user for consent.
-8. On confirmation: click "Place Order".
-9. Detect confirmation screen.
-
-**Fee breakdown** — critical for price comparison. Must extract at checkout:
-- Subtotal
-- Delivery fee (different for DashPass vs non-DashPass)
-- Service fee
-- Regulatory fees (may appear)
-- Tax
-- Tip (default pre-filled, often 15-20%)
-- Promotions / DashPass savings
-- **Total**
-
-## Order tracking extraction — STATUS: NEEDS_FIELD_TESTING
-
-Target fields:
-- Status (Order confirmed, Preparing, Picked up, On the way, Delivered)
-- Estimated delivery time
-- Driver name, photo, vehicle (when available)
-- Live map state
-- "Contact driver" / "Contact support" options
-
-## Order history extraction — STATUS: NEEDS_FIELD_TESTING
-
-Target fields per order:
-- Date
-- Restaurant name
-- Items (summary or full list)
-- Total
-- Order status (delivered, cancelled)
-- Reorder button
-- Receipt link
+Class names are styled-components hashes (`sc-eAyhxF cMeCVt`) — completely unreliable as selectors.
 
 ## Gotchas
 
-- **React SPA with obfuscated classes**: same as Uber Eats — never rely on class selectors. Use `data-*`, `aria-*`, `role`, or structural relationships.
-- **DashPass pricing**: delivery fees and service fees differ between DashPass and non-DashPass users. The skill must detect which mode is active and note it in comparisons.
-- **Required customizations**: DoorDash forces selection of required options (e.g., "Choose your protein") before adding to cart. The modal blocks the add button until selections are complete.
-- **Store slug format**: URL pattern uses `{name}-{store_id}`. The slug may change if the restaurant updates its name.
-- **Pickup vs delivery toggle**: DoorDash defaults to delivery but supports pickup. The toggle is prominent and easy to misclick.
-- **Address prompt**: first visit prompts for delivery address. The feed is empty until an address is set.
-- **Fees at checkout only**: menu prices don't include delivery/service fees. Comparison must use checkout totals.
-- **Double-check DashPass detection**: DashPass-eligible restaurants show "$0 delivery" but only for subscribers. Non-subscribers see the regular fee.
-
-## Anti-detection notes
-
-- **CONFIRMED: Cloudflare Turnstile** on all pages. Home page loads with Turnstile iframe; search/store pages show full challenge.
-- **CDP detection**: Turnstile detects CDP via three signals — screenX/screenY coordinate bug in cross-origin iframes, Runtime.enable console side effects, and debugger statement timing. JS-level stealth patches (`navigator.webdriver = false`) are themselves detectable via property descriptor probing.
-- **SOLVED: SeleniumBase UC Mode** bypasses Turnstile. Uses patched chromedriver that disconnects during challenge window. Home page loads in ~13s without triggering a full-page challenge.
-  ```python
-  from seleniumbase import SB
-  with SB(uc=True, test=True) as sb:
-      sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
-      # If full-page challenge appears:
-      sb.uc_gui_click_captcha()  # OS-level pyautogui click, not CDP
-  ```
-- DoorDash also known to use PerimeterX on some routes.
-- If `wait_for_content()` reports a block via browser-harness, switch to SeleniumBase UC Mode.
-- Respect session limits in `safety.md`.
+- **No public API**: DoorDash uses private GraphQL at `/graphql/` with CSRF tokens. DOM/Next.js extraction is the only path.
+- **DashPass pricing**: delivery fees differ for subscribers. Note which mode is active.
+- **Required customizations**: adding items to cart forces selection of required options.
+- **Fees at checkout only**: menu prices don't include delivery/service fees.
+- **cf_clearance expires ~30min**: long extraction runs need cookie re-harvesting. Scripts handle this via `--resume` checkpointing.
+- **Search result cap**: "food" query returns ~750-800 restaurants before saturation. Chao1 estimator suggests ~2000+ unseen — DoorDash likely caps results.
+- **Location-dependent**: all data is for the delivery address in the user's account (Melbourne AU in testing).

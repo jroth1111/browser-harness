@@ -1,182 +1,158 @@
 # Food Delivery — Overview
 
-Automated food delivery for Uber Eats and DoorDash via SeleniumBase UC Mode.
-Browse restaurants, extract menus, compare prices across platforms, place orders, and track deliveries.
+Automated extraction from Uber Eats and DoorDash via SeleniumBase UC Mode.
+Enumerate restaurants, extract full menus (name, price, description, image), compare across platforms.
 
 ## Prerequisites
 
-- **Anti-bot bypass required**: Both platforms block CDP-connected browsers. Use SeleniumBase UC Mode (`uc=True`) to bypass Cloudflare Turnstile (DoorDash) and WAF (Uber Eats). See "Accessing platforms" below.
-- User must be logged into the target platform. The skill does not handle login credentials — use the cookie capture flow below for first-time setup.
-- For placing orders: user must have a valid delivery address and payment method configured on the platform.
-- For cross-platform comparison: user must be logged into both platforms (separate tabs).
+- SeleniumBase in `.venv/` at repo root. Run scripts via `.venv/bin/python3`.
+- Authenticated cookies in `.private-data/` (see session management below).
+- Both platforms block CDP-connected browsers — only SeleniumBase UC Mode works.
 
 ## Cold-start sequence
 
-1. Check if cookies exist in `.private-data/`. If not, run the cookie capture flow below.
-2. Identify platform (Uber Eats / DoorDash). Read `platforms/<platform>.md`.
-3. Identify user intent. Use the intent router below.
-4. If cross-platform comparison, read both platform files.
-5. Execute.
+1. Check cookies exist in `.private-data/`. If not, run cookie capture below.
+2. Identify platform. Read `platforms/<platform>.md` for extraction details.
+3. Identify intent. Bulk extraction uses `scripts/` pipeline. Interactive use goes through SB session.
+4. Execute.
 
-## Intent router
+## Bulk extraction pipeline
 
-| User intent | Read first | When to escalate |
+Four phases, each a standalone script with checkpoint/resume:
+
+```
+Phase 1: API Discovery (already run — no public APIs, DOM path confirmed)
+Phase 2: Restaurant enumeration  ->  dd_restaurants.json / ue_restaurants.json
+Phase 3: Menu extraction         ->  dd_menus.json / ue_menus.json
+Phase 4: Export CSV + JSON        ->  food_data.csv / food_data.json
+```
+
+```bash
+REPO=/Users/gwizz/.claude/skills/browser-harness
+PY=$REPO/.venv/bin/python3
+S=$REPO/domain-skills/food-delivery/scripts
+
+# Phase 2: Enumerate (browse-all mode, single query covers all categories)
+$PY $S/enumerate_restaurants.py --platform doordash --output $S/dd_restaurants.json
+$PY $S/enumerate_restaurants.py --platform ubereats --output $S/ue_restaurants.json
+
+# Phase 3: Extract menus (--limit for testing, --resume for checkpointing)
+$PY $S/extract_menus.py --input $S/dd_restaurants.json --output $S/dd_menus.json --limit 5
+$PY $S/extract_menus.py --input $S/ue_restaurants.json --output $S/ue_menus.json
+
+# Phase 4: Export
+$PY $S/export.py --restaurants $S/dd_restaurants.json $S/ue_restaurants.json \
+                  --menus $S/dd_menus.json $S/ue_menus.json --output $S/food_data
+```
+
+### Proven performance
+
+| Metric | DoorDash | Uber Eats |
 |---|---|---|
-| Browse restaurants near me | `platforms/<platform>.md` restaurant list section | `safety.md` if block detected |
-| Search for a specific restaurant or cuisine | `platforms/<platform>.md` search section | Comparison workflow below if user wants both platforms |
-| View restaurant menu / menu items | `platforms/<platform>.md` menu extraction section | — |
-| Compare prices across platforms | Both platform files, comparison workflow below | — |
-| Place an order | `platforms/<platform>.md` order flow section | `safety.md` (order consent gate required) |
-| Track delivery / order status | `platforms/<platform>.md` tracking section | — |
-| View order history / past receipts | `platforms/<platform>.md` order history section | — |
-| Cancel or modify an order | `platforms/<platform>.md` order management section | `safety.md` (modification consent gate) |
-| Safety concern, rate limit, block | `safety.md` | Stop and ask user |
+| Restaurants enumerated | 743 in 216s | 82 in 37s |
+| Menu items (50 restaurants) | 1,099 in 670s | Not yet tested |
+| Avg items/restaurant | 22 | — |
+| Name fill rate | 100% | 99% |
+| Price fill rate (menus) | 100% | — |
+| Description fill rate (menus) | 100% | — |
+| Image fill rate (menus) | 100% | — |
 
-## Cross-platform comparison workflow
+### Timing
 
-1. Open both platforms in separate tabs.
-2. For each platform: navigate to the same restaurant (or search for the same cuisine).
-3. Extract: item name, item price, delivery fee, service fee, taxes, total, estimated delivery time, available promotions.
-4. Present side-by-side comparison.
-
-Caveats:
-- Restaurant availability and pricing may differ across platforms.
-- Same-named restaurants may not be the same physical location.
-- Fees (delivery, service) may only be visible at checkout. Prioritize checkout-level totals for accurate comparison.
-- Prices are point-in-time snapshots; promotional pricing is time-limited.
+- Menu extraction: ~13s per restaurant (no scrolling needed for DoorDash)
+- Restaurant enumeration: ~16s per restaurant for browse+scroll
+- Cookies expire ~30min (DD `cf_clearance`), scripts re-harvest at end
+- Checkpoint every 5 restaurants, break every 15 restaurants
 
 ## Key invariants
 
-- Never place an order without explicit user confirmation (hard consent gate). See `safety.md`.
-- Never modify or cancel an order without explicit user request.
+- Never place an order without explicit user confirmation.
 - Never handle login credentials or payment information.
-- Never apply promo codes or coupons without explicit user request.
-- Stop on any block, CAPTCHA, auth redirect, or suspicious page state.
-- Human-like timing between all automated actions. See `safety.md`.
-- Delivery addresses and payment details must be pre-configured by the user on the platform.
-- All prices are location-dependent. Note the active delivery address in any output.
+- Stop on any block, CAPTCHA, or auth redirect.
+- Human-like timing between all automated actions.
+- Delivery address is location-dependent — all data is for the address in the user's account.
 
 ## File map
 
 ```
 overview.md              <- you are here
-safety.md                <- consent gates, rate limits, anti-detection
-platforms/ubereats.md    <- Uber Eats specific selectors and flows
-platforms/doordash.md    <- DoorDash specific selectors and flows
-.private-data/           <- session cookies (gitignored, never commit)
+platforms/doordash.md    <- DoorDash extraction details (field-tested)
+platforms/ubereats.md    <- Uber Eats extraction details
+scripts/
+  enumerate_restaurants.py   Phase 2: browse-all + scroll enumeration
+  extract_menus.py           Phase 3: Next.js data + DOM fallback
+  export.py                  Phase 4: merge, dedup, CSV/JSON
+  discover_apis.py           Phase 1: already run, no public APIs
+  README.md                  Full command reference
+  lib/
+    doordash.py               URLs, browse_url(), search_url()
+    ubereats.py               URLs, browse_url(), search_url()
+    sb_helpers.py             SB session, cookie inject/harvest, auth check
+    crawl_state.py            CrawlState dedup + SafetyGate rate limits
+.private-data/               Session cookies (gitignored)
   doordash_cookies.json
   ubereats_cookies.json
 ```
 
 ## Accessing platforms
 
-Both platforms have strong anti-bot protection that detects CDP connections. Browser-harness and MCP DevTools tools **cannot access these sites directly**.
-
-**Use SeleniumBase UC Mode** (installed in browser-harness `.venv`):
+Both platforms block CDP-connected browsers (browser-harness, MCP DevTools). Only SeleniumBase UC Mode works.
 
 ```python
 from seleniumbase import SB
-
 with SB(uc=True, test=True) as sb:
     sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
     # If full-page Cloudflare challenge appears:
-    sb.uc_gui_click_captcha()  # OS-level click, not CDP
-
-    # For Uber Eats:
-    sb.uc_open_with_reconnect("https://www.ubereats.com/", 4)
+    sb.uc_gui_click_captcha()
 ```
 
-Run via: `.venv/bin/python3 <<'PY' ... PY`
+### Critical: SB execute_script uses bare return, NOT arrow functions
 
-UC Mode works by disconnecting the WebDriver during the challenge window and using a patched chromedriver that removes automation flags. OS-level `pyautogui` clicks bypass the screenX/screenY detection bug in cross-origin iframes.
+SeleniumBase's `execute_script` / `sb.execute_script(js)` returns `None` for arrow functions and IIFEs. Only bare `return` statements work:
+
+```python
+# WRONG -- returns None:
+js = '() => { return JSON.stringify(items); }'
+js = '(() => { ... })()'
+
+# CORRECT -- returns data:
+js = 'var items = []; ... ; return JSON.stringify(items);'
+```
+
+Variables that need dynamic values must be baked into the string via `.replace()`:
+```python
+js = 'var baseUrl = BASEURL; ...'.replace("BASEURL", json.dumps(base_url))
+raw = sb.execute_script(js)
+```
 
 ## Session management
 
 ### First-time setup: capture cookies
-
-Cookies are stored in `.private-data/` (gitignored). On first use, capture the user's login session:
 
 ```python
 from seleniumbase import SB
 import json, time, os
 
 with SB(uc=True, test=True) as sb:
-    # --- DoorDash ---
     sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
     time.sleep(2)
-    # Ask user to log in manually in the browser window
-    # Wait for signal file (since input() doesn't work from heredoc):
-    #   user runs: touch /tmp/dd_done
+    # User logs in manually, then: touch /tmp/dd_done
     while not os.path.exists("/tmp/dd_done"):
         time.sleep(1)
     os.remove("/tmp/dd_done")
-
     cookies = sb.driver.get_cookies()
-    with open("domain-skills/food-delivery/.private-data/doordash_cookies.json", "w") as f:
-        json.dump(cookies, f)
-
-    # --- Uber Eats ---
-    sb.uc_open_with_reconnect("https://www.ubereats.com/", 4)
-    time.sleep(2)
-    # Ask user to log in, then: touch /tmp/ue_done
-    while not os.path.exists("/tmp/ue_done"):
-        time.sleep(1)
-    os.remove("/tmp/ue_done")
-
-    cookies = sb.driver.get_cookies()
-    with open("domain-skills/food-delivery/.private-data/ubereats_cookies.json", "w") as f:
-        json.dump(cookies, f)
+    Path(".private-data/doordash_cookies.json").write_text(json.dumps(cookies))
 ```
+
+Same pattern for Uber Eats with `/tmp/ue_done` signal file.
+`input()` does not work from heredoc stdin — use signal files.
 
 ### Restoring a session
 
-Load saved cookies to skip login on subsequent runs:
-
-```python
-from seleniumbase import SB
-import json, time
-
-with SB(uc=True, test=True) as sb:
-    # Open platform first (must be on-domain to set cookies)
-    sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
-    time.sleep(2)
-
-    # Inject saved cookies
-    with open("domain-skills/food-delivery/.private-data/doordash_cookies.json") as f:
-        for c in json.load(f):
-            try:
-                sb.driver.add_cookie(c)
-            except:
-                pass  # domain mismatch is expected for some cookies
-
-    # Reload with authenticated session
-    sb.driver.refresh()
-    time.sleep(3)
-    # Now logged in — proceed with automation
-```
+Handled by `lib/sb_helpers.py:create_sb_session(sb, platform)` — opens platform, injects cookies, refreshes, checks auth.
 
 ### Cookie expiry
 
-- DoorDash `cf_clearance` cookie expires after ~30 minutes. Other session cookies may last longer.
-- Uber Eats session cookies typically last days to weeks.
-- If a restored session shows logged-out state, re-run the capture flow.
-
-### Cookie storage
-
-- Location: `domain-skills/food-delivery/.private-data/*.json`
-- Gitignored — never committed to the repo.
-- Contains session tokens — treat as sensitive. Do not log or display cookie values.
-
-## Browser automation approach
-
-This skill runs through the Claude/browser-harness conversation loop — no standalone scripts.
-
-1. Browser produces artifact (`capture_screenshot()`, `js()`)
-2. Claude reads artifact (multimodal: screenshots + extracted text)
-3. Claude decides next action
-4. User consents for financial actions (per `safety.md` consent gates)
-5. Claude issues browser command (`click_at_xy`, `type_text`)
-
-Use `capture_screenshot()` + coordinate clicks as the primary interaction method, per harness conventions. Drop to DOM/selector work only when the target has no visible geometry.
-
-`wait_for_content()` after each navigation — check `block` field before running extraction JS.
+- DoorDash `cf_clearance` expires ~30min. Other session cookies may last longer.
+- Uber Eats session cookies typically last days.
+- Scripts re-harvest cookies at end of each run. Use `--resume` to continue if interrupted.
