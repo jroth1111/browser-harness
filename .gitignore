@@ -59,3 +59,8 @@ domain-skills/*/session-state/
 domain-skills/*/browser-profile/
 domain-skills/*/chrome-profile/
 outputs/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
