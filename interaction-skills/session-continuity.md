@@ -39,6 +39,8 @@ Site-specific details belong in `domain-skills/<site>/`:
 - Do not commit cookies, local storage, session storage, screenshots, exports,
   downloaded reports, private payloads, or user data.
 - Store only redacted metadata and capability receipts in the repository.
+- Use `redaction_scan.scan_paths(...)` on public fixtures, receipts, manifests,
+  and package candidates before committing or publishing them.
 - If raw cookie export is explicitly requested, write it outside the repo or to
   an encrypted local store; record only a redacted manifest.
 - If restorable auth state is explicitly requested, store the raw bundle under
