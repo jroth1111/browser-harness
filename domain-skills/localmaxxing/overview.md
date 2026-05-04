@@ -89,6 +89,13 @@ all model sizes, quantizations, and engines. This means:
 
 ## Street Prices
 
-Prices in `hardware-scorer.py` are approximate USD street prices for used/refurbished
-units where applicable. Missing prices mean no value score for that hardware.
-Update `STREET_PRICES` dict in the script as prices change.
+Prices in `hardware-scorer.py` are researched USD street prices for used/refurbished
+units where applicable. Prices were verified 2026-05-04 via eBay BIN listings and
+BestValueGPU tracker. See `hardware-prices.md` for full price research with scam analysis.
+
+To update prices, follow the methodology in `hardware-catalog.md`. Key points:
+- Use Chrome CDP to navigate directly to eBay/AliExpress listing pages (not web search)
+- BestValueGPU.com provides authoritative new + used price baselines
+- AliExpress is unreliable for 30-series NVIDIA and all Apple products (100% scam density)
+- eBay PayMore stores and eBay Refurbished program are the most reliable used sources
+- Update `STREET_PRICES` dict in `hardware-scorer.py` after research

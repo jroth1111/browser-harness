@@ -39,28 +39,51 @@ from pathlib import Path
 DATA_FILE = Path(__file__).parent / "leaderboard-data.json"
 API_BASE = "https://www.localmaxxing.com/api"
 
-# Approximate street prices (USD) for cost-efficiency scoring.
-# Only populated for common hardware; missing entries get no cost score.
+# Street prices (USD) — researched 2026-05-04 via eBay BIN + BestValueGPU.
+# Prices reflect best verified used price unless noted. See hardware-prices.md for full research.
 STREET_PRICES = {
-    "GTX 1060 6GB": 120, "GTX 1080 Ti": 200, "GTX 1650": 100,
-    "NVIDIA GeForce RTX 3060": 250, "NVIDIA GeForce RTX 3070 Ti": 350,
-    "NVIDIA GeForce RTX 3090": 600, "RTX 3060": 250, "RTX 3060 Ti": 280,
-    "RTX 3070": 330, "RTX 3070 Ti": 350, "RTX 3080": 450, "RTX 3080 Ti": 500,
-    "RTX 3090": 600, "RTX 3090 Ti": 700,
-    "RTX 4060": 300, "RTX 4060 Ti": 400, "RTX 4060 Ti 16GB": 450,
-    "RTX 4070": 550, "RTX 4070 Ti": 600, "RTX 4070 Ti Super": 600,
-    "RTX 4080": 900, "RTX 4080 Super": 1000,
-    "RTX 4090": 2000, "RTX 5070 Ti": 750, "RTX 5080": 1000, "RTX 5090": 2000,
-    "NVIDIA H100 80GB": 25000, "NVIDIA H200 NVL": 30000,
-    "A100 80GB": 12000, "A6000": 4500,
-    "L40S": 7500, "RTX A4000": 900, "RTX A6000": 4500,
-    "AMD Radeon RX 6800": 350, "AMD Radeon RX 7900 XTX": 800,
-    "AMD Radeon RX 9070": 500, "AMD Radeon RX 9070 XT": 600,
-    "Intel Arc Pro B70": 300, "Intel Arc Pro B70 32GB": 500,
-    "M2 Pro": 1300, "M3 Ultra": 4000, "M4 Max": 3500,
-    "M5 Max": 4000, "M5 Pro": 2000, "Pro": 3500,
-    "395": 900, "Max+ 395": 1700,
-    "DGX Spark": 4000, "DGX Spark GB10": 4000, "GB10": 4000,
+    # Budget/older NVIDIA
+    "GTX 1060 6GB": 63, "GTX 1080 Ti": 142, "GTX 1650": 79,
+    "NVIDIA GeForce RTX 3060": 63, "RTX 3060": 63, "RTX 3060 Ti": 200,
+    "NVIDIA GeForce RTX 3070 Ti": 269, "RTX 3070": 250, "RTX 3070 Ti": 269,
+    "RTX 2080 Ti": 269,
+    # Mid-range NVIDIA
+    "RTX 3080": 450, "RTX 3080 Ti": 449,
+    "RTX 4060 Ti 16GB": 440, "RTX 4060 Ti": 440,
+    "RTX 4070": 434, "NVIDIA GeForce RTX 4070": 434,
+    "RTX 4070 Ti Super": 499, "RTX 4070 SUPER": 499,
+    # High-end NVIDIA
+    "RTX 3090": 1100, "NVIDIA GeForce RTX 3090": 1100,
+    "RTX 3090 Ti": 1199, "NVIDIA GeForce RTX 3090 Ti": 1199,
+    "RTX 4090": 1300, "NVIDIA GeForce RTX 4090": 1300,
+    "RTX 5090": 2200, "NVIDIA GeForce RTX 5090": 2200,
+    "RTX 5080": 1150, "NVIDIA GeForce RTX 5080": 1150,
+    "RTX 5070 Ti": 660, "RTX 5060 Ti": 359,
+    # AMD
+    "AMD Radeon RX 6800": 300, "RX 6800": 300,
+    "AMD Radeon RX 7900 XTX": 825, "RX 7900 XTX": 825,
+    "AMD Radeon RX 9070 XT": 660, "RX 9070 XT": 660,
+    "AMD Radeon RX 9070": 599,
+    # Intel
+    "Intel Arc Pro B70": 1100, "Intel Arc Pro B70 32GB": 1100,
+    # Tesla/professional
+    "Tesla P100-PCIE-16GB": 295,
+    "NVIDIA H200 SXM": 5000, "NVIDIA H200 NVL": 5000,
+    "RTX PRO 6000": 4000, "RTX A6000": 1632,
+    "NVIDIA GeForce RTX 4060 Ti 16GB": 440,
+    # Apple unified memory
+    "Apple M2 Pro": 848, "Apple M3 Ultra": 7700,
+    "Apple M4 Max": 2799, "Apple M5 Max": 4979, "Apple M5 Pro": 3937,
+    "Apple Max": 4979, "Apple Pro": 3937,
+    # AMD unified memory
+    "AMD Ryzen AI MAX 395 Radeon 8060S": 2897,
+    "AMD 395": 2897, "AMD Ryzen AI Max 395": 2897,
+    "AMD Ryzen AI Max+ 395": 2897, "AMD Max+ 395": 2897,
+    "AMD Minisforum UM790 Pro": 600,
+    "AMD Radeon 8060S Graphics (Strix Halo APU)": 2897,
+    # NVIDIA dev/edge
+    "NVIDIA DGX Spark": 3999, "NVIDIA DGX Spark GB10": 3999,
+    "NVIDIA GB10": 3999, "NVIDIA Orin Nano Super Developer Kit": 249,
 }
 
 PROFILES = {
