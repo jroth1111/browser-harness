@@ -30,6 +30,7 @@ from lib.render import render_thread_markdown
 
 BROWSER = os.environ.get("BROWSER", "comet")
 SYNC_LIMIT = int(os.environ.get("SYNC_LIMIT", "0"))  # 0 = all
+FORCE_SYNC = os.environ.get("FORCE_SYNC", "")  # set to "1" to re-capture all
 DOMAIN_FILTER = os.environ.get("DOMAIN_FILTER", "chatgpt")
 
 ARCHIVE_ROOT = Path(__file__).parent.parent / ".private-data" / "archive"
@@ -102,6 +103,10 @@ for conv in all_convs:
         candidates.append(conv)
         continue
 
+    if FORCE_SYNC == "1":
+        candidates.append(conv)
+        continue
+
     conv_update = conv.get("update_time")
     if conv_update:
         import datetime
@@ -151,7 +156,7 @@ for conv in candidates:
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
         last = thread_last_capture(conn, thread_key)
-        if last and last.get("content_hash") == content_hash:
+        if last and last.get("content_hash") == content_hash and FORCE_SYNC != "1":
             upsert_thread(conn, {
                 "thread_key": thread_key, "provider_id": "chatgpt",
                 "account_key": account_key, "status": "unchanged",
