@@ -337,6 +337,31 @@ Post: Filter by relevance → export CSV
   content to render, replacing `wait_for_load()` + fixed delay
 - If `wait_for_content()` returns `block: true`, emit `__UNOBSERVABLE__` for all
   fields instead of running extraction JS on the challenge page
+- **Stealth fallback**: If CDP session hits Turnstile that `solve_turnstile()` cannot pass,
+  use Patchright stealth browser:
+
+```python
+from stealth_helpers import stealth_session
+
+with stealth_session() as s:
+    s.goto("https://z2u.com/searchAllGame?search=chatgpt")
+    # Set 400 items per page
+    s.js("""(() => {
+        const select = document.querySelector('select');
+        if (select) {
+            select.value = '400';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            document.querySelectorAll('button').forEach(b => {
+                if (b.textContent.trim() === 'Confirm') b.click();
+            });
+        }
+    })()""")
+    # All JS extraction from above works unchanged via s.js()
+    categories = s.js("...")  # paste any extraction JS from this doc
+```
+
+All JS extraction snippets in this doc work with `s.js()` — Patchright's `page.evaluate()`
+accepts arrow functions and IIFEs directly.
 
 ## Gotchas
 

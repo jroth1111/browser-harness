@@ -12,11 +12,15 @@ dependencies = [
     "websockets==16.0",
     "lxml>=5.0",
     "cssselect>=1.2",
+    "cryptography>=42.0",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+]
+stealth = [
+    "patchright>=1.59.0",
 ]
 
 [project.scripts]
@@ -24,7 +28,7 @@ browser-harness = "run:main"
 browser-harness-skill-learning-gate = "skill_learning_gate:main"
 
 [tool.setuptools]
-py-modules = ["run", "helpers", "response", "daemon", "admin", "login_session", "lightpanda_control", "data_display", "skill_learning_gate", "network_capture", "source_receipts", "extraction_contracts", "redaction_scan", "domain_skill_maturity"]
+py-modules = ["run", "helpers", "response", "daemon", "admin", "login_session", "lightpanda_control", "stealth_helpers", "data_display", "skill_learning_gate", "network_capture", "source_receipts", "extraction_contracts", "redaction_scan", "domain_skill_maturity"]
 packages = ["browser_harness_domain_skills", "browser_harness_interaction_skills", "browser_harness_docs", "browser_harness_assets"]
 
 [tool.setuptools.package-dir]

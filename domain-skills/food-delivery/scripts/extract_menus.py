@@ -13,7 +13,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lib.sb_helpers import create_sb_session, harvest_session_cookies, check_auth
+from lib.stealth_session import create_stealth_session, harvest_session_cookies, check_auth
 from lib.crawl_state import CrawlState, SafetyGate
 from lib import doordash, ubereats
 
@@ -22,14 +22,14 @@ PAGE_DELAY = (2.0, 5.0)
 MAX_SCROLLS_NO_NEW = 5
 
 
-def extract_menu_from_next_data(sb):
+def extract_menu_from_next_data(s):
     """Extract menu items from DoorDash's Next.js embedded JSON.
 
     DoorDash embeds menu data in self.__next_f.push() script tags.
     Items appear as StorePageCarouselItem objects with name, description,
     displayPrice, imgUrl fields, grouped in carousels by category.
     """
-    page_source = sb.driver.page_source
+    page_source = s.content()
 
     pattern = r'self\.__next_f\.push\(\[1,"(.*?)"\]\)'
     menu_items = []
@@ -83,57 +83,61 @@ def extract_menu_from_next_data(sb):
     # Assign categories by matching item names to DOM headings
     if menu_items:
         try:
-            _assign_categories_from_dom(sb, menu_items)
+            _assign_categories_from_dom(s, menu_items)
         except Exception:
             pass
 
     return menu_items
 
 
-def _assign_categories_from_dom(sb, menu_items):
+def _assign_categories_from_dom(s, menu_items):
     """Use DOM headings (H2) to assign categories to menu items."""
-    js = """
-    var cats = [];
-    var h2s = document.querySelectorAll('h2');
-    var skipCats = ['Reviews', 'Top Pairings', 'Trending', 'Nearby', 'Get to Know', 'Let Us Help', 'Doing Business', 'Top Dishes'];
-    for (var i = 0; i < h2s.length; i++) {
-        var h2 = h2s[i];
-        var text = h2.textContent.trim();
-        if (!text || text.length > 50) continue;
-        var skip = false;
-        for (var j = 0; j < skipCats.length; j++) {
-            if (text.indexOf(skipCats[j]) >= 0) { skip = true; break; }
+    js_code = """
+    (() => {
+        var cats = [];
+        var h2s = document.querySelectorAll('h2');
+        var skipCats = ['Reviews', 'Top Pairings', 'Trending', 'Nearby', 'Get to Know', 'Let Us Help', 'Doing Business', 'Top Dishes'];
+        for (var i = 0; i < h2s.length; i++) {
+            var h2 = h2s[i];
+            var text = h2.textContent.trim();
+            if (!text || text.length > 50) continue;
+            var skip = false;
+            for (var j = 0; j < skipCats.length; j++) {
+                if (text.indexOf(skipCats[j]) >= 0) { skip = true; break; }
+            }
+            if (skip) continue;
+            var rect = h2.getBoundingClientRect();
+            cats.push({text: text, y: Math.round(rect.top + window.scrollY)});
         }
-        if (skip) continue;
-        var rect = h2.getBoundingClientRect();
-        cats.push({text: text, y: Math.round(rect.top + window.scrollY)});
-    }
-    return JSON.stringify(cats);
+        return JSON.stringify(cats);
+    })()
     """
-    raw = sb.execute_script(js)
+    raw = s.js(js_code)
     if not raw:
         return
     categories = json.loads(raw)
 
     # Get Y positions of H3 elements (menu item names)
     names_str = json.dumps([m["item_name"] for m in menu_items[:100]])
-    js2 = """
-    var targetNames = NAMES;
-    var positions = {};
-    var h3s = document.querySelectorAll('h3');
-    for (var i = 0; i < h3s.length; i++) {
-        var text = h3s[i].textContent.trim();
-        for (var j = 0; j < targetNames.length; j++) {
-            if (text === targetNames[j] || targetNames[j].indexOf(text) >= 0 || text.indexOf(targetNames[j]) >= 0) {
-                var rect = h3s[i].getBoundingClientRect();
-                positions[targetNames[j]] = Math.round(rect.top + window.scrollY);
-                break;
-            }
-        }
-    }
-    return JSON.stringify(positions);
-    """.replace("NAMES", names_str)
-    raw2 = sb.execute_script(js2)
+    js2 = f"""
+    (() => {{
+        var targetNames = {names_str};
+        var positions = {{}};
+        var h3s = document.querySelectorAll('h3');
+        for (var i = 0; i < h3s.length; i++) {{
+            var text = h3s[i].textContent.trim();
+            for (var j = 0; j < targetNames.length; j++) {{
+                if (text === targetNames[j] || targetNames[j].indexOf(text) >= 0 || text.indexOf(targetNames[j]) >= 0) {{
+                    var rect = h3s[i].getBoundingClientRect();
+                    positions[targetNames[j]] = Math.round(rect.top + window.scrollY);
+                    break;
+                }}
+            }}
+        }}
+        return JSON.stringify(positions);
+    }})()
+    """
+    raw2 = s.js(js2)
     if not raw2:
         return
     positions = json.loads(raw2)
@@ -149,124 +153,87 @@ def _assign_categories_from_dom(sb, menu_items):
                 break
 
 
-def extract_menu_from_dom(sb):
-    """Fallback: extract menu items via DOM scraping using aria-labels and headings."""
+def extract_menu_from_dom(s):
+    """Extract menu items via DOM scraping.
+
+    Uber Eats: li elements with A$ prices. Text pattern:
+      [#N most liked][Plus small/medium]ItemNameA$XX.XX [• rating% (count)]
+    """
     js = """
-    var items = [];
-    var seen = {};
-    var categoryPositions = [];
+    (() => {
+        var items = [];
+        var seen = {};
+        var categoryPositions = [];
 
-    var headings = document.querySelectorAll('h2, h3, h4, [role="heading"]');
-    for (var i = 0; i < headings.length; i++) {
-        var h = headings[i];
-        var text = (h.textContent || '').trim();
-        if (!text || text.length > 60 || text.length < 2) continue;
-        if (h.tagName === 'H1') continue;
-        var rect = h.getBoundingClientRect();
-        if (rect.bottom > 0 && rect.top < window.innerHeight * 10) {
-            categoryPositions.push({text: text, y: rect.top});
-        }
-    }
-
-    var buttons = document.querySelectorAll('button[aria-label]');
-    for (var j = 0; j < buttons.length; j++) {
-        var btn = buttons[j];
-        var name = btn.getAttribute('aria-label');
-        if (!name || name.length < 2 || name.length > 120) continue;
-
-        var text = btn.textContent || '';
-        var priceMatch = text.match(/\\$\\d+\\.?\\d{0,2}/);
-        var price = priceMatch ? priceMatch[0] : null;
-
-        if (seen[name]) continue;
-        seen[name] = true;
-
-        var rect = btn.getBoundingClientRect();
-        var category = 'Unknown';
-        for (var k = categoryPositions.length - 1; k >= 0; k--) {
-            if (categoryPositions[k].y < rect.top) {
-                category = categoryPositions[k].text;
-                break;
+        var headings = document.querySelectorAll('h2, h3');
+        for (var i = 0; i < headings.length; i++) {
+            var h = headings[i];
+            var text = (h.textContent || '').trim();
+            if (!text || text.length > 60 || text.length < 2) continue;
+            var rect = h.getBoundingClientRect();
+            if (rect.bottom > 0 && rect.top < window.innerHeight * 20) {
+                categoryPositions.push({text: text, y: rect.top});
             }
         }
 
-        items.push({
-            category: category,
-            item_name: name,
-            item_price: price,
-            description: null,
-            popular_badge: /most ordered|most liked/i.test(text),
-            customization_count: null,
-            image_url: null,
-        });
-    }
+        var lis = document.querySelectorAll('li');
+        for (var j = 0; j < lis.length; j++) {
+            var li = lis[j];
+            var text = (li.textContent || '').trim();
+            if (text.indexOf('A$') === -1 || text.length > 500 || text.length < 10) continue;
 
-    if (items.length === 0) {
-        var allEls = document.querySelectorAll('div, section, article, li');
-        for (var m = 0; m < allEls.length; m++) {
-            var el = allEls[m];
-            var elText = el.textContent || '';
-            if (!/\\$\\d+\\.?\\d{0,2}/.test(elText)) continue;
-            if (elText.length > 2000 || elText.length < 5) continue;
-            var children = el.children;
-            var hasPrice = false, hasName = false;
-            for (var n = 0; n < children.length; n++) {
-                var ct = (children[n].textContent || '').trim();
-                if (/^\\$\\d+\\.?\\d{0,2}$/.test(ct)) hasPrice = true;
-                if (ct.length > 3 && ct.length < 100 && !ct.startsWith('$')) hasName = true;
-            }
-            if (!hasPrice || !hasName) continue;
+            var priceMatch = text.match(/A\\$\\d+\\.?\\d{0,2}/);
+            if (!priceMatch) continue;
+            var price = priceMatch[0];
 
-            var elRect = el.getBoundingClientRect();
-            var elCat = 'Unknown';
-            for (var p = categoryPositions.length - 1; p >= 0; p--) {
-                if (categoryPositions[p].y < elRect.top) {
-                    elCat = categoryPositions[p].text;
-                    break;
-                }
-            }
+            var name = text;
+            name = name.replace(/#\\d+\\s*most liked/g, '');
+            name = name.replace(/Plus (?:small|medium|large)\\s*/g, '');
+            var cutIdx = name.indexOf('A$');
+            if (cutIdx > 0) name = name.substring(0, cutIdx);
+            name = name.replace(/\\s*[•·].*$/, '');
+            name = name.replace(/\\s*\\d+%\\s*\\(\\d+\\)\\s*$/g, '');
+            name = name.trim();
 
-            var elName = null, elPrice = null, elDesc = null;
-            var childTexts = [];
-            for (var q = 0; q < children.length; q++) {
-                var ct2 = (children[q].textContent || '').trim();
-                childTexts.push(ct2);
-                if (!elPrice && /^\\$\\d+\\.?\\d{0,2}$/.test(ct2)) elPrice = ct2;
-                else if (!elName && ct2.length > 2 && ct2.length < 80 && !ct2.startsWith('$')) elName = ct2;
-            }
-            for (var r = 0; r < childTexts.length; r++) {
-                if (childTexts[r] !== elName && childTexts[r] !== elPrice && childTexts[r].length > 20) {
-                    elDesc = childTexts[r];
-                    break;
-                }
-            }
+            if (!name || name.length < 2 || name.length > 120) continue;
+            if (/^(Savings|Enjoy|Use by|Save \\d|Uber One|\\d+% off)/.test(name)) continue;
+            if (/^\\d+%/.test(name) && name.length < 15) continue;
 
-            if (!elName) continue;
-            var key = elName + elPrice;
+            var key = name + price;
             if (seen[key]) continue;
             seen[key] = true;
+
+            var rect = li.getBoundingClientRect();
+            var category = 'Unknown';
+            for (var k = categoryPositions.length - 1; k >= 0; k--) {
+                if (categoryPositions[k].y < rect.top) {
+                    category = categoryPositions[k].text;
+                    break;
+                }
+            }
+
             items.push({
-                category: elCat,
-                item_name: elName,
-                item_price: elPrice,
-                description: elDesc,
-                popular_badge: /most ordered|most liked/i.test(elText),
+                category: category,
+                item_name: name,
+                item_price: price,
+                description: null,
+                popular_badge: /most liked/i.test(text),
                 customization_count: null,
                 image_url: null,
             });
         }
-    }
 
-    return JSON.stringify(items);
+        return JSON.stringify(items);
+    })()
     """
-    raw = sb.driver.execute_script(js)
+    raw = s.js(js)
     try:
         return json.loads(raw) if raw else []
     except json.JSONDecodeError:
         return []
 
 
-def extract_menu_items(sb, platform, store_url):
+def extract_menu_items(s, platform, store_url):
     """Extract all menu items from a restaurant page.
 
     Primary: Parse Next.js embedded JSON (DoorDash).
@@ -276,21 +243,21 @@ def extract_menu_items(sb, platform, store_url):
 
     # Primary: Next.js embedded data (DoorDash)
     if platform == "doordash":
-        items = extract_menu_from_next_data(sb)
+        items = extract_menu_from_next_data(s)
 
     # Fallback: DOM scraping for any platform
     if not items:
-        items = extract_menu_from_dom(sb)
+        items = extract_menu_from_dom(s)
 
     return items
 
 
-def scroll_down(sb):
-    sb.driver.execute_script("window.scrollBy(0, window.innerHeight * 1.2);")
+def scroll_down(s):
+    s.js("window.scrollBy(0, window.innerHeight * 1.2)")
     time.sleep(random.uniform(*SCROLL_PAUSE))
 
 
-def extract_menus_for_restaurants(sb, platform, restaurants, checkpoint_path=None):
+def extract_menus_for_restaurants(s, platform, restaurants, checkpoint_path=None):
     """Extract menus from a list of restaurants."""
     mod = doordash if platform == "doordash" else ubereats
     state = CrawlState(key_field="item_key")  # composite: store_id + item_name
@@ -319,34 +286,29 @@ def extract_menus_for_restaurants(sb, platform, restaurants, checkpoint_path=Non
         print(f"\n[{i+1}/{len(restaurants)}] {store_name} ({store_id})")
         print(f"  URL: {store_url}")
 
-        try:
-            sb.driver.get(store_url)
-        except Exception:
-            sb.uc_open_with_reconnect(store_url, 4)
-
+        s.goto(store_url)
         time.sleep(random.uniform(3.0, 5.0))
 
         # Check for blocks
-        src = sb.driver.page_source[:1000]
-        if "Verify you are human" in src or "access denied" in src.lower():
-            print(f"  BLOCKED. Trying captcha click...")
-            sb.uc_gui_click_captcha()
-            time.sleep(5)
-            src = sb.driver.page_source[:1000]
-            if "Verify you are human" in src or "access denied" in src.lower():
+        html = s.content()[:1000]
+        if "Verify you are human" in html or "access denied" in html.lower():
+            print(f"  BLOCKED. Waiting for Turnstile...")
+            time.sleep(8)
+            html = s.content()[:1000]
+            if "Verify you are human" in html or "access denied" in html.lower():
                 print(f"  Still blocked. Skipping store.")
                 gate.record(403, blocked=True)
                 continue
 
         gate.record(200)
-        title = sb.get_title()
+        title = s.js("document.title")
         print(f"  Loaded: {title}")
 
         # Extract menu items — try multiple scrolls for lazy-loaded content
         scrolls_no_new = 0
         total_new = 0
         for scroll_num in range(30):
-            items = extract_menu_items(sb, platform, store_url)
+            items = extract_menu_items(s, platform, store_url)
             new = 0
             for item in items:
                 item["store_id"] = store_id
@@ -372,7 +334,7 @@ def extract_menus_for_restaurants(sb, platform, restaurants, checkpoint_path=Non
             if scrolls_no_new >= MAX_SCROLLS_NO_NEW:
                 break
 
-            scroll_down(sb)
+            scroll_down(s)
 
         processed_stores.add(store_id)
         print(f"  Extracted {total_new} items")
@@ -411,14 +373,13 @@ def main():
 
     print(f"Processing {len(restaurants)} restaurants from {platform}")
 
-    from seleniumbase import SB
-
-    with SB(uc=True, test=True) as sb:
-        authed = create_sb_session(sb, platform)
+    s = create_stealth_session(platform)
+    try:
+        authed = check_auth(s, platform)
         if not authed:
             print("WARNING: Not authenticated.")
 
-        state = extract_menus_for_restaurants(sb, platform, restaurants, args.resume)
+        state = extract_menus_for_restaurants(s, platform, restaurants, args.resume)
 
         output = {
             "platform": platform,
@@ -429,7 +390,9 @@ def main():
         Path(args.output).write_text(json.dumps(output, indent=2, default=str))
         print(f"\nSaved {len(state._records)} menu items to {args.output}")
 
-        harvest_session_cookies(sb, platform)
+        harvest_session_cookies(s, platform)
+    finally:
+        s.close()
 
 
 if __name__ == "__main__":

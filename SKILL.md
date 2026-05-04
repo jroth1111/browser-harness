@@ -34,6 +34,7 @@ Match your task to one row. Open the file in "Go to" — that's your action file
 | Click, screenshot, scroll, type on current page | Playbook below (no file needed) | `interaction-skills/ui-mechanics.md` only for hidden/0×0 targets, iframes, shadow DOM, file uploads |
 | Choose backend or test capability for a URL | `interaction-skills/backend-capability.md` | `interaction-skills/cross-domain-control-flow.md` when the task spans 2+ sites, auth states, or source families |
 | Site returns 403 / bot detection / WAF block | `interaction-skills/waf-bypass.md` | Diagnose, authorized recovery, or stop |
+| Cloudflare Turnstile block that `solve_turnstile()` cannot pass | `interaction-skills/stealth-browser.md` | `interaction-skills/waf-bypass.md` for diagnosis first |
 | Tab control, connection issues, stale tabs | `interaction-skills/tabs.md` | `interaction-skills/connection.md` when `ensure_real_tab()` or `browser-harness --doctor` fails |
 | Search products across marketplaces | `interaction-skills/product-search.md` | `interaction-skills/marketplace-search.md` for cross-platform searches spanning 2+ sites |
 | Auth wall, login, session reuse | `interaction-skills/session-continuity.md` | `interaction-skills/cookies.md` for cookie extraction/setting mechanics |

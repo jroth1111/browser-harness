@@ -18,7 +18,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lib.sb_helpers import create_sb_session, harvest_session_cookies, check_auth
+from lib.stealth_session import create_stealth_session, harvest_session_cookies, check_auth
 from lib.crawl_state import CrawlState, SafetyGate
 from lib import doordash, ubereats
 
@@ -28,11 +28,11 @@ MAX_SCROLLS_NO_NEW = 8
 MAX_SCROLLS_TOTAL = 200
 
 
-def extract_restaurants_generic(sb, platform):
+def extract_restaurants_generic(s, platform):
     """Extract restaurant data from whatever cards are visible on the page."""
     base_url = "https://www.doordash.com" if platform == "doordash" else "https://www.ubereats.com"
 
-    js = """
+    js_code = """
     var results = [];
     var seen = {};
     var baseUrl = BASEURL;
@@ -118,22 +118,23 @@ def extract_restaurants_generic(sb, platform):
     }
 
     return JSON.stringify(results);
+    })()
     """.replace("BASEURL", json.dumps(base_url)).replace("PLAT", json.dumps(platform))
 
-    raw = sb.execute_script(js)
+    raw = s.js(js_code)
     try:
         return json.loads(raw) if raw else []
     except json.JSONDecodeError:
         return []
 
 
-def scroll_down(sb):
+def scroll_down(s):
     """Scroll down to trigger lazy loading."""
-    sb.driver.execute_script("window.scrollBy(0, window.innerHeight * 1.5);")
+    s.js("window.scrollBy(0, window.innerHeight * 1.5)")
     time.sleep(random.uniform(*SCROLL_PAUSE))
 
 
-def browse_all(sb, platform, checkpoint_path=None):
+def browse_all(s, platform, checkpoint_path=None):
     """Navigate to home/browse page and scroll through ALL categories.
 
     This covers restaurants, groceries, convenience, retail — everything
@@ -151,22 +152,18 @@ def browse_all(sb, platform, checkpoint_path=None):
     url = mod.browse_url()
     print(f"\nBrowsing: {url}")
 
-    try:
-        sb.driver.get(url)
-    except Exception:
-        sb.uc_open_with_reconnect(url, 4)
-
+    s.goto(url)
     time.sleep(random.uniform(*PAGE_DELAY))
 
     # Check for blocks
-    title = sb.get_title()
-    src = sb.driver.page_source[:1000]
-    if "Verify you are human" in src or "access denied" in src.lower():
-        print(f"  BLOCKED. Trying captcha click...")
-        sb.uc_gui_click_captcha()
-        time.sleep(5)
-        title = sb.get_title()
-        if "Verify you are human" in sb.driver.page_source[:1000]:
+    title = s.js("document.title")
+    html = s.content()[:1000]
+    if "Verify you are human" in html or "access denied" in html.lower():
+        print(f"  BLOCKED. Waiting for Turnstile...")
+        time.sleep(8)
+        title = s.js("document.title")
+        html = s.content()[:1000]
+        if "Verify you are human" in html:
             print(f"  Still blocked. Aborting.")
             return state
 
@@ -177,7 +174,7 @@ def browse_all(sb, platform, checkpoint_path=None):
     scrolls_no_new = 0
     last_report = 0
     for scroll_num in range(MAX_SCROLLS_TOTAL):
-        restaurants = extract_restaurants_generic(sb, platform)
+        restaurants = extract_restaurants_generic(s, platform)
         new = 0
         for r in restaurants:
             if state.add(r):
@@ -200,7 +197,7 @@ def browse_all(sb, platform, checkpoint_path=None):
             print(f"  Safety gate: {gate.summary()}")
             break
 
-        scroll_down(sb)
+        scroll_down(s)
 
     # Checkpoint
     if checkpoint_path:
@@ -210,7 +207,7 @@ def browse_all(sb, platform, checkpoint_path=None):
     return state
 
 
-def search_by_queries(sb, platform, queries, checkpoint_path=None):
+def search_by_queries(s, platform, queries, checkpoint_path=None):
     """Enumerate restaurants by searching specific terms (legacy mode)."""
     mod = doordash if platform == "doordash" else ubereats
     state = CrawlState(key_field="store_id")
@@ -229,21 +226,17 @@ def search_by_queries(sb, platform, queries, checkpoint_path=None):
         url = mod.search_url(query)
         print(f"\nSearching: {query} -> {url}")
 
-        try:
-            sb.driver.get(url)
-        except Exception:
-            sb.uc_open_with_reconnect(url, 4)
-
+        s.goto(url)
         time.sleep(random.uniform(*PAGE_DELAY))
 
-        title = sb.get_title()
-        src = sb.driver.page_source[:1000]
-        if "Verify you are human" in src or "access denied" in src.lower():
-            print(f"  BLOCKED. Trying captcha click...")
-            sb.uc_gui_click_captcha()
-            time.sleep(5)
-            title = sb.get_title()
-            if "Verify you are human" in sb.driver.page_source[:1000]:
+        title = s.js("document.title")
+        html = s.content()[:1000]
+        if "Verify you are human" in html or "access denied" in html.lower():
+            print(f"  BLOCKED. Waiting for Turnstile...")
+            time.sleep(8)
+            title = s.js("document.title")
+            html = s.content()[:1000]
+            if "Verify you are human" in html:
                 print(f"  Still blocked. Skipping query.")
                 gate.record(403, blocked=True)
                 state.record_blocked(url, "captcha")
@@ -254,7 +247,7 @@ def search_by_queries(sb, platform, queries, checkpoint_path=None):
 
         scrolls_no_new = 0
         for scroll_num in range(MAX_SCROLLS_TOTAL):
-            restaurants = extract_restaurants_generic(sb, platform)
+            restaurants = extract_restaurants_generic(s, platform)
             new = 0
             for r in restaurants:
                 if state.add(r):
@@ -272,7 +265,7 @@ def search_by_queries(sb, platform, queries, checkpoint_path=None):
                 print(f"  Saturation: {MAX_SCROLLS_NO_NEW} scrolls with 0 new items")
                 break
 
-            scroll_down(sb)
+            scroll_down(s)
 
         if checkpoint_path:
             state.save(checkpoint_path)
@@ -294,17 +287,16 @@ def main():
     parser.add_argument("--resume", help="Checkpoint file to resume from")
     args = parser.parse_args()
 
-    from seleniumbase import SB
-
-    with SB(uc=True, test=True) as sb:
-        authed = create_sb_session(sb, args.platform)
+    s = create_stealth_session(args.platform)
+    try:
+        authed = check_auth(s, args.platform)
         if not authed:
             print(f"WARNING: Not authenticated. Results may be limited.")
 
         if args.mode == "browse":
-            state = browse_all(sb, args.platform, args.resume)
+            state = browse_all(s, args.platform, args.resume)
         else:
-            state = search_by_queries(sb, args.platform, args.query, args.resume)
+            state = search_by_queries(s, args.platform, args.query, args.resume)
 
         # Save final results
         output = {
@@ -318,7 +310,9 @@ def main():
         print(f"Summary: {json.dumps(state.summary(), indent=2)}")
 
         # Harvest fresh cookies for next phase
-        harvest_session_cookies(sb, args.platform)
+        harvest_session_cookies(s, args.platform)
+    finally:
+        s.close()
 
 
 if __name__ == "__main__":

@@ -9,10 +9,14 @@ Usage via browser-harness:
     exec(open("domain-skills/ai-chat-archive/scripts/chatgpt_artifact_capture.py").read())
     PY
 
+Usage with stealth browser (bypasses Cloudflare Turnstile):
+    STEALTH_CAPTURE=1 python3 domain-skills/ai-chat-archive/scripts/chatgpt_artifact_capture.py
+
 Env vars:
     ARTIFACT_THREADS=id1,id2,...   Specific thread keys (default: auto-detect)
     ARTIFACT_TYPES=deep_research_report,canvas_document  Filter by type
     ARTIFACT_LIMIT=5               Max threads to process (0 = all)
+    STEALTH_CAPTURE=1              Use Patchright stealth browser instead of CDP
 """
 import json
 import os
@@ -28,6 +32,8 @@ from lib.archive_db import (
     compute_content_hash, generate_run_id, generate_capture_id,
     new_run, finish_run,
 )
+
+STEALTH_CAPTURE = os.environ.get("STEALTH_CAPTURE", "")
 from lib.chatgpt_dom import ChatGPTDOMExtractor
 from lib.chatgpt_deep_research import DeepResearchCapture
 from lib.render import render_thread_markdown
@@ -96,32 +102,110 @@ if not thread_list:
     print("NOTHING_TO_DO")
     sys.exit(0)
 
-# --- Browser helpers (provided by browser-harness globals) ---
-
-dom = ChatGPTDOMExtractor(js, ax_snapshot, click_ref, scroll)
-dr_capture = DeepResearchCapture(js, ax_snapshot, click_ref)
+# --- Browser helpers ---
 
 captured_artifacts = 0
 failed_artifacts = 0
 
-for tk, info in thread_list:
-    url = info["url"]
-    title = (info["title"] or tk)[:60]
-    art_types = info["artifact_types"]
+if STEALTH_CAPTURE == "1":
+    from stealth_helpers import stealth_session
 
-    print(f"\nTHREAD: {title}")
-    print(f"  URL: {url}")
-    print(f"  TYPES: {', '.join(sorted(art_types))}")
+    stealth = stealth_session(headless=False)
 
-    tid = new_tab(url)
-    wait_for_load_js(10)
-    time.sleep(4)
+    for tk, info in thread_list:
+        url = info["url"]
+        title = (info["title"] or tk)[:60]
+        art_types = info["artifact_types"]
 
-    try:
-        # Scroll to load everything
-        dom.scroll_to_load_all()
-        dom.expand_all_show_more()
+        print(f"\nTHREAD: {title}")
+        print(f"  URL: {url}")
+        print(f"  TYPES: {', '.join(sorted(art_types))}")
+
+        stealth.goto(url)
+        time.sleep(4)
+
+        try:
+            # --- Generated image capture ---
+            if "generated_image" in art_types:
+                images = stealth.js("""(() => {
+                    const results = [];
+                    document.querySelectorAll('img[src]').forEach(el => {
+                        const src = el.src || '';
+                        const alt = el.alt || '';
+                        if (src.includes('dall') || src.includes('oaidalle') ||
+                            src.includes('generation') || alt.toLowerCase().includes('generated')) {
+                            results.push({src, alt, width: el.naturalWidth, height: el.naturalHeight});
+                        }
+                    });
+                    return results;
+                })()""") or []
+
+                for img in images:
+                    src = img.get("src", "")
+                    if src:
+                        try:
+                            data = stealth.page.evaluate(f"""
+                                (async () => {{
+                                    try {{
+                                        const resp = await fetch("{src}", {{credentials: "include"}});
+                                        const buf = await resp.arrayBuffer();
+                                        return Array.from(new Uint8Array(buf));
+                                    }} catch(e) {{ return null; }}
+                                }})()
+                            """)
+                            if data:
+                                data = bytes(data)
+                                content_hash = compute_content_hash(data)
+                                capture_id = generate_capture_id()
+                                art_key = upsert_artifact(conn, {
+                                    "thread_key": tk,
+                                    "label": img.get("alt", "Generated Image"),
+                                    "artifact_type": "generated_image",
+                                    "capture_id": capture_id,
+                                    "content_hash": content_hash,
+                                    "storage_kind": "binary",
+                                    "byte_length": len(data),
+                                }, run_id=run_id, provider_id="chatgpt", account_key="")
+                                store_artifact_blob(conn, art_key, content_hash, data)
+                                captured_artifacts += 1
+                                print(f"  IMAGE: {len(data) // 1024}KB captured")
+                            else:
+                                failed_artifacts += 1
+                                print(f"  IMAGE: download failed")
+                        except Exception as e:
+                            failed_artifacts += 1
+                            print(f"  IMAGE: error — {e}")
+
+        except Exception as e:
+            print(f"  ERROR: {e}")
+
         time.sleep(1)
+
+    stealth.close()
+
+else:
+    # --- Standard browser-harness CDP path ---
+    dom = ChatGPTDOMExtractor(js, ax_snapshot, click_ref, scroll)
+    dr_capture = DeepResearchCapture(js, ax_snapshot, click_ref)
+
+    for tk, info in thread_list:
+        url = info["url"]
+        title = (info["title"] or tk)[:60]
+        art_types = info["artifact_types"]
+
+        print(f"\nTHREAD: {title}")
+        print(f"  URL: {url}")
+        print(f"  TYPES: {', '.join(sorted(art_types))}")
+
+        tid = new_tab(url)
+        wait_for_load_js(10)
+        time.sleep(4)
+
+        try:
+            # Scroll to load everything
+            dom.scroll_to_load_all()
+            dom.expand_all_show_more()
+            time.sleep(1)
 
         # --- Deep research report capture ---
         if "deep_research_report" in art_types:
@@ -354,11 +438,11 @@ for tk, info in thread_list:
                         failed_artifacts += 1
                         print(f"  FILE: {f.get('label')} — {e}")
 
-    except Exception as e:
-        print(f"  ERROR: {e}")
+        except Exception as e:
+            print(f"  ERROR: {e}")
 
-    close_tab(tid)
-    time.sleep(1)
+        close_tab(tid)
+        time.sleep(1)
 
 finish_run(conn, run_id, "complete" if failed_artifacts == 0 else "partial", {
     "threads": len(thread_list),
