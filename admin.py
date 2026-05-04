@@ -165,15 +165,35 @@ def restart_daemon(name=None):
             except ProcessLookupError:
                 break
         else:
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            if _pid_matches_daemon(pid):
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
     for f in (sock, pid_path):
         try:
             os.unlink(f)
         except FileNotFoundError:
             pass
+
+
+def _pid_matches_daemon(pid):
+    """Best-effort guard before signaling a pid read from a stale pid file."""
+    import subprocess
+
+    try:
+        command = subprocess.check_output(
+            ["ps", "-p", str(pid), "-o", "command="],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).strip()
+    except Exception:
+        return False
+    if not command:
+        return False
+    root = str(Path(__file__).resolve().parent)
+    return "daemon.py" in command and root in command
     for f in _legacy_paths(name):
         try:
             os.unlink(f)

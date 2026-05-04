@@ -1,4 +1,5 @@
 import admin
+import signal
 import sys
 from io import StringIO
 from pathlib import Path
@@ -109,6 +110,73 @@ def test_ensure_daemon_spawns_with_current_python_interpreter():
     cmd = popen.call_args.args[0]
     assert cmd[0] == sys.executable
     assert cmd[1].endswith("daemon.py")
+
+
+def test_restart_daemon_does_not_sigterm_unrelated_stale_pid(tmp_path):
+    pid_path = tmp_path / "bh.pid"
+    pid_path.write_text("4321")
+    calls = []
+
+    class RefusingSocket:
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def settimeout(self, timeout):
+            pass
+        def connect(self, path):
+            raise FileNotFoundError(path)
+
+    def fake_kill(pid, sig):
+        calls.append((pid, sig))
+
+    with patch("admin._paths", return_value=(str(tmp_path / "bh.sock"), str(pid_path))), \
+         patch("admin._legacy_paths", return_value=()), \
+         patch("socket.socket", return_value=RefusingSocket()), \
+         patch("admin._pid_matches_daemon", return_value=False), \
+         patch("time.sleep"), \
+         patch("os.kill", side_effect=fake_kill):
+        admin.restart_daemon()
+
+    assert (4321, signal.SIGTERM) not in calls
+    assert all(call == (4321, 0) for call in calls)
+
+
+def test_restart_daemon_sigterms_matching_daemon_pid(tmp_path):
+    pid_path = tmp_path / "bh.pid"
+    pid_path.write_text("4321")
+    calls = []
+
+    class RefusingSocket:
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def settimeout(self, timeout):
+            pass
+        def connect(self, path):
+            raise FileNotFoundError(path)
+
+    def fake_kill(pid, sig):
+        calls.append((pid, sig))
+
+    with patch("admin._paths", return_value=(str(tmp_path / "bh.sock"), str(pid_path))), \
+         patch("admin._legacy_paths", return_value=()), \
+         patch("socket.socket", return_value=RefusingSocket()), \
+         patch("admin._pid_matches_daemon", return_value=True), \
+         patch("time.sleep"), \
+         patch("os.kill", side_effect=fake_kill):
+        admin.restart_daemon()
+
+    assert (4321, signal.SIGTERM) in calls
+
+
+def test_pid_matches_daemon_requires_this_repo_daemon():
+    root = Path(admin.__file__).resolve().parent
+    with patch("subprocess.check_output", return_value=f"{sys.executable} {root / 'daemon.py'}"):
+        assert admin._pid_matches_daemon(4321)
+    with patch("subprocess.check_output", return_value="/usr/bin/python /tmp/other/daemon.py"):
+        assert not admin._pid_matches_daemon(4321)
 
 
 def test_doctor_default_does_not_check_latest_release():
