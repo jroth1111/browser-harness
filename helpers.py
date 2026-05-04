@@ -25,6 +25,30 @@ NAME = os.environ.get("BH_NAME", "default")
 SOCK = f"/tmp/bh-{NAME}.sock"
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
 
+BLOCKER_JS = """(()=>{
+if(window.__bh_blockers_installed__)return;window.__bh_blockers_installed__=true;
+window.__bh_blockers__=window.__bh_blockers__||[];
+const log=k=>{const a=window.__bh_blockers__;a.push({kind:k,t:Date.now()});if(a.length>200)a.splice(0,a.length-200);};
+const w=(o,n,k)=>{if(!o)return;const f=o[n];if(typeof f!=='function')return;o[n]=function(){log(k);return f.apply(this,arguments);};};
+try{w(navigator.geolocation,'getCurrentPosition','geolocation');}catch(_){}
+try{w(navigator.geolocation,'watchPosition','geolocation');}catch(_){}
+try{w(Notification,'requestPermission','notifications');}catch(_){}
+try{w(navigator.mediaDevices,'getUserMedia','media');}catch(_){}
+try{w(navigator.mediaDevices,'getDisplayMedia','display');}catch(_){}
+try{w(navigator.clipboard,'read','clipboard-read');}catch(_){}
+try{w(navigator.clipboard,'readText','clipboard-read');}catch(_){}
+try{w(navigator.bluetooth,'requestDevice','bluetooth');}catch(_){}
+try{w(navigator.usb,'requestDevice','usb');}catch(_){}
+try{w(navigator.serial,'requestPort','serial');}catch(_){}
+try{w(navigator.hid,'requestDevice','hid');}catch(_){}
+try{w(window,'showOpenFilePicker','file-picker');}catch(_){}
+try{w(window,'showSaveFilePicker','file-picker');}catch(_){}
+try{w(window,'showDirectoryPicker','file-picker');}catch(_){}
+try{w(window,'print','print');}catch(_){}
+try{w(document,'requestStorageAccess','storage-access');}catch(_){}
+addEventListener('click',e=>{const t=e.target;if(t&&t.tagName==='INPUT'&&t.type==='file')log('file-input');},true);
+})();"""
+
 _sock = None
 
 
@@ -76,6 +100,7 @@ _MUTATING_CDP = frozenset((
     "Page.navigate", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
     "Input.insertText", "DOM.setFileInputFiles", "Page.captureScreenshot",
     "Network.setBlockedURLs", "Target.closeTarget", "Target.createTarget",
+    "Page.handleJavaScriptDialog",
 ))
 
 
@@ -1089,6 +1114,89 @@ def js(expression, target_id=None):
     if result.get("type") == "undefined":
         return {"_js_undefined": True}
     return result.get("value")
+
+
+def install_blocker_probe():
+    """Inject a diagnostic wrapper around permission-gated Web APIs.
+
+    Wraps geolocation, notifications, mediaDevices, clipboard, bluetooth/usb/serial/hid,
+    file pickers, print, storage-access, and file-input clicks so they log to
+    window.__bh_blockers__ when triggered. Idempotent per page.
+    Returns the result of Page.addScriptToEvaluateOnNewDocument.
+    """
+    cdp("Page.enable")
+    return cdp("Page.addScriptToEvaluateOnNewDocument", source=BLOCKER_JS)
+
+
+def pending_blockers(clear_js=False):
+    """Return records of OS-native popups from JS probe and CDP events.
+
+    JS-side: permission-gated API calls logged by install_blocker_probe().
+    CDP-side: Page.javascriptDialogOpening, Page.fileChooserOpened, Page.downloadWillBegin.
+    Returns {"cdp": [...], "js": [...]}. Falls back to CDP-only if JS is frozen.
+    """
+    cdp_side = _send({"meta": "pending_blockers"}).get("blockers") or []
+    js_expr = "(function(){const a=window.__bh_blockers__||[];" + \
+              ("window.__bh_blockers__=[];" if clear_js else "") + \
+              "return a;})()"
+    try:
+        raw = js(js_expr)
+    except Exception:
+        raw = None
+    js_side = raw if isinstance(raw, list) else []
+    return {"cdp": cdp_side, "js": js_side}
+
+
+def dismiss_dialog(accept=True):
+    """Dismiss a native browser dialog via CDP. Undetectable by antibot.
+
+    Works even when the JS thread is frozen. Peeks at buffered CDP events first
+    to extract dialog info. Returns {type, message, url} or None if no dialog.
+    """
+    events = drain_events()
+    info = None
+    for e in events:
+        if e.get("method") == "Page.javascriptDialogOpening":
+            p = e.get("params", {})
+            info = {"type": p.get("type", ""), "message": p.get("message", ""), "url": p.get("url", "")}
+    try:
+        cdp("Page.handleJavaScriptDialog", accept=accept)
+        if not info:
+            info = {"type": "unknown", "message": "", "url": ""}
+    except Exception:
+        pass
+    return info
+
+
+def capture_dialogs():
+    """Stub window.alert/confirm/prompt so they never block. Detectable by antibot.
+
+    Call BEFORE the action that triggers the dialog; read with dialogs().
+    For beforeunload or frozen pages, use dismiss_dialog() instead.
+    """
+    js("window.__bh_dialogs__=[];window.alert=m=>window.__bh_dialogs__.push(String(m));"
+       "window.confirm=m=>{window.__bh_dialogs__.push(String(m));return true;};"
+       "window.prompt=(m,d)=>{window.__bh_dialogs__.push(String(m));return d||'';}")
+
+
+def dialogs():
+    """Return list of captured dialog messages since last capture_dialogs()."""
+    return js("window.__bh_dialogs__||[]") or []
+
+
+def grant_permissions(origin, permissions):
+    """Pre-grant browser permissions for an origin. Prevents popups.
+
+    Common permissions: geolocation, notifications, microphone, camera,
+    clipboard-read, clipboard-write. Must be called before the page requests.
+    """
+    return cdp("Browser.grantPermissions", origin=origin, permissions=permissions)
+
+
+def set_geolocation(lat, lon, accuracy=100):
+    """Override browser geolocation. Prevents geolocation permission popups."""
+    return cdp("Emulation.setGeolocationOverride",
+               latitude=lat, longitude=lon, accuracy=accuracy)
 
 
 _KC = {"Enter": 13, "Tab": 9, "Escape": 27, "Backspace": 8, " ": 32, "ArrowLeft": 37, "ArrowUp": 38, "ArrowRight": 39, "ArrowDown": 40}
