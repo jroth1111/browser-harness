@@ -1802,3 +1802,100 @@ def test_replay_endpoints_captures_errors():
     assert result["results"][0]["status_match"] is False
     assert result["results"][0]["replay_status"] == 403
     assert result["summary"]["errors"] == 0
+
+
+def test_install_blocker_probe_enables_page_and_injects_script():
+    calls = []
+    with patch("helpers.cdp", side_effect=lambda m, **kw: calls.append(m) or {"identifier": "1"}):
+        result = helpers.install_blocker_probe()
+    assert calls == ["Page.enable", "Page.addScriptToEvaluateOnNewDocument"]
+    assert result["identifier"] == "1"
+
+
+def test_pending_blockers_returns_cdp_and_js_sides():
+    cdp_blockers = [{"kind": "dialog", "params": {"type": "alert"}, "t": 1.0}]
+    js_blockers = [{"kind": "geolocation", "t": 2.0}]
+    with patch("helpers._send", return_value={"blockers": cdp_blockers}), \
+         patch("helpers.js", return_value=js_blockers):
+        result = helpers.pending_blockers()
+    assert result["cdp"] == cdp_blockers
+    assert result["js"] == js_blockers
+
+
+def test_pending_blockers_clears_js_when_requested():
+    with patch("helpers._send", return_value={"blockers": []}), \
+         patch("helpers.js", return_value=[]) as mock_js:
+        helpers.pending_blockers(clear_js=True)
+    expr = mock_js.call_args[0][0]
+    assert "window.__bh_blockers__=[]" in expr
+
+
+def test_pending_blockers_handles_js_frozen_gracefully():
+    with patch("helpers._send", return_value={"blockers": []}), \
+         patch("helpers.js", side_effect=RuntimeError("JS frozen")):
+        result = helpers.pending_blockers()
+    assert result == {"cdp": [], "js": []}
+
+
+def test_pending_blockers_empty_when_no_blockers():
+    with patch("helpers._send", return_value={"blockers": []}), \
+         patch("helpers.js", return_value=None):
+        result = helpers.pending_blockers()
+    assert result == {"cdp": [], "js": []}
+
+
+def test_dismiss_dialog_accepts_and_returns_info():
+    dialog_event = {
+        "method": "Page.javascriptDialogOpening",
+        "params": {"type": "confirm", "message": "Are you sure?", "url": "https://example.com"},
+    }
+    with patch("helpers.drain_events", return_value=[dialog_event]), \
+         patch("helpers.cdp", return_value={}):
+        info = helpers.dismiss_dialog(accept=True)
+    assert info["type"] == "confirm"
+    assert info["message"] == "Are you sure?"
+    assert helpers.cdp == helpers.cdp  # sanity
+
+
+def test_dismiss_dialog_returns_none_when_no_dialog():
+    with patch("helpers.drain_events", return_value=[]), \
+         patch("helpers.cdp", side_effect=Exception("no dialog")):
+        info = helpers.dismiss_dialog()
+    assert info is None
+
+
+def test_capture_dialogs_stubs_window_methods():
+    with patch("helpers.js") as mock_js:
+        helpers.capture_dialogs()
+    expr = mock_js.call_args[0][0]
+    assert "window.__bh_dialogs__" in expr
+    assert "window.alert" in expr
+    assert "window.confirm" in expr
+    assert "window.prompt" in expr
+
+
+def test_dialogs_returns_captured_messages():
+    with patch("helpers.js", return_value=["hello", "world"]):
+        result = helpers.dialogs()
+    assert result == ["hello", "world"]
+
+
+def test_grant_permissions_calls_browser_grantPermissions():
+    with patch("helpers.cdp", return_value={}) as mock_cdp:
+        helpers.grant_permissions("https://example.com", ["geolocation", "notifications"])
+    mock_cdp.assert_called_once_with(
+        "Browser.grantPermissions",
+        origin="https://example.com",
+        permissions=["geolocation", "notifications"],
+    )
+
+
+def test_set_geolocation_calls_emulation_setGeolocationOverride():
+    with patch("helpers.cdp", return_value={}) as mock_cdp:
+        helpers.set_geolocation(37.7749, -122.4194, accuracy=50)
+    mock_cdp.assert_called_once_with(
+        "Emulation.setGeolocationOverride",
+        latitude=37.7749,
+        longitude=-122.4194,
+        accuracy=50,
+    )

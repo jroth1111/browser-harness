@@ -409,3 +409,50 @@ def test_malformed_devtools_active_port_skipped_gracefully(tmp_path, monkeypatch
         assert "not found" in str(e).lower() or "DevToolsActivePort" in str(e)
     else:
         raise AssertionError("expected RuntimeError — no valid DevToolsActivePort should be found")
+
+
+def test_daemon_pending_blockers_returns_empty_initially():
+    d = daemon.Daemon()
+    assert d.blockers.maxlen == 200
+    result = asyncio.run(d.handle({"meta": "pending_blockers"}))
+    assert result == {"blockers": []}
+
+
+def test_daemon_pending_blockers_returns_and_clears():
+    d = daemon.Daemon()
+    d.blockers.append({"kind": "dialog", "params": {"type": "alert"}, "t": 1.0})
+    d.blockers.append({"kind": "fileChooserOpened", "params": {}, "t": 2.0})
+    result = asyncio.run(d.handle({"meta": "pending_blockers"}))
+    assert len(result["blockers"]) == 2
+    assert result["blockers"][0]["kind"] == "dialog"
+    assert result["blockers"][1]["kind"] == "fileChooserOpened"
+    assert len(d.blockers) == 0
+
+
+def test_daemon_blockers_capped_at_200():
+    d = daemon.Daemon()
+    for i in range(250):
+        d.blockers.append({"kind": "dialog", "params": {}, "t": float(i)})
+    assert len(d.blockers) == 200
+    assert d.blockers[0]["t"] == 50.0
+    assert d.blockers[-1]["t"] == 249.0
+
+
+def test_daemon_dialog_event_appended_to_blockers():
+    d = daemon.Daemon()
+    assert d.dialog is None
+    assert len(d.blockers) == 0
+    # Simulate what tap() does
+    params = {"type": "confirm", "message": "Are you sure?", "url": "https://example.com"}
+    d.dialog = params
+    d.blockers.append({"kind": "dialog", "params": params, "t": 1.0})
+    assert d.dialog == params
+    assert len(d.blockers) == 1
+    assert d.blockers[0]["kind"] == "dialog"
+
+
+def test_daemon_file_chooser_appended_to_blockers():
+    d = daemon.Daemon()
+    d.blockers.append({"kind": "fileChooserOpened", "params": {"mode": "selectSingle"}, "t": 1.0})
+    assert len(d.blockers) == 1
+    assert d.blockers[0]["kind"] == "fileChooserOpened"
