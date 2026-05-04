@@ -39,18 +39,27 @@ Consent gates, rate limits, and anti-detection for Uber Eats and DoorDash automa
 - Variable timing between all actions (use ranges above, never fixed delays).
 - Navigate to a restaurant page without immediately interacting — browse behavior.
 - Do not rapidly cycle through restaurants in sequence.
-- Take occasional screenshots without action — mimics reading.
-- After 15-20 restaurant pages, consider a short break (10-30s).
-- Do not repeatedly add and remove items from cart.
+- After 15-20 restaurant pages, take a short break (10-30s).
+- Scripts handle this automatically via SafetyGate and random_delay().
 
 ## Block / CAPTCHA handling
 
-1. `wait_for_content()` returns `{block: true}` or `{ok: false}` → **stop immediately**.
-2. `capture_screenshot()` to document the block state.
-3. Notify user with the block reason.
-4. Do not attempt to bypass CAPTCHA or WAF challenges automatically.
-5. If user authorizes recovery, follow `interaction-skills/waf-bypass.md`.
-6. Log the block event: platform, URL, reason, timestamp.
+Both platforms may trigger blocks mid-session. The scripts handle this:
+
+```python
+# DoorDash Cloudflare Turnstile block
+src = sb.driver.page_source[:1000]
+if "Verify you are human" in src or "access denied" in src.lower():
+    sb.uc_gui_click_captcha()  # OS-level click, not CDP
+    time.sleep(5)
+    # Check if still blocked — if so, skip and continue
+```
+
+Manual escalation:
+1. Stop immediately on any block that `uc_gui_click_captcha()` doesn't clear.
+2. Do not attempt to bypass via CDP or JS injection — it won't work.
+3. Use `--resume` checkpoint to continue from where the session stopped.
+4. Re-run the cookie capture flow in overview.md if session is expired.
 
 ## Order audit trail
 
@@ -61,9 +70,9 @@ Store in `.private-data/order-log.md` (gitignored).
 ## Emergency stop
 
 Halt immediately on:
-- Any block or CAPTCHA page.
+- Any block or CAPTCHA page that doesn't clear with `uc_gui_click_captcha()`.
 - Auth redirect (user logged out mid-session).
 - Unexpected page state (checkout shows different items than expected).
 - User says "stop" at any point.
 
-No queued actions. Log where the session stopped.
+No queued actions. Log where the session stopped. Use `--resume` to continue later.
