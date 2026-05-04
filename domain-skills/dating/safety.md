@@ -33,7 +33,6 @@ Regardless of configured level, these always require explicit user confirmation:
 - Messages to matches the user hasn't interacted with in 7+ days
 - Any action when the AI confidence is below 50%
 - Opening or reviewing any existing conversation
-- Any review of more than 3 conversations in a session (does not apply to slow UI-only chat extraction with checkpointing — see `chat-audit.md`)
 
 These actions are never allowed:
 - Direct platform API calls, including `api.gotinder.com` — all data comes through browser UI
@@ -51,23 +50,20 @@ These actions are never allowed:
 | Between opening chats | 15.0s | 45.0s | User-paced, not bulk |
 | After navigation | 1.0s | — | Wait for content |
 
-### Session limits
+### Pacing guidelines
 
-| Limit | Default | Maximum | Rationale |
-|---|---|---|---|
-| Swipes per session | 80 | 200 | User-configurable in onboarding (see `onboarding.md`). Account-safety floor: never exceed 200. |
-| Messages per session | 10 | 20 | Avoid spam detection |
-| Existing conversations reviewed | 3 | 5 | User-selected sample for live review |
-| Chat extraction per session | No hard cap | No hard cap | Slow UI-only crawl with checkpointing (see `chat-audit.md`). Pacing rules self-limit. GDPR export (Path 1) is exempt from all limits — no browser interaction. |
-| Session duration | 20 min | 45 min | Avoid prolonged bot-like sessions |
-| Concurrent conversations | 3 | 5 | Quality over quantity |
+No hard caps. Pacing rules and break scheduling keep behavior human-like. The user controls when to stop.
 
-### Break scheduling
-
-- After every 10 swipes: pause 60-120 seconds
-- After every 5 messages: pause 120-240 seconds
-- After each reviewed existing conversation: pause and ask whether to continue
-- After session limit: stop completely, report summary
+| Action | Pacing | Purpose |
+|---|---|---|
+| Between swipes | 1.5-5.0s random | Human-like rhythm |
+| Between messages | 2.0-5.0s random | Human-like rhythm |
+| Between opening chats | 15-45s | User-paced, not bulk |
+| After every 10 swipes | Pause 60-120s | Break cadence |
+| After every 5 messages | Pause 120-240s | Break cadence |
+| After each conversation | Pause and ask whether to continue | User control |
+| Chat extraction | No hard cap, pacing self-limits | See `chat-audit.md` |
+| GDPR export | No limits — no browser interaction | Instant, zero risk |
 
 ## Anti-detection countermeasures
 
@@ -76,7 +72,7 @@ These actions are never allowed:
 1. **Variable timing**: Never use fixed intervals. Randomize all delays.
 2. **Profile engagement**: Occasionally scroll through full profile (3-8 seconds) before swiping, rather than always swiping instantly.
 3. **Navigation variety**: Occasionally navigate away from the swipe stack and back. Visit matches page, then return.
-4. **Session breaks**: Never run for extended periods without breaks. Respect session duration limits.
+4. **Session breaks**: Never run for extended periods without breaks. Follow pacing guidelines above.
 5. **Message uniqueness**: Never send identical messages to multiple matches. Each message must be unique and context-specific.
 6. **No direct APIs**: Never call platform private APIs or read auth tokens from browser storage.
 7. **Read-before-send**: Review the relevant visible conversation before drafting a reply, but only for the user-selected conversation being handled.

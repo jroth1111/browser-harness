@@ -123,12 +123,12 @@ Ask the user to set their consent level for each action type:
 | **Full auto** | Auto-swipe all, log decisions |
 | **Full auto with threshold** | Auto-swipe below score threshold, show above |
 
-### Session limits
-| Setting | Default | Range |
-|---|---|---|
-| Max swipes per session | 80 | 20-200 |
-| Max messages per session | 40 | 10-100 |
-| Session duration limit | 30 min | 10-120 min |
+### Pacing preferences
+| Setting | Default |
+|---|---|
+| Swipe pace | Comfortable (1.5-5s between) |
+| Message pace | Comfortable (2-5s between) |
+| Break frequency | Every 10 swipes / 5 messages |
 
 Record consent configuration in `.private-data/user-model.md`.
 

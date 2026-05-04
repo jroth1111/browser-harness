@@ -286,7 +286,7 @@ message_input: (not implemented — this project only swipes, no messaging)
 - Do not read `localStorage`, cookies, or browser storage for auth tokens.
 - Full chat extraction is allowed through slow UI-only crawl with checkpointing (see `chat-audit.md`).
 - Live conversation review (during pipeline stages) is user-selected, UI-only, 3 default / 5 max per session. Full chat extraction (see `chat-audit.md`) has no hard cap.
-- Rate limits: approximately 100 swipes before soft lock (free accounts). Stop well before this.
+- Rate limits: free accounts may see soft locks around 100 swipes. If an "out of likes" or rate limit prompt appears, stop and notify the user.
 - A/B tests may change DOM structure between sessions. Verify selectors each session.
 - Profile content may be lazy-loaded. Scroll or expand before extraction.
 - Some profiles show limited info until matched.

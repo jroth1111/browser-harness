@@ -43,7 +43,7 @@ Seven stages from onboarding to date coordination. Each stage specifies what the
   7. `wait(1.5 + random * 3.5)` — human-like timing.
   8. Check for match notification. If match: add to match queue.
   9. Repeat until: user says stop, hit rate limit, no more profiles, or session swipe limit reached.
-- **Safety**: Stop after session swipe limit (default 80). Vary timing. See `safety.md`.
+- **Safety**: Stop when user says stop, or block/CAPTCHA detected. Vary timing. See `safety.md`.
 - **Next**: Match Review.
 
 ## Stage 3: Match Review
@@ -81,7 +81,7 @@ Seven stages from onboarding to date coordination. Each stage specifies what the
 
 - **Trigger**: User wants to check conversations or monitor for new messages.
 - **Browser**: Navigate to chat list. Inspect only user-selected or visibly unread conversations.
-- **Per active conversation** (maximum 3 per session unless user explicitly raises to 5):
+- **Per active conversation**:
   1. Navigate to conversation through the normal UI. Do not call platform APIs, read auth tokens, or download full history.
   2. Apply `references/profile-conversation-read.md` to read the conversation.
   3. Classify stage (opening, early rally, banter, compatibility discovery, etc.).

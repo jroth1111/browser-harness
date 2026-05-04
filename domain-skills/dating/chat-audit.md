@@ -237,7 +237,7 @@ On session start, check if `.private-data/extraction-state.json` exists:
 | Between completing one conversation and starting the next | 8-15s | Uniform random |
 | After every 5 conversations | 60-120s | Break |
 
-### Session limits
+### Pacing
 
 No hard cap on conversations per session. The pacing rules and break scheduling naturally limit throughput. If the user wants to stop, they say "stop" — the checkpoint saves progress and they can resume in a future session.
 

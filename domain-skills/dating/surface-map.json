@@ -29,7 +29,6 @@
       "captcha",
       "auth_required",
       "user_cancelled",
-      "session_limit_reached",
       "unhandled_popup"
     ],
     "fallback_on": [
