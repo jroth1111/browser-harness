@@ -101,17 +101,19 @@ Patchright patches Playwright at the driver level:
 
 ## Escalation path
 
-If Patchright fails on a specific site, the next escalation is **Camoufox**
-(`pip install camoufox`). Camoufox patches Firefox at the C++ level — TLS
-fingerprint, canvas, WebGL, audio context, and font enumeration are all
-spoofed at the engine level. This is fundamentally harder to detect than any
-Chromium-based approach that relies on CDP patches.
+Three tiers. The domain skill records which tier works at field-test time:
 
-Escalation sequence:
-1. **CDP path** (helpers.py) — try first, works for most sites
-2. **`solve_turnstile()`** — for Cloudflare challenges that the CDP path hits
-3. **Patchright** (`stealth_session()`) — CDP detection bypass, passes Turnstile
-4. **Camoufox** — engine-level fingerprint spoofing, Firefox-based
+1. **`curl_cffi`** — impersonates real TLS fingerprint. Sufficient for most sites.
+2. **CDP browser** + `solve_turnstile()` — full Chrome rendering. Turnstile solving
+   is a fix within this tier, not a separate one. If CDP is detected at the protocol
+   level (`Runtime.enable` fingerprints), this tier fails entirely — skip to tier 3.
+3. **Patchright** (`stealth_session()`) — different browser backend that avoids
+   CDP detection entirely.
+
+If Patchright also fails, the next option is **Camoufox** (`pip install camoufox`).
+Camoufox patches Firefox at the C++ level — TLS, canvas, WebGL, audio, and font
+fingerprints are all spoofed at the engine level. This is fundamentally harder to
+detect than any Chromium-based approach.
 
 ## Relationship to Other Skills
 

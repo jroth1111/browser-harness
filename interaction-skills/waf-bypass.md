@@ -68,11 +68,12 @@ When a page is blocked, try these in order:
    is available. This covers the common case where a headless fetch fails but
    a real browser session succeeds.
 
-6. **Use the stealth browser.** When Turnstile cannot be solved through the CDP
-   path, `stealth_session()` from `stealth_helpers.py` launches a Patchright
-   browser that passes Cloudflare Turnstile natively. Patchright avoids the
-   `Runtime.enable` and `Console.enable` CDP commands that sites use for
-   automation detection. See `interaction-skills/stealth-browser.md`.
+6. **Use the stealth browser.** If the CDP path is detected at the protocol
+   level (`Runtime.enable` fingerprints) or Turnstile cannot be solved,
+   `stealth_session()` from `stealth_helpers.py` launches a Patchright browser
+   that passes Cloudflare Turnstile natively. This is a different backend
+   entirely (tier 3), not a fix on the CDP session. See
+   `interaction-skills/stealth-browser.md`.
 
 ## When to stop
 

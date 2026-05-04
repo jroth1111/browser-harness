@@ -337,8 +337,8 @@ Post: Filter by relevance → export CSV
   content to render, replacing `wait_for_load()` + fixed delay
 - If `wait_for_content()` returns `block: true`, emit `__UNOBSERVABLE__` for all
   fields instead of running extraction JS on the challenge page
-- **Stealth fallback**: If CDP session hits Turnstile that `solve_turnstile()` cannot pass,
-  use Patchright stealth browser:
+- **Stealth fallback**: If the CDP path is detected at the protocol level or
+  Turnstile cannot be solved, use Patchright stealth browser (tier 3):
 
 ```python
 from stealth_helpers import stealth_session
