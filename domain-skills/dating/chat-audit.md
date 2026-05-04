@@ -1,16 +1,75 @@
-# Chat Audit — Slow Resumable Browser UI Extraction
+# Chat Audit — Full Conversation Extraction
 
-Extracts all conversations through the browser UI — no private APIs, no token reading, no direct `api.gotinder.com` calls. Simulates a human browsing their chat history at a leisurely pace. Checkpoints after each conversation so extraction can pause and resume across sessions.
+Three extraction paths, ordered by speed. All avoid private APIs and token reading.
+
+1. **GDPR export** (fastest, zero browser interaction) — user provides Tinder's data export JSON
+2. **Browser UI crawl** (slow, resumable) — simulates a human browsing chat history at leisurely pace
+3. **Manual paste** (fallback) — user pastes specific conversations into the conversation
 
 ## Hard rules
 
 - **Never call platform private APIs** (`api.gotinder.com` etc.)
 - **Never read auth tokens** from `localStorage`, cookies, or browser storage
-- **Never extract data via any path other than visible browser DOM**
-- **Always checkpoint** after completing each conversation
-- **Always respect pacing** — this is slow by design
+- **Browser extraction must go through visible DOM only**
+- **Always checkpoint** after completing each conversation (browser crawl)
+- **Always respect pacing** — browser crawling is slow by design
 
-## Prerequisites
+## Path 1: GDPR export (fast path)
+
+Tinder provides a full data export at Settings → Download My Data. The user requests it, Tinder emails a download link (typically within 24-48 hours). The JSON file contains full message history, match list, usage stats, and profile data.
+
+### GDPR export schema (confirmed from swipestats.io parser)
+
+```
+{
+  "User": {
+    "birth_date", "create_date", "gender", "bio",
+    "city": { "name", "region" },
+    "education", "jobs": [{ "company": { "name" }, "title": { "name" } }],
+    "schools": [{ "name", "displayed" }],
+    "interests": [{ "name" }],
+    "descriptors": [{ "name", "choices", "visibility" }],
+    "sexual_orientations", "email", "full_name"
+  },
+  "Usage": {
+    "app_opens": { "date": count },
+    "swipes_likes": { "date": count },
+    "swipes_passes": { "date": count },
+    "matches": { "date": count },
+    "messages_sent": { "date": count },
+    "messages_received": { "date": count }
+  },
+  "Messages": [
+    {
+      "match_id": "string",
+      "messages": [
+        { "to", "from", "message", "sent_date", "type": "gif|gesture|activity|contact_card|swipe_note|undefined" }
+      ]
+    }
+  ],
+  "Photos": ["url"] | [{ "id", "url", "created_at", "selfie_verified" }],
+  "Purchases": { "subscription": [], "consumable": [] }
+}
+```
+
+Note: 2025+ exports use `TinderPhoto[]` objects instead of `string[]` URLs. Handle both formats.
+
+### GDPR parsing process
+
+1. User provides the JSON file path
+2. Parse `Messages` array — each entry is a match with its full message thread
+3. Cross-reference `User` for self-profile data
+4. Cross-reference `Usage` for activity patterns (swipe rates, match rates over time)
+5. Write parsed data to `.private-data/extraction-state.json` in the same format as browser extraction
+6. Skip directly to Analysis section
+
+GDPR data is richer than browser extraction (includes usage stats, purchase history, full match list with unmatched conversations). Prefer this path when available.
+
+## Path 2: Browser UI crawl (slow path)
+
+Simulates a human browsing their chat history. Checkpoints after each conversation so extraction can pause and resume across sessions.
+
+### Prerequisites
 
 - User is logged into the target platform in Chrome
 - Browser-harness is connected
@@ -29,15 +88,17 @@ sidebar_link:  "nav a[href*='/app/messages/']"
 
 **Process:**
 1. Navigate to `https://tinder.com/app/messages`
-2. Wait for sidebar to load
-3. Run extraction JS to collect visible sidebar links
-4. Scroll the sidebar down
-5. Wait 2-4 seconds
-6. Repeat from step 3
-7. **Saturation**: 3 consecutive scrolls with 0 new entries = chat list complete
-8. Save discovered chat list to `.private-data/extraction-state.json`
+2. **Dismiss popups** — Tinder shows a chain of popups after navigation (cookie consent, location permission, notification prompt, upgrade nags). Dismiss each by pressing Escape or clicking dismiss/close buttons. If a popup blocks the sidebar, handle it before continuing.
+3. Wait for sidebar to load
+4. Run extraction JS to collect visible sidebar links
+5. **Filter out non-chat links** — exclude URLs containing `likes-you` or `my-lices` (these are not conversations)
+6. Scroll the sidebar container via JS: `el.scrollTop = el.scrollHeight`, then compare `scrollHeight` before and after. If unchanged, scroll is saturated.
+7. Wait 2-4 seconds
+8. Repeat from step 4
+9. **Saturation**: 3 consecutive scrolls with 0 new entries = chat list complete
+10. Save discovered chat list to `.private-data/extraction-state.json`
 
-**Extraction JS:**
+**Sidebar extraction JS:**
 ```javascript
 () => {
   const links = document.querySelectorAll('nav a[href*="/app/messages/"]');
@@ -45,6 +106,8 @@ sidebar_link:  "nav a[href*='/app/messages/']"
   for (const link of links) {
     const url = link.href;
     const matchId = url.split('/app/messages/')[1] || '';
+    // Filter out non-chat sidebar links
+    if (matchId === 'likes-you' || matchId === 'my-lices' || matchId === '') continue;
     const name = link.textContent.trim();
     convos.push({ name, matchId, url });
   }
@@ -52,32 +115,45 @@ sidebar_link:  "nav a[href*='/app/messages/']"
 }
 ```
 
+**Sidebar scroll JS:**
+```javascript
+(el) => {
+  const before = el.scrollHeight;
+  el.scrollTop = el.scrollHeight;
+  return { before, after: el.scrollHeight, changed: el.scrollHeight !== before };
+}
+```
+
 ### Phase 2: Thread extraction
 
 Iterate through the discovered chat list. One conversation per step.
 
-**Selectors (Tinder, confirmed):**
+**Selectors (Tinder, confirmed — with fallback chain):**
 ```
 conversation_log:  "[role='log']"
 message_article:   "[role='log'] [role='article']"
-sender:            "strong.Hidden"  →  textContent minus ":"
-message_text:      "span.text"
+sender_primary:    "strong.Hidden"  →  textContent minus ":"
+sender_fallback:   Yahoo-style class — "Ta(e)" = sent by user, "Ta(start)" = received (less stable)
+message_text:      "span.text"  →  fallback: "span[class*='text']"  →  fallback: "div.msg > span"
 timestamp:         "time"  →  textContent + datetime attribute
-is_user_sent:      sender === "You"
+is_user_sent:      sender === "You"  →  fallback: class contains "Ta(e)"
 ```
+
+Selector priority: a11y attributes (`strong.Hidden`, `role`, `aria-label`) over Yahoo-style CSS classes (`Ta(e)`, `Px(16px)`) which change across builds.
 
 **Per-conversation process:**
 1. Click the sidebar link for the next pending conversation (not URL navigation — more human-like)
 2. Wait 3-6 seconds (simulating reading the opening messages)
-3. Extract visible messages via JS
-4. If the conversation has older messages (scroll-up arrow or "load more" present), scroll up within the conversation log
-5. Wait 2-4 seconds per scroll
-6. Extract newly loaded messages, deduplicate against already-extracted
-7. **Saturation**: 3 consecutive scrolls with 0 new messages = thread complete
-8. Mark conversation as `complete` in checkpoint
-9. Wait 8-15 seconds before starting the next conversation
+3. **Dismiss any popups** — upgrade nags, "It's a Match!" modals, rate-limit warnings. Press Escape or click dismiss. If a CAPTCHA or account restriction appears, stop immediately (see safety.md).
+4. Extract visible messages via JS
+5. If the conversation has older messages, scroll up within the conversation log: `log.scrollTop = 0`, then compare `scrollHeight` before/after
+6. Wait 2-4 seconds per scroll
+7. Extract newly loaded messages, deduplicate against already-extracted
+8. **Saturation**: 3 consecutive scrolls with 0 new messages = thread complete
+9. Mark conversation as `complete` in checkpoint
+10. Wait 8-15 seconds before starting the next conversation
 
-**Thread extraction JS:**
+**Thread extraction JS (with fallback selectors):**
 ```javascript
 () => {
   const log = document.querySelector("[role='log']");
@@ -85,18 +161,32 @@ is_user_sent:      sender === "You"
   const articles = log.querySelectorAll("[role='article']");
   const messages = [];
   for (const art of articles) {
+    // Sender: primary selector → fallback to Yahoo-style class detection
     const senderEl = art.querySelector("strong.Hidden");
-    const sender = senderEl
+    let sender = senderEl
       ? senderEl.textContent.replace(":", "").trim()
       : "unknown";
+    let isSent = sender === "You";
+
+    // Fallback: Ta(e) = sent by user, Ta(start) = received
+    if (sender === "unknown") {
+      const classStr = art.className || "";
+      if (classStr.includes("Ta(e)")) { sender = "You"; isSent = true; }
+      else if (classStr.includes("Ta(start)")) { sender = "match"; isSent = false; }
+    }
+
+    // Message text: primary → class partial match → div.msg > span
     const textEl =
       art.querySelector("span.text") ||
-      art.querySelector("span[class*='text']");
+      art.querySelector("span[class*='text']") ||
+      art.querySelector("div.msg > span");
     const text = textEl ? textEl.textContent.trim() : "";
+
+    // Timestamp
     const timeEl = art.querySelector("time");
     const time = timeEl ? timeEl.textContent.trim() : "";
     const datetime = timeEl ? timeEl.getAttribute("datetime") : "";
-    const isSent = sender === "You";
+
     messages.push({ sender, text, time, datetime, isSent });
   }
   return messages;
@@ -152,9 +242,10 @@ On session start, check if `.private-data/extraction-state.json` exists:
 No hard cap on conversations per session. The pacing rules and break scheduling naturally limit throughput. If the user wants to stop, they say "stop" — the checkpoint saves progress and they can resume in a future session.
 
 The extraction stops automatically on:
-- Block/CAPTCHA/account restriction detected
+- Block/CAPTCHA/account restriction detected (popup that cannot be dismissed with Escape)
 - User says "stop" or "pause"
 - Login session expires (redirect to login page)
+- Unexpected popup that doesn't match known dismissal patterns (cookie consent, location, notification, upgrade nag, match modal)
 
 ## Analysis
 
@@ -262,3 +353,14 @@ The full extraction can run at any point in the onboarding flow:
 3. **After interview**: Interview runs first for basic fields, extraction enriches with real behavioral data.
 
 Recommended: **After**. Manual interview is the primary source; chat extraction calibrates and enriches.
+
+## Path 3: Manual paste (fallback)
+
+If GDPR export is unavailable and browser extraction isn't feasible, the user can paste conversations directly. For each pasted conversation, extract the same fields (sender, text, timestamp) and add to the analysis pipeline. This is lower fidelity (no timestamps sometimes, no metadata) but works for specific conversations the user wants analyzed.
+
+## Path selection
+
+Ask the user which path to use:
+1. **GDPR export available?** → Use Path 1 (fastest, richest data)
+2. **No GDPR, browser available and logged in?** → Use Path 2 (slow but complete)
+3. **Neither?** → Use Path 3 (manual, selective)

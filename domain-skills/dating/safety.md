@@ -81,6 +81,8 @@ These actions are never allowed:
 6. **No direct APIs**: Never call platform private APIs or read auth tokens from browser storage.
 7. **Read-before-send**: Review the relevant visible conversation before drafting a reply, but only for the user-selected conversation being handled.
 8. **Extraction pacing**: Full chat extraction via UI crawl must follow pacing rules in `chat-audit.md` — 3-6s between navigation, 2-4s between scrolls, 8-15s between conversations, checkpoint after each.
+9. **Popup chain handling**: Tinder shows 7+ popup types in sequence after login/navigation. Dismiss each with Escape. If a popup can't be dismissed, stop and notify the user.
+10. **Photo cycling**: Use SPACE key to cycle through profile photos (0.4s pause between) — this is how the keen-slider carousel works. More natural than clicking navigation arrows.
 
 ### Fingerprint reduction
 
@@ -103,6 +105,7 @@ Stop immediately if any of these appear:
 - Unusually fast rate limit (signals detection)
 - Page content doesn't match expected structure
 - Element selectors fail repeatedly (may indicate DOM changes or block)
+- Unexpected popup that doesn't match known dismissal patterns (known popups: cookie consent, location permission, notification prompt, upgrade nags, match modal — all dismissible with Escape)
 
 ### Response protocol
 

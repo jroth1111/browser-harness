@@ -32,10 +32,19 @@ Run these in order. Skip any the user declines to provide.
 - What the user chose to present reveals self-perception and intent
 - Photo selection patterns reveal self-presentation style
 
-### 5. Existing chat threads (slow UI-only extraction — see `chat-audit.md`)
-- Full chat extraction through slow browser UI crawl with checkpointing.
+### 5. Existing chat threads — three paths (see `chat-audit.md`)
+
+**Path 1: GDPR export (preferred when available)**
+- User requests data export from Tinder settings → receives JSON with full message history
+- Contains: all messages, usage stats, match list, profile data
+- Zero browser interaction, richest data source
+
+**Path 2: Browser UI crawl**
+- Full chat extraction through slow browser UI crawl with checkpointing
 - Resumable across sessions. No API access or token reading.
-- Extract patterns: what messages the user sent, what landed, what fell flat.
+
+**Path 3: Manual paste**
+- User pastes specific conversations for selective analysis
 
 ## How to run
 

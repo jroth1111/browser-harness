@@ -7,9 +7,10 @@ Seven stages from onboarding to date coordination. Each stage specifies what the
 - **Trigger**: No `.private-data/user-model.md` exists, or user requests profile update.
 - **Options** (offer in this order):
   1. **Manual interview** — `onboarding.md` — structured Q&A. Safest primary source.
-  2. **Deep research** — `references/research-user.md` — scan user-approved digital footprint to pre-populate user model.
-  3. **Full chat extraction** — `chat-audit.md` — slow UI-only crawl of all conversations with checkpointing. Resumable across sessions. No API access or token reading.
-- **Browser**: None for manual interview. Browser use for chat extraction is UI-only with checkpointing (see `chat-audit.md`).
+  2. **GDPR export** — `chat-audit.md` Path 1 — user provides Tinder's data export JSON. Fastest path, richest data. Zero browser interaction.
+  3. **Full chat extraction** — `chat-audit.md` Path 2 — slow UI-only crawl of all conversations with checkpointing. Resumable across sessions. No API access or token reading.
+  4. **Deep research** — `references/research-user.md` — scan user-approved digital footprint to pre-populate user model.
+- **Browser**: None for manual interview or GDPR export. Browser use for chat extraction is UI-only with checkpointing (see `chat-audit.md`).
 - **AI**: Build user model and voiceprint using chosen method.
 - **Output**: `.private-data/user-model.md`, `.private-data/voiceprint.md`, `.private-data/outcome-log.md` (if chat extraction is used).
 - **Next**: User selects a platform and action.

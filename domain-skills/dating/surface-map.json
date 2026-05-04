@@ -29,7 +29,8 @@
       "captcha",
       "auth_required",
       "user_cancelled",
-      "session_limit_reached"
+      "session_limit_reached",
+      "unhandled_popup"
     ],
     "fallback_on": [
       "selector_drift",
@@ -212,11 +213,13 @@
             "conversation_log": "[role='log']",
             "message_article": "[role='article']",
             "sender": "strong.Hidden",
+            "sender_fallback": "Yahoo-style class Ta(e)=sent, Ta(start)=received (less stable, changes across builds)",
             "message_text": "span.text",
+            "message_text_fallback": "span[class*='text'] or div.msg > span",
             "timestamp": "time",
             "is_user_sent": "sender textContent === 'You'"
           },
-          "notes": "Scroll up within [role='log'] to load older messages. Saturation at 3 consecutive zero-new scrolls."
+          "notes": "Scroll up within [role='log'] to load older messages. Saturation at 3 consecutive zero-new scrolls. Dismiss popups (upgrade nags, match modals) with Escape before extraction."
         },
         "hinge": {
           "status": "DEFERRED"
