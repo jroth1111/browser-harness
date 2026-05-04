@@ -11,7 +11,7 @@ import time
 import urllib.request
 from collections import deque
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 try:
     from cdp_use.client import CDPClient
@@ -63,6 +63,10 @@ PROFILES = [
 ]
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
 BROWSER_SCOPED_PREFIXES = ("Browser.", "Target.", "Storage.")
+_SENSITIVE_QUERY_KEY_RE = __import__("re").compile(
+    r"(token|secret|password|passwd|auth|authorization|credential|key|signature|sig|session)",
+    __import__("re").I,
+)
 
 
 def log(msg):
@@ -105,12 +109,26 @@ def _merge_warnings(*warning_lists):
 
 def _redact_url(url):
     parsed = urlparse(url)
+    query = parsed.query
+    if query:
+        pairs = []
+        changed = False
+        for key, value in parse_qsl(query, keep_blank_values=True):
+            if _SENSITIVE_QUERY_KEY_RE.search(key):
+                pairs.append((key, "REDACTED"))
+                changed = True
+            else:
+                pairs.append((key, value))
+        if changed:
+            query = urlencode(pairs)
     if not parsed.username and not parsed.password:
+        if query != parsed.query:
+            return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", query, parsed.fragment))
         return url
     host = parsed.hostname or ""
     if parsed.port:
         host = f"{host}:{parsed.port}"
-    return urlunparse((parsed.scheme, host, parsed.path, "", parsed.query, parsed.fragment))
+    return urlunparse((parsed.scheme, host, parsed.path, "", query, parsed.fragment))
 
 
 def _remote_allowed():

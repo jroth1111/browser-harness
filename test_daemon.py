@@ -144,6 +144,18 @@ def test_credentials_in_endpoint_rejected():
             raise AssertionError("expected RuntimeError")
 
 
+def test_endpoint_metadata_redacts_sensitive_query_values():
+    url = "ws://127.0.0.1:9222/devtools/browser/abc?token=secret&fingerprint=111&api_key=abc"
+    with patch.dict(os.environ, {"BH_CDP_WS": url}, clear=True):
+        resolved, info = daemon.resolve_cdp_endpoint()
+
+    assert resolved == url
+    assert info["resolved_url"] == (
+        "ws://127.0.0.1:9222/devtools/browser/abc?"
+        "token=REDACTED&fingerprint=111&api_key=REDACTED"
+    )
+
+
 def test_wss_loopback_accepted_with_warning():
     url = "wss://127.0.0.1:9222/devtools/browser/abc"
     with patch.dict(os.environ, {"BH_CDP_WS": url}, clear=True):
