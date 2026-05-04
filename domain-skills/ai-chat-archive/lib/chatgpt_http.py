@@ -142,13 +142,13 @@ class ChatGPTHTTPAPI:
         """Extract ordered messages from the conversation mapping node tree.
 
         The mapping is a dict of node_id -> { message, children, parent }.
-        We walk all nodes, skip system messages and empty content, and sort
-        by create_time to get a stable ordering.
+        We walk all nodes, skip system messages, and sort by create_time.
 
-        Rich content (dict parts containing artifact references, deep research
-        markers, canvas operations) is preserved in ``rich_parts``.  Tool
-        messages are kept even when their text content is a widget placeholder
-        like "Rendered a widget" because they carry artifact metadata.
+        Handles both ``content.parts[]`` (standard messages) and
+        content-type-specific fields (``thoughts``, ``code``, ``reasoning_recap``,
+        ``execution_output``, ``tether_browsing_display``, ``computer_output``).
+        Rich content (dict parts with artifact references) is preserved in
+        ``rich_parts``.  Tool messages are always kept.
         """
         mapping = detail.get("mapping", {})
         messages = []
@@ -162,12 +162,36 @@ class ChatGPTHTTPAPI:
             if role == "system":
                 continue
 
-            content_parts = msg.get("content", {}).get("parts", [])
+            msg_content = msg.get("content", {})
+            content_type = msg_content.get("content_type", "")
+            content_parts = msg_content.get("parts", [])
             text_parts = [p for p in content_parts if isinstance(p, str)]
             rich_parts = [p for p in content_parts if isinstance(p, dict)]
             content = "\n".join(text_parts)
 
-            # Keep tool messages with widget placeholders — they have artifact refs
+            # Content-type-specific extraction (no parts array)
+            if not content.strip() and content_type in (
+                "code", "thoughts", "reasoning_recap",
+                "execution_output", "tether_browsing_display",
+                "computer_output", "multimodal_text",
+            ):
+                content = (
+                    msg_content.get("text", "")
+                    or msg_content.get("content", "")
+                    or ""
+                )
+                thoughts = msg_content.get("thoughts")
+                if thoughts and not content:
+                    # Extract text from thoughts list
+                    parts = []
+                    for t in (thoughts if isinstance(thoughts, list) else [thoughts]):
+                        if isinstance(t, dict):
+                            parts.append(t.get("content", t.get("summary", "")))
+                        elif isinstance(t, str):
+                            parts.append(t)
+                    content = "\n".join(parts)
+
+            # Keep tool messages even with empty content — they carry metadata
             has_rich = bool(rich_parts)
             if not content.strip() and not has_rich and role != "tool":
                 continue
@@ -178,6 +202,7 @@ class ChatGPTHTTPAPI:
             messages.append({
                 "role": role,
                 "content": content,
+                "content_type": content_type or None,
                 "provider_message_id": msg.get("id", node_id),
                 "created_at": msg.get("create_time"),
                 "model": metadata.get("model_slug", ""),
