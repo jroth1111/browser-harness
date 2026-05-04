@@ -26,6 +26,13 @@ def search_url(query):
     return f"{BASE}/search?q={query}"
 
 
+def browse_url():
+    """URL for browsing all available restaurants/stores.
+    Uses generic 'food' search to return all options.
+    """
+    return f"{BASE}/search?q=food"
+
+
 def store_url(slug, store_id):
     return f"{BASE}/store/{slug}/{store_id}"
 

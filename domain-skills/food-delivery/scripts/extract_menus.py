@@ -22,155 +22,220 @@ PAGE_DELAY = (2.0, 5.0)
 MAX_SCROLLS_NO_NEW = 5
 
 
-def extract_menu_items(sb, platform, store_url):
-    """Extract all menu items from a restaurant page via DOM scraping."""
+def extract_menu_from_next_data(sb):
+    """Extract menu items from DoorDash's Next.js embedded JSON.
+
+    DoorDash embeds all menu data in self.__next_f.push() script tags.
+    Parse the itemLists from the page source — no DOM scraping needed.
+    """
+    page_source = sb.driver.page_source
+
+    # Find all self.__next_f.push calls containing itemLists
+    pattern = r'self\.__next_f\.push\(\[1,"(.*?)"\]\)'
+    menu_items = []
+
+    for match in re.finditer(pattern, page_source, re.DOTALL):
+        raw = match.group(1)
+        try:
+            decoded = raw.encode("utf-8").decode("unicode_escape")
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            continue
+
+        if "itemLists" not in decoded:
+            continue
+
+        # Extract itemLists array from the decoded string
+        # Find "itemLists":[ and match brackets
+        idx = decoded.find('"itemLists"')
+        if idx == -1:
+            continue
+
+        # Find the opening [ after "itemLists":
+        bracket_start = decoded.find("[", idx)
+        if bracket_start == -1:
+            continue
+
+        # Count brackets to find matching ]
+        depth = 0
+        bracket_end = bracket_start
+        for i in range(bracket_start, len(decoded)):
+            if decoded[i] == "[":
+                depth += 1
+            elif decoded[i] == "]":
+                depth -= 1
+                if depth == 0:
+                    bracket_end = i + 1
+                    break
+
+        json_str = decoded[bracket_start:bracket_end]
+        try:
+            item_lists = json.loads(json_str)
+        except json.JSONDecodeError:
+            continue
+
+        for category_obj in item_lists:
+            category = category_obj.get("title", "Unknown")
+            # subtitle may contain item count like "10 items"
+            for item in category_obj.get("items", []):
+                name = item.get("name", "").strip()
+                if not name:
+                    continue
+
+                price = item.get("displayPrice", "")
+                if not price:
+                    price = str(item.get("price", ""))
+
+                menu_items.append({
+                    "category": category,
+                    "item_name": name,
+                    "item_price": price,
+                    "description": item.get("description", ""),
+                    "popular_badge": bool(item.get("isPopular") or item.get("mostOrdered")),
+                    "customization_count": None,
+                    "image_url": item.get("imageUrl") or item.get("imageSrc") or None,
+                })
+
+        # Only need the first match with itemLists
+        if menu_items:
+            break
+
+    return menu_items
+
+
+def extract_menu_from_dom(sb):
+    """Fallback: extract menu items via DOM scraping using aria-labels and headings."""
     js = """
-    () => {
-        const items = [];
-        const seen = new Set();
-        let currentCategory = 'Unknown';
+    var items = [];
+    var seen = {};
+    var categoryPositions = [];
 
-        // Find all visible text to understand page structure
-        // Strategy: find category headers, then find item cards below them
+    var headings = document.querySelectorAll('h2, h3, h4, [role="heading"]');
+    for (var i = 0; i < headings.length; i++) {
+        var h = headings[i];
+        var text = (h.textContent || '').trim();
+        if (!text || text.length > 60 || text.length < 2) continue;
+        if (h.tagName === 'H1') continue;
+        var rect = h.getBoundingClientRect();
+        if (rect.bottom > 0 && rect.top < window.innerHeight * 10) {
+            categoryPositions.push({text: text, y: rect.top});
+        }
+    }
 
-        // Get all headings that could be category names
-        const headings = document.querySelectorAll('h1, h2, h3, h4, [role="heading"]');
-        const categoryPositions = [];
+    var buttons = document.querySelectorAll('button[aria-label]');
+    for (var j = 0; j < buttons.length; j++) {
+        var btn = buttons[j];
+        var name = btn.getAttribute('aria-label');
+        if (!name || name.length < 2 || name.length > 120) continue;
 
-        headings.forEach(h => {
-            const text = h.textContent?.trim();
-            if (!text || text.length > 60 || text.length < 2) return;
-            // Skip if it looks like the store name (usually h1)
-            if (h.tagName === 'H1') return;
-            const rect = h.getBoundingClientRect();
-            if (rect.bottom > 0 && rect.top < window.innerHeight * 10) {
-                categoryPositions.push({ text, y: rect.top });
+        var text = btn.textContent || '';
+        var priceMatch = text.match(/\\$\\d+\\.?\\d{0,2}/);
+        var price = priceMatch ? priceMatch[0] : null;
+
+        if (seen[name]) continue;
+        seen[name] = true;
+
+        var rect = btn.getBoundingClientRect();
+        var category = 'Unknown';
+        for (var k = categoryPositions.length - 1; k >= 0; k--) {
+            if (categoryPositions[k].y < rect.top) {
+                category = categoryPositions[k].text;
+                break;
             }
+        }
+
+        items.push({
+            category: category,
+            item_name: name,
+            item_price: price,
+            description: null,
+            popular_badge: /most ordered|most liked/i.test(text),
+            customization_count: null,
+            image_url: null,
         });
+    }
 
-        // Find menu item containers — look for elements with price text
-        // Prices usually look like $XX.XX or $X.XX
-        const allElements = document.querySelectorAll('div, section, article, li');
-        const itemContainers = [];
-
-        allElements.forEach(el => {
-            const text = el.textContent || '';
-            // Must contain a price pattern
-            if (!/\\$\\d+\\.?\\d*/.test(text)) return;
-            // Must be reasonably sized (not the whole page)
-            if (text.length > 2000 || text.length < 5) return;
-            // Should have a child with price-like text
-            const children = el.children;
-            let hasPrice = false, hasName = false;
-            for (const child of children) {
-                const childText = child.textContent?.trim() || '';
-                if (/^\\$\\d+\\.?\\d{0,2}$/.test(childText)) hasPrice = true;
-                if (childText.length > 3 && childText.length < 100 && !childText.startsWith('$')) hasName = true;
+    if (items.length === 0) {
+        var allEls = document.querySelectorAll('div, section, article, li');
+        for (var m = 0; m < allEls.length; m++) {
+            var el = allEls[m];
+            var elText = el.textContent || '';
+            if (!/\\$\\d+\\.?\\d{0,2}/.test(elText)) continue;
+            if (elText.length > 2000 || elText.length < 5) continue;
+            var children = el.children;
+            var hasPrice = false, hasName = false;
+            for (var n = 0; n < children.length; n++) {
+                var ct = (children[n].textContent || '').trim();
+                if (/^\\$\\d+\\.?\\d{0,2}$/.test(ct)) hasPrice = true;
+                if (ct.length > 3 && ct.length < 100 && !ct.startsWith('$')) hasName = true;
             }
-            if (hasPrice && hasName) {
-                itemContainers.push(el);
-            }
-        });
+            if (!hasPrice || !hasName) continue;
 
-        // Extract from item containers
-        itemContainers.forEach(container => {
-            const containerText = container.textContent || '';
-            const rect = container.getBoundingClientRect();
-
-            // Find category for this item based on position
-            let category = 'Unknown';
-            for (let i = categoryPositions.length - 1; i >= 0; i--) {
-                if (categoryPositions[i].y < rect.top) {
-                    category = categoryPositions[i].text;
+            var elRect = el.getBoundingClientRect();
+            var elCat = 'Unknown';
+            for (var p = categoryPositions.length - 1; p >= 0; p--) {
+                if (categoryPositions[p].y < elRect.top) {
+                    elCat = categoryPositions[p].text;
                     break;
                 }
             }
 
-            // Extract name: first significant text that isn't a price
-            let name = null;
-            let price = null;
-            let description = null;
-            const childTexts = [];
-
-            for (const child of container.children) {
-                const childText = child.textContent?.trim() || '';
-                childTexts.push(childText);
-
-                if (!price && /^\\$\\d+\\.?\\d{0,2}$/.test(childText)) {
-                    price = childText;
-                } else if (!name && childText.length > 2 && childText.length < 80 && !childText.startsWith('$')) {
-                    name = childText;
-                }
+            var elName = null, elPrice = null, elDesc = null;
+            var childTexts = [];
+            for (var q = 0; q < children.length; q++) {
+                var ct2 = (children[q].textContent || '').trim();
+                childTexts.push(ct2);
+                if (!elPrice && /^\\$\\d+\\.?\\d{0,2}$/.test(ct2)) elPrice = ct2;
+                else if (!elName && ct2.length > 2 && ct2.length < 80 && !ct2.startsWith('$')) elName = ct2;
             }
-
-            // Description: longest non-name, non-price text
-            for (const ct of childTexts) {
-                if (ct !== name && ct !== price && ct.length > 20) {
-                    description = ct;
+            for (var r = 0; r < childTexts.length; r++) {
+                if (childTexts[r] !== elName && childTexts[r] !== elPrice && childTexts[r].length > 20) {
+                    elDesc = childTexts[r];
                     break;
                 }
             }
 
-            if (!name) return;
-            const key = name + price;
-            if (seen.has(key)) return;
-            seen.add(key);
-
+            if (!elName) continue;
+            var key = elName + elPrice;
+            if (seen[key]) continue;
+            seen[key] = true;
             items.push({
-                category: category,
-                item_name: name,
-                item_price: price,
-                description: description,
-                popular_badge: /most ordered|most liked|#\\d/i.test(containerText),
+                category: elCat,
+                item_name: elName,
+                item_price: elPrice,
+                description: elDesc,
+                popular_badge: /most ordered|most liked/i.test(elText),
                 customization_count: null,
                 image_url: null,
             });
-        });
-
-        // Fallback: if no items found with structured approach, try simpler extraction
-        if (items.length === 0) {
-            const priceElements = document.querySelectorAll('*');
-            const priceTexts = new Set();
-            priceElements.forEach(el => {
-                const text = el.textContent?.trim() || '';
-                if (/^\\$\\d+\\.?\\d{0,2}$/.test(text) && el.children.length === 0) {
-                    // This is a leaf price element — find its sibling for the name
-                    const parent = el.parentElement;
-                    if (parent) {
-                        const siblings = parent.children;
-                        let name = null;
-                        for (const sib of siblings) {
-                            const sibText = sib.textContent?.trim() || '';
-                            if (sibText !== text && sibText.length > 2 && sibText.length < 80 && !sibText.startsWith('$')) {
-                                name = sibText;
-                                break;
-                            }
-                        }
-                        if (name && !seen.has(name)) {
-                            seen.add(name);
-                            items.push({
-                                category: 'Unknown',
-                                item_name: name,
-                                item_price: text,
-                                description: null,
-                                popular_badge: false,
-                                customization_count: null,
-                                image_url: null,
-                            });
-                        }
-                    }
-                }
-            });
         }
-
-        return JSON.stringify(items);
     }
+
+    return JSON.stringify(items);
     """
     raw = sb.driver.execute_script(js)
     try:
         return json.loads(raw) if raw else []
     except json.JSONDecodeError:
         return []
+
+
+def extract_menu_items(sb, platform, store_url):
+    """Extract all menu items from a restaurant page.
+
+    Primary: Parse Next.js embedded JSON (DoorDash).
+    Fallback: DOM scraping via aria-labels and headings.
+    """
+    items = []
+
+    # Primary: Next.js embedded data (DoorDash)
+    if platform == "doordash":
+        items = extract_menu_from_next_data(sb)
+
+    # Fallback: DOM scraping for any platform
+    if not items:
+        items = extract_menu_from_dom(sb)
+
+    return items
 
 
 def scroll_down(sb):
@@ -230,7 +295,7 @@ def extract_menus_for_restaurants(sb, platform, restaurants, checkpoint_path=Non
         title = sb.get_title()
         print(f"  Loaded: {title}")
 
-        # Scroll and extract menu items
+        # Extract menu items — try multiple scrolls for lazy-loaded content
         scrolls_no_new = 0
         total_new = 0
         for scroll_num in range(30):
@@ -252,6 +317,10 @@ def extract_menus_for_restaurants(sb, platform, restaurants, checkpoint_path=Non
                 scrolls_no_new += 1
             else:
                 scrolls_no_new = 0
+
+            # DoorDash Next.js: first pass gets everything, skip scrolling
+            if platform == "doordash" and scroll_num == 0 and total_new > 0:
+                break
 
             if scrolls_no_new >= MAX_SCROLLS_NO_NEW:
                 break
