@@ -1,0 +1,468 @@
+{
+  "schema_version": 1,
+  "project": "browser-harness",
+  "objective": "Harden browser-harness by making each critical runtime, data, packaging, and skill surface explicit, testable, and small enough to improve without adding a manager layer.",
+  "non_goals": [
+    "no manager layer",
+    "no retries framework",
+    "no session manager",
+    "no daemon supervisor",
+    "no config system",
+    "no logging framework",
+    "no bot-detection circumvention",
+    "no committed private browser state"
+  ],
+  "required_reachability_links": [
+    "entry",
+    "validation",
+    "routing",
+    "execution",
+    "state_effect",
+    "output",
+    "lifecycle",
+    "observability",
+    "regression"
+  ],
+  "surface_ids": [
+    "cli_entrypoint",
+    "daemon_socket_lifecycle",
+    "cdp_transport",
+    "navigation_readiness",
+    "block_and_auth_detection",
+    "session_continuity",
+    "fetch_source_selection",
+    "network_capture",
+    "crawl_safety",
+    "extraction_contracts",
+    "domain_skill_loading",
+    "report_rendering",
+    "packaging_release",
+    "quality_gates"
+  ],
+  "surfaces": [
+    {
+      "id": "cli_entrypoint",
+      "scope": "browser-harness command execution, setup/doctor/update flags, and stdin or -c code execution.",
+      "files": ["run.py", "admin.py", "SKILL.md", "README.md"],
+      "contracts": [
+        "ensure_daemon runs before user code execution",
+        "first navigation guidance remains new_tab(url), not goto_url(url)",
+        "run.py stays a thin command shim"
+      ],
+      "risks": [
+        "stale daemon treated as healthy",
+        "user active tab clobbered by default navigation",
+        "CLI grows into an unreviewable control layer"
+      ],
+      "positive_probe": "Run CLI/unit tests that prove ensure_daemon is invoked before exec and setup/doctor/update flags route to admin helpers.",
+      "negative_probe": "Search the CLI for manager-style subcommand/control abstractions and for default navigation patterns that contradict SKILL.md.",
+      "reachability": {
+        "entry": "project script browser-harness -> run:main",
+        "validation": "flag parsing and mutually exclusive setup/doctor/update/code paths",
+        "routing": "run.py dispatches to admin helpers or executes helper-preloaded code",
+        "execution": "ensure_daemon then exec(code, globals())",
+        "state_effect": "may start/reuse daemon; no browser navigation unless user code requests it",
+        "output": "stdout/stderr from selected command or executed snippet",
+        "lifecycle": "daemon start is delegated to admin.ensure_daemon",
+        "observability": "daemon startup errors surface with /tmp/bh-<name>.log hint",
+        "regression": "test_cli_entrypoint coverage should exercise flag routing and exec ordering"
+      }
+    },
+    {
+      "id": "daemon_socket_lifecycle",
+      "scope": "Daemon startup, endpoint discovery, Unix socket/pid/log files, stale process recovery, and shutdown cleanup.",
+      "files": ["daemon.py", "admin.py", "test_daemon.py", "test_admin.py"],
+      "contracts": [
+        "CDP endpoints default to loopback only",
+        "endpoint URLs must not contain credentials",
+        "stale daemon sockets are probed with a real CDP call",
+        "restart cleans current bh-* paths and legacy bu-* paths"
+      ],
+      "risks": [
+        "unsafe remote CDP attachment",
+        "credential-bearing endpoint logs",
+        "dead daemon accepts socket connections but cannot control Chrome",
+        "pid/socket cleanup targets the wrong process"
+      ],
+      "positive_probe": "Unit tests cover endpoint validation, DevToolsActivePort resolution, daemon_alive probing, and restart cleanup.",
+      "negative_probe": "Remote or credentialed CDP endpoints fail unless explicitly allowed and redacted.",
+      "reachability": {
+        "entry": "admin.ensure_daemon or daemon.py main",
+        "validation": "daemon._validate_endpoint_url rejects unsafe endpoint shapes",
+        "routing": "env BH_CDP_WS wins, otherwise DevToolsActivePort discovery",
+        "execution": "CDPClient websocket relay over /tmp/bh-<name>.sock",
+        "state_effect": "creates/updates socket, pid, log, and in-memory event buffer",
+        "output": "newline-delimited JSON responses to helper client",
+        "lifecycle": "startup, stale recovery, shutdown, pid/socket unlink",
+        "observability": "/tmp/bh-<name>.log and endpoint_info metadata",
+        "regression": "test_daemon.py and test_admin.py should cover validation and cleanup paths"
+      }
+    },
+    {
+      "id": "cdp_transport",
+      "scope": "helpers.py socket client, raw CDP request/response handling, reconnect behavior, and recoverable session errors.",
+      "files": ["helpers.py", "test_helpers.py"],
+      "contracts": [
+        "mutating CDP methods are not automatically retried after socket errors",
+        "non-mutating requests may reconnect once",
+        "oversized, malformed, or timeout responses poison the socket and force reconnect",
+        "recoverable target/session errors retry once after reconnect"
+      ],
+      "risks": [
+        "duplicate click/navigation/file-upload side effects",
+        "socket stream misalignment after malformed response",
+        "silent stale-session failure"
+      ],
+      "positive_probe": "Unit tests simulate reconnects, mutating send failures, malformed responses, and recoverable CDP target errors.",
+      "negative_probe": "A mutating method failure must not be retried by _send.",
+      "reachability": {
+        "entry": "helpers.cdp and higher-level helper functions",
+        "validation": "_send validates JSON response and CDP error payload",
+        "routing": "all helper CDP calls flow through _send unless explicitly documented",
+        "execution": "Unix socket request to daemon relay",
+        "state_effect": "may reconnect helper socket; may mutate browser only once for mutating CDP",
+        "output": "CDP result dict or loud RuntimeError",
+        "lifecycle": "socket opened lazily, closed on atexit or corruption",
+        "observability": "error message includes method for mutating socket failures",
+        "regression": "test_helpers.py transport tests"
+      }
+    },
+    {
+      "id": "navigation_readiness",
+      "scope": "new_tab/goto_url/load waits, meaningful content readiness, blank renders, and stale/internal tab recovery.",
+      "files": ["helpers.py", "interaction-skills/extraction-coverage.md", "interaction-skills/ui-mechanics.md", "test_helpers.py"],
+      "contracts": [
+        "extraction workflows use wait_for_content rather than fixed sleep or load-only readiness",
+        "internal/stale tabs are recoverable with ensure_real_tab",
+        "blocked or blank pages are not treated as empty data"
+      ],
+      "risks": [
+        "running extraction JS on a challenge shell",
+        "declaring empty results from a page that never rendered",
+        "operating on an internal Chrome tab"
+      ],
+      "positive_probe": "Readiness tests cover useful text, timeout, blank content, and stale tab recovery.",
+      "negative_probe": "A WAF/auth/blank page must produce blocked or unobservable status before extraction.",
+      "reachability": {
+        "entry": "new_tab, goto_url, wait_for_content, ensure_real_tab",
+        "validation": "URL/tab state and content thresholds",
+        "routing": "navigation helpers call load waits then content checks when extraction is expected",
+        "execution": "Page.navigate or Target.createTarget plus Runtime content inspection",
+        "state_effect": "active target may change; page content status is sampled",
+        "output": "{ok, reason, text, html, block}",
+        "lifecycle": "waits bounded by timeout and stale session recovery",
+        "observability": "block reason and content lengths in returned status",
+        "regression": "test_helpers.py wait_for_content tests"
+      }
+    },
+    {
+      "id": "block_and_auth_detection",
+      "scope": "WAF, bot-detection, auth gate, login redirect, and Turnstile handling boundaries.",
+      "files": ["helpers.py", "interaction-skills/waf-bypass.md", "interaction-skills/session-continuity.md", "test_helpers.py"],
+      "contracts": [
+        "detect blocks and auth gates before extraction",
+        "authorized recovery paths only",
+        "persistent block emits __UNOBSERVABLE__",
+        "no fingerprinting or WAF circumvention guidance"
+      ],
+      "risks": [
+        "mistaking security shell for data",
+        "unsafe cookie/token extraction into standalone clients",
+        "normal content false-positive blocked"
+      ],
+      "positive_probe": "Fixtures cover Kasada, Akamai, Cloudflare, generic WAF, auth gate, and normal content.",
+      "negative_probe": "Normal content with benign WAF-looking strings must not be blocked.",
+      "reachability": {
+        "entry": "detect_block_page and wait_for_content",
+        "validation": "signature thresholds and URL/text/html heuristics",
+        "routing": "blocked status routes to recovery, stop, or unobservable output",
+        "execution": "pure content inspection plus optional browser-native Turnstile interaction",
+        "state_effect": "no standalone secret extraction or hidden bypass state",
+        "output": "{blocked, kind, evidence}",
+        "lifecycle": "bounded wait and explicit stop rule when authorized recovery fails",
+        "observability": "block kind and evidence snippets",
+        "regression": "test_helpers.py block detection fixtures"
+      }
+    },
+    {
+      "id": "session_continuity",
+      "scope": "Authenticated browser profile reuse, redacted manifests, private auth bundles, same-domain cookie headers, and restore verification.",
+      "files": ["login_session.py", "interaction-skills/session-continuity.md", "docs/local-cdp-providers.md", "test_login_session.py"],
+      "contracts": [
+        "the user's browser profile is the primary auth store",
+        "raw cookies/storage belong only in ignored private paths when explicitly requested",
+        "redacted manifests record names, domains, receipts, and verification context",
+        "restore proof requires a fresh profile or separate process"
+      ],
+      "risks": [
+        "committed session secrets",
+        "same-profile restore false positive",
+        "cross-origin cookie leakage"
+      ],
+      "positive_probe": "Tests cover redaction, cookie URL matching, manifest fields, same-domain headers, and restore failure on login redirect.",
+      "negative_probe": "Secret-like cookie/storage values must not appear in committed manifests, fixtures, receipts, or package artifacts.",
+      "reachability": {
+        "entry": "login_session helpers and session-continuity workflow",
+        "validation": "origin, cookie domain/path/secure matching, redaction scans",
+        "routing": "browser profile -> redacted manifest or ignored private bundle",
+        "execution": "CDP cookie/storage reads and optional restore into supplied client",
+        "state_effect": "local manifest/private bundle only when requested",
+        "output": "redacted manifest, capability receipt, or restored-state verification result",
+        "lifecycle": "expires_or_recheck_after and fresh-profile verification",
+        "observability": "cookie names/domains, storage keys, and receipt refs without values",
+        "regression": "test_login_session.py and redaction scan tests"
+      }
+    },
+    {
+      "id": "fetch_source_selection",
+      "scope": "fetch(source=auto/http/session/browser), HTTP helpers, browser-session HTTP, source receipts, and fallback decisions.",
+      "files": ["helpers.py", "response.py", "interaction-skills/data-source-exploration.md", "interaction-skills/cross-domain-control-flow.md", "test_helpers.py"],
+      "contracts": [
+        "exports and structured APIs are preferred when complete",
+        "field-level parity decides canonical source",
+        "fallback reason and capability receipt are recorded for serious workflows",
+        "browser extraction fills gaps rather than duplicating every field by default"
+      ],
+      "risks": [
+        "page-level success hides missing fields",
+        "silent fallback to weaker source",
+        "session HTTP used before browser profile is seeded"
+      ],
+      "positive_probe": "Tests should prove source fallback order, browser-session seeding requirement, and Response helper behavior.",
+      "negative_probe": "A lightweight backend cannot become canonical for private/authenticated fields without a capability receipt.",
+      "reachability": {
+        "entry": "helpers.fetch and domain source-discovery workflows",
+        "validation": "source parameter, content status, field parity, receipt presence",
+        "routing": "http -> session -> browser fallback for auto where allowed",
+        "execution": "urllib HTTP, browser-session HTTP, or browser navigation",
+        "state_effect": "may seed browser session; may create receipt in domain-local store",
+        "output": "Response object plus optional capability receipt",
+        "lifecycle": "fallback stops on blocks or missing authorization",
+        "observability": "source, status, fields found/missing, fallback reason",
+        "regression": "test_helpers.py fetch/source tests and domain receipt tests"
+      }
+    },
+    {
+      "id": "network_capture",
+      "scope": "CDP Network event capture, response body capture, endpoint clustering, replay, and API promotion.",
+      "files": ["helpers.py", "network_capture.py", "interaction-skills/api-schema-audit.md", "test_helpers.py"],
+      "contracts": [
+        "body capture is opt-in",
+        "smart_wait/network_idle must not drain events during active capture",
+        "headers/bodies must be redacted before committed receipts",
+        "captured API promotion requires replay/schema parity"
+      ],
+      "risks": [
+        "event stream stolen by another wait",
+        "committed Authorization/Cookie headers or private bodies",
+        "promoting an API endpoint from a non-replayable browser-only request"
+      ],
+      "positive_probe": "Tests cover start/poll/stop, max_entries, body capture opt-in, replay summaries, and redaction fixtures.",
+      "negative_probe": "NetworkCapture receipts must reject raw cookie, authorization, bearer, and session headers.",
+      "reachability": {
+        "entry": "NetworkCapture.start/poll/endpoints/responses_for and replay_endpoints",
+        "validation": "active capture state, max entries, request method, content-type/status parity",
+        "routing": "CDP Network events -> in-memory entries -> endpoint clusters/replay",
+        "execution": "Network.enable, event drain, optional Network.getResponseBody",
+        "state_effect": "in-memory capture only unless caller writes redacted receipt",
+        "output": "endpoint list, response pairs, replay summary",
+        "lifecycle": "start, poll, stop, clear; no overlapping event drains",
+        "observability": "summary counts by resource type/status and pending requests",
+        "regression": "test_helpers.py NetworkCapture tests"
+      }
+    },
+    {
+      "id": "crawl_safety",
+      "scope": "CrawlState dedupe/saturation/accounting and SafetyGate request/time/block/429 budgets.",
+      "files": ["helpers.py", "interaction-skills/coverage-accounting.md", "test_helpers.py"],
+      "contracts": [
+        "long crawls have a key field and dedupe accounting",
+        "bounded crawls enforce request/time/block budgets",
+        "blocked pages are recorded separately from empty result pages",
+        "saturation claims include marginal discovery evidence"
+      ],
+      "risks": [
+        "infinite or overbroad crawl",
+        "duplicate records inflate coverage",
+        "blocked pages counted as complete",
+        "premature saturation from too-short marginal window"
+      ],
+      "positive_probe": "Tests cover add/dedupe, blocked records, scope totals, save/load, saturation, unseen estimate, and SafetyGate limits.",
+      "negative_probe": "A crawl with blocked pages or unknown key fields cannot claim full coverage.",
+      "reachability": {
+        "entry": "CrawlState and SafetyGate",
+        "validation": "key_field, request budget, elapsed budget, block threshold, status code",
+        "routing": "domain workflow checks gate before requests and state after page/entity extraction",
+        "execution": "in-memory accounting plus optional JSON save/load",
+        "state_effect": "records, occurrence counts, blocked list, marginal counts",
+        "output": "summary, saved JSON, or raised RuntimeError when configured",
+        "lifecycle": "reset, save/load, bounded crawl loops",
+        "observability": "records, deduped, blocked, scope totals, saturated, estimated_unseen",
+        "regression": "test_helpers.py CrawlState and SafetyGate tests"
+      }
+    },
+    {
+      "id": "extraction_contracts",
+      "scope": "Browser and parser extraction field semantics, selector probes, primary keys, fixtures, and coverage triage.",
+      "files": ["interaction-skills/extraction-coverage.md", "domain-skills/surface-map-pattern.md", "domain-skills/README.md", "test_domain_surface_maps.py"],
+      "contracts": [
+        "fields distinguish value, confirmed absent, __UNOBSERVABLE__, and not checked",
+        "selectors are probed before extractor code is trusted",
+        "primary key fields must not be all-null on representative pages",
+        "surface maps include positive and negative probes"
+      ],
+      "risks": [
+        "silent data loss through empty strings",
+        "wrong entity type queried",
+        "selector drift masked by sparse results",
+        "fixtures only cover development examples"
+      ],
+      "positive_probe": "Extractor tests include fixture-backed value, absent, unobservable, and omitted-key cases.",
+      "negative_probe": "A blocked page fixture must not pass as an empty but successful extraction.",
+      "reachability": {
+        "entry": "domain extractor scripts, parser helpers, and extraction JS snippets",
+        "validation": "selector probes, entity type, primary key, four-state field semantics",
+        "routing": "source discovery chooses parser/API/UI path before extraction",
+        "execution": "Response parser, JS extraction, or domain script parser",
+        "state_effect": "CSV/JSON/report rows with provenance and field states",
+        "output": "typed records or unobservable evidence",
+        "lifecycle": "fixture refresh and selector-drift checks",
+        "observability": "fill-rate triage, broken selector list, source receipt",
+        "regression": "domain parser fixtures and surface-map tests"
+      }
+    },
+    {
+      "id": "domain_skill_loading",
+      "scope": "Root router, domain index, packaged domain assets, surface maps, and empirical skill promotion.",
+      "files": ["SKILL.md", "domain-skills/README.md", "interaction-skills/README.md", "skill_learning_gate.py", "test_skill_learning_gate.py", "test_domain_surface_maps.py"],
+      "contracts": [
+        "known domains route to overview.md or the most specific file",
+        "domain skills contain durable rules, not task narration or secrets",
+        "rich domain bundles expose surface maps, fixtures, receipts, and scripts when applicable",
+        "empirical lessons pass the learning gate before promotion"
+      ],
+      "risks": [
+        "packaged install cannot discover domain skills",
+        "skill prose captures private/session-specific state",
+        "generalizable mechanics duplicated inside domain docs"
+      ],
+      "positive_probe": "Tests prove packaged domain skill discovery and surface-map contract validity.",
+      "negative_probe": "Private/generated directories must be excluded from reusable guidance and package artifacts.",
+      "reachability": {
+        "entry": "SKILL.md router and domain-skills/README.md cold start",
+        "validation": "domain folder, overview/readme presence, surface-map schema",
+        "routing": "root skill -> domain skill -> interaction skill for mechanics",
+        "execution": "agent reads skill files and optional scripts/assets",
+        "state_effect": "no runtime state unless scripts are explicitly run",
+        "output": "operator guidance, script commands, fixtures, receipts",
+        "lifecycle": "empirical learning gate and index updates",
+        "observability": "surface maps, tests, and package discovery checks",
+        "regression": "test_helpers packaged asset discovery and skill-learning tests"
+      }
+    },
+    {
+      "id": "report_rendering",
+      "scope": "data_display.py generated HTML reports, assets, disabled states, and browser-visible render checks.",
+      "files": ["data_display.py", "browser_harness_assets/alpinejs-3.14.9-cdn.min.js", "browser_harness_assets/echarts-5.5.1.min.js", "interaction-skills/data-display.md", "test_data_display.py"],
+      "contracts": [
+        "report HTML renders data without overlapping or missing controls",
+        "disabled reasons and missing data are explicit",
+        "assets load from source and packaged installs",
+        "runtime verification covers representative desktop/mobile views when UI changes"
+      ],
+      "risks": [
+        "static tests pass while browser UI is broken",
+        "missing/private/unobservable data appears as empty success",
+        "packaged asset paths differ from repo paths"
+      ],
+      "positive_probe": "Fixture render tests plus browser screenshot/pixel checks for significant UI changes.",
+      "negative_probe": "Missing/private/unobservable fields must not render as ordinary empty values.",
+      "reachability": {
+        "entry": "data_display.py APIs and domain scripts that emit reports",
+        "validation": "schema/field metadata, disabled reasons, asset paths",
+        "routing": "data records -> report model -> HTML/assets",
+        "execution": "HTML generation and browser render",
+        "state_effect": "local HTML artifact only when user requests report output",
+        "output": "interactive HTML table/explorer",
+        "lifecycle": "asset cleanup and no generated reports committed unless intended",
+        "observability": "render screenshots or fixture HTML assertions",
+        "regression": "test_data_display.py and browser runtime checks"
+      }
+    },
+    {
+      "id": "packaging_release",
+      "scope": "pyproject package config, wheel contents, clean install smoke, console scripts, package data, and artifact exclusions.",
+      "files": ["pyproject.toml", "test_packaging.py", "README.md", "SKILL.md", "install.md"],
+      "contracts": [
+        "runtime modules and skill/assets packages are included",
+        "private/generated/session/cache artifacts are excluded",
+        "console scripts work after wheel install",
+        "packaged domain skill discovery matches source checkout behavior"
+      ],
+      "risks": [
+        "structural pyproject test passes but wheel omits files",
+        "private data leaks into distribution",
+        "entrypoint works only in editable checkout"
+      ],
+      "positive_probe": "Build wheel, inspect archive, install into temp env, smoke browser-harness help/doctor-safe import paths.",
+      "negative_probe": "Wheel content scan finds no .private-data, .session-store, outputs, downloads, cookies, HARs, or profile state.",
+      "reachability": {
+        "entry": "python build/install and project.scripts",
+        "validation": "wheel archive inventory and clean-env import checks",
+        "routing": "setuptools py-modules/package-dir/package-data",
+        "execution": "build backend creates wheel; installed script imports run:main",
+        "state_effect": "temporary build/install artifacts only",
+        "output": "wheel file, installed console scripts, package data",
+        "lifecycle": "build artifacts cleaned after verification",
+        "observability": "captured wheel inventory and smoke command output",
+        "regression": "test_packaging.py plus wheel inspection test"
+      }
+    },
+    {
+      "id": "quality_gates",
+      "scope": "Repo-native verification commands, hygiene scans, optional live/E2E gates, and session close checks.",
+      "files": ["README.md", "pyproject.toml", "test_packaging.py"],
+      "contracts": [
+        "default gate uses uv sync --group dev and uv run --group dev pytest -q",
+        "plugin-conflict fallback disables pytest plugin autoload",
+        "live/E2E tests remain gated by explicit environment variables",
+        "final session leaves no unrelated generated junk"
+      ],
+      "risks": [
+        "agents run host-only checks that miss packaged behavior",
+        "live tests run unintentionally against external services",
+        "verification leaves large generated artifacts"
+      ],
+      "positive_probe": "Documented gate runs locally and records command, cwd, exit code, and decisive output.",
+      "negative_probe": "Quality gate must not require external credentials or live sites unless an explicit env flag is set.",
+      "reachability": {
+        "entry": "README development commands and CI/local gate docs",
+        "validation": "dependency setup, pytest collection, env-gated live tests",
+        "routing": "static/unit/package checks before optional live/E2E checks",
+        "execution": "uv/pytest/build/hygiene commands",
+        "state_effect": "temporary env/build artifacts only",
+        "output": "pass/fail summaries and captured decisive errors",
+        "lifecycle": "cleanup generated artifacts before completion",
+        "observability": "command evidence in issue/response",
+        "regression": "documented quality gate checked by tests where practical"
+      }
+    }
+  ],
+  "borrowed_patterns": [
+    {
+      "source_family": "Playwright-style tooling",
+      "adapt": "opt-in traces and reproducible receipts for failed or high-risk runs",
+      "reject": "large always-on framework around the thin harness"
+    },
+    {
+      "source_family": "Scrapy-style pipelines",
+      "adapt": "field contracts, item validation, and source provenance",
+      "reject": "crawler framework replacement for direct browser-harness scripts"
+    },
+    {
+      "source_family": "robust dating/Tinder automation projects",
+      "adapt": "stale-pane guards, profile identity checks, halt detection, saturation/dedupe ledgers, and selector-drift fixtures",
+      "reject": "private API token reuse, stealth/proxy defaults, lock-file deletion, and raw profile/session artifacts"
+    }
+  ]
+}
