@@ -35,7 +35,40 @@ four-state extraction for browser-based extraction.
 ### Phase 2: Build
 
 1. Create `domain-skills/<site>/` with `overview.md` containing confirmed URL
-   patterns, source classification, DOM selectors, anti-bot notes, and gotchas.
+   patterns, source classification, DOM selectors, anti-bot classification, and
+   gotchas.
+
+   **Anti-bot classification.** Record what protection the site uses (Cloudflare
+   Turnstile, Datadome, Akamai, Kasada, none detected) and which backend path
+   works. The escalation order is:
+
+   ```
+   curl_cffi(url)              # impersonate a real TLS fingerprint
+     ├─ ok? done
+     ├─ blocked? → CDP browser + wait_for_content()
+     │   ├─ ok? done
+     │   ├─ turnstile? → solve_turnstile()
+     │   │   ├─ solved? done
+     │   │   └─ failed? → patchright stealth_session()
+     │   │       ├─ ok? done
+     │   └─ other error? → retry / report
+   ```
+
+   Record the result as a dated finding in overview.md:
+
+   ```
+   Field-tested against example.com on 2026-05-05.
+   No anti-bot protection detected. curl_cffi sufficient for all pages.
+   ```
+
+   or:
+
+   ```
+   Field-tested against example.com on 2026-05-05.
+   Cloudflare Turnstile on all routes. CDP path blocked. stealth_session() required.
+   ```
+
+   The domain skill imports only the backend that works — no runtime cascade.
 2. If the skill has scripts, create `scripts/search.py` (or equivalent) with
    JS snippet generation, merge/filter, and CSV export commands. For the
    localStorage accumulation pattern (accumulate results across paginated
@@ -58,6 +91,9 @@ four-state extraction for browser-based extraction.
    `../interaction-skills/extraction-coverage.md` Phase 3 section. Fix BROKEN
    selectors before declaring done.
 4. Verify CSV output has correct columns and filtering.
+5. Record the anti-bot classification in overview.md: protection type, working
+   backend path, and date of observation. This is the persistent finding that
+   prevents future sessions from re-discovering it.
 
 ### Phase 4: Extract Generalizable Lessons
 
