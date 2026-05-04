@@ -16,6 +16,9 @@ exist, the cold-read path for a rich bundle, or the full folder inventory.
    selection, session continuity, data display, or skill-learning promotion.
 5. Keep `.private-data/`, `.session-store/`, `outputs/`, caches, and generated
    reports out of reusable guidance.
+6. Use `maturity-tiers.md` and `domain_skill_maturity.evaluate_domain_skill(...)`
+   when deciding whether a domain skill is documented, scripted, fixture-tested,
+   live-smoked, or packaged-safe.
 
 ## Creating a New Domain Skill
 

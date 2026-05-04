@@ -40,3 +40,11 @@ A robustness change is not verified until the affected surface has:
 - reachability evidence for entry, validation, routing, execution, state effect,
   output, lifecycle, observability, and regression, or an explicit `n/a` reason
   in the machine-readable map.
+
+## External Patterns
+
+Borrowed robustness ideas are recorded in `docs/external-pattern-adaptations.md`.
+Treat outside projects as evidence for method-level safeguards only. Do not
+borrow private API access, token reuse, stealth/proxy defaults, credential
+automation, CAPTCHA bypass, raw profile/session persistence, or unbounded rapid
+traversal.

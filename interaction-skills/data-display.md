@@ -113,6 +113,11 @@ Disabled view buttons show the missing requirement, such as "Line needs one
 time field and one numeric measure", so users can understand why a chart is not
 available for the current source.
 
+Report cells must not collapse extraction states into the same visual blank.
+The embedded JSON payload preserves raw values, including `null`, empty strings,
+and sentinels such as `__UNOBSERVABLE__`; table rendering displays `null` and
+`(missing)` explicitly when a field is absent from an individual row.
+
 ## Exploration controls
 
 - Facets live in the sidebar, with per-value counts, search within each facet,

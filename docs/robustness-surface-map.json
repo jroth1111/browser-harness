@@ -451,16 +451,19 @@
   "borrowed_patterns": [
     {
       "source_family": "Playwright-style tooling",
+      "evidence": "docs/external-pattern-adaptations.md",
       "adapt": "opt-in traces and reproducible receipts for failed or high-risk runs",
       "reject": "large always-on framework around the thin harness"
     },
     {
       "source_family": "Scrapy-style pipelines",
+      "evidence": "docs/external-pattern-adaptations.md",
       "adapt": "field contracts, item validation, and source provenance",
       "reject": "crawler framework replacement for direct browser-harness scripts"
     },
     {
       "source_family": "robust dating/Tinder automation projects",
+      "evidence": "docs/external-pattern-adaptations.md",
       "adapt": "stale-pane guards, profile identity checks, halt detection, saturation/dedupe ledgers, and selector-drift fixtures",
       "reject": "private API token reuse, stealth/proxy defaults, lock-file deletion, and raw profile/session artifacts"
     }

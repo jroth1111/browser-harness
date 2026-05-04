@@ -359,6 +359,32 @@ def test_render_dataset_redacts_hidden_fields_from_browser_payload_and_aggregate
     assert all("secret_score" not in key and "secret_category" not in key for key in ds["aggregates"]["line"])
 
 
+def test_render_dataset_preserves_null_missing_and_unobservable_states(tmp_path):
+    p = tmp_path / "rows.json"
+    p.write_text(
+        json.dumps(
+            [
+                {"id": 1, "status": "__UNOBSERVABLE__", "score": None},
+                {"id": 2, "status": "", "note": "present"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    out = pathlib.Path(data_display.render_dataset(str(p)))
+    payload = _extract_payload(out)
+    html = out.read_text(encoding="utf-8")
+    ds = payload["datasets"][0]
+
+    assert ds["data"][0]["status"] == "__UNOBSERVABLE__"
+    assert ds["data"][0]["score"] is None
+    assert "score" not in ds["data"][1]
+    assert ds["data"][1]["status"] == ""
+    assert "display = '(missing)'" in html
+    assert "title = 'field missing from this row'" in html
+    assert "display = 'null'" in html
+
+
 def test_render_dataset_includes_faceted_filtering_controls(tmp_path):
     p = tmp_path / "rows.json"
     p.write_text(

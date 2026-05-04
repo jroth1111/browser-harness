@@ -183,20 +183,25 @@ Only closure with coverage ratio 1.0 authorizes an absence claim.
 **Using CrawlState:**
 
 ```python
-from helpers import CrawlState
+from helpers import CrawlState, SafetyGate
 
 state = CrawlState(key_field="listing_id")
+gate = SafetyGate(max_requests=500, max_seconds=300)
 for page_url in page_urls:
+    if not gate.ok():
+        break
     results = js(extraction_snippet)
     new_count = 0
     for record in results:
         if state.add(record):
             new_count += 1
     state.page_done(new_count)
+    gate.record(200)
     if state.saturation_reached(k=3):
         print("Saturation: 0 new items for 3 consecutive pages")
         break
 print(state.summary())
+print(state.receipt(source_context={"domain": "example.com", "query": "..."}, safety=gate))
 ```
 
 **Rating implications:**
@@ -216,6 +221,7 @@ A crawl output should include these metrics alongside the extracted data:
 | Coverage ratio | `extracted / page_declared_total` per scope | Completeness vs page's own count |
 | Coverage rating | Worst of HIGH/MEDIUM/LOW/UNKNOWN across scopes | Single health signal |
 | Dedup count | `CrawlState.summary()["deduped"]` | Overlap between pages and queries |
+| Missing-key count | `CrawlState.summary()["missing_key"]` | Records that could not be safely deduped |
 | Blocked page count | `CrawlState.summary()["blocked"]` | Access reliability |
 | Unobservable fraction | `blocked / total_pages` | Whether coverage gaps are from blocks or extraction failures |
 | Field-state matrix | `field_triage(records)` — counts of present/null/__UNOBSERVABLE__ per field | Extraction health per field |
@@ -234,5 +240,8 @@ can assess reliability without re-running the crawl.
   crawl waves
 - **Saturation-based stopping** is implemented by `CrawlState` in `../helpers.py` — use
   `CrawlState.saturation_reached()` when page-declared counts are unavailable.
+- **Crawl receipts** are implemented by `CrawlState.receipt(...)`; include the
+  receipt next to long-running crawl output so dedupe, blocked, marginal, and
+  safety-limit evidence survives handoff.
 - **Closure certificates** in `extraction-coverage.md` — saturation is distinct from
   closure. Saturation is an efficiency stop; closure is a completeness claim.

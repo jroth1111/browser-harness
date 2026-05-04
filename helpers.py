@@ -1298,6 +1298,7 @@ class CrawlState:
         self._occurrences = {}  # key -> encounter count
         self._records = []
         self._dup_attempts = 0
+        self._missing_key = 0
         self._blocked = []
         self._scope_totals = {}
         self._marginal = deque(maxlen=marginal_window)
@@ -1306,6 +1307,7 @@ class CrawlState:
         """Add record if key_field value is new. Returns True if added."""
         key = record.get(self.key_field)
         if key is None:
+            self._missing_key += 1
             return False
         if key in self._occurrences:
             self._occurrences[key] += 1
@@ -1345,10 +1347,23 @@ class CrawlState:
         return {
             "records": len(self._records),
             "deduped": self._dup_attempts,
+            "missing_key": self._missing_key,
             "blocked": len(self._blocked),
             "scope_totals": dict(self._scope_totals),
             "saturated": self.saturation_reached(),
             "estimated_unseen": self.estimated_unseen(),
+        }
+
+    def receipt(self, source_context=None, safety=None):
+        """Compact crawl evidence suitable for a redacted capability receipt."""
+        safety_summary = safety.summary() if safety is not None else None
+        return {
+            "key_field": self.key_field,
+            "source_context": dict(source_context or {}),
+            "summary": self.summary(),
+            "marginal": list(self._marginal),
+            "blocked_sample": self._blocked[:5],
+            "safety": safety_summary,
         }
 
     def save(self, path):
@@ -1359,6 +1374,7 @@ class CrawlState:
             "occurrences": self._occurrences,
             "records": self._records,
             "dup_attempts": self._dup_attempts,
+            "missing_key": self._missing_key,
             "blocked": self._blocked,
             "scope_totals": self._scope_totals,
             "marginal": list(self._marginal),
@@ -1374,6 +1390,7 @@ class CrawlState:
         cs._occurrences = data.get("occurrences", {})
         cs._records = data.get("records", [])
         cs._dup_attempts = data.get("dup_attempts", 0)
+        cs._missing_key = data.get("missing_key", 0)
         cs._blocked = data.get("blocked", [])
         cs._scope_totals = data.get("scope_totals", {})
         cs._marginal = deque(data.get("marginal", []), maxlen=cs._marginal.maxlen)
@@ -1800,9 +1817,20 @@ class NetworkCapture:
     and ``Network.disable`` (killing the event stream).
     """
 
-    def __init__(self, capture_bodies=False, max_entries=1000):
+    _SENSITIVE_HEADERS = {
+        "authorization",
+        "cookie",
+        "set-cookie",
+        "proxy-authorization",
+        "x-api-key",
+        "x-csrf-token",
+        "x-xsrf-token",
+    }
+
+    def __init__(self, capture_bodies=False, max_entries=1000, max_body_chars=200000):
         self._capture_bodies = capture_bodies
         self._max = max_entries
+        self._max_body_chars = max_body_chars
         self._active = False
         self.clear()
 
@@ -1850,7 +1878,9 @@ class NetworkCapture:
                 if self._capture_bodies:
                     try:
                         body = cdp("Network.getResponseBody", requestId=rid)
-                        self._responses[rid]["body"] = body.get("body", "")
+                        raw_body = body.get("body", "")
+                        self._responses[rid]["body"] = raw_body[:self._max_body_chars]
+                        self._responses[rid]["body_truncated"] = len(raw_body) > self._max_body_chars
                     except Exception:
                         pass
                 if rid in self._requests:
@@ -1882,6 +1912,14 @@ class NetworkCapture:
         """Full request/response pairs where URL matches *pattern* regex."""
         return [e for e in self._entries if re.search(pattern, e["url"])]
 
+    def redacted_entries(self):
+        """Captured entries with sensitive headers removed for receipts/logs."""
+        return [self._redact_entry(e) for e in self._entries]
+
+    def redacted_responses_for(self, pattern):
+        """Redacted request/response pairs where URL matches *pattern* regex."""
+        return [self._redact_entry(e) for e in self.responses_for(pattern)]
+
     def summary(self):
         by_rt, by_status = {}, {}
         for e in self._entries:
@@ -1911,7 +1949,25 @@ class NetworkCapture:
         resp = self._responses.pop(rid, {})
         if "body" in resp:
             entry["body"] = resp["body"]
+            entry["body_truncated"] = resp.get("body_truncated", False)
         self._entries.append(entry)
+
+    @classmethod
+    def _redact_headers(cls, headers):
+        redacted = {}
+        for key, value in (headers or {}).items():
+            if str(key).lower() in cls._SENSITIVE_HEADERS:
+                redacted[key] = "REDACTED"
+            else:
+                redacted[key] = value
+        return redacted
+
+    @classmethod
+    def _redact_entry(cls, entry):
+        safe = dict(entry)
+        safe["headers"] = cls._redact_headers(safe.get("headers"))
+        safe["response_headers"] = cls._redact_headers(safe.get("response_headers"))
+        return safe
 
 
 _URL_NUM = re.compile(r"^\d{2,}$")

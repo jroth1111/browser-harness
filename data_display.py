@@ -2470,9 +2470,12 @@ function app() {
       const v = row[fieldName];
       let display = '';
       let title = '';
-      if (v == null) {
-        display = '';
-        title = '';
+      if (v === undefined) {
+        display = '(missing)';
+        title = 'field missing from this row';
+      } else if (v === null) {
+        display = 'null';
+        title = 'null';
       } else if (typeof v === 'object') {
         display = Array.isArray(v) ? '[' + v.length + ' items]' : '{' + Object.keys(v).length + ' keys}';
         title = JSON.stringify(v).slice(0, 1000);

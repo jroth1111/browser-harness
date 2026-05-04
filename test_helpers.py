@@ -1243,6 +1243,7 @@ def test_crawl_state_add_skips_none_key():
     state = helpers.CrawlState(key_field="id")
     assert state.add({"name": "No ID"}) is False
     assert state.summary()["records"] == 0
+    assert state.summary()["missing_key"] == 1
 
 
 def test_crawl_state_saturation_reached():
@@ -1328,6 +1329,31 @@ def test_crawl_state_summary_includes_estimated_unseen():
     assert "estimated_unseen" in state.summary()
 
 
+def test_crawl_state_receipt_includes_marginal_blocked_and_safety():
+    state = helpers.CrawlState(key_field="id", marginal_window=3)
+    gate = helpers.SafetyGate(max_requests=5, consecutive_block_threshold=2)
+    assert gate.ok() is True
+    gate.record(429, blocked=True)
+    state.add({"id": "a"})
+    state.add({"id": "a"})
+    state.add({"name": "missing key"})
+    state.record_blocked("https://example.com/page", "auth_gate")
+    state.page_done(1)
+    receipt = state.receipt(
+        source_context={"domain": "example.com", "query": "widgets"},
+        safety=gate,
+    )
+
+    assert receipt["key_field"] == "id"
+    assert receipt["source_context"]["domain"] == "example.com"
+    assert receipt["summary"]["records"] == 1
+    assert receipt["summary"]["deduped"] == 1
+    assert receipt["summary"]["missing_key"] == 1
+    assert receipt["blocked_sample"] == [{"url": "https://example.com/page", "reason": "auth_gate"}]
+    assert receipt["marginal"] == [1]
+    assert receipt["safety"]["429_count"] == 1
+
+
 def test_field_triage_returns_empty_for_no_records():
     assert helpers.field_triage([]) == {}
 
@@ -1375,6 +1401,7 @@ def test_crawl_state_save_load_roundtrip(tmp_path):
     assert len(loaded._records) == 2
     assert loaded._records[0]["name"] == "Alice"
     assert loaded._dup_attempts == 0
+    assert loaded._missing_key == 0
     assert len(loaded._blocked) == 1
     assert loaded._scope_totals == {"cat": 10}
     assert list(loaded._marginal) == [2]
@@ -1605,6 +1632,59 @@ def test_network_capture_summary():
     assert s["by_resource_type"]["XHR"] == 2
     assert s["by_status"][200] == 1
     assert s["pending_requests"] == 1
+
+
+def test_network_capture_redacted_entries_hide_sensitive_headers():
+    cap = helpers.NetworkCapture()
+    cap._entries.append({
+        "url": "https://api.example.com/private",
+        "method": "GET",
+        "headers": {
+            "Authorization": "Bearer abcdefghijklmnopqrstuvwxyz012345",
+            "Cookie": "sid=secret-session-value",
+            "Accept": "application/json",
+        },
+        "response_headers": {
+            "Set-Cookie": "sid=secret-session-value",
+            "Content-Type": "application/json",
+        },
+        "status": 200,
+        "content_type": "application/json",
+    })
+
+    redacted = cap.redacted_entries()[0]
+    assert redacted["headers"]["Authorization"] == "REDACTED"
+    assert redacted["headers"]["Cookie"] == "REDACTED"
+    assert redacted["headers"]["Accept"] == "application/json"
+    assert redacted["response_headers"]["Set-Cookie"] == "REDACTED"
+    assert redacted["response_headers"]["Content-Type"] == "application/json"
+
+
+def test_network_capture_body_capture_is_bounded():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1",
+            "request": {"url": "https://api.example.com/private", "method": "GET", "headers": {}},
+            "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1",
+            "response": {"status": 200, "headers": {}, "mimeType": "application/json"},
+        }},
+    ]
+
+    def fake_cdp(method, **params):
+        assert method == "Network.getResponseBody"
+        return {"body": "abcdef"}
+
+    with patch("helpers.drain_events", return_value=events), \
+         patch("helpers.cdp", side_effect=fake_cdp):
+        cap = helpers.NetworkCapture(capture_bodies=True, max_body_chars=3)
+        cap.poll()
+
+    entry = cap.responses_for("private")[0]
+    assert entry["body"] == "abc"
+    assert entry["body_truncated"] is True
 
 
 # --- url_cluster ---
