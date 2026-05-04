@@ -60,3 +60,79 @@ def test_none_html_text_handled():
     assert r.html == ""
     assert r.text == ""
     assert not r.truncated
+
+
+# --- Extraction helpers ---
+
+
+def test_next_data_extracts_json():
+    html = '<html><script id="__NEXT_DATA__">{"props":{"pageProps":{"items":[1,2,3]}}}</script></html>'
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert r.next_data() == {"props": {"pageProps": {"items": [1, 2, 3]}}}
+
+
+def test_next_data_returns_none_when_absent():
+    r = Response(html="<p>no next data</p>", text="x", url="https://x.com",
+                 status=200, source="http")
+    assert r.next_data() is None
+
+
+def test_json_ld_extracts_blocks():
+    html = '<script type="application/ld+json">{"@type":"Product","name":"Widget"}</script>'
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    results = r.json_ld()
+    assert len(results) == 1
+    assert results[0]["name"] == "Widget"
+
+
+def test_json_ld_filters_by_type():
+    html = (
+        '<script type="application/ld+json">{"@type":"Product","name":"A"}</script>'
+        '<script type="application/ld+json">{"@type":"BreadcrumbList","name":"B"}</script>'
+    )
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    products = r.json_ld("Product")
+    assert len(products) == 1
+    assert products[0]["name"] == "A"
+
+
+def test_json_ld_handles_array_with_type_filter():
+    html = '<script type="application/ld+json">[{"@type":"Product","name":"A"},{"@type":"Review","name":"B"}]</script>'
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    products = r.json_ld("Product")
+    assert len(products) == 1
+    assert products[0]["name"] == "A"
+
+
+def test_json_ld_handles_string_type():
+    html = '<script type="application/ld+json">{"@type":"Product","name":"Widget"}</script>'
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    products = r.json_ld("Product")
+    assert len(products) == 1
+
+
+def test_json_ld_returns_empty_when_absent():
+    r = Response(html="<p>no json-ld</p>", text="x", url="https://x.com",
+                 status=200, source="http")
+    assert r.json_ld() == []
+
+
+def test_json_ld_skips_invalid_json():
+    html = (
+        '<script type="application/ld+json">{"@type":"Product","name":"A"}</script>'
+        '<script type="application/ld+json">NOT JSON</script>'
+    )
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert len(r.json_ld()) == 1
+
+
+def test_embedded_json_extracts_window_assignment():
+    html = '<script>window.MY_DATA={"key": "value"};</script>'
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert r.embedded_json("MY_DATA") == {"key": "value"}
+
+
+def test_embedded_json_returns_none_when_absent():
+    r = Response(html="<p>no js</p>", text="x", url="https://x.com",
+                 status=200, source="http")
+    assert r.embedded_json("MY_DATA") is None

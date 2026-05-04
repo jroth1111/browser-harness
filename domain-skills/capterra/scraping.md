@@ -1,6 +1,8 @@
 # Capterra — Scraping & Data Extraction
 
 Field-tested against capterra.com on 2026-04-18. All code blocks validated with live requests.
+No anti-bot protection with `User-Agent: ClaudeBot` (explicitly allowed in robots.txt).
+Default browser UA gets Cloudflare 403.
 
 ## Do this first
 

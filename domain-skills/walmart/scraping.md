@@ -1,6 +1,7 @@
 # Walmart — Product Search & Data Extraction
 
 Field-tested against walmart.com on 2026-04-18 using `http_get` (no browser required).
+PerimeterX triggers on full Chrome UA. Bare `Mozilla/5.0` UA bypasses it.
 All code blocks were run and outputs verified against live responses.
 
 ---

@@ -152,6 +152,24 @@ Embedded JSON is a second-tier source (after exports/APIs, before DOM scraping).
 It's particularly valuable for discovering URL parameters, filter options, and
 sort metadata without reverse-engineering the UI.
 
+### Python extraction via `fetch()` Response
+
+When using `fetch()` (returns a `Response` object), extraction helpers are available:
+
+```python
+r = fetch("https://example.com/page")
+
+# Next.js
+data = r.next_data()                    # -> dict or None
+
+# JSON-LD structured data
+products = r.json_ld("Product")          # -> list of dicts matching @type
+all_schemas = r.json_ld()                # -> list of all ld+json blocks
+
+# window.VAR_NAME = {...} assignments
+config = r.embedded_json("SITE_CONFIG")  # -> dict or None
+```
+
 ## Filtering strategy
 
 Push filtering to the server whenever possible. The hierarchy:

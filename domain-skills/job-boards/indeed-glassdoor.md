@@ -1,5 +1,8 @@
 # Job Boards — Indeed, Glassdoor, Stepstone
 
+Field-tested against indeed.com and glassdoor.com on 2026-04-18.
+Indeed: no anti-bot, `http_get` works. Glassdoor: Cloudflare Bot Management blocks all `http_get` (403), browser required.
+
 Covers: `indeed.com`, `glassdoor.com`, `stepstone.de`
 
 ---

@@ -1,5 +1,8 @@
 """Response wrapper with lazy lxml parsing for CSS/XPath queries."""
 
+import json
+import re
+
 _MAX_RESPONSE_CHARS = 2 * 1024 * 1024  # 2MB
 
 
@@ -76,3 +79,43 @@ class Response:
 
     def __repr__(self):
         return self.summary()
+
+    def next_data(self):
+        """Extract __NEXT_DATA__ JSON from Next.js pages."""
+        m = re.search(
+            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+            self.html, re.DOTALL,
+        )
+        return json.loads(m.group(1)) if m else None
+
+    def json_ld(self, schema_type=None):
+        """Extract application/ld+json blocks. Optionally filter by @type."""
+        blocks = re.findall(
+            r'<script type="application/ld\+json">(.*?)</script>',
+            self.html, re.DOTALL,
+        )
+        results = []
+        for b in blocks:
+            try:
+                parsed = json.loads(b)
+            except json.JSONDecodeError:
+                continue
+            if schema_type is None:
+                results.append(parsed)
+                continue
+            items = parsed if isinstance(parsed, list) else [parsed]
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                types = item.get("@type", [])
+                if isinstance(types, str):
+                    types = [types]
+                if schema_type in types:
+                    results.append(item)
+        return results
+
+    def embedded_json(self, var_name):
+        """Extract window.VAR_NAME = {...} assignment as parsed JSON."""
+        from helpers import _extract_json_assignment
+        raw = _extract_json_assignment(self.html, var_name)
+        return json.loads(raw) if raw else None
