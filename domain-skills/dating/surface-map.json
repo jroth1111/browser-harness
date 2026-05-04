@@ -3,11 +3,10 @@
   "domain": "dating-platforms",
   "field_tested": {
     "date": "2026-05-03",
-    "note": "Tinder selectors partially field-tested in transcript 70fbfcd8-2a6f-468c-a65c-5eae4b248e16. Hinge and Feeld remain deferred pending feasibility testing."
+    "note": "Tinder login, visible recs, sidebar entries, conversation DOM, and message extraction selectors confirmed in transcript 70fbfcd8-2a6f-468c-a65c-5eae4b248e16. Direct Tinder API/localStorage access forbidden because they triggered account restriction risk. Full chat extraction allowed through slow UI-only crawl with checkpointing (see chat-audit.md). Hinge and Feeld remain deferred pending feasibility testing."
   },
   "path_types": [
-    "browser",
-    "hybrid"
+    "browser"
   ],
   "forbidden": [
     "automated account creation",
@@ -18,7 +17,10 @@
     "extracting or storing other users' photos",
     "creating fake profiles or misrepresenting identity",
     "unmatching without explicit user request",
-    "making purchases or using premium features without request"
+    "making purchases or using premium features without request",
+    "direct Tinder API calls or api.gotinder.com access",
+    "reading Tinder auth tokens from localStorage or cookies",
+    "automated traversal of many conversations via API or script (slow UI-only crawl is allowed, see chat-audit.md)"
   ],
   "execution_policy": {
     "stop_on": [
@@ -32,8 +34,7 @@
     "fallback_on": [
       "selector_drift",
       "slow_load",
-      "partial_content",
-      "api_token_unavailable"
+      "partial_content"
     ],
     "never_fallback_to": [
       "credential_entry",
@@ -187,49 +188,9 @@
       }
     },
     {
-      "id": "hybrid_read_conversation",
-      "path_type": "hybrid",
-      "primary": "Tinder API using fresh browser localStorage auth token when available",
-      "fallback_chain": [
-        "browser_read_conversation_dom"
-      ],
-      "inputs": [
-        "platform",
-        "match_id"
-      ],
-      "outputs": [
-        "messages"
-      ],
-      "evidence": [
-        "message list extracted with sender, text, timestamp, and order"
-      ],
-      "platform_details": {
-        "tinder": {
-          "status": "CONFIRMED_VIA_API",
-          "mechanism": "API preferred (faster, more reliable). DOM as fallback.",
-          "selectors": {
-            "api_endpoint": "https://api.gotinder.com/v2/matches/{match_id}/messages?count=100",
-            "api_auth": "X-Auth-Token from localStorage.getItem('TinderWeb/APIToken')",
-            "dom_container": "[role=\"log\"] inside main",
-            "dom_message": "[role=\"article\"]",
-            "dom_sender": "strong.Hidden (\"You:\" or match name)",
-            "dom_text": "span.text or span[class*=\"text\"]",
-            "dom_timestamp": "time[datetime]"
-          },
-          "notes": "API tokens expire and refresh on page reload. Always read fresh token before API calls. Rate limit API calls 200ms+ apart."
-        },
-        "hinge": {
-          "status": "DEFERRED"
-        },
-        "feeld": {
-          "status": "DEFERRED"
-        }
-      }
-    },
-    {
       "id": "browser_read_conversation_dom",
       "path_type": "browser",
-      "primary": "js() extraction from [role=\"log\"] [role=\"article\"] conversation DOM",
+      "primary": "UI-only conversation reading from visible browser page via DOM extraction",
       "fallback_chain": [
         "conversation_screenshot_scroll"
       ],
@@ -241,22 +202,61 @@
         "messages"
       ],
       "evidence": [
-        "DOM message list extracted with sender, text, timestamp, and order"
+        "visible conversation page reviewed with DOM extraction"
       ],
       "platform_details": {
         "tinder": {
-          "status": "CONFIRMED_VIA_API",
-          "mechanism": "API preferred (faster, more reliable). DOM as fallback.",
+          "status": "CONFIRMED",
+          "mechanism": "DOM extraction via evaluate_script. No API calls, no token reading.",
           "selectors": {
-            "api_endpoint": "https://api.gotinder.com/v2/matches/{match_id}/messages?count=100",
-            "api_auth": "X-Auth-Token from localStorage.getItem('TinderWeb/APIToken')",
-            "dom_container": "[role=\"log\"] inside main",
-            "dom_message": "[role=\"article\"]",
-            "dom_sender": "strong.Hidden (\"You:\" or match name)",
-            "dom_text": "span.text or span[class*=\"text\"]",
-            "dom_timestamp": "time[datetime]"
+            "conversation_log": "[role='log']",
+            "message_article": "[role='article']",
+            "sender": "strong.Hidden",
+            "message_text": "span.text",
+            "timestamp": "time",
+            "is_user_sent": "sender textContent === 'You'"
           },
-          "notes": "API tokens expire and refresh on page reload. Always read fresh token before API calls. Rate limit API calls 200ms+ apart."
+          "notes": "Scroll up within [role='log'] to load older messages. Saturation at 3 consecutive zero-new scrolls."
+        },
+        "hinge": {
+          "status": "DEFERRED"
+        },
+        "feeld": {
+          "status": "DEFERRED"
+        }
+      }
+    },
+    {
+      "id": "browser_extract_all_chats",
+      "path_type": "browser",
+      "primary": "slow UI-only crawl with checkpointing — scroll sidebar to discover chats, navigate to each, extract messages via DOM",
+      "fallback_chain": [
+        "conversation_screenshot_scroll"
+      ],
+      "inputs": [
+        "platform"
+      ],
+      "outputs": [
+        "chat_list",
+        "threads"
+      ],
+      "evidence": [
+        "extraction-state.json checkpoint with per-conversation message counts"
+      ],
+      "consent_gate": true,
+      "platform_details": {
+        "tinder": {
+          "status": "CONFIRMED",
+          "mechanism": "Two-phase crawl: (1) sidebar scroll to discover all chat links, (2) navigate to each chat and extract messages via DOM with scroll-up saturation",
+          "selectors": {
+            "sidebar_link": "nav a[href*='/app/messages/']",
+            "conversation_log": "[role='log']",
+            "message_article": "[role='article']",
+            "sender": "strong.Hidden",
+            "message_text": "span.text",
+            "timestamp": "time"
+          },
+          "notes": "Resumable across sessions. No hard cap on conversations — pacing rules self-limit. 3-6s between nav, 2-4s between scrolls, 8-15s between conversations. Checkpoint after each conversation. See chat-audit.md for full protocol."
         },
         "hinge": {
           "status": "DEFERRED"
@@ -405,11 +405,11 @@
       "path_type": "browser"
     },
     {
-      "id": "tinder_conversation_api",
-      "path_type": "hybrid"
+      "id": "tinder_conversation_dom",
+      "path_type": "browser"
     },
     {
-      "id": "tinder_conversation_dom",
+      "id": "tinder_chat_extraction",
       "path_type": "browser"
     },
     {
@@ -473,8 +473,8 @@
     ],
     "read_chats": [
       "browser_read_chat_list",
-      "hybrid_read_conversation",
-      "browser_read_conversation_dom"
+      "browser_read_conversation_dom",
+      "browser_extract_all_chats"
     ],
     "send_message": [
       "browser_send_message"

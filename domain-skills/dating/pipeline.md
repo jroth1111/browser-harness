@@ -6,12 +6,12 @@ Seven stages from onboarding to date coordination. Each stage specifies what the
 
 - **Trigger**: No `.private-data/user-model.md` exists, or user requests profile update.
 - **Options** (offer in this order):
-  1. **Chat audit shortcut** — `chat-audit.md` — extract voiceprint and outcomes from existing Tinder/Hinge/Feeld conversations. Richest signal source.
-  2. **Deep research** — `references/research-user.md` — scan digital footprint to pre-populate user model.
-  3. **Manual interview** — `onboarding.md` — structured Q&A. Use as fallback or to fill gaps after options 1-2.
-- **Browser**: None for manual interview. Required for chat audit (read-only extraction).
+  1. **Manual interview** — `onboarding.md` — structured Q&A. Safest primary source.
+  2. **Deep research** — `references/research-user.md` — scan user-approved digital footprint to pre-populate user model.
+  3. **Full chat extraction** — `chat-audit.md` — slow UI-only crawl of all conversations with checkpointing. Resumable across sessions. No API access or token reading.
+- **Browser**: None for manual interview. Browser use for chat extraction is UI-only with checkpointing (see `chat-audit.md`).
 - **AI**: Build user model and voiceprint using chosen method.
-- **Output**: `.private-data/user-model.md`, `.private-data/voiceprint.md`, `.private-data/outcome-log.md` (if chat audit).
+- **Output**: `.private-data/user-model.md`, `.private-data/voiceprint.md`, `.private-data/outcome-log.md` (if chat extraction is used).
 - **Next**: User selects a platform and action.
 
 ## Stage 1: Platform Connect
@@ -48,7 +48,7 @@ Seven stages from onboarding to date coordination. Each stage specifies what the
 ## Stage 3: Match Review
 
 - **Trigger**: Matches exist, user wants to review.
-- **Browser**: Navigate to matches page. `js()` to extract match list.
+- **Browser**: Navigate to matches page and inspect only the visible, user-selected subset. Do not enumerate or export all matches.
 - **AI**: For each match, apply `references/profile-conversation-read.md`.
 - **AI**: Prioritize matches by compatibility score.
 - **Output**: Ranked match list:
@@ -79,9 +79,9 @@ Seven stages from onboarding to date coordination. Each stage specifies what the
 ## Stage 5: Conversation Phase
 
 - **Trigger**: User wants to check conversations or monitor for new messages.
-- **Browser**: Navigate to chat list. `js()` to detect unread messages.
-- **Per active conversation**:
-  1. Navigate to conversation. `js()` to extract full message thread.
+- **Browser**: Navigate to chat list. Inspect only user-selected or visibly unread conversations.
+- **Per active conversation** (maximum 3 per session unless user explicitly raises to 5):
+  1. Navigate to conversation through the normal UI. Do not call platform APIs, read auth tokens, or download full history.
   2. Apply `references/profile-conversation-read.md` to read the conversation.
   3. Classify stage (opening, early rally, banter, compatibility discovery, etc.).
   4. Apply `references/decision-rubric.md` to choose move.

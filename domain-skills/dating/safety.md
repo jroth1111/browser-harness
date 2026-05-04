@@ -32,6 +32,12 @@ Regardless of configured level, these always require explicit user confirmation:
 - Any message the AI flags as "high risk" (could be misread, boundary-crossing, or tone-mismatched)
 - Messages to matches the user hasn't interacted with in 7+ days
 - Any action when the AI confidence is below 50%
+- Opening or reviewing any existing conversation
+- Any review of more than 3 conversations in a session (does not apply to slow UI-only chat extraction with checkpointing — see `chat-audit.md`)
+
+These actions are never allowed:
+- Direct platform API calls, including `api.gotinder.com` — all data comes through browser UI
+- Reading auth tokens from localStorage, cookies, or browser storage
 
 ## Rate limiting
 
@@ -42,22 +48,25 @@ Regardless of configured level, these always require explicit user confirmation:
 | Between swipes | 1.5s | 5.0s | Uniform random |
 | Between reading profiles | 0.5s | 2.0s | Uniform random |
 | Between sending messages | 2.0s | 5.0s | Uniform random |
-| Between opening chats | 1.0s | 3.0s | Uniform random |
+| Between opening chats | 15.0s | 45.0s | User-paced, not bulk |
 | After navigation | 1.0s | — | Wait for content |
 
 ### Session limits
 
 | Limit | Default | Maximum | Rationale |
 |---|---|---|---|
-| Swipes per session | 80 | 200 | Free accounts ~100 before soft lock |
-| Messages per session | 40 | 100 | Avoid spam detection |
-| Session duration | 30 min | 120 min | Avoid prolonged bot-like sessions |
-| Concurrent conversations | 5 | 10 | Quality over quantity |
+| Swipes per session | 20 | 40 | Conservative account-safety cap |
+| Messages per session | 10 | 20 | Avoid spam detection |
+| Existing conversations reviewed | 3 | 5 | User-selected sample for live review |
+| Chat extraction per session | No hard cap | No hard cap | Slow UI-only crawl with checkpointing (see `chat-audit.md`). Pacing rules self-limit. |
+| Session duration | 20 min | 45 min | Avoid prolonged bot-like sessions |
+| Concurrent conversations | 3 | 5 | Quality over quantity |
 
 ### Break scheduling
 
-- After every 20 swipes: pause 30-60 seconds
-- After every 10 messages: pause 60-120 seconds
+- After every 10 swipes: pause 60-120 seconds
+- After every 5 messages: pause 120-240 seconds
+- After each reviewed existing conversation: pause and ask whether to continue
 - After session limit: stop completely, report summary
 
 ## Anti-detection countermeasures
@@ -69,8 +78,9 @@ Regardless of configured level, these always require explicit user confirmation:
 3. **Navigation variety**: Occasionally navigate away from the swipe stack and back. Visit matches page, then return.
 4. **Session breaks**: Never run for extended periods without breaks. Respect session duration limits.
 5. **Message uniqueness**: Never send identical messages to multiple matches. Each message must be unique and context-specific.
-6. **API spacing**: Space API calls 200ms+ apart. Never make rapid-fire requests.
-7. **Read-before-send**: Always read the conversation history before drafting a reply, even if you have context from a previous session.
+6. **No direct APIs**: Never call platform private APIs or read auth tokens from browser storage.
+7. **Read-before-send**: Review the relevant visible conversation before drafting a reply, but only for the user-selected conversation being handled.
+8. **Extraction pacing**: Full chat extraction via UI crawl must follow pacing rules in `chat-audit.md` — 3-6s between navigation, 2-4s between scrolls, 8-15s between conversations, checkpoint after each.
 
 ### Fingerprint reduction
 
@@ -78,6 +88,7 @@ Regardless of configured level, these always require explicit user confirmation:
 2. Vary the entry point (sometimes start from matches, sometimes from recs).
 3. Don't always open the first match first. Vary traversal order.
 4. Occasionally re-read a profile you've already seen.
+5. Do not enumerate the whole account via API. Slow UI-only chat extraction with checkpointing is allowed — it looks like a human browsing their history.
 
 ## Block / CAPTCHA handling
 
@@ -88,6 +99,7 @@ Stop immediately if any of these appear:
 - "Something went wrong" or error pages
 - Redirect to login page when already logged in
 - "Your account is under review" or similar restriction notice
+- Any 24-hour restriction, temporary ban, or account activity warning
 - Unusually fast rate limit (signals detection)
 - Page content doesn't match expected structure
 - Element selectors fail repeatedly (may indicate DOM changes or block)
@@ -106,7 +118,8 @@ Stop immediately if any of these appear:
 ### After a block
 
 - Wait at least 24 hours before attempting automation on that platform again.
-- On next session, start with reduced limits (50% of normal).
+- After a platform restriction, do not automate that platform again unless the user explicitly re-enables it in a later session.
+- On any later session, start with manual, UI-only, one-action-at-a-time operation.
 - If blocked a second time, stop all automation on that platform and discuss with user.
 
 ## Audit trail

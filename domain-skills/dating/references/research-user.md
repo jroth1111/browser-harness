@@ -32,10 +32,10 @@ Run these in order. Skip any the user declines to provide.
 - What the user chose to present reveals self-perception and intent
 - Photo selection patterns reveal self-presentation style
 
-### 5. Existing chat threads (Tinder chat audit — see `chat-audit.md`)
-- Read all existing conversations on connected platforms
-- Extract: what messages the user sent, what landed, what fell flat
-- This is the richest signal source for voiceprint and outcome patterns
+### 5. Existing chat threads (slow UI-only extraction — see `chat-audit.md`)
+- Full chat extraction through slow browser UI crawl with checkpointing.
+- Resumable across sessions. No API access or token reading.
+- Extract patterns: what messages the user sent, what landed, what fell flat.
 
 ## How to run
 

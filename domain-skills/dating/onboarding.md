@@ -1,12 +1,12 @@
 # Onboarding — Structured Interview Flow
 
-Builds user model and voiceprint through a structured interview. Use as the fallback option after chat audit (`chat-audit.md`) and deep research (`references/research-user.md`).
+Builds user model and voiceprint through a structured interview. Use as the primary safe option before any chat extraction (`chat-audit.md`) or deep research (`references/research-user.md`).
 
 ## When to use
 
 - No `.private-data/user-model.md` exists
 - User wants to update preferences
-- Chat audit or deep research left gaps that need filling
+- Chat extraction or deep research left gaps that need filling
 
 ## Interview flow
 

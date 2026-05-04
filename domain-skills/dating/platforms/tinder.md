@@ -81,55 +81,55 @@ dismiss_button: ""
 
 ## Chat list extraction
 
-**STATUS: NEEDS FIELD TESTING**
+**STATUS: CONFIRMED**
 
-Navigate to `https://tinder.com/app/messages`. Extract:
-- Match name
-- Unread indicator
-- Last message preview
-- Timestamp
+Navigate to `https://tinder.com/app/messages`. Extract conversation entries from the sidebar.
 
 ```
-chat_list_container: ""
-chat_item: ""
-chat_name: ""
-unread_indicator: ""
-last_message_preview: ""
+sidebar_link: "nav a[href*='/app/messages/']"
+chat_name: link.textContent.trim()
+match_id: url.split('/app/messages/')[1]
 ```
+
+Sidebar shows a subset — scroll down to load more entries. Saturation at 3 consecutive scrolls with 0 new entries.
 
 ## Conversation extraction
 
-**STATUS: NEEDS FIELD TESTING**
+**STATUS: CONFIRMED**
 
-Navigate to individual chat. Extract:
-- Message bubbles (sender identification)
-- Message text
-- Timestamps
-- Media indicators
+Navigate to individual chat. Extract messages from DOM.
 
 ```
-message_container: ""
-message_bubble: ""
-sent_message_selector: ""
-received_message_selector: ""
-message_text: ""
-timestamp: ""
+conversation_log: "[role='log']"
+message_article: "[role='article']"
+sender: "strong.Hidden" → textContent minus ":"
+message_text: "span.text"
+timestamp: "time" → textContent + datetime attribute
+is_sent: sender === "You"
 ```
+
+Scroll up within `[role='log']` to load older messages. Wait 2-4s per scroll. Saturation at 3 consecutive scrolls with 0 new messages.
+
+For full extraction protocol with checkpointing, see `chat-audit.md`.
 
 ## Message input
 
-**STATUS: NEEDS FIELD TESTING**
+**STATUS: CONFIRMED**
 
 ```
-message_input: ""
-send_button: ""
+message_input: "Type a message ..." textbox
+send_button: "SEND" button
 ```
 
-Approach: `type_text(message)` into input field, then `dispatch_key("Enter")` or `click_at_xy` on send button.
+Approach: `type_text(message)` into input field, then dispatch Enter or click send button.
 
 ## Gotchas
 
 - Tinder aggressively detects bots. Keep human-like timing. See `safety.md`.
+- Do not call Tinder private APIs or `api.gotinder.com`.
+- Do not read `localStorage`, cookies, or browser storage for auth tokens.
+- Full chat extraction is allowed through slow UI-only crawl with checkpointing (see `chat-audit.md`).
+- Live conversation review (during pipeline stages) is user-selected, UI-only, and capped at 3-5 per session.
 - Rate limits: approximately 100 swipes before soft lock (free accounts). Stop well before this.
 - A/B tests may change DOM structure between sessions. Verify selectors each session.
 - Profile content may be lazy-loaded. Scroll or expand before extraction.
