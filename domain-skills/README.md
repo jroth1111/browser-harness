@@ -40,18 +40,18 @@ four-state extraction for browser-based extraction.
 
    **Anti-bot classification.** Record what protection the site uses (Cloudflare
    Turnstile, Datadome, Akamai, Kasada, none detected) and which backend path
-   works. The escalation order is:
+   works. Three tiers:
 
    ```
-   curl_cffi(url)              # impersonate a real TLS fingerprint
-     ├─ ok? done
-     ├─ blocked? → CDP browser + wait_for_content()
-     │   ├─ ok? done
-     │   ├─ turnstile? → solve_turnstile()
-     │   │   ├─ solved? done
-     │   │   └─ failed? → patchright stealth_session()
-     │   │       ├─ ok? done
-     │   └─ other error? → retry / report
+   1. curl_cffi(url)                    # impersonates real TLS fingerprint
+      ok? done. blocked? → 2
+
+   2. CDP browser + wait_for_content()  # full Chrome rendering
+      ok? done. turnstile? → solve_turnstile() (fix within this tier)
+      turnstile unsolved or bot detected? → 3
+
+   3. patchright stealth_session()       # different browser backend entirely
+      ok? done. failed? → stop, report
    ```
 
    Record the result as a dated finding in overview.md:
