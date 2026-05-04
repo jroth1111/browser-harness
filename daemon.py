@@ -264,6 +264,7 @@ class Daemon:
         self.endpoint_info = None
         self.events = deque(maxlen=BUF)
         self.dialog = None
+        self.blockers = deque(maxlen=200)
         self.stop = None  # asyncio.Event, set inside start()
 
     async def attach_first_page(self):
@@ -302,8 +303,11 @@ class Daemon:
             self.events.append({"method": method, "params": params, "session_id": session_id})
             if method == "Page.javascriptDialogOpening":
                 self.dialog = params
+                self.blockers.append({"kind": "dialog", "params": params, "t": time.time()})
             elif method == "Page.javascriptDialogClosed":
                 self.dialog = None
+            elif method in ("Page.fileChooserOpened", "Page.downloadWillBegin"):
+                self.blockers.append({"kind": method.split(".")[-1], "params": params, "t": time.time()})
             elif method == "Target.targetDestroyed":
                 destroyed_id = (params or {}).get("targetId")
                 if destroyed_id and destroyed_id == self._attached_target_id:
@@ -339,6 +343,9 @@ class Daemon:
             self._attached_target_id = req.get("target_id", self._attached_target_id)
             return {"session_id": self.session}
         if meta == "pending_dialog": return {"dialog": self.dialog}
+        if meta == "pending_blockers":
+            out = list(self.blockers); self.blockers.clear()
+            return {"blockers": out}
         if meta == "shutdown":    self.stop.set(); return {"ok": True}
 
         method = req["method"]
