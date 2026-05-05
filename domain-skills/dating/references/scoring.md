@@ -96,3 +96,21 @@ For existing conversations, add these dimensions:
 - **Thread health**: Is the conversation alive, flat, or draining?
 
 Conversation scoring uses the same decision rubric but maps to message moves instead of swipe moves (see `references/decision-rubric.md` pipeline-stage mapping).
+
+## Lead tiers
+
+Once a thread has at least two exchanges, classify the lead into a tier and update `lead_tier` in `references/thread-state.md`. Tier drives investment level and consent gating.
+
+| Tier | Signals | Action | Investment policy |
+|---|---|---|---|
+| **high** | Asks back; reveals specifics; plays back; matches or escalates flirtation; logistically plausible; structurally compatible | Invest, qualify, escalate when `escalation_readiness.ready === true` | Match her energy; slightly elevate when she increases |
+| **medium** | Some warmth; inconsistent effort; one or more compatibility unknowns | Test one key unknown with a single sharper shot | Match her energy only; do not pre-invest |
+| **low** | Only responds, never asks; vague; dodges clarity; hot/cold | Do not carry; let dormancy handle it | Do not over-function; one revive max if structurally viable |
+| **false-positive** | High chemistry but low compatibility, low availability, or pure fantasy fuel | Do not romanticise; clarify or exit | Charge does not justify investment; check `false_chemistry_flags[]` |
+
+**Tier rules**:
+- A thread can move up tiers when she invests; downgrade after two consecutive `maintaining` or one `decreasing` (matches `references/decision-rubric.md` deprioritise triggers).
+- `false-positive` is not a downgrade of `high` — it is a separate diagnosis. A thread can have high chemistry and still be false-positive.
+- Lead tier informs message length: drafts to `low` and `false-positive` should be short or absent. Long replies to short replies are an over-function red flag.
+
+**Default starting tier**: `medium` after first reply, until evidence supports `high` or `low`.

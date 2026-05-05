@@ -30,8 +30,8 @@ Regardless of configured level, these always require explicit user confirmation:
 - First message to a new match (opener)
 - Date proposal or escalation message
 - Any message the AI flags as "high risk" (could be misread, boundary-crossing, or tone-mismatched)
-- Messages to matches the user hasn't interacted with in 7+ days
-- Any action when the AI confidence is below 50%
+- Messages to a match where the most recent exchange in `.private-data/outcome-log.md` is older than 7 days (treat as a re-engagement, not a continuation)
+- Any action where AI confidence (per `references/scoring.md` and `references/decision-rubric.md`) is LOW
 - Opening or reviewing any existing conversation
 
 These actions are never allowed:
@@ -40,29 +40,19 @@ These actions are never allowed:
 
 ## Rate limiting
 
-### Inter-action timing
+No hard caps. Pacing rules and break scheduling keep behavior human-like; the user controls when to stop. All inter-action delays use uniform random within the stated range.
 
-| Action | Minimum delay | Maximum delay | Distribution |
-|---|---|---|---|
-| Between swipes | 1.5s | 5.0s | Uniform random |
-| Between reading profiles | 0.5s | 2.0s | Uniform random |
-| Between sending messages | 2.0s | 5.0s | Uniform random |
-| Between opening chats | 15.0s | 45.0s | User-paced, not bulk |
-| After navigation | 1.0s | — | Wait for content |
-
-### Pacing guidelines
-
-No hard caps. Pacing rules and break scheduling keep behavior human-like. The user controls when to stop.
-
-| Action | Pacing | Purpose |
+| Action | Delay | Purpose |
 |---|---|---|
-| Between swipes | 1.5-5.0s random | Human-like rhythm |
-| Between messages | 2.0-5.0s random | Human-like rhythm |
-| Between opening chats | 15-45s | User-paced, not bulk |
-| After every 10 swipes | Pause 60-120s | Break cadence |
-| After every 5 messages | Pause 120-240s | Break cadence |
+| Between swipes | 1.5–5.0s | Human-like rhythm |
+| Between reading profiles | 0.5–2.0s | Human-like rhythm |
+| Between sending messages | 2.0–5.0s | Human-like rhythm |
+| Between opening chats | 15–45s | User-paced, not bulk |
+| After navigation | wait for content (≥1.0s) | DOM ready |
+| After every 10 swipes | Pause 60–120s | Break cadence |
+| After every 5 messages | Pause 120–240s | Break cadence |
 | After each conversation | Pause and ask whether to continue | User control |
-| Chat extraction | No hard cap, pacing self-limits | See `chat-audit.md` |
+| Chat extraction | See `chat-audit.md` pacing | Slow UI-only crawl |
 | GDPR export | No limits — no browser interaction | Instant, zero risk |
 
 ## Anti-detection countermeasures
@@ -116,10 +106,11 @@ Stop immediately if any of these appear:
 
 ### After a block
 
-- Wait at least 24 hours before attempting automation on that platform again.
-- After a platform restriction, do not automate that platform again unless the user explicitly re-enables it in a later session.
-- On any later session, start with manual, UI-only, one-action-at-a-time operation.
-- If blocked a second time, stop all automation on that platform and discuss with user.
+Three-tier escalation. Tier is set by the block type detected, not by count.
+
+- **Tier 1 — soft signal** (CAPTCHA, "Something went wrong", unexpected popup, repeated selector failure): wait at least 24 hours, then resume only with manual, UI-only, one-action-at-a-time operation. If a second Tier-1 signal appears in the next session, escalate to Tier 2.
+- **Tier 2 — explicit restriction** ("Your account is under review", 24-hour temporary ban, rate-limit lockout, account activity warning): do not automate that platform again unless the user explicitly re-enables it in a later session. Resumption starts with manual, UI-only operation.
+- **Tier 3 — repeat or hard block** (any block after a Tier-2 reset, or permanent restriction): stop all automation on that platform and discuss with the user before any further action.
 
 ## Audit trail
 
@@ -133,10 +124,13 @@ Every automated action logs to `.private-data/outcome-log.md`:
 Type: [swipe | message | navigate | read]
 Target: [match name or profile identifier]
 Decision: [LIKE/PASS | message text | URL]
-AI confidence: [0-100]
+AI confidence: [HIGH/MEDIUM/LOW]
 Consent: [auto/approved/manual]
 Rubric score: [if applicable]
 Result: [success/fail/block]
+Predicted_watch: [Watch line if message; per references/thread-state.md predictions]
+Verdict: [confirmed/falsified/inconclusive — when a prior prediction was resolved this cycle]
+Thread_stage: [from .private-data/threads/<match_id>.json — for messages]
 Notes: [any observations]
 ```
 
@@ -154,7 +148,27 @@ Messages drafted: [N]
 New matches: [N]
 Conversations checked: [N]
 Blocks/incidents: [N]
+
+Funnel (this session):
+- Openers sent: [N]
+- Opener replies received: [N] ([rate%])
+- Conversations active: [N]
+- Date proposals sent: [N] ([rate% of active conversations])
+- Date proposals accepted: [N] ([rate%])
+
+Funnel (rolling 30 days, computed from .private-data/threads/*.json):
+- Opener → reply: [rate%] over [N openers]
+- Conversation → escalation: [rate%] over [N conversations]
+- Escalation → date confirmed: [rate%] over [N proposals]
+- Date confirmed → meet: [rate%] over [N confirmed]
+
+Closed-loop verdicts (this session):
+- Predictions resolved: [N]
+- Confirmed / Falsified / Inconclusive: [N / N / N]
+- Cross-thread patterns surfaced: [N — list briefly]
 ```
+
+The funnel rates and verdicts are computed by reading `.private-data/threads/*.json` per `references/thread-state.md` cross-thread queries. They are the primary feedback signal for whether rubric/voice changes are working; review them at the end of every session.
 
 ## Emergency stop
 

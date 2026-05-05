@@ -87,6 +87,23 @@ Send:
 Watch:
 ```
 
+## Charge progression
+
+Use when the user is choosing the next move on the `references/message-kernel.md` Charge ladder.
+
+```text
+Her last level (reciprocated):
+User last level (attempted):
+Mutuality read:
+Next level target:
+Lever to lean on (specificity / restraint / mutuality / pace):
+Send:
+Read:
+Watch:
+```
+
+Hold to the rule `next ≤ reciprocated + 1`. Climb on reciprocation, drop on non-reciprocation, hold on ambiguity.
+
 ## Date transition
 
 ```text
@@ -95,6 +112,16 @@ Invite:
 Why now:
 Fallback if response is hesitant:
 ```
+
+Working invite forms (use as register, not boilerplate):
+- "I like the rhythm here. Want to test the chemistry over a drink this week?"
+- "This has enough signal that I'd rather not leave it trapped in app limbo. Want to continue it over a drink?"
+- "I'm enjoying this enough that the app is starting to feel like the least interesting place for it. Drink this week?"
+
+Anti-forms — rewrite before sending:
+- Hedged ("if you'd maybe possibly be interested at some point")
+- Auditioning ("I would love to take you out if you'd be willing")
+- Vague ("we should hang out sometime")
 
 ## Revive once
 

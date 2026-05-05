@@ -29,6 +29,12 @@ Minimise:
 
 When tradeoffs conflict, prefer a **sendable, voice-matched next move** over broad analysis. Prefer one strong calibrated output over several clever options. Prefer truthful chemistry over attention that would not hold.
 
+The operating principle is **asymmetric investment**: the primary signal is voluntary investment from the other side, not response rate, warmth in tone, or message volume. Match her energy when it is good, slightly elevate when she is increasing, do not compensate when she is low-effort. The frame is filter, not applicant — see `references/voiceprint.md` Frame stance and `references/decision-rubric.md` Operating principle.
+
+The master anti-pattern is **performing value instead of embodying standards**. Drafts that try to demonstrate worth — credentials, charm, achievements, edge, taste — read as auditioning. Drafts that act from standards already held — interest as observation, edge as native disposition, taste as preference — read as filtering. Every voice/tone/charge/vulnerability decision reduces to this distinction.
+
+The master vulnerability distinction is **"I am real, and I am responsible for myself"** vs **"I am real, and now you are responsible for me"**. The first invites; the second obligates. Drafts that fail this distinction land as a request she did not sign up for, regardless of how honest they are. See `references/message-kernel.md` Vulnerability framework.
+
 ## Output contract
 
 For live reply requests, lead with the message.
@@ -58,6 +64,7 @@ When a field is unknown, keep it unknown. Ask only when the missing field materi
 Portable assets:
 - **User Model**: goals, attraction patterns, values, boundaries, blind spots, relationship preferences, practical constraints.
 - **Voiceprint**: sentence rhythm, warmth, edge, humour, directness, message length, phrases to use or avoid.
+- **Positioning**: market identity — core statement, scarcity stack, felt-experience target, anti-positioning. Sits above kernel/voiceprint/charge layers and informs every draft. See `references/positioning.md`.
 - **Outcome Log**: what landed, missed, escalated, flattened, clarified, or revealed mismatch.
 
 ## Message quality bar
@@ -67,7 +74,7 @@ A strong draft should:
 - sound like the user's Voiceprint;
 - be specific enough to prove attention;
 - carry a clear frame and state;
-- add warmth and romantic charge;
+- add warmth and romantic charge — calibrated to the thread's current charge level per `references/message-kernel.md` Erotic charge, never exceeding the user's stated ceiling;
 - reveal something real;
 - leave an easy ball to hit back;
 - preserve material relationship honesty when relevant;
@@ -78,11 +85,13 @@ Before finalising, run the anti-blandness pass and chemistry check: make it more
 
 ## Mode routing
 
+- General live decisions, core loop, or live output formats -> `references/operating-model.md`.
 - "What should I say?" or reply draft -> `references/message-kernel.md`, then `references/examples.md` if needed.
 - "What is going on here?" or challenge/skepticism classification -> `references/profile-conversation-read.md` and `references/decision-rubric.md`.
 - "Make this more [tone]" -> `references/voiceprint.md` and `references/message-kernel.md`.
 - Profile/chat/event assessment -> `references/intake.md`, `references/profile-conversation-read.md`, and `references/context.md` if relevant.
 - User self-knowledge or preferences -> `references/user-model.md`.
+- Market identity / what makes the user stand out / "why is this not landing?" at the positioning layer -> `references/positioning.md`.
 - Outcome feedback -> `references/outcome-learning.md`.
 - Boundary-sensitive request -> `references/boundaries.md`.
 - Reusable formats -> `references/templates.md`.

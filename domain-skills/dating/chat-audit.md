@@ -91,7 +91,7 @@ sidebar_link:  "nav a[href*='/app/messages/']"
 2. **Dismiss popups** — Tinder shows a chain of popups after navigation (cookie consent, location permission, notification prompt, upgrade nags). Dismiss each by pressing Escape or clicking dismiss/close buttons. If a popup blocks the sidebar, handle it before continuing.
 3. Wait for sidebar to load
 4. Run extraction JS to collect visible sidebar links
-5. **Filter out non-chat links** — exclude URLs containing `likes-you` or `my-lices` (these are not conversations)
+5. **Filter out non-chat links** — exclude URLs containing `likes-you` or `my-likes` (these are not conversations)
 6. Scroll the sidebar container via JS: `el.scrollTop = el.scrollHeight`, then compare `scrollHeight` before and after. If unchanged, scroll is saturated.
 7. Wait 2-4 seconds
 8. Repeat from step 4
@@ -107,7 +107,7 @@ sidebar_link:  "nav a[href*='/app/messages/']"
     const url = link.href;
     const matchId = url.split('/app/messages/')[1] || '';
     // Filter out non-chat sidebar links
-    if (matchId === 'likes-you' || matchId === 'my-lices' || matchId === '') continue;
+    if (matchId === 'likes-you' || matchId === 'my-likes' || matchId === '') continue;
     const name = link.textContent.trim();
     convos.push({ name, matchId, url });
   }

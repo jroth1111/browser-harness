@@ -23,11 +23,12 @@ Not-logged-in indicators:
 
 ## Profile card selectors
 
-**STATUS: PARTIALLY CONFIRMED** (TinderBotz, davidteather/tinder-bot, shashank-100/tinder-cli, Copy Conversation Gist)
+**STATUS: PARTIALLY CONFIRMED.** Card name/age + photo carousel confirmed. Bio, prompts, job, education, distance, lifestyle tags need field testing after expanding the profile card.
 
-Tinder uses Yahoo-style obfuscated CSS classes (`Px(16px)`, `Bdrs(100px)`, `Ta(e)`, `Typs(subheading-1)`) that change across deployments. Prefer `data-*`, `aria-*`, `role` attributes and keyboard shortcuts over CSS-class or XPath selectors.
+Tinder uses Yahoo-style obfuscated CSS classes (`Px(16px)`, `Bdrs(100px)`, `Ta(e)`, `Typs(subheading-1)`) that change across deployments. Use a11y-tree selectors (`role`, `aria-label`, `data-testid`) and keyboard shortcuts as primary; fall back to obfuscated classes only when a11y is unavailable; never rely on absolute XPaths.
 
-### Confirmed from field testing (our project)
+### Confirmed (field-tested in this project)
+
 ```
 card_container:  region "Card stack"
 name_age:        button "{name} {age} Open profile"
@@ -40,244 +41,123 @@ nope_button:     button "NOPE"
 super_like:      button "SUPER LIKE"
 ```
 
-### Selectors from open-source projects (cross-reference)
+### Selector stability ranking
 
-TinderBotz (Selenium + undetected-chromedriver, most complete):
-```
-name:           XPath {content}/div/div[1]/div/main/div[1]/div/div/div[1]/div[1]/div/div[2]/div[1]/div/div[1]/div/h1
-age:            XPath {content}/div/div[1]/div/main/div[1]/div/div/div[1]/div[1]/div/div[2]/div[1]/div/div[1]/span
-verified:       XPath ...div[1]/div[2] existence check
-bio:            CSS div[class*="Px(16px) Py(12px) Us(t)"]
-looking_for:    CSS div[class="Px(16px) My(12px)"]>div[class="D(b)"] div[class="Typs(subheading-1) CenterAlign"]
-passions:       CSS div[class='Px(16px) Py(12px)'] h2 + div[class^='Bdrs(100px)'] items
-row_data:       XPath //div[@class="Row"] with SVG d-attribute path matching
-images:         XPath //div[@aria-label='Profile slider'] → value_of_css_property('background-image').split('"')[1]
-profile_open:   ActionChains.send_keys(Keys.ARROW_UP)
-like:           ActionChains.send_keys(Keys.ARROW_RIGHT)
-dislike:        ActionChains.send_keys(Keys.ARROW_LEFT)
-superlike:      ActionChains.drag_and_drop_by_offset(card, 0, -200)
-```
-
-davidteather/tinder-bot (Selenium + selenium-stealth):
-```
-card:           XPath //span[@class='keen-slider__slide Wc($transform) Fxg(1)']/div
-name:           card.get_attribute("aria-label")
-bio:            XPath //div[@aria-hidden='false' and @class='Toa(n) Wc($transform)...']/div[@tabindex='0']/div[@class='Tsh($tsh-s)...']/div/div/div[@class='BreakWord Whs(pl)...']
-images:         XPath //div[@class='Expand Pos(a) D(f) Ov(h) Us(n) keen-slider']/span/div[@aria-label='{name}'] → outerHTML.split("url(&quot;")[1]
-school:         XPath //div[@aria-hidden='false']...div[@itemprop='affiliation']
-like_button:    XPath //div[@class='Pos(r) Py(16px)...']/div/button[2]
-dislike_button: XPath //div[@class='Pos(r) Py(16px)...']/div/button[1]
-image_cycle:    body.send_keys(Keys.SPACE) with 0.4s pause
-```
-
-shashank-100/tinder-cli (Chrome remote debugging + agent-browser CLI):
-```
-profile_text:   snapshot matching button "([^"]+Open profile[^"]*)" [ref
-like:           snapshot → button "LIKE" [ref=e\d+] → click @ref
-nope:           snapshot → button "NOPE" [ref=e\d+] → click @ref
-photos_region:  region "[^"]*photos[^"]*" [ref=e\d+]
-photo_tabs:     tab "Photo \d+" [ref=e\d+] — click each, get html, regex https://images.*gotinder.*
-```
-
-Youngermaster/Tinder-Automatic-Swiper (Chrome extension, content.js):
-```
-like_button:    document.getElementsByClassName("button Lts($ls-s) Z(0) CenterAlign...Bgi($g-ds-background-like):a")[0]
-dislike_button: document.getElementsByClassName("button Lts($ls-s) Z(0) CenterAlign...Bgi($g-ds-background-nope):a")[0]
-```
-
-liplylie/tinder-web-scraper (raw Selenium, minimal):
-```
-dismiss_popup:  XPath //*[@id="modal-manager"]/div/div/div[2]/div[1]/div/div[3]/button[1]
-login_btn:      XPath //*[@id="content"]/div/span/div/div[2]/div/div[1]/div[1]/div/button
-like_button:    XPath //*[@id="content"]/div/span/div/div[1]/div/main/div/div/div/div[1]/div[2]/button[4]
-dislike_button: XPath //*[@id="content"]/div/span/div/div[1]/div/main/div/div/div/div[1]/div[2]/button[2]
-dismiss_after:  driver.actions().sendKeys(webdriver.Key.ESCAPE).perform()
-```
-
-### Selector stability assessment
-
-| Approach | Stability | Reason |
+| Approach | Stability | Notes |
 |---|---|---|
-| Keyboard shortcuts (Arrow keys) | HIGH | Tinder uses these for accessibility; unlikely to change |
-| `aria-label`, `role`, `data-testid` | HIGH | Accessibility attributes are stable |
-| `button "LIKE"` / `button "NOPE"` from a11y tree | HIGH | Screen reader labels, stable |
-| `region "Card stack"`, `region "{name}'s photos"` | HIGH | ARIA roles for accessibility |
-| `div[class*="Px(16px)"]` Yahoo-style CSS classes | LOW | Obfuscated, change across builds |
-| Absolute XPaths like `/div[1]/div[2]/div[3]/...` | VERY LOW | Break on any DOM restructuring |
-| `//span[@class='keen-slider__slide Wc($transform) Fxg(1)']` | VERY LOW | Full class string match, brittle |
+| Keyboard shortcuts (Arrow keys, SPACE, Enter) | HIGH | Tinder maps these for power users |
+| `aria-label`, `role`, `data-testid` from a11y tree | HIGH | Stable across builds |
+| Yahoo-style classes (`Px(16px)`, `Ta(e)`, `Bdrs(100px)`) | LOW | Obfuscated, change across builds — fallback only |
+| Absolute XPaths (`/div[1]/div[2]/...`) | VERY LOW | Break on any DOM restructuring — never use |
+| Full class-string matches (`span[class='keen-slider__slide Wc($transform) Fxg(1)']`) | VERY LOW | Brittle — never use |
 
-### Recommended approach for our project
+### When primary selectors fail
 
-Use a11y tree selectors (button/region/tab roles) + keyboard shortcuts, which aligns with our existing confirmed selectors. Fall back to screenshot + OCR if a11y tree is stale after a Tinder update.
+If a11y-tree selectors miss after a Tinder update:
+1. `capture_screenshot()` and confirm DOM still renders the expected layout.
+2. Re-derive selectors via `js()` exploration and update this file + `surface-map.json`.
+3. Fall back to screenshot + click-by-coordinates while selectors are repaired.
+4. If the page structure has changed materially, stop the session and notify the user.
 
 ## Swipe mechanics
 
-**STATUS: CONFIRMED** (multiple projects + our field testing)
+**STATUS: CONFIRMED.**
 
-### Keyboard shortcuts (preferred — most stable)
-```
-Like:        Right arrow (ARROW_RIGHT)
-Nope:        Left arrow (ARROW_LEFT)
-Open profile: Up arrow (ARROW_UP)
-Super Like:  Enter key (or drag up by 200px)
-Dismiss:     Escape key
-```
-TinderBotz confirms keyboard shortcuts are more reliable than button clicks. Arrow keys work because Tinder maps them for power users. This is the recommended approach.
+### Keyboard shortcuts (primary — most stable)
 
-### Button selectors
+```
+Like:         Right arrow
+Nope:         Left arrow
+Open profile: Up arrow
+Super Like:   Enter (or drag card up by 200px)
+Cycle photos: SPACE (~0.4s pause between photos)
+Dismiss:      Escape
+```
+
+Keyboard shortcuts beat button clicks for stability and look more human-like.
+
+### Button selectors (fallback)
+
 ```
 like_button:     button "LIKE"
 nope_button:     button "NOPE"
 super_like:      button "SUPER LIKE"
 rewind_button:   button "REWIND" (paid feature)
 ```
-These come from the a11y tree (confirmed in our field testing and by shashank-100/tinder-cli).
-
-### CSS class selectors (from Chrome extension — less stable)
-```
-like_button:    class contains "Bgi($g-ds-background-like):a"
-dislike_button: class contains "Bgi($g-ds-background-nope):a"
-```
-
-### ActionChains approach (TinderBotz)
-```python
-like:    ActionChains.send_keys(Keys.ARROW_RIGHT)
-dislike: ActionChains.send_keys(Keys.ARROW_LEFT)
-super:   ActionChains.drag_and_drop_by_offset(card, 0, -200)
-```
 
 ### Post-swipe handling
-- After each swipe, check for "no more matches" state: `div[class*='Pos(a) B(20px) Ta(c) C($c-secondary)']` containing "unable to find any potential matches"
-- On "no more matches": refresh page, re-dismiss popups
-- Press Escape after each swipe to dismiss any overlay (liplylie approach)
-- Handle "It's a Match!" modal separately
+
+- After each swipe, press Escape to clear any overlay.
+- Watch for "It's a Match!" modal — handle separately (see Match notification).
+- Watch for "out of likes" / "no more matches" state — stop and notify the user.
 
 ## Match notification
 
-**STATUS: PARTIALLY CONFIRMED** (from TinderBotz popup handling)
-
-"It's a Match!" overlay detection:
-- TinderBotz handles this as one of many popup types in sequence
-- The session dismisses popups by clicking dismiss/close buttons in modal-manager
-- The overlay does NOT auto-close — requires explicit dismissal
-- After dismissing, the next profile card loads automatically
-
-TinderBotz popup handler sequence (7+ popup types handled in order):
-1. Cookie consent (`//button` with "accept" text)
-2. Location permission (`//button[@data-testid="allow"]`)
-3. Notification permission (`//button[@data-testid="decline"]`)
-4. "It's a Match!" modal
-5. Add to homescreen prompt
-6. Tinder Gold/Plus upgrade prompt
-7. Various rate-limit or out-of-likes modals
+**STATUS: NEEDS FIELD TESTING.** "It's a Match!" overlay does NOT auto-close — requires explicit dismissal. After dismiss, the next profile card loads automatically.
 
 ```
 match_overlay:    TO_BE_FIELD_TESTED — "It's a Match!" modal
 dismiss_button:   TO_BE_FIELD_TESTED
-popup_container:  //*[@id="modal-manager"]/div/div
+popup_container:  #modal-manager descendant
 ```
+
+Common popup chain after login/navigation (dismiss each with Escape, in order):
+1. Cookie consent
+2. Location permission
+3. Notification permission
+4. "It's a Match!" modal
+5. Add-to-homescreen prompt
+6. Tinder Gold/Plus upgrade nag
+7. Rate-limit / "out of likes" modals
+
+If a popup is not in this list and Escape does not dismiss it, stop the session and screenshot for diagnosis (per `safety.md`).
 
 ## Chat list extraction
 
-**STATUS: CONFIRMED** (our field testing + TinderBotz match_helper.py)
+**STATUS: CONFIRMED.** Navigate to `https://tinder.com/app/messages`. Extract conversation entries from the sidebar.
 
-Navigate to `https://tinder.com/app/messages`. Extract conversation entries from the sidebar.
-
-### Confirmed selectors (our project)
 ```
 sidebar_link:  "nav a[href*='/app/messages/']"
 chat_name:     link.textContent.trim()
 match_id:      url.split('/app/messages/')[1]
 ```
 
-### TinderBotz match_helper approach (cross-reference)
-```
-tab_switching:    //button[@role="tab"] matching text "Matches" or "Messages"
-new_match_ids:    //div[@role="tabpanel"] → .//div/div/a → extract href, split by "/" → filter out "likes-you"/"my-likes"
-messaged_ids:     //div[@class="messageList"] → .//a → extract href
-```
+Filter out non-chat sidebar links: `likes-you`, `my-likes`.
 
-### Infinite scroll for sidebar
-TinderBotz scrolls the tab panel via JS:
-```javascript
-arguments[0].scrollTop = arguments[0].scrollHeight
-```
-Then waits 4 seconds and compares scrollHeight. If unchanged, scroll is saturated.
+Sidebar is a virtualized list. To load more, scroll the sidebar container via JS (`el.scrollTop = el.scrollHeight`) and compare `scrollHeight` before/after with 2–4s waits. Saturation at 3 consecutive scrolls with 0 new entries.
 
-Our approach (chat-audit.md): saturation at 3 consecutive scrolls with 0 new entries, 2-4s between scrolls.
-
-### Scroll-to-bottom helper (TinderBotz)
-Scrolls element to bottom repeatedly until scrollHeight stabilizes (0.5s pauses). Used for loading full match list before extraction.
+For the full extraction protocol with checkpointing, see `chat-audit.md`.
 
 ## Conversation extraction
 
-**STATUS: CONFIRMED** (our field testing + Copy Conversation Gist + TinderBotz)
+**STATUS: CONFIRMED.** Navigate to an individual chat and extract messages from the DOM.
 
-Navigate to individual chat. Extract messages from DOM.
-
-### Confirmed selectors (our project)
 ```
 conversation_log:  "[role='log']"
-message_article:   "[role='article']"
-sender:            "strong.Hidden" → textContent minus ":"
-message_text:      "span.text"
-timestamp:         "time" → textContent + datetime attribute
-is_sent:           sender === "You"
+message_article:   "[role='log'] [role='article']"
+sender:            "strong.Hidden"   → textContent minus ":"
+sender_fallback:   class contains "Ta(e)" → user-sent; "Ta(start)" → received (Yahoo-style, less stable)
+message_text:      "span.text"       → fallback: "span[class*='text']" → "div.msg > span"
+timestamp:         "time"            → textContent + datetime attribute
+is_user_sent:      sender === "You"  → fallback: class contains "Ta(e)"
 ```
 
-### Copy Conversation Gist selectors (JavaScript bookmarklet, imsys/d9b8e26c90c683b83eab2d20d4d26ca1)
-```
-chat_container:       .chat → :first-child + div > div
-current_user_name:    span.Ell
-other_person_name:    div.chatAvatar span.Hidden
-message_container:    div[role=log] > div
-sender_class_sent:    Ta(e)       → current user
-sender_class_recv:    Ta(start)   → other person
-timestamp:            time element → getAttribute('datetime')
-message_content:      div.msg > span → textContent.trim()
-```
+Selector priority: a11y attributes (`role`, `strong.Hidden`) over Yahoo-style CSS classes which churn across builds.
 
-The Gist formats each message as: `{sender} - {time} - {messageContent}`
-Critical finding: `Ta(e)` class = sent by current user, `Ta(start)` = received from other person. These Yahoo-style classes may change.
+Scroll up within `[role='log']` (`log.scrollTop = 0`) to load older messages. Wait 2–4s between scrolls. Saturation at 3 consecutive scrolls with 0 new messages.
 
-### TinderBotz match_helper selectors
-```
-chat_opening:         navigates to /app/messages/{chatid}
-message_input:        //textarea → send_keys(message) → Keys.ENTER
-send_delay:           1.5 seconds after sending
-tab_check:            checks both "Matches" and "Messages" tabs
-js_click:             execute_script("arguments[0].click()") for reliable clicking
-```
-
-### Scroll-up for older messages
-Scroll up within `[role='log']` to load older messages. Wait 2-4s per scroll. Saturation at 3 consecutive scrolls with 0 new messages.
-
-### Chat ID deduplication (TinderBotz)
-Tracks `used_chatids` across iterations to avoid re-processing conversations. Important for resumable extraction.
-
-For full extraction protocol with checkpointing, see `chat-audit.md`.
+Track processed `match_id`s across iterations to avoid re-extracting conversations.
 
 ## Message input
 
-**STATUS: CONFIRMED** (our field testing + TinderBotz)
+**STATUS: CONFIRMED.**
 
 ```
-message_input: "Type a message ..." textbox
-send_button:   "SEND" button
+message_input: textbox "Type a message ..."   (multiline)
+send_button:   button "SEND"                  (disabled when input empty)
 ```
 
-Approach: `type_text(message)` into input field, then dispatch Enter or click send button.
-
-TinderBotz approach:
-```
-textarea:      //textarea → send_keys(message) → Keys.ENTER
-send_delay:    1.5 seconds
-```
-
-shashank-100/tinder-cli approach:
-```
-message_input: (not implemented — this project only swipes, no messaging)
-```
+Approach: `type_text(message)` into the input field, then dispatch Enter or click the send button. Wait ~1.5s after sending to let the message land before further actions.
 
 ## Gotchas
 
@@ -285,7 +165,7 @@ message_input: (not implemented — this project only swipes, no messaging)
 - Do not call Tinder private APIs or `api.gotinder.com`.
 - Do not read `localStorage`, cookies, or browser storage for auth tokens.
 - Full chat extraction is allowed through slow UI-only crawl with checkpointing (see `chat-audit.md`).
-- Live conversation review (during pipeline stages) is user-selected, UI-only, 3 default / 5 max per session. Full chat extraction (see `chat-audit.md`) has no hard cap.
+- Live conversation review (during pipeline stages) is user-selected and UI-only. No hard cap — pacing rules in `safety.md` self-limit throughput. Full chat extraction (see `chat-audit.md`) is also uncapped.
 - Rate limits: free accounts may see soft locks around 100 swipes. If an "out of likes" or rate limit prompt appears, stop and notify the user.
 - A/B tests may change DOM structure between sessions. Verify selectors each session.
 - Profile content may be lazy-loaded. Scroll or expand before extraction.
@@ -302,121 +182,21 @@ message_input: (not implemented — this project only swipes, no messaging)
 
 ## Anti-detection notes
 
-### Timing (from open-source projects)
+We connect via CDP to the user's real Chrome — no Selenium/webdriver fingerprint. Our anti-detection effort is therefore behavioral, not technical:
 
-| Project | Inter-action delay | Distribution |
-|---|---|---|
-| TinderBotz | `random.uniform(0.5, 2.3) * initial_sleep` | Scaled uniform |
-| davidteather/tinder-bot | `time.sleep(0.3)` fixed | Fixed (minimal) |
-| shashank-100/tinder-cli | 3000ms between profiles, 400ms between photo tabs | Fixed |
-| liplylie/tinder-web-scraper | No delay (1000 iterations immediate) | None |
-| Youngermaster Chrome ext | User-configurable delay seconds | User-controlled |
-| Our project | 1.5 + random * 3.5 seconds | Uniform random |
-
-### Detection evasion techniques (from open-source projects)
-
-**undetected-chromedriver** (TinderBotz):
-- Patches chromedriver to avoid `navigator.webdriver` detection
-- Chrome options: `--no-first-run`, `--no-service-autorun`, `--password-store=basic`, `--lang=en-GB`
-- No headless mode (headless is more detectable)
-
-**selenium-stealth** (davidteather/tinder-bot):
-- Overrides `navigator.languages`, `navigator.vendor`, `navigator.platform`
-- Sets WebGL vendor/renderer to common values
-- Fixes hairline (subpixel rendering fingerprint)
-- `excludeSwitches: ["enable-automation"]` removes automation indicators
-- `useAutomationExtension: False`
-
-**Chrome remote debugging** (shashank-100/tinder-cli):
-- Launches real Chrome with `--remote-debugging-port=9222`
-- Uses `agent-browser` CLI to connect to existing Chrome
-- Most stealthy approach — uses a genuine Chrome browser session
-
-**Chrome extension** (Youngermaster):
-- Runs inside the page context as a content script
-- No Selenium/webdriver footprint at all
-- Limited to click-based interaction (no profile extraction)
-
-**Like/dislike ratio mixing** (TinderBotz):
-- Supports ratio-based swiping: e.g., `ratio="72.5%"` means 72.5% likes
-- Randomly decides like vs dislike per profile based on ratio
-- Avoids patterns of all-likes that trigger detection
-
-### Recommended anti-detection for our project
-
-1. Use Chrome DevTools Protocol (CDP) connection to real Chrome, not Selenium
-2. Vary inter-swipe timing (1.5-5 seconds, uniform random)
-3. Occasionally scroll through full profile before swiping
-4. Occasionally navigate away from swipe stack and back
-5. Don't run for extended periods without breaks
-6. Never send identical messages to multiple matches
-7. Mix in occasional passes even on high-score profiles
-8. Our approach already avoids the webdriver fingerprint problem by connecting via CDP
+1. Vary inter-swipe timing per `safety.md` (1.5–5s uniform random; never fixed).
+2. Occasionally scroll through the full profile (3–8s) before swiping.
+3. Occasionally navigate away from the swipe stack (matches → back) to break patterns.
+4. Take breaks per the pacing schedule in `safety.md`.
+5. Never send identical messages to multiple matches.
+6. Mix in occasional PASSes even on high-score profiles to avoid all-LIKE patterns.
+7. Use keyboard shortcuts (more human-like than button clicks).
 
 ## Login and session persistence
 
-### Login flows (from open-source projects)
+We connect to the user's already-open Chrome via CDP. The user logs in manually. We never handle credentials. Session persistence comes from the user's Chrome profile.
 
-**TinderBotz** (most complete):
-```
-cookie_accept:   //button[@type="button"] with span containing "accept"
-login_button:    XPath to "Log in" button
-google_login:    //button[@aria-label="Log in with Google"] → popup → email → password
-facebook_login:  //button[@aria-label="Log in with Facebook"] → popup → email → pass → loginbutton
-sms_login:       //button[@aria-label="Log in with phone number"] → phone_number input
-post_login:      //button[@data-testid="allow"] (location) → //button[@data-testid="decline"] (notifications)
-popup_focus:     Retry up to 50 times with 0.3s sleep to find popup window
-delay:           7 seconds (WebDriverWait timeout)
-post_login_wait: 5 seconds sleep after login flow completion
-```
-
-**davidteather/tinder-bot**:
-```
-google_login:    Direct OAuth URL construction → email → password → navigate to tinder.com → login btn → google btn
-sms_login:       phone_number input → verification code (manual entry) → email verification code (manual entry)
-location_allow:  //button[@aria-label='Allow']
-notif_deny:      //button[@aria-label='Not interested']
-```
-
-**liplylie/tinder-web-scraper**:
-```
-facebook_login:  Direct navigation to facebook.com → email → pass → login → navigate to tinder.com
-popup_dismiss:   //*[@id="modal-manager"]/div/div/div[2]/div[1]/div/div[3]/button[1]
-onboarding:      Clicks through onboarding steps via XPath chain
-```
-
-### Session persistence
-
-**Chrome profile persistence** (TinderBotz):
-```
---user-data-dir={path}  → Chrome profile directory persists cookies/sessions across launches
-```
-This is the primary session persistence mechanism. When using `--user-data-dir`, the Chrome profile retains login cookies so subsequent launches don't need re-login.
-
-**Login detection** (TinderBotz):
-```python
-if "tinder.com/app/" in self.browser.current_url:
-    # logged in
-else:
-    # need to login
-```
-
-**Geolocation spoofing** (TinderBotz + davidteather):
-```python
-browser.execute_cdp_cmd("Page.setGeolocationOverride", {
-    "latitude": lat,
-    "longitude": lon,
-    "accuracy": 98
-})
-```
-
-**Proxy support** (TinderBotz):
-- IP-based: Chrome option `--proxy-server=ip:port`
-- Auth-based: Chrome extension for user:pass@host:port proxy
-
-### For our project
-
-Our approach differs: we connect to the user's already-open Chrome via CDP. The user logs in manually. We never handle credentials. Session persistence comes from the user's Chrome profile.
+Login detection: URL contains `tinder.com/app/` and the navigation/sidebar tabs are visible. Otherwise treat as not-logged-in and ask the user to log in manually.
 
 ## GDPR data export structure
 
@@ -481,3 +261,12 @@ Note: 2025+ exports use a new photo format with `TinderPhoto[]` objects instead 
 Descriptor categories include: Smoking, Drinking, Workout, Zodiac, Height, Personality Type, Education, Languages, Looking for, Relationship Type, Pets, etc.
 
 This data is useful for the user model but must be provided by the user — we do not request GDPR exports programmatically.
+
+## Out of scope
+
+The following Tinder surfaces are deliberately not automated by this skill:
+
+- **Profile / bio editing** (`tinder.com/app/profile`). Onboarding generates polarising profile copy (filter line, green flags, not-for line) as guidance — the user pastes it manually. Reasons: bot-detection risk is materially higher than swipe/message automation since profile edits are a rare user behaviour; atomicity risk is real (a crash mid-edit could leave the live profile partially overwritten); Tinder's prompt UI mixes free text, multiple-choice questions, and dropdown/slider controls with no documented selectors; bios get edited rarely enough that the automation cost does not amortise; and "what goes on a public profile" is a deliberate identity decision where human-in-the-loop is the right consent posture.
+- **Account settings, subscription / billing, photo upload, identity verification.** All require manual user action.
+
+If a future session reconsiders profile-edit automation, start by field-testing one live edit through the UI to determine save behaviour (autosave vs explicit save), prompt-selection mechanics, and character limits before adding any selectors to `surface-map.json`.

@@ -50,6 +50,15 @@ Run questions conversationally, not as a form. Follow up naturally. Skip questio
 - Self-identified patterns they want to change
 - What they know doesn't work but do anyway
 
+**6b. How do you carry attraction in writing?**
+- Highest level of `references/message-kernel.md` Charge ladder the user is comfortable sending (1 warm recognition / 2 playful tension / 3 flirtatious frame / 4 personal reveal / 5 romantic subtext / 6 embodied implication / 7 direct escalation). Most users top out at 5–6 in early threads.
+- Comfort with embodied implication ("dangerous over a drink and eye contact") vs preference for staying at romantic-subtext level.
+- Comfort with vulnerability-as-charge (small, owned reveals like "warmth and good questions undo me pretty quickly").
+- Sexual vocabulary the user uses (and avoids). Some users say "want", others find it too direct; capture their actual comfort.
+- Charge moves the user does *not* want to use even if they sometimes work for others (e.g. fake dominance, explicit physical descriptions, eye-contact lines if too theatrical for them).
+
+These answers shape draft selection across every charged message — the copilot will not generate above the user's stated ceiling.
+
 ### Phase 4: Flags and boundaries
 
 **7. What are your hard no's? What ends things immediately?**
@@ -72,6 +81,57 @@ Run questions conversationally, not as a form. Follow up naturally. Skip questio
 - Settings they prefer (coffee, drinks, activity, walk)
 - Duration expectations
 - How they decide if there's chemistry
+
+### Phase 6: Profile copy (polarising filter)
+
+The user's bio and prompt answers should filter, not appeal universally. Most profiles try to be liked; high-signal profiles make the right person think "that's me" and the wrong person move on. The objective here is to draft 2–3 lines that do that work.
+
+**11. What do you actually want to filter for?**
+- Two or three traits that reliably predict good fit (not "nice", "fun", or "kind" — those filter no one).
+- Two or three traits that reliably predict mismatch (passive communication, "let's see where it goes", chaos dressed as freedom, etc.).
+
+**Draft three profile components from the answers:**
+
+1. **Filter line** — names a quality the user is drawn to, in concrete terms. Example: *"Drawn to women who can do playful and emotionally honest in the same conversation."* Avoid generic adjectives; use verbs and contrasts.
+2. **Green flags** — short, specific list. Example: *"Green flags: emotional directness, ambition, weird little obsessions, the ability to flirt without turning into a motivational podcast."*
+3. **Not-for line** — what the user is honestly not interested in. Example: *"Not for: chaos dressed as freedom, passive communication, or people who think 'let's see where it goes' means 'I will make no choices.'"*
+
+These three pieces are stored in the user model as profile copy and used both as bio guidance and as voice/frame anchors for messages.
+
+**Profile copy review checklist** before saving:
+- Does the wrong match read this and self-deselect? If yes, the filter is working.
+- Does the right match read this and feel recognised? If yes, the invitation is working.
+- Is anything in there written to be liked by everyone? Cut it.
+
+### Saving the profile copy
+
+The skill outputs the three lines as guidance only. The user pastes them into Tinder's profile editor manually. The copilot does **not** automate bio editing — see `platforms/tinder.md` Out of scope for the rationale (bot-detection risk, atomicity risk, low frequency, human-in-the-loop is the right consent posture for public profile changes).
+
+Before saving in Tinder:
+- Review the live preview (Tinder shows what the profile will look like to other users).
+- Check the bio character count fits Tinder's limit.
+- Confirm the green flags / not-for line read as intended in context.
+
+### Phase 7: Positioning derivation
+
+After Phases 1–6 are complete, derive the user's market positioning and save to `.private-data/positioning.md` per the template in `references/positioning.md`. Positioning is a portable asset alongside `user-model.md` and `voiceprint.md`; it sits above the kernel/voiceprint/charge layers and informs every draft.
+
+Inputs to the derivation:
+- Phase 2 attraction patterns and Phase 3 communication style → which scarcity-stack levers come naturally vs need reinforcement.
+- Phase 4 hard no's and Phase 6 filter copy → core positioning statement and anti-positioning.
+- Phase 5 pace + relationship structure (mono / poly / ENM / RA) → low-chaos directness register.
+- Voiceprint frame stance and charge ceiling → felt-experience target.
+
+Output the five sections of the positioning template:
+1. Core statement (one sentence in the user's voice — usually a sharper version of *"Erotic charge without chaos. Depth without heaviness. Directness without pressure. Standards without bitterness."* in the user's actual words).
+2. Scarcity stack — which of the five (erotic intelligence, selective warmth, low-chaos directness, felt life, good logistics) are native vs need deliberate reinforcement.
+3. Profile copy alignment — which filter / green-flag / not-for line carries which scarcity element.
+4. Felt-experience target — what the right woman should feel after three exchanges.
+5. Anti-positioning — moves the user must not lean on even if they sometimes work for others (fake dominance, founder pitch-deck energy, performed unavailability, etc.).
+
+### Validation of positioning
+
+Read the core statement back to the user and ask: "Does this sound like an offer you'd actually make, in a register you'd actually use?" If the user pauses or qualifies it, rewrite — positioning that does not sound like the user is dead on arrival.
 
 ## Voiceprint calibration
 
@@ -107,21 +167,25 @@ From the interview answers, construct the scoring rubric (see `references/scorin
 
 Ask the user to set their consent level for each action type:
 
-### Message consent levels
-| Level | Behavior |
-|---|---|
-| **Draft only** | Show message, user sends manually |
-| **Approve** | Show message, send on user approval |
-| **Auto-send** | Send automatically, log what was sent |
-| **Auto-send with threshold** | Auto-send below confidence threshold, approve above |
+Canonical level names live in `safety.md`. Use those tokens verbatim when writing to `.private-data/user-model.md` so other files can match on them.
 
-### Swipe consent levels
-| Level | Behavior |
+### Message consent levels (`safety.md` canonical)
+| Token | Behavior |
 |---|---|
-| **Manual only** | Show each profile, user decides |
-| **Approve non-obvious** | Auto-swipe obvious PASS, show LIKE and MAYBE |
-| **Full auto** | Auto-swipe all, log decisions |
-| **Full auto with threshold** | Auto-swipe below score threshold, show above |
+| `draft-only` | Show message, user sends manually |
+| `approve` | Show message, send on user approval (default) |
+| `auto-send` | Send automatically, log what was sent |
+| `auto-threshold` | Auto-send below confidence threshold, approve above |
+
+### Swipe consent levels (`safety.md` canonical)
+| Token | Behavior |
+|---|---|
+| `manual` | Show each profile, user decides |
+| `approve-non-obvious` | Auto-swipe obvious PASS, show LIKE and MAYBE (default) |
+| `full-auto` | Auto-swipe all, log decisions |
+| `auto-threshold` | Auto-swipe below score threshold, show above |
+
+Hard consent requirements in `safety.md` override the configured level for first-message openers, date proposals, high-risk drafts, dormant matches (7+ days), low-confidence actions (<50%), and opening any existing conversation.
 
 ### Pacing preferences
 | Setting | Default |
@@ -152,6 +216,14 @@ Populate all fields from `references/voiceprint.md` template:
 - Voice characteristics extracted from interview answers and samples
 - Example messages (characteristic and anti-pattern)
 - Tone calibration notes
+
+### `.private-data/positioning.md`
+Populate all fields from `references/positioning.md` Positioning template:
+- Core statement
+- Scarcity stack notes (erotic intelligence, selective warmth, low-chaos directness, felt life, good logistics)
+- Profile copy alignment (filter line, green flags, not-for line)
+- Felt-experience target
+- Anti-positioning
 
 ## Validation
 

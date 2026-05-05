@@ -1,6 +1,6 @@
 # Outcome Learning
 
-Use this file when the user reports what happened after a message, profile decision, date transition, event, or conversation.
+Use this file when the user reports what happened, AND every time a new message arrives in an active thread (closed loop below). The closed loop runs automatically against `references/thread-state.md` predictions; user-reported outcomes layer on top.
 
 ## Outcome capture
 
@@ -58,3 +58,31 @@ Avoid treating "worked" or "did not work" as sufficient. Capture the exact messa
 ## Failed interaction rule
 
 A failed, awkward, flat, or wrong-feeling interaction is a missing watchpoint. Convert it into a future cue the copilot should notice earlier next time.
+
+## Closed loop: predicted vs. observed
+
+Every sent message stores its `Watch:` line as a prediction in `references/thread-state.md` `predictions[]`. When a reply arrives, run this loop **before** drafting the next message:
+
+1. Read the prior unverified prediction from thread state (the user's most recently sent message that does not yet have a verdict).
+2. Classify the observed reply against the `Watch:` line:
+   - **confirmed**: the predicted signal appeared (positive or negative version, as long as the read was right).
+   - **falsified**: the opposite signal appeared, or the predicted signal clearly didn't.
+   - **inconclusive**: the reply doesn't speak to the prediction (e.g., topic shift, ambient delay, neutral acknowledgement).
+3. Append `verdict`, `evidence` (one phrase from the reply), and `verdict_at` to that prediction entry in thread state.
+4. If the verdict is `falsified` or `inconclusive`, run the **cross-thread query** (see `references/thread-state.md`) for similar predictions: same `Watch:` shape, same conversation stage. If ≥3 falsified across threads, surface as a model update candidate.
+
+### Closed-loop output (compact)
+
+```text
+Predicted: [Watch line from prior message]
+Observed: [one-phrase summary of their reply]
+Verdict: confirmed | falsified | inconclusive
+Cross-thread pattern: [none | N similar verdicts; falsified ≥3 → flag]
+Update suggested: [if cross-thread pattern; otherwise none]
+```
+
+The `Update suggested` line, when present, follows the standard model-update protocol from `references/user-model.md` (Update / Evidence / Confidence / Implication). Apply only after the user confirms — predictions falsifying once is evidence, not proof; falsifying ≥3 times across distinct threads at the same stage is a pattern.
+
+### What the loop is for
+
+Without it, the rubric is static between onboarding sessions and the `Watch:` line is decorative. With it, every sent message becomes a small experiment whose result feeds back into the rubric and voiceprint within hours, not weeks.

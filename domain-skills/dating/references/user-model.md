@@ -77,6 +77,11 @@ User Model
 - Unknown fields:
 - Hypotheses to test:
 - Calibration questions:
+
+8. Profile copy (polarising filter — see onboarding.md Phase 6)
+- Filter line:
+- Green flags:
+- Not-for line:
 ```
 
 ## Fast-start interview
