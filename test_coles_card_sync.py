@@ -162,6 +162,93 @@ def test_upsert_payload_deduplicates_transactions(tmp_path):
     conn.close()
 
 
+def test_upsert_payload_dedups_balance_snapshots_per_type(tmp_path):
+    db_path = tmp_path / "coles.sqlite3"
+    conn = coles_card_sync.init_db(db_path)
+    coles_card_sync.insert_run(conn, "run-bal")
+    payload = {
+        "url": "https://secure.coles.com.au/home/account_dashboard",
+        "account_label": "Coles Mastercard ending 1234",
+        "balances": [
+            {
+                "balance_type": "current_balance",
+                "label": "Current balance",
+                "amount_text": "$123.45",
+                "currency": "AUD",
+                "raw_text": "Current balance $123.45 (header)",
+            },
+            {
+                "balance_type": "current_balance",
+                "label": "Current balance",
+                "amount_text": "$123.45",
+                "currency": "AUD",
+                "raw_text": "Current balance $123.45 (summary card)",
+            },
+        ],
+        "transactions": [],
+    }
+    counts = coles_card_sync.upsert_payload(conn, "run-bal", payload)
+
+    assert counts["balances"] == 2
+    assert conn.execute("select count(*) from balance_snapshots").fetchone()[0] == 1
+    conn.close()
+
+
+def test_upsert_payload_preserves_csv_source_after_dom_run(tmp_path):
+    db_path = tmp_path / "coles.sqlite3"
+    conn = coles_card_sync.init_db(db_path)
+    coles_card_sync.insert_run(conn, "run-csv")
+    csv_payload = {
+        "url": "https://secure.coles.com.au/transactions",
+        "account_label": "Coles Mastercard ending 1234",
+        "balances": [],
+        "transactions": [],
+        "transactions_csv": [
+            {
+                "Date": "05 May 26",
+                "Amount": "-$9.27",
+                "Account Number": "Card ending 8954",
+                "Transaction Type": "Posted",
+                "Transaction Details": "Coffee Shop",
+                "Category": "Food",
+                "Merchant Name": "Coffee Shop",
+                "Processed On": "06 May 26",
+            }
+        ],
+    }
+    coles_card_sync.upsert_payload(conn, "run-csv", csv_payload)
+
+    coles_card_sync.insert_run(conn, "run-dom")
+    dom_payload = {
+        "url": "https://secure.coles.com.au/transactions",
+        "account_label": "Coles Mastercard ending 1234",
+        "balances": [],
+        "transactions": [
+            {
+                "posted_date_text": "5 May 2026",
+                "description": "Coffee Shop",
+                "amount_text": "-$9.27",
+                "currency": "AUD",
+                "raw_text": "5 May 2026 Coffee Shop -$9.27",
+                "processed_on": "2026-05-06",
+                "account_number": "Card ending 8954",
+            }
+        ],
+    }
+    coles_card_sync.upsert_payload(conn, "run-dom", dom_payload)
+
+    rows = conn.execute(
+        "select source_method, merchant_name, category, raw_json from transactions"
+    ).fetchall()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["source_method"] == "csv_export"
+    assert row["merchant_name"] == "Coffee Shop"
+    assert row["category"] == "Food"
+    assert "Merchant Name=Coffee Shop" in row["raw_json"]
+    conn.close()
+
+
 def test_upsert_payload_imports_csv_export_fields(tmp_path):
     db_path = tmp_path / "coles.sqlite3"
     conn = coles_card_sync.init_db(db_path)

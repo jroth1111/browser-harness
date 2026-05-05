@@ -16,7 +16,6 @@ import json
 import re
 import sqlite3
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -219,7 +218,7 @@ def _all_text_payload():
 
 def _is_auth_surface(payload):
     text = (payload.get("body_excerpt") or "") + " " + (payload.get("title") or "") + " " + (payload.get("url") or "")
-    return bool(re.search(r"id\.colesgroupprofile|auth\.colesgroupprofile|secure\.coles\.com\.au/login|Login - Coles Credit Cards|Log in with your Coles account|Log in or create account|Email Password|Your old credit card login|Complete application", text, re.I))
+    return bool(re.search(r"id\.colesgroupprofile|auth\.colesgroupprofile|secure\.coles\.com\.au/login(?:[/?#]|$)|Login - Coles Credit Cards|Log in with your Coles account|Log in or create account|Email Password|Your old credit card login|Complete application", text, re.I))
 
 def _rewrite_url_max_age(url, max_age):
     if max_age is None or max_age < 0:
@@ -514,7 +513,8 @@ try:
             "transactions_url": tx_page.get("url"),
             "transactions_click": tx_click,
             "balance_count": len(balances),
-            "transaction_count": len(transactions),
+            "dom_transaction_count": len(transactions),
+            "csv_transaction_count": len((csv_export or {}).get("rows", [])) if csv_export else 0,
         },
     )
 except SystemExit:
@@ -801,7 +801,7 @@ def upsert_payload(
         amount = parse_money_to_cents(balance.get("amount_text"))
         if amount is None:
             continue
-        snapshot_id = stable_hash(run_id, acct, balance.get("balance_type"), balance.get("raw_text"), amount, length=32)
+        snapshot_id = stable_hash(run_id, acct, balance.get("balance_type") or "unknown", length=32)
         conn.execute(
             """INSERT OR REPLACE INTO balance_snapshots(
                  snapshot_id, run_id, account_key, observed_at, balance_type,
@@ -853,10 +853,18 @@ def upsert_payload(
                  status=COALESCE(excluded.status, transactions.status),
                  running_balance_cents=COALESCE(excluded.running_balance_cents, transactions.running_balance_cents),
                  source_url=excluded.source_url,
-                 source_method=excluded.source_method,
+                 source_method=CASE
+                   WHEN excluded.source_method='csv_export' THEN 'csv_export'
+                   WHEN transactions.source_method='csv_export' THEN 'csv_export'
+                   ELSE excluded.source_method
+                 END,
                  last_seen_at=excluded.last_seen_at,
                  last_run_id=excluded.last_run_id,
-                 raw_json=excluded.raw_json""",
+                 raw_json=CASE
+                   WHEN excluded.source_method='csv_export' THEN excluded.raw_json
+                   WHEN transactions.source_method='csv_export' THEN transactions.raw_json
+                   ELSE excluded.raw_json
+                 END""",
             (
                 key,
                 acct,
