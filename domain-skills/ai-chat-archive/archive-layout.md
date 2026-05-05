@@ -173,9 +173,53 @@ CREATE TABLE IF NOT EXISTS cdc_events (
   observed_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS cookie_jars (
+  jar_id TEXT PRIMARY KEY,
+  provider_id TEXT NOT NULL REFERENCES providers(provider_id),
+  account_key TEXT REFERENCES accounts(account_key),
+  source_browser TEXT NOT NULL,
+  source_profile TEXT NOT NULL DEFAULT 'Default',
+  cookies_json TEXT NOT NULL,
+  harvested_at TEXT NOT NULL,
+  last_used_at TEXT,
+  last_auth_check_at TEXT,
+  last_auth_status TEXT,
+  expires_at TEXT,
+  account_label TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cookie_jars_provider_account
+  ON cookie_jars(provider_id, account_key);
+
+CREATE INDEX IF NOT EXISTS idx_cookie_jars_provider_status
+  ON cookie_jars(provider_id, last_auth_status, last_auth_check_at);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS capture_fts
 USING fts5(thread_key, title, rendered_markdown, content='');
 ```
+
+### Cookie Jar Vault
+
+`cookie_jars` is the multi-account credential vault that lets the sync runner
+re-authenticate against any provider without re-prompting the user. Each row
+stores one logged-in browser session for one provider, keyed by
+`(provider_id, account_key, source_browser, source_profile)`:
+
+- `cookies_json` is the rich-shape jar produced by `lib.cookie_jar_io` —
+  a list of `{name, value, domain, path, expires, ...}` records. It is the
+  raw decrypted cookie set for the provider's `cookie_domains`, not flattened.
+- `harvested_at` is the ISO8601 UTC timestamp the jar was extracted from the
+  browser. `scripts/harvest.py` upserts on this triple-key and skips writes
+  when the cookie set is unchanged.
+- `last_auth_check_at` / `last_auth_status` / `account_label` are receipts
+  populated by the sync runner during `probe_login`. Values for
+  `last_auth_status` are `ok`, `expired`, `forbidden`, `error`, or NULL.
+- `account_key` is filled in once a provider's `probe_login` has resolved an
+  account context. It can be NULL between harvest and first sync.
+
+The vault must never leave the private archive root. Treat `cookies_json` as
+secret material — do not include cookie jar rows in exports, fixtures, or
+public receipts.
 
 ## Export Contract
 

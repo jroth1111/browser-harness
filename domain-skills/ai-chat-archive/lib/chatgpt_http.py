@@ -12,6 +12,7 @@ The oai-sc cookie value must also be sent as an HTTP header.
 """
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 

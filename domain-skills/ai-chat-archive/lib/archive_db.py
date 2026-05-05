@@ -9,6 +9,15 @@ from pathlib import Path
 from .schema import init_db
 
 
+# --- hashing ---------------------------------------------------------------
+
+def compute_content_hash(text: str | bytes) -> str:
+    """SHA-256 with a short prefix. Accepts text or bytes."""
+    if isinstance(text, str):
+        text = text.encode("utf-8")
+    return "sha256:" + hashlib.sha256(text).hexdigest()
+
+
 def connect(db_path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -41,11 +50,12 @@ def ensure_account(
     conn.commit()
 
 
-def compute_content_hash(text: str) -> str:
-    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
 def compute_thread_key(provider_id: str, provider_thread_id: str) -> str:
+    """Stable thread key. ChatGPT/Claude/Perplexity emit globally-unique UUIDs,
+    so the provider thread id alone is durable; queries always scope by
+    provider_id so cross-provider collisions are guarded at the query layer.
+    For surfaces without durable ids, derive a synthetic key from
+    (provider, account, canonical_url) at the call site and pass it here."""
     return provider_thread_id
 
 
@@ -429,3 +439,107 @@ def _append_cdc(
             _utc_now(),
         ),
     )
+
+
+# --- cookie jars -----------------------------------------------------------
+
+def compute_jar_id(provider_id: str, account_key: str | None, source_browser: str, source_profile: str) -> str:
+    raw = f"{provider_id}:{account_key or ''}:{source_browser}:{source_profile}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def upsert_cookie_jar(
+    conn: sqlite3.Connection,
+    *,
+    provider_id: str,
+    account_key: str | None,
+    account_label: str | None,
+    source_browser: str,
+    source_profile: str,
+    cookies: dict,
+    auth_status: str,
+    expires_at: str | None,
+) -> str:
+    """Store or refresh a cookie jar. Returns jar_id."""
+    jar_id = compute_jar_id(provider_id, account_key, source_browser, source_profile)
+    now = _utc_now()
+    conn.execute(
+        """INSERT INTO cookie_jars (
+             jar_id, provider_id, account_key, source_browser, source_profile,
+             cookies_json, harvested_at, last_auth_check_at, last_auth_status,
+             expires_at, account_label
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(jar_id) DO UPDATE SET
+             account_key = COALESCE(excluded.account_key, cookie_jars.account_key),
+             cookies_json = excluded.cookies_json,
+             harvested_at = excluded.harvested_at,
+             last_auth_check_at = excluded.last_auth_check_at,
+             last_auth_status = excluded.last_auth_status,
+             expires_at = excluded.expires_at,
+             account_label = COALESCE(excluded.account_label, cookie_jars.account_label)""",
+        (
+            jar_id, provider_id, account_key, source_browser, source_profile,
+            json.dumps(cookies, default=str),
+            now, now, auth_status, expires_at, account_label,
+        ),
+    )
+    conn.commit()
+    return jar_id
+
+
+def list_cookie_jars(
+    conn: sqlite3.Connection,
+    provider_id: str | None = None,
+    account_key: str | None = None,
+    only_active: bool = True,
+) -> list[dict]:
+    sql = "SELECT * FROM cookie_jars WHERE 1=1"
+    params: list = []
+    if provider_id:
+        sql += " AND provider_id = ?"; params.append(provider_id)
+    if account_key:
+        sql += " AND account_key = ?"; params.append(account_key)
+    if only_active:
+        sql += " AND (last_auth_status IS NULL OR last_auth_status IN ('ok', 'unknown'))"
+    sql += " ORDER BY last_auth_check_at DESC"
+    rows = conn.execute(sql, params).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["cookies"] = json.loads(d["cookies_json"])
+        except Exception:
+            d["cookies"] = {}
+        out.append(d)
+    return out
+
+
+def mark_jar_status(
+    conn: sqlite3.Connection,
+    jar_id: str,
+    status: str,
+    *,
+    used: bool = False,
+) -> None:
+    now = _utc_now()
+    if used:
+        conn.execute(
+            "UPDATE cookie_jars SET last_auth_status = ?, last_auth_check_at = ?, last_used_at = ? WHERE jar_id = ?",
+            (status, now, now, jar_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE cookie_jars SET last_auth_status = ?, last_auth_check_at = ? WHERE jar_id = ?",
+            (status, now, jar_id),
+        )
+    conn.commit()
+
+
+def attach_account_to_jar(
+    conn: sqlite3.Connection, jar_id: str, account_key: str, account_label: str | None,
+) -> None:
+    conn.execute(
+        "UPDATE cookie_jars SET account_key = ?, account_label = COALESCE(?, account_label) WHERE jar_id = ?",
+        (account_key, account_label, jar_id),
+    )
+    conn.commit()

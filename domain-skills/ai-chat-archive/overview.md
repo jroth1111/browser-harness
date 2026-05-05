@@ -59,7 +59,71 @@ Provider rows are starting hypotheses, not acceptance evidence. A run receipt
 must say which URL, browser profile, account label, and source family actually
 worked.
 
+## Architecture
+
+The skill ships as a generic plugin runner with one provider implementation per
+supported service. Files of interest:
+
+```text
+ai-chat-archive/
+  lib/
+    archive_db.py          # SQLite plumbing + key derivations
+    cookie_extract.py      # Chromium/Safari/Comet cookie decrypt
+    cookie_jar_io.py       # rich ↔ flat cookie shape conversions
+    provider_base.py       # Provider ABC + dataclasses (CapturedThread, ...)
+    providers_registry.py  # short id → class map
+    sync_runner.py         # generic probe → inventory → capture → delta loop
+    schema.py              # canonical SQL DDL
+  providers/
+    chatgpt/  claude/  gemini/  grok/  perplexity/
+      __init__.py provider.py http.py render.py
+  scripts/
+    harvest.py             # sweep cookies into the vault
+    sync.py                # drive sync_runner across stored jars
+    recon.py               # Camoufox network capture for surface mapping
+```
+
+A `cookie_jars` table acts as the multi-account vault, keyed by
+`(provider_id, account_key, source_browser, source_profile)`. Each provider
+declares its `cookie_domains`; harvest filters the raw browser sweep to those
+domains before writing a jar.
+
 ## Required Run Shape
+
+Two capture modes are available. Prefer HTTP sync when possible; fall back to
+browser automation when the provider blocks direct API access.
+
+### Mode 1: HTTP Sync (default for all providers)
+
+Extract cookies from a logged-in browser once, store them in the vault, then
+let the sync runner drive every provider through `probe_login → inventory →
+capture_thread`:
+
+```bash
+# 1. Harvest cookies for every provider (idempotent; skips unchanged jars)
+python3 -m scripts.harvest --db .private-data/archive/archive.sqlite3
+
+# 2. Sync stored jars (all providers, all accounts)
+python3 -m scripts.sync --db .private-data/archive/archive.sqlite3
+
+# Restrict by provider, account, or capture cap
+python3 -m scripts.sync --provider gemini --limit 5
+python3 -m scripts.sync --provider chatgpt --account me@example.com --fresh
+```
+
+Prerequisites:
+- A logged-in browser profile for each target provider (Chrome, Comet, Edge,
+  Safari, Arc, Brave, ...)
+- macOS Keychain access for Chromium-family Safe Storage entries
+- The `cryptography` Python package
+- `camoufox` only when running `scripts/recon.py` to remap a drifted surface
+
+The runner is provider-agnostic: it computes the deltas, writes the schema rows,
+and stores the rendered Markdown. Per-provider quirks (mapping tree walking for
+ChatGPT, batchexecute RPCs for Gemini, NextAuth + step-decomposed answers for
+Perplexity) live entirely inside `providers/<id>/http.py`.
+
+### Mode 2: Browser Automation (fallback)
 
 Use browser-harness against the user's currently logged-in browser profile.
 Never type credentials or scrape hidden auth state. If a provider shows login,
