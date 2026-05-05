@@ -20,7 +20,10 @@ def test_money_parser_handles_aud_formats():
 def test_sanitize_payload_redacts_auth_redirect_values():
     jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzNCJ9.s4mPL3SiGn4tur3xx"
     payload = {
-        "url": f"https://id.colesgroupprofile.com.au/?token={jwt}&state=secret&clientName=NAB",
+        "url": (
+            f"https://id.colesgroupprofile.com.au/?token={jwt}"
+            f"&state=secret&session_state=sess1234&code_verifier=vCode99&clientName=NAB"
+        ),
         "page": {
             "body_excerpt": (
                 f"signed in as user@example.com with {jwt} via auth.colesgroupprofile.com.au"
@@ -32,6 +35,8 @@ def test_sanitize_payload_redacts_auth_redirect_values():
 
     assert jwt not in sanitized_str
     assert "secret" not in sanitized_str
+    assert "sess1234" not in sanitized_str
+    assert "vCode99" not in sanitized_str
     assert "user@example.com" not in sanitized_str
     assert "clientName=NAB" in sanitized["url"]
     # Domain names must NOT be matched by the JWT redactor.

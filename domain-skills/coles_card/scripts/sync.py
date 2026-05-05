@@ -36,10 +36,12 @@ SENSITIVE_QUERY_KEYS = {
     "client_assertion",
     "code",
     "code_challenge",
+    "code_verifier",
     "id_token",
     "nonce",
     "refresh_token",
     "session",
+    "session_state",
     "state",
     "token",
     "x-state",
@@ -218,7 +220,7 @@ def _all_text_payload():
 
 def _is_auth_surface(payload):
     text = (payload.get("body_excerpt") or "") + " " + (payload.get("title") or "") + " " + (payload.get("url") or "")
-    return bool(re.search(r"id\.colesgroupprofile|auth\.colesgroupprofile|secure\.coles\.com\.au/login(?:[/?#]|$)|Login - Coles Credit Cards|Log in with your Coles account|Log in or create account|Email Password|Your old credit card login|Complete application", text, re.I))
+    return bool(re.search(r"id\.colesgroupprofile|auth\.colesgroupprofile|secure\.coles\.com\.au/login\b|Login - Coles Credit Cards|Log in with your Coles account|Log in or create account|Email Password|Your old credit card login|Complete application", text, re.I))
 
 def _rewrite_url_max_age(url, max_age):
     if max_age is None or max_age < 0:
