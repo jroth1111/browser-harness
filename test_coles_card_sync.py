@@ -12,7 +12,22 @@ spec.loader.exec_module(coles_card_sync)
 def test_money_parser_handles_aud_formats():
     assert coles_card_sync.parse_money_to_cents("$1,234.56") == 123456
     assert coles_card_sync.parse_money_to_cents("-$12.30") == -1230
+    assert coles_card_sync.parse_money_to_cents("−$12.30") == -1230
+    assert coles_card_sync.parse_money_to_cents("+$12.30") == 1230
     assert coles_card_sync.parse_money_to_cents("($42.00)") == -4200
+
+
+def test_sanitize_payload_redacts_auth_redirect_values():
+    payload = {
+        "url": "https://id.colesgroupprofile.com.au/?token=abc.def.ghi&state=secret&clientName=NAB",
+        "page": {"body_excerpt": "signed in as user@example.com with abc.def.ghi"},
+    }
+    sanitized = coles_card_sync.sanitize_payload(payload)
+
+    assert "abc.def.ghi" not in str(sanitized)
+    assert "secret" not in str(sanitized)
+    assert "user@example.com" not in str(sanitized)
+    assert "clientName=NAB" in sanitized["url"]
 
 
 def test_upsert_payload_deduplicates_transactions(tmp_path):

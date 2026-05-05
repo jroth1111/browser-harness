@@ -34,6 +34,12 @@ waits. The user completes login, MFA, or account selection manually. The script
 does not type credentials, read cookies, persist storage state, or redirect auth
 callbacks away from Coles/NAB.
 
+If the authenticated Coles card tab is already open, use:
+
+```bash
+python3 $S/sync.py --current-tab --require-transactions
+```
+
 ## Daily Run Shape
 
 Use the same command from cron, launchd, or a Codex automation. A daily

@@ -18,6 +18,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 DEFAULT_START_URL = "https://secure.coles.com.au/login"
@@ -28,6 +29,19 @@ DEFAULT_DB = (
     / "coles_card.sqlite3"
 )
 RESULT_MARKER = "__COLES_CARD_RESULT__"
+SENSITIVE_QUERY_KEYS = {
+    "access_token",
+    "client_assertion",
+    "code",
+    "code_challenge",
+    "id_token",
+    "nonce",
+    "refresh_token",
+    "session",
+    "state",
+    "token",
+    "x-state",
+}
 
 
 BROWSER_PROBE = r'''
@@ -38,6 +52,7 @@ import time
 START_URL = __START_URL__
 INTERACTIVE_LOGIN = __INTERACTIVE_LOGIN__
 LOGIN_TIMEOUT = __LOGIN_TIMEOUT__
+USE_CURRENT_TAB = __USE_CURRENT_TAB__
 
 def _all_text_payload():
     return js(r"""
@@ -57,9 +72,13 @@ def _all_text_payload():
     }
     return out;
   }
-  function text(el) {
-    return (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
-  }
+	  function rawText(el) {
+	    const target = el && el.nodeType === Node.DOCUMENT_NODE ? (el.body || el.documentElement) : el;
+	    return (target && (target.innerText || target.textContent)) || "";
+	  }
+	  function text(el) {
+	    return rawText(el).replace(/\s+/g, " ").trim();
+	  }
   function linesFromText(s) {
     return String(s || "")
       .split(/\n|(?<=\d{2})\s{2,}/)
@@ -67,9 +86,10 @@ def _all_text_payload():
       .filter(Boolean);
   }
   const allRoots = roots();
-  const rootText = allRoots.map(r => text(r.host || r)).join("\n");
-  const lines = linesFromText(rootText);
-  const moneyRe = /(?:-\s*)?\$ ?\d[\d,]*(?:\.\d{2})|\$ ?-\d[\d,]*(?:\.\d{2})|\(\$ ?\d[\d,]*(?:\.\d{2})\)/g;
+	  const rootText = allRoots.map(r => rawText(r)).join("\n");
+	  const lines = linesFromText(rootText);
+	  const moneySource = String.raw`(?:[-−+]\s*)?\$ ?\d[\d,]*(?:\.\d{2})?|\$ ?[-−+]?\d[\d,]*(?:\.\d{2})?|\(\$ ?\d[\d,]*(?:\.\d{2})?\)`;
+	  const moneyRe = new RegExp(moneySource, "g");
   const dateRe = /\b(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|\d{1,2}\s+(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)\s+\d{2,4})\b/i;
   const balanceMatchers = [
     ["current_balance", /current balance/i],
@@ -82,11 +102,12 @@ def _all_text_payload():
   const balances = [];
   for (let i = 0; i < lines.length; i++) {
     for (const [kind, rx] of balanceMatchers) {
-      if (!rx.test(lines[i])) continue;
-      const windowText = lines.slice(i, i + 3).join(" ");
-      const money = windowText.match(moneyRe);
-      if (money && money.length) {
-        balances.push({
+	      if (!rx.test(lines[i])) continue;
+	      const windowText = lines.slice(i, i + 3).join(" ");
+	      const direct = windowText.match(new RegExp(rx.source + String.raw`\s*(` + moneySource + `)`, "i"));
+	      const money = direct ? [direct[1]] : windowText.match(moneyRe);
+	      if (money && money.length) {
+	        balances.push({
           balance_type: kind,
           label: lines[i],
           amount_text: money[0],
@@ -96,20 +117,53 @@ def _all_text_payload():
       }
     }
   }
-  const elements = [];
-  for (const root of allRoots) {
-    if (!root.querySelectorAll) continue;
-    for (const el of root.querySelectorAll("tr,[role='row'],li,div")) {
-      const rowText = text(el);
-      if (rowText.length < 16 || rowText.length > 500) continue;
-      if (!dateRe.test(rowText) || !moneyRe.test(rowText)) continue;
-      if (/current balance|available credit|credit limit|minimum payment|payment due/i.test(rowText)) continue;
-      elements.push(rowText);
-    }
-  }
-  const seenRows = new Set();
-  const transactions = [];
-  for (const rowText of elements) {
+	  const elements = [];
+	  function nearbyDate(el) {
+	    let node = el;
+	    while (node) {
+	      let sib = node.previousElementSibling;
+	      while (sib) {
+	        const found = text(sib).match(dateRe);
+	        if (found) return found[0];
+	        sib = sib.previousElementSibling;
+	      }
+	      node = node.parentElement || (node.getRootNode && node.getRootNode().host);
+	    }
+	    return null;
+	  }
+	  for (const root of allRoots) {
+	    if (!root.querySelectorAll) continue;
+	    for (const el of root.querySelectorAll("tr,[role='row'],li,div")) {
+	      if (el.tagName !== "LI" && el.querySelector && el.querySelector("li")) continue;
+	      const rowText = text(el);
+	      if (rowText.length < 16 || rowText.length > 500) continue;
+	      moneyRe.lastIndex = 0;
+	      const date = (rowText.match(dateRe) || [nearbyDate(el)])[0];
+	      if (!date || !moneyRe.test(rowText)) {
+	        moneyRe.lastIndex = 0;
+	        continue;
+	      }
+	      moneyRe.lastIndex = 0;
+	      if (/current balance|available credit|credit limit|minimum payment|payment due/i.test(rowText)) continue;
+	      elements.push(dateRe.test(rowText) ? rowText : date + " " + rowText);
+	    }
+	  }
+	  const seenRows = new Set();
+	  const transactions = [];
+	  let currentDate = null;
+	  for (const line of lines) {
+	    const date = (line.match(dateRe) || [null])[0];
+	    if (date) currentDate = date;
+	    if (!moneyRe.test(line)) {
+	      moneyRe.lastIndex = 0;
+	      continue;
+	    }
+	    moneyRe.lastIndex = 0;
+	    if (/current balance|available balance|available credit|credit limit|minimum payment|payment due/i.test(line)) continue;
+	    const rowText = date ? line : (currentDate ? currentDate + " " + line : line);
+	    elements.push(rowText);
+	  }
+	  for (const rowText of elements) {
     const compact = rowText.replace(/\s+/g, " ").trim();
     if (seenRows.has(compact)) continue;
     seenRows.add(compact);
@@ -155,7 +209,7 @@ def _all_text_payload():
 
 def _is_auth_surface(payload):
     text = (payload.get("body_excerpt") or "") + " " + (payload.get("title") or "") + " " + (payload.get("url") or "")
-    return bool(re.search(r"auth\.colesgroupprofile|Log in with your Coles account|Log in or create account|Email Password|Your old credit card login|Complete application", text, re.I))
+    return bool(re.search(r"id\.colesgroupprofile|auth\.colesgroupprofile|secure\.coles\.com\.au/login|Login - Coles Credit Cards|Log in with your Coles account|Log in or create account|Email Password|Your old credit card login|Complete application", text, re.I))
 
 def _click_authorize_button():
     return js(r"""
@@ -230,7 +284,19 @@ def _result(status, **extra):
     print("__COLES_CARD_RESULT__" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
 
 try:
-    new_tab(START_URL)
+    if USE_CURRENT_TAB:
+        tabs = list_tabs(include_chrome=False)
+        target = next((tab for tab in tabs if "secure.coles.com.au/home" in (tab.get("url") or "")), None)
+        if not target:
+            target = next((tab for tab in tabs if "secure.coles.com.au" in (tab.get("url") or "")), None)
+        if not target:
+            target = next((tab for tab in tabs if "colesgroupprofile.com.au" in (tab.get("url") or "")), None)
+        if target:
+            switch_tab(target)
+        else:
+            new_tab(START_URL)
+    else:
+        new_tab(START_URL)
     wait_for_load()
     time.sleep(4)
     initial = _all_text_payload()
@@ -255,6 +321,9 @@ try:
     tx_page = _all_text_payload()
     balances = dashboard.get("balances") or tx_page.get("balances") or []
     transactions = tx_page.get("transactions") or dashboard.get("transactions") or []
+    if _is_auth_surface(tx_page) and not balances and not transactions:
+        _result("blocked", reason="still_on_login", page=tx_page)
+        raise SystemExit(0)
     _result(
         "ok",
         url=tx_page.get("url") or dashboard.get("url"),
@@ -278,6 +347,39 @@ except Exception as exc:
 
 def utc_now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def redact_text(value: str) -> str:
+    value = re.sub(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[redacted-email]", value, flags=re.I)
+    return re.sub(r"\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[redacted-jwt]", value)
+
+
+def sanitize_url(value: str | None) -> str | None:
+    if not value:
+        return value
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return redact_text(value)
+    query = []
+    for key, val in parse_qsl(parts.query, keep_blank_values=True):
+        if key.lower() in SENSITIVE_QUERY_KEYS:
+            query.append((key, "[redacted]"))
+        else:
+            query.append((key, redact_text(val)))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def sanitize_payload(value: Any, key: str = "") -> Any:
+    if isinstance(value, dict):
+        return {k: sanitize_payload(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [sanitize_payload(item, key) for item in value]
+    if isinstance(value, str):
+        if key.lower().endswith("url") or value.startswith(("http://", "https://")):
+            return sanitize_url(value)
+        return redact_text(value)
+    return value
 
 
 def init_db(db_path: Path) -> sqlite3.Connection:
@@ -347,7 +449,7 @@ def parse_money_to_cents(value: str | None) -> int | None:
     if not value:
         return None
     text = value.strip()
-    negative = text.startswith("-") or text.startswith("(") or "$ -" in text or "$-" in text
+    negative = text.startswith(("-", "−", "(")) or "$ -" in text or "$-" in text or "$ −" in text or "$−" in text
     cleaned = re.sub(r"[^0-9.]", "", text)
     if not cleaned:
         return None
@@ -515,12 +617,18 @@ def upsert_payload(conn: sqlite3.Connection, run_id: str, payload: dict[str, Any
     return {"account_key": acct, "balances": balance_count, "transactions": tx_count}
 
 
-def run_browser_probe(start_url: str, interactive_login: bool, login_timeout: int) -> dict[str, Any]:
+def run_browser_probe(
+    start_url: str,
+    interactive_login: bool,
+    login_timeout: int,
+    use_current_tab: bool = False,
+) -> dict[str, Any]:
     code = (
         BROWSER_PROBE
         .replace("__START_URL__", json.dumps(start_url))
         .replace("__INTERACTIVE_LOGIN__", "True" if interactive_login else "False")
         .replace("__LOGIN_TIMEOUT__", str(login_timeout))
+        .replace("__USE_CURRENT_TAB__", "True" if use_current_tab else "False")
     )
     proc = subprocess.run(
         ["browser-harness", "-c", code],
@@ -536,9 +644,9 @@ def run_browser_probe(start_url: str, interactive_login: bool, login_timeout: in
     if not result_line:
         raise RuntimeError(
             "browser probe did not emit a result marker; "
-            f"exit={proc.returncode}; output={combined[-2000:]}"
+            f"exit={proc.returncode}; output={redact_text(combined[-2000:])}"
         )
-    payload = json.loads(result_line)
+    payload = sanitize_payload(json.loads(result_line))
     payload["_browser_exit_code"] = proc.returncode
     return payload
 
@@ -549,6 +657,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-url", default=DEFAULT_START_URL)
     parser.add_argument("--interactive-login", action="store_true")
     parser.add_argument("--login-timeout", type=int, default=180)
+    parser.add_argument("--current-tab", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--require-transactions", action="store_true")
     return parser
@@ -557,7 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     run_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + stable_hash(time.time(), length=8)
-    payload = run_browser_probe(args.start_url, args.interactive_login, args.login_timeout)
+    payload = run_browser_probe(args.start_url, args.interactive_login, args.login_timeout, args.current_tab)
 
     if args.dry_run:
         print(json.dumps(payload, indent=2, sort_keys=True))
