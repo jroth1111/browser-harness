@@ -1,7 +1,9 @@
 # Booking.com — Scraping & Data Extraction
 
-Field-tested against booking.com on 2026-04-18 using `http_get` and the
-`dml/graphql` JSON API. All tests run without a browser session.
+Field-tested against booking.com on 2026-04-18.
+**AWS WAF JS challenge on all HTML pages** — `http_get` returns a ~4 KB stub, not usable content.
+The `dml/graphql` JSON API accepts `http_get` for schema exploration but not authenticated queries.
+**For data extraction, use a browser session** (`goto` + `js`).
 
 ---
 

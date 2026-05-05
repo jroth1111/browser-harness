@@ -126,7 +126,7 @@ the file exists:
 | File | Kind | Purpose |
 |---|---|---|
 | `README.md` | skill | Folder landing page and fast path for cold readers |
-| `overview.md` | skill | Intent routing, two-axis model, source guardrails, build order, common executable entry points, schema index |
+| `overview.md` | skill | Intent routing, two-axis model, source guardrails, build order, schema index |
 | `exploration-protocol.md` | skill | Discovery-first process for public, private, Lightpanda, and headful sources |
 | `workflows-current-state.md` | skill | Sensing workflows for market, competitor, and own-listing current state |
 | `market-research-playbook.md` | skill | Dealflow, opportunity discovery, property validation, market archetypes, and pursue/watch/reject decisions |
@@ -564,28 +564,12 @@ Phase 5 - learning system:
 Outcome: the system learns which price, content, rule, and operations changes
 actually improve host results.
 
-## Common Executable Entry Points
+## Executable entry points
 
-This is a shortcut table only. `scripts/README.md` is the authoritative
-executable index for script role, control-flow stage, source family,
-prerequisites, outputs, refusal rules, and helper-only modules.
-
-| Goal | Run | Notes |
-|---|---|---|
-| Refresh the host's live private listing inventory | `scripts/collect_listings.py` | Other private collectors read its output. Run this first. |
-| Refresh calendar export / iCal daily availability snapshots | `scripts/collect_calendar_export.py` | Export-source path for booked/blocked nights; hashes event IDs and preserves last-good state on empty-feed regressions. |
-| Refresh per-listing Insights for dashboards | `scripts/sync_insights_year_view.py` | Canonical Insights entry point. Wraps `collect_insights.py` with preflight, optional probe refresh, family extracts, and HTML rendering. Do not call `collect_insights.py` directly for the standard workflow. |
-| Refresh authenticated host review rows | `scripts/collect_host_reviews.py` | Default scope is `ACTIVE` listings. |
-| Refresh logged-out competitor comp set | `scripts/collect_competitors.py` | Refuses to run if owner cookies are present or listing inventory is partial. |
-| Audit how the host's own listings appear to a guest | `scripts/collect_own_public.py` | Same logged-out guard as competitors. |
-| Track long-term rental asking prices in current or watchlisted buildings | `scripts/collect_rea_building_rentals.py` | Public REA browser workflow. Searches by suburb, filters by building, revisits known URLs, and records price/lifecycle events. |
-| Evaluate collected rows into decisions and actions | `scripts/decision_gates.py` | Pure helper module. Import it from reports/tests; it does not browse or collect. |
-| Refresh `ChartQuery` granularity reference | `scripts/probe_chart_granularity.py` | One-off; `sync_insights_year_view.py` triggers it automatically when stale. |
-
-Helper modules (`insights_ledger.py`, `insights_planner.py`,
-`extract_route_family.py`, `listing_scope.py`, `public_scan_planner.py`,
-`decision_gates.py`) are imported by collectors, reports, tests, and runners;
-do not invoke them directly.
+For runnable scripts, refusal guards, helper-only modules, and the "what do I
+run?" map, read `scripts/README.md`. It is the single source of truth for
+script role, control-flow stage, source family, prerequisites, outputs, and
+refusal rules; do not duplicate that index here.
 
 ## Schema row index
 

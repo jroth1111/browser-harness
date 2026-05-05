@@ -1,28 +1,57 @@
 # Airbnb.com.au - Enhancement Roadmap
 
 Use this file when deciding what to add next to the host intelligence system.
-The goal is to move from descriptive reporting to decision support and then to a
-learning system.
+This is a forward-looking backlog only. The schema row index in `overview.md`
+and the status ledger in `pipeline-fulfilment.md` are the authoritative sources
+for what already exists.
 
-## Highest-leverage enhancements
+## Implemented foundations
 
-| Priority | Enhancement | Why it matters | Files |
-|---:|---|---|---|
-| 1 | Data quality and provenance layer | Prevents stale, partial, or ambiguous scraped data from driving bad decisions | `data-quality.md` |
-| 2 | Internal finance layer | Airbnb payout is not owner profit; true margin needs cleaning, linen, utilities, management, maintenance, owner splits, and capex | `schema-finance.md` |
-| 3 | Market research decision engine | Turns public-search demand, absorption, capacity gaps, comp theses, channel fit, and underwriting into pursue/watch/reject dealflow decisions | `market-research-playbook.md`, `schema-market-research.md` |
-| 4 | Demand-context layer | Pricing needs event, holiday, weather, transport, regulation, and market-shock context, not only Airbnb comps | `schema-demand-context.md` |
-| 5 | Recommendation and outcome tracking | Records what the system advised, what the host changed, and whether it worked | `decisioning.md` |
-| 6 | Promotion and discount governance | Prevents search-rank promotions and discounts from leaking into peak dates or eroding margin | `schema-performance.md`, `analytics-alerts.md` |
-| 7 | Content quality scoring | Turns photos, photo tours, amenities, badges, and review themes into conversion levers | `schema-core.md`, `public-market.md` |
-| 8 | Market-relative comp scoring | Combines Airbnb similar listings, manual comps, and public search observations with confidence | `schema-public-market.md`, `analytics-alerts.md` |
-| 9 | Operations risk prediction | Links turnover load, message gaps, cleaner capacity, maintenance recurrence, and reviews | `schema-operations.md`, `analytics-alerts.md` |
+These layers are built and should not be added again. Edit the linked schema or
+helper instead of proposing them as new work.
+
+| Layer | Owner |
+|---|---|
+| Data quality and provenance (`airbnb_data_capture_run`, `airbnb_source_observation`, `airbnb_field_quality`) | `data-quality.md`, `scripts/run_integrity.py` |
+| Internal finance (`airbnb_internal_cost_model`, `airbnb_owner_contract`, `airbnb_owner_statement`, `airbnb_capex_maintenance_plan`) | `schema-finance.md` |
+| Demand context (`airbnb_market_event`, `airbnb_holiday_calendar`, `airbnb_weather_context`, `airbnb_demand_calendar`, etc.) | `schema-demand-context.md` |
+| Market research, comp theses, channel, midterm, underwriting | `schema-market-research.md`, `market-research-playbook.md`, `decision_gates.evaluate_market_research_pack` |
+| Recommendation/action/experiment/outcome attribution rows | `decisioning.md` |
+| Conversion diagnosis, photo/product audit, gallery CRO, content brief, settings drift, calendar actions, operations risk, channel strategy | `scripts/decision_gates.py` |
+| Visual-revenue, image-improvement prompts, design opportunities | `visual-revenue-workflows.md`, `schema-visual-revenue.md` |
+| REA building rental monitoring | `realestate-building-rentals.md`, `scripts/collect_rea_building_rentals.py` |
+
+## Open frontiers
+
+Pulled from `pipeline-fulfilment.md` "Remaining evidence gaps" and from the
+decision/learning loop end state. Each frontier is a candidate, not a committed
+plan.
+
+1. **Public rank longitudinal trend.** Today's public-rank rows are sampled,
+   date-specific observations. Convert them into a stable trend by repeating
+   across dates, guests, stay lengths, devices, and time-of-day; build a
+   trend-aware view of search-card visibility instead of single-snapshot rank.
+2. **Lightpanda field-level parity.** Lightpanda is a capability candidate
+   only. Before promoting it for any public surface, prove field-level parity
+   against headful Chrome for the exact public search and listing-page fields
+   the collectors emit.
+3. **Listing-level rating null discipline.** `rating_display_state`,
+   `star_distribution_source`, and related fields already distinguish absent
+   widgets from parser failure. Continue preserving nulls and never fill from
+   host-aggregate review averages; revisit only if Airbnb exposes per-listing
+   rating widgets more uniformly.
+4. **Closed-loop outcome learning.** `airbnb_recommendation`,
+   `airbnb_action_log`, `airbnb_experiment`, and `airbnb_outcome_attribution`
+   rows exist; the loop closes only once outcome attribution feeds back into
+   recommendation suppression (stop suggesting changes that repeatedly fail to
+   move metrics) and into confidence weighting on future recommendations.
 
 ## Enhancement principles
 
 - Do not add a metric unless it changes a decision.
-- Prefer pure decision-gate helpers over browser-dependent recommendation logic.
-  Collectors gather rows; `scripts/decision_gates.py` evaluates them.
+- Prefer pure decision-gate helpers in `scripts/decision_gates.py` over
+  browser-dependent recommendation logic. Collectors gather rows; helpers
+  evaluate them.
 - Track every recommendation as an action candidate with expected impact,
   confidence, owner, deadline, and outcome.
 - Prefer leading indicators over lagging reports: booking pace, search
@@ -34,82 +63,7 @@ learning system.
 - Compare against both Airbnb-selected similar listings and a host-curated comp
   set; neither is sufficient alone.
 
-## New data families to add
-
-1. Data quality:
-   - capture run
-   - source observation
-   - field quality
-   - freshness SLA
-   - screenshot/download evidence
-
-2. Internal finance:
-   - property cost model
-   - actual stay cost
-   - owner contract
-   - owner statement
-   - capex and maintenance reserve
-
-3. Demand context:
-   - public/school holidays
-   - local events
-   - weather and disruption days
-   - transport/flight/event access signals
-   - regulation or supply-change events
-
-4. Market research:
-   - market research run
-   - absorption snapshots
-   - stay-length gap snapshots
-   - guest-capacity curves
-   - price distribution snapshots
-   - comp theses and counterexamples
-   - channel demand snapshots
-   - midterm viability snapshots
-   - underwriting summaries
-   - pursue/watch/reject decisions
-
-5. Decisioning:
-   - recommendation
-   - action log
-   - experiment
-   - outcome attribution
-   - decision review
-
-## Upgrade path
-
-Phase A - trust the data:
-
-1. Add `airbnb_data_capture_run`.
-2. Add field-level confidence and freshness.
-3. Require evidence references for values that trigger alerts.
-
-Phase B - understand true profit:
-
-1. Add internal cost and owner contract tables.
-2. Calculate contribution margin per stay.
-3. Add margin-safe pricing and promotion alerts.
-
-Phase C - understand demand:
-
-1. Add market event and holiday calendars.
-2. Add demand-window tags to future dates.
-3. Explain booking pace and price recommendations using context.
-
-Phase D - evaluate markets and deals:
-
-1. Add market-research runs and public absorption snapshots.
-2. Add stay-length and guest-capacity gap scans.
-3. Add comp thesis, counterexample, channel, midterm, and underwriting records.
-4. Produce pursue/watch/reject decisions with explicit confidence.
-
-Phase E - learn from actions:
-
-1. Create recommendation and action logs.
-2. Track pre/post metrics and control windows.
-3. Promote recommendations only after observed lift or defensible evidence.
-
-## Examples of better host questions after enhancement
+## Examples of host questions the system should answer
 
 - "This date is unbooked; is that because the market is soft, my price is high,
   minimum stay blocks common searches, or my search-card conversion is weak?"

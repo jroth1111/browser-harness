@@ -1,9 +1,14 @@
 # Airbnb.com.au - Pipeline Fulfilment Review
 
+- last_refreshed_at: `2026-04-28`
+- source: post-collection counts from authenticated host runs and logged-out
+  public collectors at that date
+
 Use this file as the current evidence ledger for the host intelligence data
 pipeline. Status is field-level: a source can be high coverage for fields Airbnb
 exposes publicly while still carrying explicit nulls for fields Airbnb does not
-show for a listing.
+show for a listing. Counts below are point-in-time; refresh `last_refreshed_at`
+and the row counts after the next host-run sweep.
 
 ## Current status
 
