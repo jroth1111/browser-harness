@@ -78,11 +78,11 @@ STREET_PRICES = {
     "Apple M4 Max": 3269, "Apple M5 Max": 4979, "Apple M5 Pro": 3937,
     "Apple Max": 4979, "Apple Pro": 3937,
     # AMD unified memory
-    "AMD Ryzen AI MAX 395 Radeon 8060S": 2897,
-    "AMD 395": 2897, "AMD Ryzen AI Max 395": 2897,
-    "AMD Ryzen AI Max+ 395": 2897, "AMD Max+ 395": 2897,
+    "AMD Ryzen AI MAX 395 Radeon 8060S": 1699,
+    "AMD 395": 1699, "AMD Ryzen AI Max 395": 1699,
+    "AMD Ryzen AI Max+ 395": 1699, "AMD Max+ 395": 1699,
     "AMD Minisforum UM790 Pro": 600,
-    "AMD Radeon 8060S Graphics (Strix Halo APU)": 2897,
+    "AMD Radeon 8060S Graphics (Strix Halo APU)": 1699,
     # NVIDIA dev/edge
     "NVIDIA DGX Spark": 3999, "NVIDIA DGX Spark GB10": 3999,
     "NVIDIA GB10": 3999, "NVIDIA Orin Nano Super Developer Kit": 249,

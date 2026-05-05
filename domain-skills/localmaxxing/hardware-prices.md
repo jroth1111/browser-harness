@@ -460,12 +460,14 @@ Prices researched 2026-05-04 via **Chrome CDP** (direct page navigation to eBay 
 
 | # | Platform | Price | Condition | Notes |
 |---|---|---|---|---|
-| 1 | eBay | $1,099 | New | NIMO brand mini PC (entry config) |
-| 2 | eBay | $2,499 | New | NIMO brand (higher spec) |
+| 1 | eBay | $1,099 | SCAM | NIMO brand — 0% feedback seller, confirmed fake |
+| 2 | eBay | $2,499 | New | NIMO brand (higher spec, seller unverified) |
 | 3 | eBay | $4,399 | New | Minisforum (premium config) |
 | 4 | AliExpress | $2,235-5,119 | New | Various configs and brands |
+| 5 | Bosgame (direct) | $1,699 | New | Bosgame M5, 128GB LPDDR5X 8533MHz, 2TB SSD — cheapest verified new |
+| 6 | Amazon US | ~$1,800-2,000 | New | GMKtec EVO-X2, 128GB LPDDR5X 8000MHz |
 
-**Verdict:** $1,099 entry to $4,399 premium. No scam indicators — consistent pricing across platforms.
+**Verdict:** Cheapest verified new unit is Bosgame M5 at $1,699 (direct from bosgamepc.com). The $1,099 eBay NIMO listing is a 0% feedback scam — ignore. Minisforum MS-S1 Max at $3,199 is the best-reviewed but most expensive. GMKtec EVO-X2 sits in between at ~$1,800-2,000 on Amazon.
 
 ---
 
@@ -533,7 +535,7 @@ Prices researched 2026-05-04 via **Chrome CDP** (direct page navigation to eBay 
 | Mac Studio M4 Max 64GB | eBay | $3,999 | New | Sealed with warranty |
 | MacBook Pro M2 Pro 16GB | eBay | $848 | Refurb | 57% below retail |
 | DGX Spark 128GB | eBay | ~$3,999 | Used | Sub-$3K = confirmed scam |
-| Ryzen AI MAX 395 128GB | eBay | $1,099-2,499 | New | Mini PCs, no scam indicators |
+| Ryzen AI MAX 395 128GB | Bosgame (direct) | $1,699 | New | Bosgame M5 — cheapest verified new |
 | Minisforum UM790 Pro | AliExpress | $471 | Barebones | Add own RAM for 64GB |
 | Orin Nano Super 8GB | eBay | $224 | New | Below $249 MSRP |
 
