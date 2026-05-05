@@ -256,10 +256,16 @@ def _html_initial_json(html: str, variable: str) -> dict[str, Any] | None:
     return None
 
 
-def local_video_id_extraction(url_or_id: str) -> dict[str, Any]:
+def local_video_id_extraction(url_or_id: str | None) -> dict[str, Any]:
     value = (url_or_id or "").strip()
     if VIDEO_ID_RE.match(value):
         return result(True, {"video_id": value, "source_pattern": "raw_id"})
+    # Promote bare host-prefixed strings (e.g. "youtu.be/<id>") to absolute URLs so urlparse
+    # populates netloc instead of dumping the whole string into path.
+    if value and "://" not in value and value.lower().startswith(
+        ("youtu.be/", "www.youtube.com/", "youtube.com/", "m.youtube.com/", "music.youtube.com/")
+    ):
+        value = f"https://{value}"
     parsed = urllib.parse.urlparse(value)
     query = urllib.parse.parse_qs(parsed.query)
     candidates = []
@@ -267,7 +273,7 @@ def local_video_id_extraction(url_or_id: str) -> dict[str, Any]:
     path_parts = [part for part in parsed.path.split("/") if part]
     if parsed.netloc.endswith("youtu.be") and path_parts:
         candidates.append(path_parts[0])
-    for prefix in ("shorts", "embed", "live"):
+    for prefix in ("shorts", "embed", "live", "v"):
         if prefix in path_parts:
             index = path_parts.index(prefix)
             if len(path_parts) > index + 1:
@@ -288,7 +294,7 @@ def static_oembed_video_card(payload: dict[str, Any] | None = None, **_: Any) ->
 def static_thumbnails(video_id: str, size: str = "hqdefault") -> dict[str, Any]:
     extracted = local_video_id_extraction(video_id)
     if not extracted["ok"]:
-        return extracted
+        return result(False, None, extracted["reason"], path_type="static")
     vid = extracted["data"]["video_id"]
     sizes = ["maxresdefault", "hqdefault", "mqdefault", "default"]
     selected = size if size in sizes else "hqdefault"
@@ -357,9 +363,10 @@ def api_global_search(payload: Any = None) -> dict[str, Any]:
 
 def api_search_continuation(payload: Any = None) -> dict[str, Any]:
     parsed = api_global_search(payload)
-    parsed["data"] = parsed["data"] or {}
-    parsed["data"]["continuation_result"] = True
-    return parsed | {"path_type": "api"}
+    parsed["path_type"] = "api"
+    if parsed["ok"]:
+        parsed["data"]["continuation_result"] = True
+    return parsed
 
 
 def api_search_filters(surface_map: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -463,6 +470,8 @@ def browser_transcript_panel(payload: Any = None) -> dict[str, Any]:
 
 
 def api_related_videos(payload: Any = None) -> dict[str, Any]:
+    if payload is None:
+        return result(False, None, "not_available", path_type="hybrid")
     videos = _parse_video_renderers(payload)
     return result(bool(videos), {"videos": videos}, "success" if videos else "empty_result", path_type="hybrid")
 
@@ -485,10 +494,21 @@ def api_chapters_key_moments(payload: Any = None) -> dict[str, Any]:
 def browser_share_panel(payload: Any = None) -> dict[str, Any]:
     if payload is None:
         return result(False, None, "not_available", path_type="hybrid")
+    renderer_types = {name for name, _ in _renderer_items(payload)}
+    target_id_set = set()
+    for node in _walk(payload):
+        target_id = node.get("targetId") if isinstance(node, dict) else None
+        if isinstance(target_id, str):
+            target_id_set.add(target_id)
+    embed_present = (
+        "embedRenderer" in renderer_types
+        or any("embed" in tid.lower() for tid in target_id_set)
+    )
+    copy_present = any("copy" in tid.lower() for tid in target_id_set)
     return result(True, {
-        "embed": _first_renderer(payload, "embedRenderer") is not None or "embed" in json.dumps(payload).lower(),
-        "copy": "copy" in json.dumps(payload).lower(),
-        "renderer_types": sorted({name for name, _ in _renderer_items(payload)}),
+        "embed": embed_present,
+        "copy": copy_present,
+        "renderer_types": sorted(renderer_types),
     }, path_type="hybrid")
 
 
@@ -592,17 +612,22 @@ def api_channel_about(payload: Any = None) -> dict[str, Any]:
 
 
 def api_channel_videos(payload: Any = None, **_: Any) -> dict[str, Any]:
+    if payload is None:
+        return result(False, None, "not_available", path_type="hybrid")
     videos = _parse_video_renderers(payload)
     return result(bool(videos), {"videos": videos, "continuations": _continuations(payload)}, "success" if videos else "empty_result", path_type="hybrid")
 
 
 def api_channel_shorts(payload: Any = None, **_: Any) -> dict[str, Any]:
     parsed = api_channel_videos(payload)
-    parsed["data"]["shorts"] = [item for item in parsed["data"]["videos"] if item["renderer"] == "shortsLockupViewModel"]
+    if parsed["data"] is not None:
+        parsed["data"]["shorts"] = [item for item in parsed["data"]["videos"] if item["renderer"] == "shortsLockupViewModel"]
     return parsed
 
 
 def api_channel_playlists(payload: Any = None) -> dict[str, Any]:
+    if payload is None:
+        return result(False, None, "not_available", path_type="hybrid")
     playlists = _parse_playlist_renderers(payload)
     return result(bool(playlists), {"playlists": playlists, "continuations": _continuations(payload)}, "success" if playlists else "empty_result", path_type="hybrid")
 
@@ -622,7 +647,8 @@ def api_channel_community(payload: Any = None, max_results: int | None = None) -
 
 def api_channel_streams(payload: Any = None, **_: Any) -> dict[str, Any]:
     parsed = api_channel_videos(payload)
-    parsed["data"]["streams"] = parsed["data"]["videos"]
+    if parsed["data"] is not None:
+        parsed["data"]["streams"] = parsed["data"]["videos"]
     return parsed
 
 
@@ -644,17 +670,19 @@ def api_playlist_contents(payload: Any = None, max_results: int | None = None) -
 
 def api_trending(payload: Any = None) -> dict[str, Any]:
     parsed = api_global_search(payload)
-    parsed["data"] = parsed["data"] or {}
-    parsed["data"]["surface"] = "trending"
-    return parsed | {"path_type": "api"}
+    parsed["path_type"] = "api"
+    if parsed["ok"]:
+        parsed["data"]["surface"] = "trending"
+    return parsed
 
 
 def api_hashtag(payload: Any = None, tag: str | None = None) -> dict[str, Any]:
     parsed = api_global_search(payload)
-    parsed["data"] = parsed["data"] or {}
-    parsed["data"]["tag"] = tag
-    parsed["data"]["surface"] = "hashtag"
-    return parsed | {"path_type": "api"}
+    parsed["path_type"] = "api"
+    if parsed["ok"]:
+        parsed["data"]["tag"] = tag
+        parsed["data"]["surface"] = "hashtag"
+    return parsed
 
 
 PRIMITIVE_FUNCTIONS: dict[str, Callable[..., dict[str, Any]]] = {

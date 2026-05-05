@@ -33,12 +33,22 @@ def test_video_id_extraction_accepts_supported_forms_and_rejects_invalid():
         "https://youtu.be/dQw4w9WgXcQ?t=3",
         "https://www.youtube.com/shorts/dQw4w9WgXcQ",
         "https://www.youtube.com/embed/dQw4w9WgXcQ",
+        # Schemeless host-prefixed forms produced by chat clients and copy-paste.
+        "youtu.be/dQw4w9WgXcQ",
+        "youtube.com/watch?v=dQw4w9WgXcQ",
+        # Legacy embed alternative still valid in YouTube's own URL set.
+        "https://www.youtube.com/v/dQw4w9WgXcQ",
+        # Mobile and YT Music subdomains.
+        "https://m.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
     ]
     for sample in samples:
         parsed = module.local_video_id_extraction(sample)
-        assert parsed["ok"] is True
-        assert parsed["data"]["video_id"] == "dQw4w9WgXcQ"
+        assert parsed["ok"] is True, sample
+        assert parsed["data"]["video_id"] == "dQw4w9WgXcQ", sample
     assert module.local_video_id_extraction("not-a-video-id")["reason"] == "not_found"
+    assert module.local_video_id_extraction("")["reason"] == "not_found"
+    assert module.local_video_id_extraction(None)["reason"] == "not_found"
 
 
 def test_search_and_continuation_fixture_parse_mixed_renderers():
@@ -185,3 +195,82 @@ Thanks
     empty = module.local_caption_payload_text("vtt", "WEBVTT\n\n")
     assert empty["ok"] is False
     assert empty["reason"] == "empty_result"
+
+
+def test_none_payload_helpers_return_not_available_without_data_keys():
+    module = load_module()
+    # None-payload semantics: every helper must terminate with not_available and no
+    # half-populated data dict, so callers can reliably branch on `ok` alone.
+    none_returning = [
+        module.api_related_videos,
+        module.api_channel_videos,
+        module.api_channel_playlists,
+        module.api_channel_shorts,
+        module.api_channel_streams,
+        module.api_chapters_key_moments,
+        module.api_comments,
+        module.api_watch_next_detail,
+        module.api_playlist_contents,
+        module.api_channel_about,
+        module.api_channel_community,
+        module.browser_transcript_panel,
+        module.browser_share_panel,
+        module.browser_action_surfaces,
+        module.static_oembed_video_card,
+    ]
+    for fn in none_returning:
+        outcome = fn(None)
+        assert outcome["ok"] is False, fn.__name__
+        assert outcome["reason"] == "not_available", fn.__name__
+        assert outcome["data"] is None, fn.__name__
+
+
+def test_search_continuation_and_discovery_helpers_dont_decorate_terminal_results():
+    module = load_module()
+    for helper in (module.api_search_continuation, module.api_trending):
+        terminal = helper(None)
+        assert terminal["ok"] is False
+        assert terminal["data"] is None
+        assert terminal["path_type"] == "api"
+    hashtag_terminal = module.api_hashtag(None, tag="python")
+    assert hashtag_terminal["ok"] is False
+    assert hashtag_terminal["data"] is None
+    assert hashtag_terminal["path_type"] == "api"
+
+
+def test_static_thumbnails_propagates_video_id_extraction_failure():
+    module = load_module()
+    bad = module.static_thumbnails("not-a-video-id")
+    assert bad["ok"] is False
+    assert bad["reason"] == "not_found"
+    assert bad["path_type"] == "static"
+    good = module.static_thumbnails("dQw4w9WgXcQ")
+    assert good["ok"] is True
+    assert good["data"]["selected_size"] == "hqdefault"
+    assert good["data"]["url"].endswith("dQw4w9WgXcQ/hqdefault.jpg")
+
+
+def test_browser_share_panel_does_not_false_positive_on_unrelated_text():
+    module = load_module()
+    # Text fields containing the words "embed" or "copy" must not trip detection;
+    # only renderer types or share-target identifiers count as evidence.
+    payload = {
+        "description": "Click the share button to embed or copy the link.",
+        "title": "How to embed videos and copy URLs",
+    }
+    parsed = module.browser_share_panel(payload)
+    assert parsed["ok"] is True
+    assert parsed["data"]["embed"] is False
+    assert parsed["data"]["copy"] is False
+
+    detected = module.browser_share_panel({
+        "shareTargetContainerRenderer": {
+            "targets": [
+                {"shareTargetRenderer": {"targetId": "share-target-embed"}},
+                {"shareTargetRenderer": {"targetId": "share-target-copy-link"}},
+            ]
+        }
+    })
+    assert detected["ok"] is True
+    assert detected["data"]["embed"] is True
+    assert detected["data"]["copy"] is True

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "candidate_id": "airbnb-host-dashboard-auth-state-holdout",
+  "domain": "airbnb",
+  "affected_skill_paths": [
+    "agent-workspace/domain-skills/airbnb/host-sources.md"
+  ],
+  "observed_surface": {
+    "origin": "https://www.airbnb.com.au",
+    "url_pattern": "/hosting",
+    "auth_context": "persistent_logged_in_host_account",
+    "browser_backend": "headful_chrome",
+    "source_family": "host_private",
+    "required_fields": [
+      "listing_id",
+      "calendar_state",
+      "private_performance_metrics"
+    ]
+  },
+  "evidence_refs": [
+    "airbnb-host-dashboard-capability-receipt"
+  ],
+  "observed_behavior": "Host dashboard, private analytics, calendar, settings, exports, messages, and reservations require persistent logged-in host state.",
+  "proposed_rule": "Use persistent logged-in headful Chrome for Airbnb host-private workflows that require account-scoped fields.",
+  "forbidden_overgeneralization": "Do not use public logged-out market rules for account-scoped host workflows.",
+  "source_contextuality": {
+    "scope": "Airbnb host-private surfaces with account-scoped fields.",
+    "does_not_apply_when": [
+      "The workflow studies public guest-visible rank and price without host personalization."
+    ]
+  },
+  "positive_probe": {
+    "description": "Host-private fields require persistent logged-in source context.",
+    "evidence_required": "Receipt with source_family=host_private and auth_context=persistent_logged_in_host_account."
+  },
+  "negative_probe": {
+    "description": "Public market source context is not reused for private host fields.",
+    "forbidden_path": "A logged-out public-market receipt treated as host-private evidence."
+  },
+  "redaction_status": {
+    "status": "pass",
+    "finding_count": 0
+  },
+  "confidence": "high",
+  "promotion_decision": "accept"
+}

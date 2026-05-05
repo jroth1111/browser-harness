@@ -24,7 +24,7 @@ Generalizable:
 - capability receipts
 - profile labels and recheck cadence
 
-Site-specific details belong in `domain-skills/<site>/`:
+Site-specific details belong in `agent-workspace/domain-skills/<site>/`:
 
 - safe seed URLs
 - private source names
@@ -53,8 +53,8 @@ Site-specific details belong in `domain-skills/<site>/`:
 Domain skills can use these ignored paths:
 
 ```text
-domain-skills/<site>/.session-store/
-domain-skills/<site>/.private-data/
+agent-workspace/domain-skills/<site>/.session-store/
+agent-workspace/domain-skills/<site>/.private-data/
 ```
 
 Use `.session-store/` for local continuity manifests and capability receipts.
@@ -67,7 +67,7 @@ they contain live session secrets.
 Recommended layout:
 
 ```text
-domain-skills/<site>/.session-store/
+agent-workspace/domain-skills/<site>/.session-store/
   profiles/
     <profile-label>.json
   capability/

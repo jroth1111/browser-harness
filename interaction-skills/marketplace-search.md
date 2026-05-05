@@ -19,7 +19,7 @@ Generalizable:
 - query construction strategy
 
 Platform-specific extractors, URLs, and transport details belong in
-`domain-skills/<platform>/`. This skill orchestrates across them; it does not
+`agent-workspace/domain-skills/<platform>/`. This skill orchestrates across them; it does not
 duplicate their extractors.
 
 ## Component-to-product mapping
@@ -117,10 +117,10 @@ Each platform has a different transport. Parallelize where possible.
 
 | Platform | Transport | Rate limit | Extractor doc |
 |----------|-----------|------------|---------------|
-| eBay | `http_get` | ~5-10 req/IP then block | `domain-skills/ebay/scraping.md` |
-| Walmart | `http_get` (bare UA) | No observed limit | `domain-skills/walmart/scraping.md` |
-| Amazon | CDP (browser) | No observed limit | `domain-skills/amazon/product-search.md` |
-| AliExpress | CDP (browser) | No observed limit | `domain-skills/aliexpress/scraping.md` |
+| eBay | `http_get` | ~5-10 req/IP then block | `agent-workspace/domain-skills/ebay/scraping.md` |
+| Walmart | `http_get` (bare UA) | No observed limit | `agent-workspace/domain-skills/walmart/scraping.md` |
+| Amazon | CDP (browser) | No observed limit | `agent-workspace/domain-skills/amazon/product-search.md` |
+| AliExpress | CDP (browser) | No observed limit | `agent-workspace/domain-skills/aliexpress/scraping.md` |
 
 ### Execution order
 
@@ -143,7 +143,7 @@ Each platform has a different transport. Parallelize where possible.
 
 ### Parallel pattern (http_get platforms)
 
-Following `domain-skills/news-aggregation/multi-source.md`:
+Following `agent-workspace/domain-skills/news-aggregation/multi-source.md`:
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
@@ -242,10 +242,10 @@ the "is_system" count) is a known limitation — the heuristic works better for
 
 ## Cross-references
 
-- `domain-skills/ebay/scraping.md` — eBay extractors, URL params, rate limits
-- `domain-skills/walmart/scraping.md` — Walmart extractors, `__NEXT_DATA__` pattern
-- `domain-skills/amazon/product-search.md` — Amazon CDP extraction
-- `domain-skills/aliexpress/scraping.md` — AliExpress CDP extraction, trap detection
+- `agent-workspace/domain-skills/ebay/scraping.md` — eBay extractors, URL params, rate limits
+- `agent-workspace/domain-skills/walmart/scraping.md` — Walmart extractors, `__NEXT_DATA__` pattern
+- `agent-workspace/domain-skills/amazon/product-search.md` — Amazon CDP extraction
+- `agent-workspace/domain-skills/aliexpress/scraping.md` — AliExpress CDP extraction, trap detection
 - `interaction-skills/product-search.md` — filtering strategy, marketplace fraud avoidance, product-vs-category search
 - `interaction-skills/cross-domain-control-flow.md` — backend routing, auth boundaries
-- `domain-skills/news-aggregation/multi-source.md` — ThreadPoolExecutor parallel fetch pattern
+- `agent-workspace/domain-skills/news-aggregation/multi-source.md` — ThreadPoolExecutor parallel fetch pattern

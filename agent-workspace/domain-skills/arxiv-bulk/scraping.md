@@ -1,6 +1,6 @@
 # arXiv Bulk Harvest + Semantic Scholar — OAI-PMH & Citation Enrichment
 
-Companion to `domain-skills/arxiv/scraping.md`. Use the **arxiv** skill for search-and-fetch workflows. Use **this skill** when you need:
+Companion to `agent-workspace/domain-skills/arxiv/scraping.md`. Use the **arxiv** skill for search-and-fetch workflows. Use **this skill** when you need:
 
 - Bulk-harvesting all papers in a subject area or date window (OAI-PMH)
 - Citation counts, influential-citation scores, and cross-database IDs (Semantic Scholar)

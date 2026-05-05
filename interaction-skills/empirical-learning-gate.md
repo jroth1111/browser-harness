@@ -20,7 +20,7 @@ outside the skill artifact.
 ## Candidate Record
 
 Store candidates as JSON when the learning is non-trivial or cross-domain. Use
-the shared schema at `domain-skills/skill-learning-candidate.schema.json`.
+the shared schema at `agent-workspace/domain-skills/skill-learning-candidate.schema.json`.
 
 Required source context:
 
@@ -93,7 +93,7 @@ headers, private payload bodies, or unredacted screenshots in the candidate.
 Domain-specific learning fixtures live under:
 
 ```text
-domain-skills/<site>/fixtures/skill-learning/
+agent-workspace/domain-skills/<site>/fixtures/skill-learning/
   accepted/
   rejected/
   holdout/
@@ -107,7 +107,7 @@ and `holdout/` for counterexamples that prevent overgeneralization.
 Run the gate before promoting a non-trivial candidate:
 
 ```bash
-browser-harness --skill-learning-gate /absolute/path/to/domain-skills/<site>/fixtures/skill-learning/accepted/example.json
+browser-harness --skill-learning-gate /absolute/path/to/agent-workspace/domain-skills/<site>/fixtures/skill-learning/accepted/example.json
 ```
 
 Installed packages also expose

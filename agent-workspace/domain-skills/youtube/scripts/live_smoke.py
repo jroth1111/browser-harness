@@ -2,7 +2,7 @@
 """Create a redacted YouTube live-smoke receipt skeleton from browser-harness.
 
 Run with:
-  browser-harness < domain-skills/youtube/scripts/live_smoke.py
+  browser-harness < agent-workspace/domain-skills/youtube/scripts/live_smoke.py
 
 The script intentionally records shape/status evidence and ytcfg key names, not
 cookies, visitor IDs, page key values, playback URLs, or caption base URLs.
@@ -16,8 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-ROOT = Path("domain-skills/youtube")
-REPO_ROOT_MARKERS = ("helpers.py", "domain-skills/youtube/surface-map.json")
+ROOT = Path("agent-workspace/domain-skills/youtube")
+REPO_ROOT_MARKERS = ("helpers.py", "agent-workspace/domain-skills/youtube/surface-map.json")
 REDACT_PATTERNS = [
     (re.compile(r'("visitorData"\s*:\s*)"[^"]+"'), r'\1"<redacted>"'),
     (re.compile(r'("INNERTUBE_API_KEY"\s*:\s*)"[^"]+"'), r'\1"<redacted>"'),
@@ -57,7 +57,7 @@ def require_repo_root() -> None:
     if missing:
         raise SystemExit(
             "Run from browser-harness repo root with: "
-            "browser-harness < domain-skills/youtube/scripts/live_smoke.py"
+            "browser-harness < agent-workspace/domain-skills/youtube/scripts/live_smoke.py"
         )
 
 

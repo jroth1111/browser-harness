@@ -26,7 +26,7 @@ commit cookie values — extract at runtime from the user's browser profile.
 
 ## Scripts
 
-Executable scripts in `domain-skills/ebay/scripts/`:
+Executable scripts in `agent-workspace/domain-skills/ebay/scripts/`:
 
 | Script | Purpose |
 |--------|---------|
@@ -38,16 +38,16 @@ Executable scripts in `domain-skills/ebay/scripts/`:
 
 ```bash
 # Full search with iterative discovery:
-uv run python3 domain-skills/ebay/scripts/search.py search "Ryzen AI Max+ 395" --output results.csv
+uv run python3 agent-workspace/domain-skills/ebay/scripts/search.py search "Ryzen AI Max+ 395" --output results.csv
 
 # Verify seller trust on existing CSV:
-uv run python3 domain-skills/ebay/scripts/search.py verify results.csv --output verified.csv
+uv run python3 agent-workspace/domain-skills/ebay/scripts/search.py verify results.csv --output verified.csv
 
 # Generate URLs only (no fetching):
-python3 domain-skills/ebay/scripts/search.py urls "RTX 5090" --products "RTX 5090"
+python3 agent-workspace/domain-skills/ebay/scripts/search.py urls "RTX 5090" --products "RTX 5090"
 
 # Classify titles from CSV:
-python3 domain-skills/ebay/scripts/classify_product_line.py --csv results.csv --field title
+python3 agent-workspace/domain-skills/ebay/scripts/classify_product_line.py --csv results.csv --field title
 ```
 
 ### search.py workflow

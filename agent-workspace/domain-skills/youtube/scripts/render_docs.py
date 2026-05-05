@@ -94,7 +94,7 @@ def render(data: dict) -> str:
 def main() -> int:
     data = load_map()
     (ROOT / "generated-surfaces.md").write_text(render(data), encoding="utf-8")
-    print("wrote domain-skills/youtube/generated-surfaces.md")
+    print("wrote agent-workspace/domain-skills/youtube/generated-surfaces.md")
     return 0
 
 

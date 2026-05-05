@@ -1,0 +1,38 @@
+{
+  "platform": "doordash",
+  "authenticated": true,
+  "api_endpoints": [
+    {
+      "source": "performance_api",
+      "url": "https://o17585.ingest.us.sentry.io/api/6196846/envelope/?sentry_key=f55609756bfb481c8ad0a180c8248883&sentry_version=7&sentry_client=sentry.javascript.nextjs%2F8.36.0",
+      "method": "GET"
+    },
+    {
+      "source": "performance_api",
+      "url": "https://cdn.segment.com/v1/projects/L3UWqZFYa0jF2PtgpEsKod2WtZet4Zvr/settings",
+      "method": "GET"
+    },
+    {
+      "source": "performance_api",
+      "url": "https://maps.googleapis.com/maps/api/mapsjs/gen_204?csp_test=true",
+      "method": "GET"
+    },
+    {
+      "source": "performance_api",
+      "url": "https://423b12fd7b819ec52acafed4ef462cb2.doordash.com/iguazu-edge/v1/p2",
+      "method": "GET"
+    },
+    {
+      "source": "performance_api_store",
+      "url": "https://img.cdn4dd.com/s/managed/prism/icons/next/default/24/menu.svg",
+      "method": "GET"
+    }
+  ],
+  "http_headers": {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cookie": "csrf_token=ZJHusvMPo8p1bhEoZKvqETLF2iXiRTQluI8IwApFNIXPRqOsinjTTrp71vuW9mWN; _ga_J4BQM7M3T2=GS2.1.s1777862414$o2$g1$t1777862456$j18$l1$h1297563287; lastRskxRun=1777862456533; _ga_PHYNT4K7L2=GS2.1.s1777833994$o1$g0$t1777833994$j60$l0$h0; dd_device_id=dx_2e8284fbfdea47988c3d4dcedcdb9ccc; dd_last_login_action=Login; realtime_events=W3siYWN0aW9uX3R5cGUiOiJzdG9yZV92aXNpdCIsImVudGl0eV9pZCI6IjI0Mzg3NDI2In1d; dd_delivery_correlation_id=962968ec-37e5-423d-87ad-5d2a5d9b484d; _ga=GA1.2.768625253.1777833941; __ps_slu=https://www.doordash.com/; g_state={\"i_l\":0,\"i_ll\":1777862411155,\"i_b\":\"AtqSNNZ7MG4lhfRQaqhBt+zMe8c58MrNR2jkW8DM7Wk\",\"i_e\":{\"enable_itp_optimization\":0},\"i_et\":1777862408302}; __ps_r=_; authState=562fb8dd-03fb-4786-a454-62af60823015; dd_non_essential_opt_in=true; _fbp=fb.1.1777833941345.306280896674481315; rCookie=yn10cpdv3el35ityesaumoq4fbuu; _ga_BXB2XKP8LL=GS2.1.s1777862414$o2$g1$t1777862455$j19$l0$h0; ajs_user_id=323404574; dd_device_session_id=6d2c7109-b537-4fc4-8776-b14d63e91f8e; cf_clearance=2N1KyURo6Pc3dMD6CTW1l_Ahe3SN4YPAqiI4JzsCWeI-1777862407-1.2.1.1-V0inOiKfG8VriaKPUU6IaRzZqyaYjnOMwcl_n1LZAiUjvoYdZsmhRNFdgf4eOSeUAKZIevFk5SvOFsrPFLK2L.PEDJawLkvYQb5uS5W5HFh7jI4qMs0B3G35EPl1ru2Iz3pEp_IihmCWUoOoex7vY.PQX06MSdWaU6H3szTDLId3J125_OQb6bkIXrC0Pojhoza7vxqlMVRNGuBILR7_oTnH6TaxmujM9HCVPN8T79tbYA_EeAd7eK0Pd4kIohO_hh_I9EkAIWpp7y5aejtWRH9EmZ5QVlMSujtenoBQ.7biPymjq1fZ6szGbOrWt1H.igVLNO8q7Xsh3ZKQ12Ge.Q; _pin_unauth=dWlkPU1UTTJNRGN5Wm1VdFpXSXpOQzAwTURVMUxXSmtaVFl0T0RFNE9XSXdPR1JtWVRndw; amplitude_id_8a4cf5f3981e8b7827bab3968fb1ad2bdoordash.com=eyJkZXZpY2VJZCI6ImYzODYyN2FlLTcxYzItNGNmMC1iMTQ4LTIwZTVmZjc5ZjE3NVIiLCJ1c2VySWQiOiIzMjM0MDQ1NzQiLCJvcHRPdXQiOmZhbHNlLCJzZXNzaW9uSWQiOjE3Nzc4NjI0MTUxNzYsImxhc3RFdmVudFRpbWUiOjE3Nzc4NjI0NTczMzcsImV2ZW50SWQiOjEyMiwiaWRlbnRpZnlJZCI6MzksInNlcXVlbmNlTnVtYmVyIjoxNjF9; __stripe_mid=43509c68-b061-4af1-b5a9-10a11a291fde9da05c; dd_market_id=12; __ps_fva=1777833941270; __cfwaitingroom=Chh5WElQQ3Y3VkcveG9yazZ6bkZkd1NRPT0SgAJTNEwzcSt3R1NTSllZd0p1Q1V2aUg4a3FaVzhQWnIyMmVlUTZmdVFVNDdseUtUekhOZWdSWWxXYzhJMnNnTjcxaW1QaC8wN2JONTBaZXJjU0ZaVXRUSmJ2aUYvR0txZllDLzJTOHJuaEpzWHFPMlFGMzJ2bVpndmx1Y1hxL3MzS0tkcWY4aVllWlN1VTIvalhNajJGa3doU1VJSE1qV3R2YzduK2xPTmRrYTk3dVU0U3VvVytrVWRBUlhnaHQ0bmoxQ2FDeTR0WkhuR3FxZHhtZXlIcW13dzI1MWY1QmlKYy9ZMFlRQ0dNb0dmVHpIQWYrN2ZUYlp4Y1dDTHBmNlE2; _twpid=tw.1777833941223.252944500255410381; dd_last_login_method=Email; _ga_7WP64FZ9FR=GS2.1.s1777833994$o1$g0$t1777833994$j60$l0$h0; __stripe_sid=a56d22ce-0637-45dc-b3d8-9901eb1328076342a5; ddweb_token=eyJhbGciOiJIUzI1NiJ9.eyJvcmlnX2lhdCI6MTc3Nzg2MjQ1MiwicGVkcmVnYWwiOnsiaWQiOiIzNWRhYTJjNy0xZTVjLTRjMjAtOTI3Zi03NWJkNjViM2MxZDMiLCJwZHJuIjoiNHNOd1ZSYy4zMzUwMjY4OTkifSwiZXhwIjoxNzc4MTIxNjUyLCJ1c2VyIjp7ImF1dGhfdmVyc2lvbiI6MywiaXNfc3RhZmYiOmZhbHNlLCJpZCI6MzM1MDI2ODk5LCJlbWFpbCI6Imd3aXp6QGVtYWlsLmNvbSJ9LCJjaWQiOjE2NjY1MTkzOTA0MjYyOTUwNDB9.-I-MpNMVzL2YKGaI3xi0pfEeQbJNc5oyvm4rV-1ZOp4:fd780eb6-a434-4e20-a5bb-53a243cdade7; _cfuvid=fXPWwWdIVfk.FTgq5jtoqMcgbMFbVbpCYJEKWyMwI7I-1777862421.586849-1.0.1.1-q8yag2LiRKIIZtMixlYRIHDsFHgm1hCCmZFIDrxaEYA; _clck=1igwzwc%5E2%5Eg5r%5E0%5E2314; _clsk=gz4d7m%5E1777862456967%5E6%5E1%5Es.clarity.ms%2Fcollect; _ga_9ZH32N32VL=GS2.1.s1777833944$o1$g1$t1777833968$j36$l0$h0; cf_clearance=pIuMirJ.SAHlh4oWdCZJD0uRJ2.mt1OS1JGcy8oPZP0-1777833971-1.2.1.1-XKSPzQ5sx.evwTDaSbzrRtsPTd9JXfCJQybxWJti9t0vO5s2jau9NIPiNDhjI2onowbahNdASj4ha5iacKV5uNi7Mb.5bn32XEN2YNVNfxvNhOLes4glm5s5U2aJLozJ2TTpjkn9CJ1LLqN98ZF7QGMv4dXWbYU8cBo1oE5v0WeKhcbkFcKrYRh64yKgHgd8KRvmi3BrlTLPDtPeCp3ziD8kf4PBRdFSJmA2Hf59vthvazjE5PayOXfm7gsTIPs_skwZvnZqSLQxvPAHsWEOVgj3ZMD1Jfq.29oCUJP3yv82W2GHezVwJbNm9qg6UZKbYZ7iPn2dx_bcP5dr5Pa_85t.197R5rz49IwGaLBYDDn4WIg16HpOmAFIuXzMtzjpOQggnBR.gQgh1oK3wSyPJ9EYFv9R_TpwCZWTBruvbv8; _gid=GA1.2.358639097.1777833941; IR_gbd=doordash.com; _yjsu_yjad=1777833942.b39c8609-76e8-4574-ba0d-64746178fe59; __pdst=88481853aa754c54bdf11b76db2a749f; g_state={\"i_l\":0,\"i_ll\":1777833994003,\"i_b\":\"oA89IZu/aW+T01Jm53ODBa+BY9nO1c8lYVaNqopSNDc\",\"i_e\":{\"enable_itp_optimization\":0},\"i_et\":1777833941315}; amplitude_idundefineddoordash.com=eyJvcHRPdXQiOmZhbHNlLCJzZXNzaW9uSWQiOm51bGwsImxhc3RFdmVudFRpbWUiOm51bGwsImV2ZW50SWQiOjAsImlkZW50aWZ5SWQiOjAsInNlcXVlbmNlTnVtYmVyIjowfQ==; __ps_lu=https://www.doordash.com/; _uetvid=4910ca80472011f198501328c2f2859d; ajs_anonymous_id=96ff593f-0c2d-4e7b-9ae5-1b7b9f3f0978; __ps_sr=_; _gcl_au=1.1.1904485322.1777833941.1980877023.1777833952.1777833951; __cf_bm=WBEsAdRnPQan2h9Pvd9IRSu.R.5luapKDSzq.U3bt.w-1777862421.586849-1.0.1.1-tU33bcPL7IZplkGcAdOOpUCIxXiWxO7OJBSnS3yzEdquzOo1hW1WXns9ntYkmlTaWlcLHW1FATueq5BGjXiMdHYbzv__X4rVMG2Nh4JQG45Utirrg.A_IbdhVcm2WyRU; IR_10350=1777862455435%7C0%7C1777862455435%7C%7C; __cf_bm=ZI.06EOjOUtyFzm1nX1lGuyE1zPQpum8PeosRLV0qI8-1777862413.4699628-1.0.1.1-jdmzGxScJg88_ZZZNO2YudehkchpAsGDTVxod1juzr406S7L8dsso2Jp9404BOiRt0cHzl4rVbZFlbdIKDxmm43ZSnTTX0rNj2hZBlmzvWAG8E2BHL7n19Jecxde_r5RC8AGcX5JRgWbsP0xno_7Rw; dd_cx_logged_in=true; _rdt_uuid=1777833941237.54b0b753-262f-4df3-bc1f-3078b0eae972; _uetsid=4910bff0472011f1986f817b9e0fc1c7; rskxRunCookie=0; dd_market_id=12; __pdst=8cb6bdc27a42443a9db4ac4853356a49; singular_device_id=3583ff9a-532a-41dd-8b9c-044714c8b946; __ps_did=pscrb_2d10d292-4f67-49c4-b22c-0930d5cc04f3; _ga_4J1MLKETLL=GS2.1.s1777833994$o1$g0$t1777833994$j60$l0$h0; dd_market_id=-1; dd_signature_agent=notAgent; ddweb_session_id=e34b5247-348b-4569-8ca8-f43c076ccebe:0:019def29-0c49-7a0b-ad72-515cd0bcb891; _cfuvid=KXvZy19POc2VF5BGonlpfKf4qyDBZRD4JhV.63R3QBY-1777833937.854849-1.0.1.1-j0xghpoiNX.O6PVpPjlDbRYWsq5X7ylCTzO1XB2QF7w; _ga_B9VFPJDRB8=GS2.1.s1777833994$o1$g0$t1777833994$j60$l0$h0; dd_rfp=55021128a54539bb080fa142b1eea43d; dd_session_id=sx_95d7e5a456594be3bf88604c029d571a"
+  },
+  "cookie_file": "/Users/gwizz/.claude/skills/browser-harness/agent-workspace/domain-skills/food-delivery/.private-data/doordash_cookies.json"
+}

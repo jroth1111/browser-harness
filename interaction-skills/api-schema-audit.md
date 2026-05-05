@@ -199,4 +199,4 @@ After implementing extraction against an API:
 
 - `data-source-exploration.md` — source discovery order, embedded JSON extraction
 - `extraction-coverage.md` — coverage probes, field triage, four-state semantics
-- `domain-skills/surface-map-pattern.md` — primitive registry, verification probes
+- `agent-workspace/domain-skills/surface-map-pattern.md` — primitive registry, verification probes

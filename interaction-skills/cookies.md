@@ -52,7 +52,7 @@ values for a local debugging task.
 
 REA pages are a concrete case where the same-domain solved-session pattern is
 useful. The reusable part is the seed/fetch retry; the REA-specific URLs and
-payload parsing belong in `domain-skills/realestate-com-au/scraping.md`.
+payload parsing belong in `agent-workspace/domain-skills/realestate-com-au/scraping.md`.
 
 ```python
 seed_browser_session("https://www.realestate.com.au/")
