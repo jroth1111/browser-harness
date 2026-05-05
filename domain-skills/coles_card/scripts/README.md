@@ -27,6 +27,8 @@ Options:
 - `--dry-run` prints the normalized browser payload without writing rows.
 - `--require-transactions` exits non-zero if the authenticated page yields no
   transaction rows.
+- `--account-label LABEL` overrides the page-derived account label so the local
+  `account_key` stays stable across runs.
 
 Daily non-interactive command:
 

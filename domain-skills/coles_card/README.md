@@ -54,8 +54,17 @@ python3 $S/sync.py --interactive-login --export-csv --require-transactions
 
 The CSV export currently exposes more transaction fields than the rendered
 screen rows, including account number/card ending, transaction type, category,
-merchant name, and processed date when Coles/NAB provides it. The script imports
-the CSV rows first, then falls back to rendered rows when no export is available.
+merchant name, and processed date when Coles/NAB provides it. When the CSV
+export returns one or more rows the script uses it as the sole transaction
+source; the rendered DOM rows are only ingested when no export rows are
+available, to avoid duplicate inserts under different normalization.
+
+To keep the local `account_key` stable when the page-derived label drifts, pass
+`--account-label`:
+
+```bash
+python3 $S/sync.py --export-csv --account-label "Coles Mastercard ending 1234"
+```
 
 ## Persistent Session Profile
 

@@ -25,12 +25,6 @@ Default start URL:
 https://secure.coles.com.au/home/account_dashboard
 ```
 
-Interactive login fallback URL:
-
-```text
-https://secure.coles.com.au/login
-```
-
 Field-tested on 2026-05-05. The unauthenticated login page is a React/web
 component shell. The "Log in with your Coles account" button is inside the
 `usl-base-web-shell-landing-page` shadow DOM and is not an anchor.

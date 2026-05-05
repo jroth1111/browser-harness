@@ -24,7 +24,6 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 DEFAULT_START_URL = "https://secure.coles.com.au/home/account_dashboard"
-DEFAULT_LOGIN_URL = "https://secure.coles.com.au/login"
 DEFAULT_AUTH_MAX_AGE = 20
 DEFAULT_DB = (
     Path("domain-skills")
@@ -349,8 +348,10 @@ def _ensure_transactions_page():
 
 def _download_csv_export():
     download_dir = tempfile.mkdtemp(prefix="coles-card-export-")
-    cdp("Browser.setDownloadBehavior", behavior="allow", downloadPath=download_dir)
-    clicked = js(r"""
+    try:
+        cdp("Browser.setDownloadBehavior", behavior="allow", downloadPath=download_dir)
+        try:
+            clicked = js(r"""
 (() => {
   function roots() {
     const out = [document];
@@ -397,37 +398,47 @@ def _download_csv_export():
   });
 })()
 """)
-    if not clicked.get("clicked"):
-        return {"clicked": clicked, "rows": [], "fieldnames": [], "downloaded": False}
-    deadline = time.time() + 30
-    csv_path = None
-    while time.time() < deadline:
+            if not clicked.get("clicked"):
+                return {"clicked": clicked, "rows": [], "fieldnames": [], "downloaded": False}
+            deadline = time.time() + 30
+            csv_path = None
+            while time.time() < deadline:
+                for name in os.listdir(download_dir):
+                    if name.endswith(".crdownload"):
+                        continue
+                    if name.lower().endswith(".csv"):
+                        csv_path = os.path.join(download_dir, name)
+                        break
+                if csv_path:
+                    break
+                time.sleep(0.25)
+            if not csv_path:
+                return {"clicked": clicked, "rows": [], "fieldnames": [], "downloaded": False}
+            with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+                text = f.read()
+            reader = csv.DictReader(io.StringIO(text))
+            rows = list(reader)
+            return {
+                "clicked": clicked,
+                "downloaded": True,
+                "fieldnames": reader.fieldnames or [],
+                "rows": rows,
+            }
+        finally:
+            try:
+                cdp("Browser.setDownloadBehavior", behavior="default")
+            except Exception:
+                pass
+    finally:
         for name in os.listdir(download_dir):
-            if name.endswith(".crdownload"):
-                continue
-            if name.lower().endswith(".csv"):
-                csv_path = os.path.join(download_dir, name)
-                break
-        if csv_path:
-            break
-        time.sleep(0.25)
-    if not csv_path:
-        return {"clicked": clicked, "rows": [], "fieldnames": [], "downloaded": False}
-    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
-        text = f.read()
-    try:
-        os.remove(csv_path)
-        os.rmdir(download_dir)
-    except OSError:
-        pass
-    reader = csv.DictReader(io.StringIO(text))
-    rows = list(reader)
-    return {
-        "clicked": clicked,
-        "downloaded": True,
-        "fieldnames": reader.fieldnames or [],
-        "rows": rows,
-    }
+            try:
+                os.remove(os.path.join(download_dir, name))
+            except OSError:
+                pass
+        try:
+            os.rmdir(download_dir)
+        except OSError:
+            pass
 
 def _result(status, **extra):
     payload = {"status": status, **extra}
@@ -473,12 +484,13 @@ try:
         if _is_auth_surface(tx_page):
             _result("blocked", reason="not_logged_in", page=tx_page)
             raise SystemExit(0)
+        tx_click = {"clicked": "/transactions" in (tx_page.get("url") or ""), "via": "export_csv"}
         csv_export = _download_csv_export()
     else:
         csv_export = None
         tx_click = _click_transactions()
-    if tx_click.get("clicked"):
-        time.sleep(4)
+        if tx_click.get("clicked"):
+            time.sleep(4)
     tx_page = _all_text_payload()
     balances = dashboard.get("balances") or tx_page.get("balances") or []
     transactions = tx_page.get("transactions") or dashboard.get("transactions") or []
@@ -508,7 +520,13 @@ try:
 except SystemExit:
     raise
 except Exception as exc:
-    _result("error", reason=str(exc), page=_all_text_payload() if 'js' in globals() else {})
+    fallback_page = {}
+    if 'js' in globals():
+        try:
+            fallback_page = _all_text_payload()
+        except Exception:
+            fallback_page = {}
+    _result("error", reason=str(exc), page=fallback_page)
 '''
 
 
@@ -518,7 +536,7 @@ def utc_now() -> str:
 
 def redact_text(value: str) -> str:
     value = re.sub(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[redacted-email]", value, flags=re.I)
-    return re.sub(r"\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[redacted-jwt]", value)
+    return re.sub(r"\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b", "[redacted-jwt]", value)
 
 
 def sanitize_url(value: str | None) -> str | None:
@@ -674,14 +692,15 @@ def normalize_date(value: str | None) -> str | None:
     m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$", text)
     if m:
         day, month, year = m.groups()
-        if len(year) == 2:
-            year = "20" + year
-        return f"{year.zfill(4)}-{month.zfill(2)}-{day.zfill(2)}"
+        if 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+            if len(year) == 2:
+                year = "20" + year
+            return f"{year.zfill(4)}-{month.zfill(2)}-{day.zfill(2)}"
     m = re.match(r"^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$", text)
     if m:
         day, month_name, year = m.groups()
         month = month_map.get(month_name.lower())
-        if month:
+        if month and 1 <= int(day) <= 31:
             if len(year) == 2:
                 year = "20" + year
             return f"{year.zfill(4)}-{month}-{day.zfill(2)}"
@@ -701,8 +720,8 @@ def transaction_key(account: str, tx: dict[str, Any]) -> str:
     amount = parse_money_to_cents(tx.get("amount_text")) or 0
     posted = normalize_date(tx.get("posted_date_text"))
     description = re.sub(r"\s+", " ", tx.get("description") or "").strip().lower()
-    account_number = re.sub(r"\s+", "", tx.get("account_number") or tx.get("Account Number") or "")
-    processed = normalize_date(tx.get("processed_on") or tx.get("Processed On"))
+    account_number = re.sub(r"\s+", "", tx.get("account_number") or "")
+    processed = normalize_date(tx.get("processed_on"))
     return stable_hash(account, account_number, posted, processed, amount, description, length=32)
 
 
@@ -757,9 +776,14 @@ def finish_run(
     conn.commit()
 
 
-def upsert_payload(conn: sqlite3.Connection, run_id: str, payload: dict[str, Any]) -> dict[str, int | str]:
+def upsert_payload(
+    conn: sqlite3.Connection,
+    run_id: str,
+    payload: dict[str, Any],
+    account_label_override: str | None = None,
+) -> dict[str, int | str]:
     now = utc_now()
-    label = (payload.get("account_label") or "Coles Credit Card").strip()
+    label = (account_label_override or payload.get("account_label") or "Coles Credit Card").strip()
     acct = account_key(label)
     source_url = payload.get("url")
     conn.execute(
@@ -801,7 +825,7 @@ def upsert_payload(conn: sqlite3.Connection, run_id: str, payload: dict[str, Any
     tx_count = 0
     inserted_count = 0
     csv_rows = [normalize_csv_transaction(row) for row in (payload.get("transactions_csv") or [])]
-    dom_rows = payload.get("transactions") or []
+    dom_rows = [] if csv_rows else (payload.get("transactions") or [])
     for tx in csv_rows + dom_rows:
         amount = parse_money_to_cents(tx.get("amount_text"))
         if amount is None:
@@ -920,6 +944,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--export-csv", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--require-transactions", action="store_true")
+    parser.add_argument(
+        "--account-label",
+        default=None,
+        help="Override the page-derived account label; stabilises account_key across runs.",
+    )
     return parser
 
 
@@ -954,7 +983,7 @@ def main(argv: list[str] | None = None) -> int:
                 "reason": payload.get("reason"),
             }, sort_keys=True))
             return 2
-        counts = upsert_payload(conn, run_id, payload)
+        counts = upsert_payload(conn, run_id, payload, account_label_override=args.account_label)
         status = "ok"
         if args.require_transactions and counts["transactions"] == 0:
             status = "partial"
