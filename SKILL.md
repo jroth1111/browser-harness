@@ -134,7 +134,7 @@ run.py calls ensure_daemon() before exec — you never start/stop manually unles
 
 ### Remote browsers
 
-Use remote for parallel sub-agents (each gets its own isolated browser via a distinct BU_NAME) or on a headless server. BROWSER_USE_API_KEY must be set. start_remote_daemon, list_cloud_profiles, list_local_profiles, sync_local_profile are pre-imported.
+Use remote for parallel sub-agents (each gets its own isolated browser via a distinct BH_NAME) or on a headless server. BROWSER_USE_API_KEY must be set. start_remote_daemon, list_cloud_profiles, list_local_profiles, sync_local_profile are pre-imported.
 
 ```bash
 browser-harness -c '
@@ -145,7 +145,7 @@ start_remote_daemon("work")                               # default — clean br
 # start_remote_daemon("work", proxyCountryCode=None)      # disable the Browser Use proxy
 '
 
-BU_NAME=work browser-harness -c '
+BH_NAME=work browser-harness -c '
 new_tab("https://example.com")
 print(page_info())
 '

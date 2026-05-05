@@ -7,9 +7,9 @@ import pytest
 
 
 RUN_ID = os.environ.get("AIRBNB_E2E_YEAR_RUN_ID", "e2e-airbnb-year-view-bounded")
-SCRIPT = "domain-skills/airbnb/scripts/sync_insights_year_view.py"
-INSIGHTS_DIR = Path("domain-skills/airbnb/.private-data/insights-collections")
-SESSION_DIR = Path("domain-skills/airbnb/.session-store/capability")
+SCRIPT = "agent-workspace/domain-skills/airbnb/scripts/sync_insights_year_view.py"
+INSIGHTS_DIR = Path("agent-workspace/domain-skills/airbnb/.private-data/insights-collections")
+SESSION_DIR = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
 
 
 def _run_year_view(run_id):

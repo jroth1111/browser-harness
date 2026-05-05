@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("domain-skills/airbnb/scripts/collect_rea_building_rentals.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/collect_rea_building_rentals.py")
     spec = importlib.util.spec_from_file_location("collect_rea_building_rentals", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

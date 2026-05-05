@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("domain-skills/airbnb/scripts/decision_gates.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/decision_gates.py")
     spec = importlib.util.spec_from_file_location("airbnb_decision_gates", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -12,7 +12,7 @@ def load_module():
 
 
 def load_fixture(name):
-    path = Path("domain-skills/airbnb/fixtures/decision-gates") / name
+    path = Path("agent-workspace/domain-skills/airbnb/fixtures/decision-gates") / name
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -116,7 +116,7 @@ def test_beautiful_unreproducible_comp_is_inspiration_only():
 
 
 def test_missing_entire_home_public_scan_gate_is_covered_by_planner():
-    path = Path("domain-skills/airbnb/scripts/public_scan_planner.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/public_scan_planner.py")
     spec = importlib.util.spec_from_file_location("airbnb_public_scan_planner", path)
     planner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(planner)

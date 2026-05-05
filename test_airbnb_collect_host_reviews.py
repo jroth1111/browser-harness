@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def load_host_reviews_module():
-    path = Path("domain-skills/airbnb/scripts/collect_host_reviews.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/collect_host_reviews.py")
     spec = importlib.util.spec_from_file_location("airbnb_collect_host_reviews", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

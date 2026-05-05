@@ -6,7 +6,7 @@ import pytest
 
 
 def load_sync_module():
-    path = Path("domain-skills/airbnb/scripts/sync_insights_year_view.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/sync_insights_year_view.py")
     spec = importlib.util.spec_from_file_location("airbnb_sync_insights_year_view", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -12,7 +12,7 @@ def load_module(path, name):
 
 
 def load_planner():
-    return load_module("domain-skills/airbnb/scripts/insights_planner.py", "airbnb_insights_planner")
+    return load_module("agent-workspace/domain-skills/airbnb/scripts/insights_planner.py", "airbnb_insights_planner")
 
 
 def sample_inputs():
@@ -377,7 +377,7 @@ def test_planner_does_not_drop_listings_with_partial_ledger_coverage():
     planner must still emit chart requests for B.
     """
     planner = load_planner()
-    ledger_module = load_module("domain-skills/airbnb/scripts/insights_ledger.py", "airbnb_insights_ledger")
+    ledger_module = load_module("agent-workspace/domain-skills/airbnb/scripts/insights_ledger.py", "airbnb_insights_ledger")
     today = date(2026, 4, 28)
     listings = [{"listing_id": "A"}, {"listing_id": "B"}]
     routes = [{"family": "conversion", "subroute": "p3_impressions"}]
@@ -425,7 +425,7 @@ def test_sentinel_covered_window_is_not_replanned():
     treats as covered dates.
     """
     planner = load_planner()
-    ledger_module = load_module("domain-skills/airbnb/scripts/insights_ledger.py", "airbnb_insights_ledger")
+    ledger_module = load_module("agent-workspace/domain-skills/airbnb/scripts/insights_ledger.py", "airbnb_insights_ledger")
     listings, routes, periods, today = sample_inputs()
     route = routes[0]
 

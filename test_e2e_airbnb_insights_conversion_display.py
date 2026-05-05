@@ -7,7 +7,7 @@ from pathlib import Path
 from data_display import render_dataset
 
 
-BASE = Path("domain-skills/airbnb/.private-data/insights-collections")
+BASE = Path("agent-workspace/domain-skills/airbnb/.private-data/insights-collections")
 RUN_ID = "e2e-airbnb-insights-conversion-browser"
 
 
@@ -45,7 +45,7 @@ PY"""
 
 def test_insights_families_e2e_collector_and_display_parity():
     source_json = BASE / f"{RUN_ID}.json"
-    receipt_json = Path(f"domain-skills/airbnb/.session-store/capability/{RUN_ID}-receipt.json")
+    receipt_json = Path(f"agent-workspace/domain-skills/airbnb/.session-store/capability/{RUN_ID}-receipt.json")
     for path in [source_json, receipt_json]:
         assert path.exists(), f"Missing artifact: {path}"
 
@@ -57,7 +57,7 @@ def test_insights_families_e2e_collector_and_display_parity():
     assert receipt["all_api_requests_ok"] is True
     assert receipt["all_parsers_found_rows"] is True
 
-    extract_module_path = Path("domain-skills/airbnb/scripts/extract_route_family.py")
+    extract_module_path = Path("agent-workspace/domain-skills/airbnb/scripts/extract_route_family.py")
     namespace = {}
     exec(extract_module_path.read_text(encoding="utf-8"), namespace)
     extract_family = namespace["extract_family"]

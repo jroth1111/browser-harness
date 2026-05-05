@@ -11,7 +11,7 @@ def load_module(path, name):
 
 
 def load_ledger_module():
-    return load_module("domain-skills/airbnb/scripts/insights_ledger.py", "airbnb_insights_ledger")
+    return load_module("agent-workspace/domain-skills/airbnb/scripts/insights_ledger.py", "airbnb_insights_ledger")
 
 
 def sample_row(observed_at="2026-04-28T04:15:12Z", ds="2026-04-20", value=1):

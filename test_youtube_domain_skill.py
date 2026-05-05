@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-YOUTUBE = ROOT / "domain-skills" / "youtube"
+YOUTUBE = ROOT / "agent-workspace/domain-skills" / "youtube"
 
 
 def load_surface_map():
@@ -491,7 +491,7 @@ def test_youtube_receipts_and_live_smoke_are_redaction_first():
                 assert data.get("cleanup", {}).get("closed_tab") is True
 
     script = (YOUTUBE / "scripts" / "live_smoke.py").read_text(encoding="utf-8")
-    assert "browser-harness < domain-skills/youtube/scripts/live_smoke.py" in script
+    assert "browser-harness < agent-workspace/domain-skills/youtube/scripts/live_smoke.py" in script
     assert "require_repo_root()" in script
     assert "Run from browser-harness repo root" in script
     assert "load_surface_map()" in script

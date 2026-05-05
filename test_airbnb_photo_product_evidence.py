@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("domain-skills/airbnb/scripts/photo_product_evidence.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/photo_product_evidence.py")
     spec = importlib.util.spec_from_file_location("airbnb_photo_product_evidence", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

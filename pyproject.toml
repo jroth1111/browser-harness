@@ -26,13 +26,59 @@ stealth = [
 ]
 
 [project.scripts]
-browser-harness = "browser_harness.run:main"
+browser-harness = "run:main"
+browser-harness-skill-learning-gate = "skill_learning_gate:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+py-modules = [
+    "run",
+    "helpers",
+    "response",
+    "daemon",
+    "admin",
+    "login_session",
+    "lightpanda_control",
+    "stealth_helpers",
+    "data_display",
+    "skill_learning_gate",
+    "network_capture",
+    "source_receipts",
+    "extraction_contracts",
+    "redaction_scan",
+    "domain_skill_maturity",
+]
+packages = [
+    "browser_harness",
+    "browser_harness_domain_skills",
+    "browser_harness_interaction_skills",
+    "browser_harness_docs",
+    "browser_harness_assets",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools.package-dir]
+browser_harness = "src/browser_harness"
+browser_harness_domain_skills = "agent-workspace/domain-skills"
+browser_harness_interaction_skills = "interaction-skills"
+browser_harness_docs = "docs"
+browser_harness_assets = "browser_harness_assets"
+
+[tool.setuptools.package-data]
+browser_harness_domain_skills = ["**/*.md", "**/*.json", "**/*.py", "**/*.csv", "**/*.png", "**/*.txt"]
+browser_harness_interaction_skills = ["**/*.md"]
+browser_harness_docs = ["**/*.md", "**/*.png", "**/*.json"]
+browser_harness_assets = ["*.js"]
+
+[tool.setuptools.exclude-package-data]
+browser_harness_domain_skills = [
+    "**/.private-data/**",
+    "**/.session-store/**",
+    "**/outputs/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+]
+
+[tool.setuptools.data-files]
+"share/browser-harness" = ["README.md", "SKILL.md", "install.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

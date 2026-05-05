@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-SHARED_SCHEMA = ROOT / "domain-skills" / "surface-map.schema.json"
+SHARED_SCHEMA = ROOT / "agent-workspace/domain-skills" / "surface-map.schema.json"
 ALLOWED_PATH_TYPES = {"api", "browser", "hybrid", "static", "local"}
 FILTER_STATUSES = {"available", "default", "disabled", "selected"}
 REQUIRED_TOP_LEVEL = {
@@ -24,7 +24,7 @@ REQUIRED_RECEIPTS = {"primitive_id", "path_type", "fallback_attempts"}
 
 
 def surface_maps():
-    return sorted((ROOT / "domain-skills").glob("*/surface-map.json"))
+    return sorted((ROOT / "agent-workspace/domain-skills").glob("*/surface-map.json"))
 
 
 def helpers_defined():

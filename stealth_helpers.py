@@ -16,7 +16,14 @@ import atexit
 import tempfile
 from pathlib import Path
 
-from patchright.sync_api import sync_playwright
+try:
+    from patchright.sync_api import sync_playwright
+except ModuleNotFoundError:
+    def sync_playwright():
+        raise ModuleNotFoundError(
+            "patchright is required for stealth browser sessions; "
+            "install the stealth dependency group"
+        )
 
 
 class StealthPage:
@@ -98,7 +105,8 @@ class _StealthSession:
         self._stealth_page = None
 
     def __enter__(self):
-        pw = sync_playwright().start()
+        manager = sync_playwright()
+        pw = manager if "chromium" in dir(manager) else manager.start()
 
         udd = self._user_data_dir
         if udd is None:

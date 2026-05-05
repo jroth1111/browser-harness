@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("domain-skills/airbnb/scripts/schedule_surface_refresh.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/schedule_surface_refresh.py")
     spec = importlib.util.spec_from_file_location("airbnb_schedule_surface_refresh", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

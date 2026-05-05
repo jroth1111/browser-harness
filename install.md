@@ -53,11 +53,11 @@ Chrome / Browser Use cloud -> CDP WS -> browser_harness.daemon -> IPC -> browser
 - Protocol is one JSON line each way.
 - Requests are {method, params, session_id} for CDP or {meta: ...} for daemon control.
 - Responses are {result} / {error} / {events} / {session_id}.
-- IPC: Unix socket at `/tmp/bu-<NAME>.sock` on POSIX, TCP loopback + port file on Windows.
-- BU_NAME namespaces the daemon's IPC, pid, and log files.
-- BU_CDP_WS overrides local Chrome discovery for remote browsers.
-- BU_CDP_URL overrides local Chrome discovery with a specific DevTools HTTP endpoint (used for Way 2).
-- BU_BROWSER_ID + BROWSER_USE_API_KEY lets the daemon stop a Browser Use cloud browser on shutdown.
+- IPC: Unix socket at `/tmp/bh-<NAME>.sock` on POSIX, TCP loopback + port file on Windows.
+- BH_NAME namespaces the daemon's IPC, pid, and log files.
+- BH_CDP_WS overrides local Chrome discovery for remote browsers.
+- BH_CDP_URL overrides local Chrome discovery with a specific DevTools HTTP endpoint (used for Way 2).
+- BH_BROWSER_ID + BROWSER_USE_API_KEY lets the daemon stop a Browser Use cloud browser on shutdown.
 
 # Browser connection setup and troubleshooting
 
@@ -67,7 +67,7 @@ This section is the source of truth for how browser-harness connects to a browse
 
 Browser-harness can connect to any Chrome or Chromium-based browser on your computer, or to a Browser Use cloud browser.
 
-**Cloud browsers** are managed by the Browser Use cloud API. Start one in Python with `start_remote_daemon("work", ...)`. Authentication is via the `BROWSER_USE_API_KEY` environment variable; the harness handles the WebSocket URL itself. To carry your local Chrome cookies into a cloud browser, install `profile-use` once (`curl -fsSL https://browser-use.com/profile.sh | sh`), then call `uuid = sync_local_profile("MyChromeProfile")` followed by `start_remote_daemon("work", profileId=uuid)`. Cookies are the only thing synced — not localStorage, not extensions, not history.
+**Cloud browsers** are managed by the Browser Use cloud API. Start one in Python with `start_remote_daemon("work", ...)`. Authentication is via the `BROWSER_USE_API_KEY` environment variable; the harness handles the WebSocket URL itself. To carry your local Chrome cookies into a cloud browser, install `profile-use` once (`curl -fsSL https://example.invalid/profile-sync | sh`), then call `uuid = sync_local_profile("MyChromeProfile")` followed by `start_remote_daemon("work", profileId=uuid)`. Cookies are the only thing synced — not localStorage, not extensions, not history.
 
 **Local browsers** require remote debugging to be enabled. There are two ways, and they suit different use cases.
 
@@ -78,7 +78,7 @@ Browser-harness can connect to any Chrome or Chromium-based browser on your comp
 - The path must be a directory that is **not** Chrome's platform default (`%LOCALAPPDATA%\Google\Chrome\User Data` on Windows, `~/Library/Application Support/Google/Chrome` on macOS, `~/.config/google-chrome` on Linux). On Chrome 136 and later, the port flag is silently no-opped when the user-data-dir is the platform default, even if you pass it explicitly. An empty or new path gives a fresh clean profile that Chrome will persist there across future runs.
 - This path does **not** let you reuse your everyday Chrome profile. Copying the default profile's files into a custom directory makes Chrome accept the flag, but cookies are encrypted under a key bound to the original directory and will not survive the copy — so you carry over bookmarks and extensions but lose every logged-in session. If you want your real logins, use Way 1.
 
-Tell the harness which port you launched on by setting `BU_CDP_URL=http://127.0.0.1:9222` before running `browser-harness`.
+Tell the harness which port you launched on by setting `BH_CDP_URL=http://127.0.0.1:9222` before running `browser-harness`.
 
 For most tasks where the agent acts on your behalf in your normal browser, use Way 1. For automation that runs without you watching, or any case where popup interruptions are unacceptable, use Way 2 or a cloud browser.
 
@@ -104,7 +104,7 @@ If the user hasn't said which connection method to use, default to Way 1 if Chro
 
    - **chrome FAIL** → no Chrome process detected.
      - **Way 1**: ask the user to open their target Chrome themselves.
-     - **Way 2**: launch Chrome yourself with `--remote-debugging-port=9222 --user-data-dir=<non-default path>`, then set `BU_CDP_URL=http://127.0.0.1:9222` for the harness (see the Browser connection reference).
+     - **Way 2**: launch Chrome yourself with `--remote-debugging-port=9222 --user-data-dir=<non-default path>`, then set `BH_CDP_URL=http://127.0.0.1:9222` for the harness (see the Browser connection reference).
 
    - **chrome ok, daemon FAIL** → Way 1 setup is incomplete. Tell the user to:
      - navigate to `chrome://inspect/#remote-debugging` in their Chrome and tick "Allow remote debugging for this browser instance" if not yet ticked (one-time per profile)
@@ -123,7 +123,7 @@ If the user hasn't said which connection method to use, default to Way 1 if Chro
      browser-harness -c 'restart_daemon()'
      ```
 
-     If that hangs, escalate: kill all Chrome and daemon processes, then reopen Chrome and retry. On macOS/Linux, also remove `/tmp/bu-default.sock` and `/tmp/bu-default.pid` if they linger.
+     If that hangs, escalate: kill all Chrome and daemon processes, then reopen Chrome and retry. On macOS/Linux, also remove `/tmp/bh-default.sock` and `/tmp/bh-default.pid` if they linger.
 
 4. After any fix, retry step 1.
 

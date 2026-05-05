@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("domain-skills/airbnb/scripts/surface_capabilities.py")
+    path = Path("agent-workspace/domain-skills/airbnb/scripts/surface_capabilities.py")
     spec = importlib.util.spec_from_file_location("airbnb_surface_capabilities", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
