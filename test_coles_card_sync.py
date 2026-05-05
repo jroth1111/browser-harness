@@ -30,6 +30,11 @@ def test_sanitize_payload_redacts_auth_redirect_values():
     assert "clientName=NAB" in sanitized["url"]
 
 
+def test_defaults_avoid_forced_login_route():
+    assert coles_card_sync.DEFAULT_START_URL == "https://secure.coles.com.au/home/account_dashboard"
+    assert coles_card_sync.DEFAULT_AUTH_MAX_AGE == 20
+
+
 def test_upsert_payload_deduplicates_transactions(tmp_path):
     db_path = tmp_path / "coles.sqlite3"
     conn = coles_card_sync.init_db(db_path)

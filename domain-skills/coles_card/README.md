@@ -26,13 +26,19 @@ The `.private-data/` directory is ignored by git.
 If the browser session is not already logged in, run:
 
 ```bash
-python3 $S/sync.py --interactive-login --login-timeout 180
+python3 $S/sync.py --interactive-login --export-csv --login-timeout 180
 ```
 
-The script opens the official Coles/NAB login flow in the attached browser and
-waits. The user completes login, MFA, or account selection manually. The script
-does not type credentials, read cookies, persist storage state, or redirect auth
-callbacks away from Coles/NAB.
+The script starts at the authenticated account dashboard, then opens the
+official Coles/NAB login flow only if the browser profile is not already
+accepted. The user completes login, MFA, or account selection manually. The
+script does not type credentials, read cookies, persist storage state, or
+redirect auth callbacks away from Coles/NAB.
+
+When Coles/NAB redirects to `auth.colesgroupprofile.com.au`, the tool rewrites
+the generated OAuth `max_age` parameter to `20` seconds by default instead of
+leaving `max_age=0`. This avoids the strictest "fresh auth only" request, but it
+does not override Coles/NAB server-side session expiry or SMS/MFA policy.
 
 If the authenticated Coles card tab is already open, use:
 
@@ -59,7 +65,7 @@ copied auth tokens. To create a durable Coles-only profile for recurring syncs:
 ```bash
 browser-harness --launch-profile domain-skills/coles_card/.private-data/chrome-profile \
   --port 9222 \
-  --url https://secure.coles.com.au/login
+  --url https://secure.coles.com.au/home/account_dashboard
 ```
 
 Log in manually in that Chrome window once. Future syncs can reuse the same

@@ -12,7 +12,11 @@ python3 domain-skills/coles_card/scripts/sync.py
 Options:
 
 - `--db PATH` sets the SQLite database path.
-- `--start-url URL` overrides the start route.
+- `--start-url URL` overrides the start route. The default is the authenticated
+  account dashboard, not the login route.
+- `--auth-max-age SECONDS` rewrites Coles Group auth URLs to this OAuth
+  `max_age` value during interactive login. The default is `20`; use `-1` to
+  disable rewriting.
 - `--current-tab` extracts from an existing Coles/Coles Group tab instead of
   opening a new login route.
 - `--interactive-login` lets the user complete login/MFA manually in the
@@ -27,13 +31,13 @@ Options:
 Daily non-interactive command:
 
 ```bash
-python3 domain-skills/coles_card/scripts/sync.py
+python3 domain-skills/coles_card/scripts/sync.py --export-csv --require-transactions
 ```
 
 Manual session refresh:
 
 ```bash
-python3 domain-skills/coles_card/scripts/sync.py --interactive-login --login-timeout 180
+python3 domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --login-timeout 180
 ```
 
 Authenticated current-tab E2E check:

@@ -23,7 +23,9 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
-DEFAULT_START_URL = "https://secure.coles.com.au/login"
+DEFAULT_START_URL = "https://secure.coles.com.au/home/account_dashboard"
+DEFAULT_LOGIN_URL = "https://secure.coles.com.au/login"
+DEFAULT_AUTH_MAX_AGE = 20
 DEFAULT_DB = (
     Path("domain-skills")
     / "coles_card"
@@ -54,12 +56,14 @@ import os
 import re
 import tempfile
 import time
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 START_URL = __START_URL__
 INTERACTIVE_LOGIN = __INTERACTIVE_LOGIN__
 LOGIN_TIMEOUT = __LOGIN_TIMEOUT__
 USE_CURRENT_TAB = __USE_CURRENT_TAB__
 EXPORT_CSV = __EXPORT_CSV__
+AUTH_MAX_AGE = __AUTH_MAX_AGE__
 
 def _all_text_payload():
     return js(r"""
@@ -217,6 +221,42 @@ def _all_text_payload():
 def _is_auth_surface(payload):
     text = (payload.get("body_excerpt") or "") + " " + (payload.get("title") or "") + " " + (payload.get("url") or "")
     return bool(re.search(r"id\.colesgroupprofile|auth\.colesgroupprofile|secure\.coles\.com\.au/login|Login - Coles Credit Cards|Log in with your Coles account|Log in or create account|Email Password|Your old credit card login|Complete application", text, re.I))
+
+def _rewrite_url_max_age(url, max_age):
+    if max_age is None or max_age < 0:
+        return url
+    parts = urlsplit(url)
+    if not re.search(r"(^|\.)colesgroupprofile\.com\.au$", parts.netloc):
+        return url
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    changed = False
+    found = False
+    out = []
+    for key, value in query:
+        if key == "max_age":
+            found = True
+            new_value = str(max_age)
+            changed = changed or value != new_value
+            out.append((key, new_value))
+        else:
+            out.append((key, value))
+    if not found:
+        out.append(("max_age", str(max_age)))
+        changed = True
+    if not changed:
+        return url
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(out), parts.fragment))
+
+def _apply_auth_max_age():
+    if AUTH_MAX_AGE is None or AUTH_MAX_AGE < 0:
+        return {"changed": False, "reason": "disabled"}
+    payload = _all_text_payload()
+    current = payload.get("url") or ""
+    rewritten = _rewrite_url_max_age(current, AUTH_MAX_AGE)
+    if rewritten == current:
+        return {"changed": False, "url": current}
+    js("location.replace(%s)" % json.dumps(rewritten))
+    return {"changed": True, "url": rewritten}
 
 def _click_authorize_button():
     return js(r"""
@@ -414,10 +454,12 @@ try:
         if not INTERACTIVE_LOGIN:
             _result("blocked", reason="not_logged_in", page=initial)
             raise SystemExit(0)
+        _apply_auth_max_age()
         _click_authorize_button()
         deadline = time.time() + LOGIN_TIMEOUT
         while time.time() < deadline:
             time.sleep(3)
+            _apply_auth_max_age()
             payload = _all_text_payload()
             if not _is_auth_surface(payload):
                 break
@@ -835,6 +877,7 @@ def run_browser_probe(
     login_timeout: int,
     use_current_tab: bool = False,
     export_csv: bool = False,
+    auth_max_age: int = DEFAULT_AUTH_MAX_AGE,
 ) -> dict[str, Any]:
     code = (
         BROWSER_PROBE
@@ -843,6 +886,7 @@ def run_browser_probe(
         .replace("__LOGIN_TIMEOUT__", str(login_timeout))
         .replace("__USE_CURRENT_TAB__", "True" if use_current_tab else "False")
         .replace("__EXPORT_CSV__", "True" if export_csv else "False")
+        .replace("__AUTH_MAX_AGE__", str(auth_max_age))
     )
     proc = subprocess.run(
         ["browser-harness", "-c", code],
@@ -869,6 +913,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--start-url", default=DEFAULT_START_URL)
+    parser.add_argument("--auth-max-age", type=int, default=DEFAULT_AUTH_MAX_AGE)
     parser.add_argument("--interactive-login", action="store_true")
     parser.add_argument("--login-timeout", type=int, default=180)
     parser.add_argument("--current-tab", action="store_true")
@@ -887,6 +932,7 @@ def main(argv: list[str] | None = None) -> int:
         args.login_timeout,
         args.current_tab,
         args.export_csv,
+        args.auth_max_age,
     )
 
     if args.dry_run:
