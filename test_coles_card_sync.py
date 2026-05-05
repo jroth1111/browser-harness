@@ -71,3 +71,43 @@ def test_upsert_payload_deduplicates_transactions(tmp_path):
     assert conn.execute("select amount_cents from transactions").fetchone()[0] == -1234
     assert conn.execute("select amount_cents from balance_snapshots").fetchone()[0] == 12345
     conn.close()
+
+
+def test_upsert_payload_imports_csv_export_fields(tmp_path):
+    db_path = tmp_path / "coles.sqlite3"
+    conn = coles_card_sync.init_db(db_path)
+    coles_card_sync.insert_run(conn, "run-csv")
+    payload = {
+        "url": "https://secure.coles.com.au/transactions",
+        "account_label": "Coles Rewards Mastercard ending 0475",
+        "balances": [],
+        "transactions": [],
+        "transactions_csv": [
+            {
+                "Date": "05 May 26",
+                "Amount": "-$9.27",
+                "Account Number": "Card ending 8954",
+                "": "",
+                "Transaction Type": "Pending",
+                "Transaction Details": "Pending: DiDi Card ending 8954",
+                "Category": "Taxis & ride shares",
+                "Merchant Name": "DiDi",
+                "Processed On": "",
+            }
+        ],
+    }
+    counts = coles_card_sync.upsert_payload(conn, "run-csv", payload)
+
+    row = conn.execute(
+        "select posted_date, amount_cents, merchant_name, category, card_ending, status, source_method from transactions"
+    ).fetchone()
+    assert counts["transactions"] == 1
+    assert counts["transactions_inserted"] == 1
+    assert row["posted_date"] == "2026-05-05"
+    assert row["amount_cents"] == -927
+    assert row["merchant_name"] == "DiDi"
+    assert row["category"] == "Taxis & ride shares"
+    assert row["card_ending"] == "8954"
+    assert row["status"] == "pending"
+    assert row["source_method"] == "csv_export"
+    conn.close()

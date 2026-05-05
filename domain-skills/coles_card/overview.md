@@ -6,7 +6,8 @@ Sync the user's own Coles credit card Online Service Centre data into a local
 SQLite store:
 
 - current balance and other visible balance figures
-- visible credit card transactions
+- credit card transactions from the transaction-history export when available
+- rendered transaction rows as a fallback when export is unavailable
 - sync run receipts and blocked-run reasons
 
 Out of scope:
@@ -48,10 +49,13 @@ shell.
 1. Open the official Coles secure login route in the user's browser profile.
 2. If login, MFA, CAPTCHA, or account selection is visible, stop unless the user
    requested `--interactive-login`.
-3. After the authenticated account surface is visible, extract balances and
-   transactions from rendered DOM/shadow DOM only.
-4. Upsert normalized rows into SQLite.
-5. Record a run receipt with status `ok`, `blocked`, or `error`.
+3. After the authenticated account surface is visible, extract balances from
+   rendered DOM/shadow DOM.
+4. Open transaction history through the authenticated app route and import the
+   CSV export when available.
+5. If export is unavailable, fall back to rendered transaction rows.
+6. Upsert normalized rows into SQLite.
+7. Record a run receipt with status `ok`, `blocked`, or `error`.
 
 ## Database
 
@@ -66,7 +70,10 @@ Tables:
 - `sync_runs` records each attempt.
 - `accounts` stores a stable local account key and non-secret account label.
 - `balance_snapshots` stores observed balance figures per run.
-- `transactions` upserts transactions by account/date/description/amount hash.
+- `transactions` upserts transactions by account/date/processed-date/
+  description/amount hash and stores API/export fields when present:
+  merchant name, transaction type, category, account number, card ending,
+  pending/posted status, and source method.
 
 ## Verification
 
@@ -82,6 +89,12 @@ Then run the persisted sync:
 python3 domain-skills/coles_card/scripts/sync.py
 sqlite3 domain-skills/coles_card/.private-data/coles_card.sqlite3 \
   "select status, summary_json from sync_runs order by started_at desc limit 1"
+```
+
+To validate the broader export-backed path:
+
+```bash
+python3 domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --require-transactions
 ```
 
 If selectors drift, inspect the run summary and the current authenticated page.

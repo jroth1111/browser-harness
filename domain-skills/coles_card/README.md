@@ -40,6 +40,39 @@ If the authenticated Coles card tab is already open, use:
 python3 $S/sync.py --current-tab --require-transactions
 ```
 
+For the broadest transaction import, use the authenticated transaction export:
+
+```bash
+python3 $S/sync.py --interactive-login --export-csv --require-transactions
+```
+
+The CSV export currently exposes more transaction fields than the rendered
+screen rows, including account number/card ending, transaction type, category,
+merchant name, and processed date when Coles/NAB provides it. The script imports
+the CSV rows first, then falls back to rendered rows when no export is available.
+
+## Persistent Session Profile
+
+Session reuse should live in the browser profile, not in exported credentials or
+copied auth tokens. To create a durable Coles-only profile for recurring syncs:
+
+```bash
+browser-harness --launch-profile domain-skills/coles_card/.private-data/chrome-profile \
+  --port 9222 \
+  --url https://secure.coles.com.au/login
+```
+
+Log in manually in that Chrome window once. Future syncs can reuse the same
+profile while Coles/NAB keeps the browser session valid:
+
+```bash
+python3 $S/sync.py --export-csv --require-transactions
+```
+
+If the session expires, rerun the interactive command and complete login/MFA in
+the browser. The sync tool deliberately does not export cookies, local storage,
+session storage, passwords, or bearer tokens into its own files.
+
 ## Daily Run Shape
 
 Use the same command from cron, launchd, or a Codex automation. A daily

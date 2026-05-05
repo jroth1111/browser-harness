@@ -9,7 +9,9 @@ sessionStorage, or auth tokens.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
+import io
 import json
 import re
 import sqlite3
@@ -46,13 +48,18 @@ SENSITIVE_QUERY_KEYS = {
 
 BROWSER_PROBE = r'''
 import json
+import csv
+import io
+import os
 import re
+import tempfile
 import time
 
 START_URL = __START_URL__
 INTERACTIVE_LOGIN = __INTERACTIVE_LOGIN__
 LOGIN_TIMEOUT = __LOGIN_TIMEOUT__
 USE_CURRENT_TAB = __USE_CURRENT_TAB__
+EXPORT_CSV = __EXPORT_CSV__
 
 def _all_text_payload():
     return js(r"""
@@ -279,6 +286,109 @@ def _click_transactions():
 })()
 """)
 
+def _ensure_transactions_page():
+    payload = _all_text_payload()
+    if "/transactions" in (payload.get("url") or "") and re.search(r"Transaction history|transactions for", payload.get("body_excerpt") or "", re.I):
+        return payload
+    clicked = _click_transactions()
+    if clicked.get("clicked"):
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(1)
+            payload = _all_text_payload()
+            if "/transactions" in (payload.get("url") or "") and re.search(r"Transaction history|transactions for", payload.get("body_excerpt") or "", re.I):
+                return payload
+    js("location.href = 'https://secure.coles.com.au/transactions'")
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        time.sleep(1)
+        payload = _all_text_payload()
+        if "/transactions" in (payload.get("url") or "") and re.search(r"Transaction history|transactions for", payload.get("body_excerpt") or "", re.I):
+            return payload
+    return payload
+
+def _download_csv_export():
+    download_dir = tempfile.mkdtemp(prefix="coles-card-export-")
+    cdp("Browser.setDownloadBehavior", behavior="allow", downloadPath=download_dir)
+    clicked = js(r"""
+(() => {
+  function roots() {
+    const out = [document];
+    const seen = new Set(out);
+    for (let i = 0; i < out.length; i++) {
+      const root = out[i];
+      const nodes = root.querySelectorAll ? root.querySelectorAll("*") : [];
+      for (const node of nodes) {
+        if (node.shadowRoot && !seen.has(node.shadowRoot)) {
+          seen.add(node.shadowRoot);
+          out.push(node.shadowRoot);
+        }
+      }
+    }
+    return out;
+  }
+  function find(selector) {
+    for (const root of roots()) {
+      if (!root.querySelector) continue;
+      const el = root.querySelector(selector);
+      if (el) return el;
+    }
+    return null;
+  }
+  const exportButton = find("#export");
+  if (!exportButton) return {clicked: false, reason: "export_button_missing"};
+  exportButton.click();
+  const started = Date.now();
+  return new Promise(resolve => {
+    const tick = () => {
+      const csvButton = find("#ExportAsCSV");
+      if (csvButton) {
+        csvButton.click();
+        resolve({clicked: true});
+        return;
+      }
+      if (Date.now() - started > 5000) {
+        resolve({clicked: false, reason: "csv_menu_missing"});
+        return;
+      }
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+})()
+""")
+    if not clicked.get("clicked"):
+        return {"clicked": clicked, "rows": [], "fieldnames": [], "downloaded": False}
+    deadline = time.time() + 30
+    csv_path = None
+    while time.time() < deadline:
+        for name in os.listdir(download_dir):
+            if name.endswith(".crdownload"):
+                continue
+            if name.lower().endswith(".csv"):
+                csv_path = os.path.join(download_dir, name)
+                break
+        if csv_path:
+            break
+        time.sleep(0.25)
+    if not csv_path:
+        return {"clicked": clicked, "rows": [], "fieldnames": [], "downloaded": False}
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+        text = f.read()
+    try:
+        os.remove(csv_path)
+        os.rmdir(download_dir)
+    except OSError:
+        pass
+    reader = csv.DictReader(io.StringIO(text))
+    rows = list(reader)
+    return {
+        "clicked": clicked,
+        "downloaded": True,
+        "fieldnames": reader.fieldnames or [],
+        "rows": rows,
+    }
+
 def _result(status, **extra):
     payload = {"status": status, **extra}
     print("__COLES_CARD_RESULT__" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
@@ -315,7 +425,16 @@ try:
             _result("blocked", reason="login_timeout", page=_all_text_payload())
             raise SystemExit(0)
     dashboard = _all_text_payload()
-    tx_click = _click_transactions()
+    tx_click = {"clicked": False}
+    if EXPORT_CSV:
+        tx_page = _ensure_transactions_page()
+        if _is_auth_surface(tx_page):
+            _result("blocked", reason="not_logged_in", page=tx_page)
+            raise SystemExit(0)
+        csv_export = _download_csv_export()
+    else:
+        csv_export = None
+        tx_click = _click_transactions()
     if tx_click.get("clicked"):
         time.sleep(4)
     tx_page = _all_text_payload()
@@ -330,6 +449,12 @@ try:
         account_label=dashboard.get("account_label") or tx_page.get("account_label"),
         balances=balances,
         transactions=transactions,
+        transactions_csv=(csv_export or {}).get("rows") if csv_export else [],
+        csv_export={
+            "downloaded": (csv_export or {}).get("downloaded", False),
+            "fieldnames": (csv_export or {}).get("fieldnames", []),
+            "row_count": len((csv_export or {}).get("rows", [])) if csv_export else 0,
+        },
         extraction={
             "dashboard_url": dashboard.get("url"),
             "transactions_url": tx_page.get("url"),
@@ -425,11 +550,19 @@ def init_db(db_path: Path) -> sqlite3.Connection:
             transaction_key TEXT PRIMARY KEY,
             account_key TEXT NOT NULL REFERENCES accounts(account_key),
             posted_date TEXT,
+            processed_on TEXT,
             description TEXT NOT NULL,
+            merchant_name TEXT,
+            transaction_type TEXT,
+            category TEXT,
+            account_number TEXT,
+            card_ending TEXT,
+            status TEXT,
             amount_cents INTEGER NOT NULL,
             currency TEXT NOT NULL DEFAULT 'AUD',
             running_balance_cents INTEGER,
             source_url TEXT,
+            source_method TEXT NOT NULL DEFAULT 'dom',
             first_seen_at TEXT NOT NULL,
             last_seen_at TEXT NOT NULL,
             last_run_id TEXT NOT NULL REFERENCES sync_runs(run_id),
@@ -442,7 +575,26 @@ def init_db(db_path: Path) -> sqlite3.Connection:
             ON balance_snapshots(run_id, account_key, balance_type);
         """
     )
+    ensure_transaction_columns(conn)
     return conn
+
+
+def ensure_transaction_columns(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
+    additions = {
+        "processed_on": "TEXT",
+        "merchant_name": "TEXT",
+        "transaction_type": "TEXT",
+        "category": "TEXT",
+        "account_number": "TEXT",
+        "card_ending": "TEXT",
+        "status": "TEXT",
+        "source_method": "TEXT NOT NULL DEFAULT 'dom'",
+    }
+    for column, ddl in additions.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE transactions ADD COLUMN {column} {ddl}")
+    conn.commit()
 
 
 def parse_money_to_cents(value: str | None) -> int | None:
@@ -507,7 +659,35 @@ def transaction_key(account: str, tx: dict[str, Any]) -> str:
     amount = parse_money_to_cents(tx.get("amount_text")) or 0
     posted = normalize_date(tx.get("posted_date_text"))
     description = re.sub(r"\s+", " ", tx.get("description") or "").strip().lower()
-    return stable_hash(account, posted, amount, description, length=32)
+    account_number = re.sub(r"\s+", "", tx.get("account_number") or tx.get("Account Number") or "")
+    processed = normalize_date(tx.get("processed_on") or tx.get("Processed On"))
+    return stable_hash(account, account_number, posted, processed, amount, description, length=32)
+
+
+def normalize_csv_transaction(row: dict[str, Any]) -> dict[str, Any]:
+    details = re.sub(r"\s+", " ", row.get("Transaction Details") or "").strip()
+    transaction_type = re.sub(r"\s+", " ", row.get("Transaction Type") or "").strip()
+    account_number = re.sub(r"\s+", " ", row.get("Account Number") or "").strip()
+    card_match = re.search(r"(\d{4})\s*$", account_number) or re.search(r"Card ending\s+(\d{4})", details, re.I)
+    status = "pending" if re.search(r"\bpending\b", transaction_type + " " + details, re.I) else "posted"
+    description = re.sub(r"\bPending:\s*", "", details, flags=re.I)
+    description = re.sub(r"\s*Card ending\s+\d{4}\b", "", description, flags=re.I).strip()
+    return {
+        "posted_date_text": row.get("Date"),
+        "processed_on": normalize_date(row.get("Processed On")),
+        "description": description or details or row.get("Merchant Name") or transaction_type or "Transaction",
+        "merchant_name": re.sub(r"\s+", " ", row.get("Merchant Name") or "").strip() or None,
+        "transaction_type": transaction_type or None,
+        "category": re.sub(r"\s+", " ", row.get("Category") or "").strip() or None,
+        "account_number": account_number or None,
+        "card_ending": card_match.group(1) if card_match else None,
+        "status": status,
+        "amount_text": row.get("Amount"),
+        "currency": "AUD",
+        "raw_text": " | ".join(f"{key}={value}" for key, value in row.items() if value),
+        "raw_csv": row,
+        "source_method": "csv_export",
+    }
 
 
 def insert_run(conn: sqlite3.Connection, run_id: str, status: str = "running") -> None:
@@ -577,22 +757,37 @@ def upsert_payload(conn: sqlite3.Connection, run_id: str, payload: dict[str, Any
         balance_count += 1
 
     tx_count = 0
-    for tx in payload.get("transactions") or []:
+    inserted_count = 0
+    csv_rows = [normalize_csv_transaction(row) for row in (payload.get("transactions_csv") or [])]
+    dom_rows = payload.get("transactions") or []
+    for tx in csv_rows + dom_rows:
         amount = parse_money_to_cents(tx.get("amount_text"))
         if amount is None:
             continue
         key = transaction_key(acct, tx)
+        existed = conn.execute(
+            "SELECT 1 FROM transactions WHERE transaction_key=?",
+            (key,),
+        ).fetchone() is not None
         running_balance = parse_money_to_cents(tx.get("running_balance_text"))
         conn.execute(
             """INSERT INTO transactions(
-                 transaction_key, account_key, posted_date, description, amount_cents,
-                 currency, running_balance_cents, source_url, first_seen_at,
-                 last_seen_at, last_run_id, raw_json
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 transaction_key, account_key, posted_date, processed_on, description,
+                 merchant_name, transaction_type, category, account_number, card_ending,
+                 status, amount_cents, currency, running_balance_cents, source_url,
+                 source_method, first_seen_at, last_seen_at, last_run_id, raw_json
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(transaction_key) DO UPDATE SET
                  description=excluded.description,
+                 merchant_name=COALESCE(excluded.merchant_name, transactions.merchant_name),
+                 transaction_type=COALESCE(excluded.transaction_type, transactions.transaction_type),
+                 category=COALESCE(excluded.category, transactions.category),
+                 account_number=COALESCE(excluded.account_number, transactions.account_number),
+                 card_ending=COALESCE(excluded.card_ending, transactions.card_ending),
+                 status=COALESCE(excluded.status, transactions.status),
                  running_balance_cents=COALESCE(excluded.running_balance_cents, transactions.running_balance_cents),
                  source_url=excluded.source_url,
+                 source_method=excluded.source_method,
                  last_seen_at=excluded.last_seen_at,
                  last_run_id=excluded.last_run_id,
                  raw_json=excluded.raw_json""",
@@ -600,11 +795,19 @@ def upsert_payload(conn: sqlite3.Connection, run_id: str, payload: dict[str, Any
                 key,
                 acct,
                 normalize_date(tx.get("posted_date_text")),
+                tx.get("processed_on"),
                 re.sub(r"\s+", " ", tx.get("description") or "").strip(),
+                tx.get("merchant_name"),
+                tx.get("transaction_type"),
+                tx.get("category"),
+                tx.get("account_number"),
+                tx.get("card_ending"),
+                tx.get("status"),
                 amount,
                 tx.get("currency") or "AUD",
                 running_balance,
                 source_url,
+                tx.get("source_method") or "dom",
                 now,
                 now,
                 run_id,
@@ -612,9 +815,18 @@ def upsert_payload(conn: sqlite3.Connection, run_id: str, payload: dict[str, Any
             ),
         )
         tx_count += 1
+        if not existed:
+            inserted_count += 1
 
     conn.commit()
-    return {"account_key": acct, "balances": balance_count, "transactions": tx_count}
+    return {
+        "account_key": acct,
+        "balances": balance_count,
+        "transactions": tx_count,
+        "transactions_inserted": inserted_count,
+        "transactions_csv": len(csv_rows),
+        "transactions_dom": len(dom_rows),
+    }
 
 
 def run_browser_probe(
@@ -622,6 +834,7 @@ def run_browser_probe(
     interactive_login: bool,
     login_timeout: int,
     use_current_tab: bool = False,
+    export_csv: bool = False,
 ) -> dict[str, Any]:
     code = (
         BROWSER_PROBE
@@ -629,6 +842,7 @@ def run_browser_probe(
         .replace("__INTERACTIVE_LOGIN__", "True" if interactive_login else "False")
         .replace("__LOGIN_TIMEOUT__", str(login_timeout))
         .replace("__USE_CURRENT_TAB__", "True" if use_current_tab else "False")
+        .replace("__EXPORT_CSV__", "True" if export_csv else "False")
     )
     proc = subprocess.run(
         ["browser-harness", "-c", code],
@@ -658,6 +872,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--interactive-login", action="store_true")
     parser.add_argument("--login-timeout", type=int, default=180)
     parser.add_argument("--current-tab", action="store_true")
+    parser.add_argument("--export-csv", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--require-transactions", action="store_true")
     return parser
@@ -666,13 +881,19 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     run_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + stable_hash(time.time(), length=8)
-    payload = run_browser_probe(args.start_url, args.interactive_login, args.login_timeout, args.current_tab)
+    payload = run_browser_probe(
+        args.start_url,
+        args.interactive_login,
+        args.login_timeout,
+        args.current_tab,
+        args.export_csv,
+    )
 
     if args.dry_run:
         print(json.dumps(payload, indent=2, sort_keys=True))
         if payload.get("status") != "ok":
             return 2
-        if args.require_transactions and not payload.get("transactions"):
+        if args.require_transactions and not (payload.get("transactions") or payload.get("transactions_csv")):
             return 3
         return 0
 
@@ -681,6 +902,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if payload.get("status") != "ok":
             finish_run(conn, run_id, "blocked", payload, payload.get("url") or payload.get("page", {}).get("url"))
+            print(json.dumps({
+                "run_id": run_id,
+                "status": "blocked",
+                "reason": payload.get("reason"),
+            }, sort_keys=True))
             return 2
         counts = upsert_payload(conn, run_id, payload)
         status = "ok"
