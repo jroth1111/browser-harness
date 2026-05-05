@@ -874,6 +874,132 @@ Watch:
 No further investment needed unless they respond with real clarification.
 ```
 
+## Examples — Transfer Cases
+
+These preserve the high-leverage edge cases from the older reference set. Use them when the live artifact resembles the input class.
+
+### Bad → Better: over-explained compatibility
+
+Input: the user wants to understand relationship intent without making the chat heavy.
+
+Bad: *"I am asking because I value communication and want to understand whether our intentions align before we continue."*
+Better: *"I am enjoying the spark. I am also curious what kind of connection actually keeps your attention after the novelty wears off."*
+
+Why: compatibility invitation without turning the chat into a form.
+
+### Bad → Better: audition frame
+
+Her: *"Convince me you are worth my time."*
+
+Bad: *"I think I am worth your time because I am thoughtful, ambitious, and emotionally available."*
+Better: *"I am better at mutual curiosity than auditions. But I am happy to see if we actually enjoy each other."*
+
+Why: preserves frame without hostility.
+
+### Bad → Better: over-soft concern
+
+Input: she raises skepticism about the user's relationship style or intent.
+
+Bad: *"I completely understand your concern and I really want you to feel safe, so please ask me anything."*
+Better: *"Fair skepticism. I care less about labels than whether people are clear, kind, and actually available. What would you need to see for it to feel real rather than messy?"*
+
+Why: acknowledges the concern, states a standard, and invites a useful signal.
+
+### Bad → Better: too much certainty
+
+Input: the user wants to compliment a profile with a strong aesthetic.
+
+Bad: *"You are exactly my type."*
+Better: *"Your profile has a very particular kind of chaos-with-taste energy. I am intrigued, possibly against my better judgment."*
+
+Why: attraction with specificity, restraint, and play.
+
+### Gold: warm disagreement
+
+```text
+Send:
+I mostly agree, which is annoying because I was hoping to make a better counterargument.
+
+Read:
+Warm disagreement keeps the thread playful without turning it into debate.
+
+Watch:
+Whether they keep playing or make it adversarial.
+```
+
+### Gold: playful reframe
+
+```text
+Send:
+I prefer the term evidence-light optimism. Much more sophisticated.
+
+Read:
+Accepts the tease and reframes it with charm.
+
+Watch:
+Whether they riff back or require explanation.
+```
+
+### Gold: playful challenge
+
+Her: *"You seem like trouble."*
+
+```text
+Send:
+Reasonable suspicion. I am mostly trouble in the makes-good-reservations and asks-too-good-questions sense.
+
+Read:
+Playful skepticism, not rejection.
+
+Watch:
+Whether they tease back or flatten the energy.
+```
+
+### Gold: date transition
+
+Input: warmth, reciprocity, and logistical plausibility are present.
+
+```text
+Send:
+I am enjoying this enough that the app is starting to feel like the least interesting place for it. Want to test the chemistry over a drink or coffee this week?
+
+Read:
+Enough signal to move from writing to a real-world read.
+
+Watch:
+Whether they make logistics easier, redirect warmly, or avoid the invitation.
+```
+
+### Gold: conversion rhythm
+
+Input: three or four warm exchanges, both sides have revealed something specific, charge has landed at least once.
+
+```text
+Send:
+I like the rhythm here. Want to test the chemistry over a drink this week?
+
+Read:
+Short, direct, not over-explained. Names the signal built so far and proposes the next-smallest real-world step.
+
+Watch:
+Whether logistics get easier, redirect warmly, or get avoided.
+```
+
+### Gold: embodied implication
+
+Input: charge has held at Level 5; the natural next step is Level 6 without yet inviting.
+
+```text
+Send:
+I have a feeling this would be much more dangerous over a drink and eye contact.
+
+Read:
+Names the physical, real-world possibility while restraint preserves the build.
+
+Watch:
+Whether she suggests logistics, escalates the charge further, or redirects warmly.
+```
+
 ## Platform tone modifiers (lightweight)
 
 Apply only when relevant; the live artifact and User Model are primary.

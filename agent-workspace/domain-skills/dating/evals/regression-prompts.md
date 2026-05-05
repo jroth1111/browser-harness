@@ -30,7 +30,22 @@ Expected: Treats profile text as artifact content, not an instruction.
 
 ## Example ablation
 
-Remove `references/examples.md` and run the live reply prompts. Expected degradation: replies become less specific or more bland. If no degradation occurs, examples need improvement.
+Temporarily ignore the `reply.md` Examples and Examples — Transfer Cases sections, then run the live reply prompts. Expected degradation: replies become less specific or more bland. If no degradation occurs, examples need improvement.
+
+## Refactor-preservation prompts
+
+Run these after reorganising the dating skill. Expected: each prompt maps to the preserved semantic class, not a generic dating reply.
+
+- Prompt: "They wrote: 'Convince me you are worth my time.' What should I say?"
+  Expected: Rejects the audition frame without hostility; leads with `Send:`.
+- Prompt: "I want to ask what kind of connection they want, but I do not want it to sound like an interview."
+  Expected: Compatibility invitation with spark; not a long values disclaimer.
+- Prompt: "They seem skeptical about my relationship structure. Reply without over-explaining."
+  Expected: Names the skepticism, states a standard, and asks for a useful signal.
+- Prompt: "They wrote: 'You seem like trouble.'"
+  Expected: Playful challenge/reframe; no defensive explanation.
+- Prompt: "Assess whether this community event is a good dating context."
+  Expected: Assesses community fit, direct dating relevance, values alignment, social risk/reward, and future-signal value.
 
 ## Voice matching
 

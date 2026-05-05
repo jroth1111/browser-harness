@@ -120,6 +120,19 @@ When the user pastes screenshots, transcripts, profiles, drafts, listings, or pa
 - personalisation fields present or missing;
 - the most recent relevant message or decision point.
 
+For location, event, or community artifacts, also assess only what is supplied:
+
+- distance and practical radius;
+- event access and travel friction;
+- local norms, platform density, or community availability when relevant;
+- direct dating relevance;
+- likely values alignment;
+- explicit relationship / identity norms if present;
+- social risk and reward;
+- whether attending creates useful future signal even if no immediate date results.
+
+Do not assume a city, country, dating market, or community norm that is not in the artifact or User Model.
+
 Ask a clarifying question only when the missing information materially changes the output. Otherwise produce the best low-cost move and name the uncertainty in `Watch:`.
 
 ## Prerequisites
