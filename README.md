@@ -1,16 +1,18 @@
-# Browser Harness
+<img src="https://raw.githubusercontent.com/browser-use/media/main/browser-harness/banner-ink.svg" alt="Browser Harness" width="100%" />
 
-The simplest, thinnest, **self-healing** harness that gives LLM **complete freedom** to complete any browser task. Built directly on CDP.
+# Browser Harness ♞
 
-The agent writes what's missing, mid-task. No framework, no recipes, no rails. One websocket to Chrome, nothing between.
+Connect an LLM directly to your real browser with a thin, editable CDP harness. For browser tasks where you need **complete freedom**.
+
+One websocket to Chrome, nothing between. The agent writes what's missing during execution. The harness improves itself every run.
 
 ```
   ● agent: wants to upload a file
   │
-  ● helpers.py → upload_file() missing
+  ● agent-workspace/agent_helpers.py → helper missing
   │
-  ● agent edits the harness and writes it    helpers.py   192 → 199 lines
-  │                                                       + upload_file()
+  ● agent writes it                         agent_helpers.py
+  │                                                       + custom helper
   ✓ file uploaded
 ```
 
@@ -23,60 +25,50 @@ Paste into Claude Code or Codex:
 ```text
 Set up https://github.com/browser-use/browser-harness for me.
 
-Read `install.md` first to install and connect this repo to my real browser. Then read `SKILL.md` for normal usage. Always read `helpers.py` because that is where the functions are. When you open a setup or verification tab, activate it so I can see the active browser tab. After it is installed, open this repository in my browser and, if I am logged in to GitHub, ask me whether you should star it for me as a quick demo that the interaction works — only click the star if I say yes.
+Read `install.md` and follow the steps to install browser-harness and connect it to my browser.
 ```
 
-When this page appears, tick the checkbox so the agent can connect to your browser:
+The agent will open `chrome://inspect/#remote-debugging`. Tick the checkbox so the agent can connect to your browser:
 
 <img src="docs/setup-remote-debugging.png" alt="Remote debugging setup" width="520" style="border-radius: 12px;" />
 
-See [domain-skills/](domain-skills/) for example tasks.
+Click Allow when the per-attach popup appears (Chrome 144+):
 
-For browser options such as Codex Browser Use, CloakBrowser, Browserless, Steel,
-Kernel Chromium images, and Kameleo, see
-[docs/local-cdp-providers.md](docs/local-cdp-providers.md).
+<img src="docs/allow-remote-debugging.png" alt="Allow remote debugging popup" width="520" style="border-radius: 12px;" />
 
-## Development
+See [agent-workspace/domain-skills/](agent-workspace/domain-skills/) for example tasks.
 
-Run the test suite from a clean checkout with:
+## Free Browser Use Cloud browsers
 
-```bash
-uv sync --group dev
-uv run --group dev pytest -q
-```
+Stealth, sub-agents, or headless deployment.<br>
+**Browser Use Cloud free tier: 3 concurrent browsers, proxies, captcha solving, and more. No card required.**
 
-If the system-wide `langsmith` pytest plugin is installed and causes a pydantic version conflict, disable it:
+- Grab a key at [cloud.browser-use.com/new-api-key](https://cloud.browser-use.com/new-api-key)
+- Or let the agent sign up itself via [docs.browser-use.com/llms.txt](https://docs.browser-use.com/llms.txt) (setup flow + challenge context included).
 
-```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q
-```
+## Architecture (~1k lines across 4 core files)
 
-Live/E2E tests that hit Airbnb's API are gated behind environment flags:
-
-| Test file | Gate env var |
-|---|---|
-| `test_e2e_airbnb_insights_year_view.py` | `AIRBNB_E2E_YEAR_VIEW=1` |
-| `test_e2e_airbnb_insights_negative_controls.py` | `AIRBNB_E2E_NEGATIVE_429=1` |
-| `test_e2e_airbnb_insights_conversion_display.py` | Runs unconditionally against pre-collected fixtures |
-
-## Project Map
-
-- `SKILL.md` — agent-facing router, workflow map, executable index, and usage rules.
-- `install.md` — first-time install, browser bootstrap, maintenance commands, and local architecture.
-- `run.py` — `browser-harness` CLI; runs plain Python with helpers preloaded and exposes setup/doctor/update commands.
-- `helpers.py` — browser primitives the agent uses inside `browser-harness`.
-- `admin.py` + `daemon.py` — daemon bootstrap plus the CDP websocket and socket bridge.
-- `interaction-skills/README.md` — reusable browser mechanics and cross-domain workflow index.
-- `domain-skills/README.md` — site-specific workflow and source-contract index.
-- `data_display.py`, `login_session.py`, `lightpanda_control.py`, `skill_learning_gate.py` — helper modules for reports, session continuity, backend capability, and empirical skill promotion.
+- `install.md` — first-time install and browser bootstrap
+- `SKILL.md` — day-to-day usage
+- `src/browser_harness/` — protected core package
+- `agent-workspace/agent_helpers.py` — helper code the agent edits
+- `agent-workspace/domain-skills/` — reusable site-specific skills the agent edits
 
 ## Contributing
 
-PRs and improvements welcome. The best way to help: **contribute a new domain skill** under [domain-skills/](domain-skills/) for a site or task you use often (LinkedIn outreach, ordering on Amazon, filing expenses, etc.). Each skill teaches the agent the selectors, flows, and edge cases it would otherwise have to rediscover.
+PRs and improvements welcome. The best way to help: **contribute a new domain skill** under [agent-workspace/domain-skills/](agent-workspace/domain-skills/) for a site or task you use often (LinkedIn outreach, ordering on Amazon, filing expenses, etc.). Each skill teaches the agent the selectors, flows, and edge cases it would otherwise have to rediscover.
 
 - **Skills are written by the harness, not by you.** Just run your task with the agent — when it figures something non-obvious out, it files the skill itself (see [SKILL.md](SKILL.md)). Please don't hand-author skill files; agent-generated ones reflect what actually works in the browser.
-- Open a PR with the generated `domain-skills/<site>/` folder — small and focused is great.
+- Open a PR with the generated `agent-workspace/domain-skills/<site>/` folder — small and focused is great.
 - Bug fixes, docs tweaks, and helper improvements are equally welcome.
 - Browse existing skills (`github/`, `linkedin/`, `amazon/`, ...) to see the shape.
 
 If you're not sure where to start, open an issue and we'll point you somewhere useful.
+
+## Domain skills
+
+Set `BH_DOMAIN_SKILLS=1` to enable [agent-workspace/domain-skills/](agent-workspace/domain-skills/) — community-contributed per-site playbooks `goto_url` surfaces by domain. Contribute via PR.
+
+---
+
+[The Bitter Lesson of Agent Harnesses](https://browser-use.com/posts/bitter-lesson-agent-harnesses) · [Web Agents That Actually Learn](https://browser-use.com/posts/web-agents-that-actually-learn)

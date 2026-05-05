@@ -9,10 +9,12 @@ description = "The simplest, thinnest, and most powerful harness to control your
 requires-python = ">=3.11"
 dependencies = [
     "cdp-use==1.4.5",
-    "websockets==16.0",
+    "fetch-use==0.4.0",
     "lxml>=5.0",
     "cssselect>=1.2",
     "cryptography>=42.0",
+    "pillow==12.2.0",
+    "websockets==15.0.1",
 ]
 
 [dependency-groups]
@@ -24,33 +26,13 @@ stealth = [
 ]
 
 [project.scripts]
-browser-harness = "run:main"
-browser-harness-skill-learning-gate = "skill_learning_gate:main"
+browser-harness = "browser_harness.run:main"
 
 [tool.setuptools]
-py-modules = ["run", "helpers", "response", "daemon", "admin", "login_session", "lightpanda_control", "stealth_helpers", "data_display", "skill_learning_gate", "network_capture", "source_receipts", "extraction_contracts", "redaction_scan", "domain_skill_maturity"]
-packages = ["browser_harness_domain_skills", "browser_harness_interaction_skills", "browser_harness_docs", "browser_harness_assets"]
+package-dir = {"" = "src"}
 
-[tool.setuptools.package-dir]
-browser_harness_domain_skills = "domain-skills"
-browser_harness_interaction_skills = "interaction-skills"
-browser_harness_docs = "docs"
-browser_harness_assets = "browser_harness_assets"
+[tool.setuptools.packages.find]
+where = ["src"]
 
-[tool.setuptools.package-data]
-browser_harness_domain_skills = ["**/*.md", "**/*.json", "**/*.py"]
-browser_harness_interaction_skills = ["**/*.md"]
-browser_harness_docs = ["**/*.md", "**/*.png", "**/*.json"]
-browser_harness_assets = ["*.js"]
-
-[tool.setuptools.exclude-package-data]
-browser_harness_domain_skills = [
-    "**/.private-data/**",
-    "**/.session-store/**",
-    "**/outputs/**",
-    "**/__pycache__/**",
-    "**/*.pyc",
-]
-
-[tool.setuptools.data-files]
-"share/browser-harness" = ["README.md", "SKILL.md", "install.md", "LICENSE"]
+[tool.pytest.ini_options]
+pythonpath = ["src"]

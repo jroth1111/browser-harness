@@ -3,12 +3,10 @@ __pycache__/
 *.log
 .DS_Store
 **/.DS_Store
-
-# Local environment and secret material.
-.private-data/
 .env
 .env.*
 !.env.example
+.private-data/
 *.pem
 *.key
 *.p12
@@ -21,8 +19,17 @@ __pycache__/
 *credential*
 *secrets*
 *secret*
-
-# Browser profiles and auth/session state. Never publish logged-in sessions.
+uv.lock
+*.egg-info/
+.venv/
+.pytest_cache/
+.cursor/
+.beads/
+.dolt/
+.beads-credential-key
+*.db
+.idea/
+.claude/
 user-data-dir/
 chrome-profile/
 chrome-profiles/
@@ -42,15 +49,6 @@ storage-state/
 **/Network/Cookies
 **/Network/Cookies-journal
 *.har
-
-# Build, packaging, caches, and generated reports.
-uv.lock
-*.egg-info/
-.venv/
-.pytest_cache/
-.cursor/
-.beads/
-.claude/
 domain-skills/*/.session-store/
 domain-skills/*/.private-data/
 domain-skills/*/outputs/
@@ -58,9 +56,11 @@ domain-skills/*/auth-state/
 domain-skills/*/session-state/
 domain-skills/*/browser-profile/
 domain-skills/*/chrome-profile/
+agent-workspace/domain-skills/*/.session-store/
+agent-workspace/domain-skills/*/.private-data/
+agent-workspace/domain-skills/*/outputs/
+agent-workspace/domain-skills/*/auth-state/
+agent-workspace/domain-skills/*/session-state/
+agent-workspace/domain-skills/*/browser-profile/
+agent-workspace/domain-skills/*/chrome-profile/
 outputs/
-
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
