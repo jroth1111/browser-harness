@@ -228,16 +228,16 @@ When landing on a rich domain with no prior context, read progressively.
 1. `overview.md` — routes, filters, GraphQL bootstrap, auth notes
 
 ### Dating (`dating/`)
-1. `overview.md` — intent router, pipeline summary, cold-start guide
-2. `references/copilot-instructions.md` — AI personality, objectives, quality contract
-3. `onboarding.md` — user interview flow (run before any platform automation)
-4. `chat-audit.md` — extract voiceprint and outcome patterns from existing Tinder/Hinge/Feeld conversations
-5. `references/research-user.md` — deep research prompt for user profiling from digital footprint
-6. `pipeline.md` — 7-stage pipeline definitions and state transitions
-7. `references/scoring.md` — rubric scoring for profiles and conversations
-8. `safety.md` — consent gates, rate limits, anti-detection protocols
-9. `platforms/tinder.md` — Tinder-specific selectors and flows
-10. `references/` — 12 copilot reference files for AI decision layer
+1. `overview.md` — entry/router; identity, master rules, intent → action-file routing, cold-start guide
+2. `state.md` — schemas for all `.private-data/` artifacts (user-model, voiceprint, positioning, threads, outcome-log, extraction-state)
+3. `onboard.md` — interview + research-pre-populated path; produces user-model + voiceprint + positioning
+4. `chat-audit.md` — extract voiceprint and outcome patterns from existing Tinder conversations (GDPR / UI crawl / manual paste)
+5. `swipe.md` — per-card profile read, score, decision (replaces old Stage 2 + scoring rubric)
+6. `reply.md` — opener / mid-conversation / dormancy drafting; kernel + voiceprint + decision-rubric + thread state + closed loop
+7. `escalate.md` — readiness gate, conversion move, date coordination
+8. `safety.md` — consent gates (incl. audit-run clause), rate limits, anti-detection protocols, audit trail
+9. `platforms/tinder.md` — Tinder selectors and gotchas; `platforms/{hinge,feeld}.md` deferred
+10. `surface-map.json` — primitives, fallback DAGs, verification probes
 11. `evals/` — regression prompts for behavior testing
 
 ### Food Delivery (`food-delivery/`)

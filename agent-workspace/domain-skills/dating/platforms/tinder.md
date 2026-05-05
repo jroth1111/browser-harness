@@ -165,7 +165,7 @@ Approach: `type_text(message)` into the input field, then dispatch Enter or clic
 - Do not call Tinder private APIs or `api.gotinder.com`.
 - Do not read `localStorage`, cookies, or browser storage for auth tokens.
 - Full chat extraction is allowed through slow UI-only crawl with checkpointing (see `chat-audit.md`).
-- Live conversation review (during pipeline stages) is user-selected and UI-only. No hard cap — pacing rules in `safety.md` self-limit throughput. Full chat extraction (see `chat-audit.md`) is also uncapped.
+- Live conversation review (`reply.md` / `escalate.md`) is user-selected and UI-only. No hard cap — pacing rules in `safety.md` self-limit throughput. Full chat extraction (see `chat-audit.md`) is also uncapped.
 - Rate limits: free accounts may see soft locks around 100 swipes. If an "out of likes" or rate limit prompt appears, stop and notify the user.
 - A/B tests may change DOM structure between sessions. Verify selectors each session.
 - Profile content may be lazy-loaded. Scroll or expand before extraction.
