@@ -249,7 +249,7 @@ When landing on a rich domain with no prior context, read progressively.
 ## Full Domain Folder Inventory
 
 `ai-chat-archive`, `airbnb`, `aliexpress`, `amazon`, `archive-org`, `arxiv`, `arxiv-bulk`, `atlas`,
-`booking-com`, `capterra`, `centilebrain`, `coingecko`, `coinmarketcap`, `coursera`, `craigslist`,
+`booking-com`, `capterra`, `centilebrain`, `coingecko`, `coinmarketcap`, `coles_card`, `coursera`, `craigslist`,
 `crossref`, `dating`, `dev-to`, `duckduckgo`, `ebay`, `etsy`,
 `eventbrite`, `facebook`, `food-delivery`, `framer`, `fred`, `g2`, `g2g`, `genius`, `github`,
 `glassdoor`, `gmail`, `goodreads`, `gutenberg`, `hackernews`, `howlongtobeat`,
