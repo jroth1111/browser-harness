@@ -1,0 +1,68 @@
+{
+  "exported_at": "2026-05-04T23:44:25.046520",
+  "restaurants": {
+    "count": 825,
+    "fill_rates": {
+      "store_id": {
+        "filled": 825,
+        "total": 825,
+        "rate": 1.0
+      },
+      "name": {
+        "filled": 824,
+        "total": 825,
+        "rate": 0.999
+      },
+      "url": {
+        "filled": 825,
+        "total": 825,
+        "rate": 1.0
+      },
+      "rating": {
+        "filled": 447,
+        "total": 825,
+        "rate": 0.542
+      },
+      "delivery_fee": {
+        "filled": 743,
+        "total": 825,
+        "rate": 0.901
+      },
+      "delivery_time_min": {
+        "filled": 348,
+        "total": 825,
+        "rate": 0.422
+      }
+    }
+  },
+  "menu_items": {
+    "count": 18036,
+    "fill_rates": {
+      "item_name": {
+        "filled": 18036,
+        "total": 18036,
+        "rate": 1.0
+      },
+      "item_price": {
+        "filled": 16817,
+        "total": 18036,
+        "rate": 0.932
+      },
+      "description": {
+        "filled": 10572,
+        "total": 18036,
+        "rate": 0.586
+      },
+      "category": {
+        "filled": 7236,
+        "total": 18036,
+        "rate": 0.401
+      },
+      "popular_badge": {
+        "filled": 18036,
+        "total": 18036,
+        "rate": 1.0
+      }
+    }
+  }
+}
