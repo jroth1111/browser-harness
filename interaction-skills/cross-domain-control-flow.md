@@ -138,7 +138,7 @@ requirements. The pattern:
   headful browser profile; prefer exports or authenticated APIs after the browser
   session is valid.
 
-Site-specific routing for this pattern lives in `agent-workspace/domain-skills/<site>/`.
+Site-specific routing for this pattern lives in `domain-skills/<site>/`.
 
 ---
 

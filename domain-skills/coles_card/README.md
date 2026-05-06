@@ -8,7 +8,7 @@ database.
 
 ```bash
 REPO=/Users/gwizz/.claude/skills/browser-harness
-S=$REPO/agent-workspace/domain-skills/coles_card/scripts
+S=$REPO/domain-skills/coles_card/scripts
 
 python3 $S/sync.py
 ```
@@ -16,7 +16,7 @@ python3 $S/sync.py
 The default database is:
 
 ```text
-agent-workspace/domain-skills/coles_card/.private-data/coles_card.sqlite3
+domain-skills/coles_card/.private-data/coles_card.sqlite3
 ```
 
 The `.private-data/` directory is ignored by git.
@@ -72,7 +72,7 @@ Session reuse should live in the browser profile, not in exported credentials or
 copied auth tokens. To create a durable Coles-only profile for recurring syncs:
 
 ```bash
-browser-harness --launch-profile agent-workspace/domain-skills/coles_card/.private-data/chrome-profile \
+browser-harness --launch-profile domain-skills/coles_card/.private-data/chrome-profile \
   --port 9222 \
   --url https://secure.coles.com.au/home/account_dashboard
 ```

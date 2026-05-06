@@ -15,7 +15,7 @@ record the source context that worked.
 
 1. Choose or confirm an archive root outside the repository, or use an ignored
    local path for a private one-off run:
-   `agent-workspace/domain-skills/ai-chat-archive/.private-data/archive/`.
+   `domain-skills/ai-chat-archive/.private-data/archive/`.
 2. Read `storage-decision.md`: SQLite is the only canonical archive store.
    Markdown is a generated export format, not storage authority.
 3. Read `archive-layout.md` before writing the database schema or exports.

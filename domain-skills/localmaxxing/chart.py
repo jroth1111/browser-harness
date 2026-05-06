@@ -156,6 +156,6 @@ fig.text(0.1, 0.005,
          fontsize=8, color='#9CA3AF')
 
 plt.tight_layout(rect=[0, 0.025, 1, 1])
-out = "agent-workspace/domain-skills/localmaxxing/value-chart.png"
+out = "domain-skills/localmaxxing/value-chart.png"
 plt.savefig(out, dpi=200, bbox_inches='tight', facecolor='white')
 print(f"Saved to {out}")

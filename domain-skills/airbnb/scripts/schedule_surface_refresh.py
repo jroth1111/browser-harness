@@ -13,13 +13,13 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 
-SESSION_PATH = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
-CAPABILITY_PROBE_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/capability-probes")
-OUTPUT_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/schedules")
+SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
+CAPABILITY_PROBE_PATH = Path("domain-skills/airbnb/.private-data/capability-probes")
+OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/schedules")
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def load_module(filename, name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / filename
+    path = Path("domain-skills/airbnb/scripts") / filename
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -12,7 +12,7 @@ def load_module(filename, name):
 
 
 def test_parser_contract_fixtures_cover_required_families():
-    base = Path("agent-workspace/domain-skills/airbnb/fixtures/parser-contracts")
+    base = Path("domain-skills/airbnb/fixtures/parser-contracts")
 
     assert (base / "public-search" / "valid.json").exists()
     assert (base / "listing-inventory" / "valid.json").exists()
@@ -28,7 +28,7 @@ def test_parser_contract_fixtures_validate_against_contract_helpers():
     planner = load_module("public_scan_planner.py", "airbnb_public_scan_planner")
     calendar = load_module("collect_calendar_export.py", "airbnb_collect_calendar_export")
     exports = load_module("collect_exports.py", "airbnb_collect_exports")
-    base = Path("agent-workspace/domain-skills/airbnb/fixtures/parser-contracts")
+    base = Path("domain-skills/airbnb/fixtures/parser-contracts")
 
     listing_payload = json.loads((base / "listing-inventory" / "valid.json").read_text())
     insights_payload = json.loads((base / "insights" / "valid.json").read_text())

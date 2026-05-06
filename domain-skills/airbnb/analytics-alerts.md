@@ -67,7 +67,7 @@ Decision-gate outputs:
 Canonical year-view artifacts for dashboarding:
 
 - full snapshot JSON:
-  `agent-workspace/domain-skills/airbnb/.private-data/insights-collections/<run_id>.json`
+  `domain-skills/airbnb/.private-data/insights-collections/<run_id>.json`
 - family extracts:
   `.../<run_id>-conversion-only.json`,
   `.../<run_id>-occupancy-only.json`,

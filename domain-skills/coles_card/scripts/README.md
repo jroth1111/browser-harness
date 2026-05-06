@@ -6,7 +6,7 @@ Runs a browser-harness probe against the official Coles credit card Online
 Service Centre and writes balances and transactions to SQLite.
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py
+python3 domain-skills/coles_card/scripts/sync.py
 ```
 
 Options:
@@ -33,25 +33,25 @@ Options:
 Daily non-interactive command:
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py --export-csv --require-transactions
+python3 domain-skills/coles_card/scripts/sync.py --export-csv --require-transactions
 ```
 
 Manual session refresh:
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --login-timeout 180
+python3 domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --login-timeout 180
 ```
 
 Authenticated current-tab E2E check:
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py --current-tab --require-transactions
+python3 domain-skills/coles_card/scripts/sync.py --current-tab --require-transactions
 ```
 
 Full export E2E check:
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --require-transactions
+python3 domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --require-transactions
 ```
 
 The script stores only normalized account, balance, transaction, and run-receipt

@@ -9,9 +9,9 @@ from pathlib import Path
 
 
 DEFAULT_TARGETS = [
-    Path("agent-workspace/domain-skills/airbnb/fixtures"),
-    Path("agent-workspace/domain-skills/airbnb/schemas"),
-    Path("agent-workspace/domain-skills/airbnb"),
+    Path("domain-skills/airbnb/fixtures"),
+    Path("domain-skills/airbnb/schemas"),
+    Path("domain-skills/airbnb"),
 ]
 
 SKIP_DIRS = {
@@ -24,7 +24,7 @@ TEXT_SUFFIXES = {".json", ".jsonl", ".csv", ".md", ".txt", ".schema", ".py"}
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

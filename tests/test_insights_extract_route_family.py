@@ -15,7 +15,7 @@ def load_module(path, name):
 
 
 def test_extract_route_family_round_trip_and_render(tmp_path):
-    module = load_module("agent-workspace/domain-skills/airbnb/scripts/extract_route_family.py", "airbnb_extract_route_family")
+    module = load_module("domain-skills/airbnb/scripts/extract_route_family.py", "airbnb_extract_route_family")
     source = tmp_path / "run.json"
     payload = {
         "run_id": "run-1",
@@ -50,7 +50,7 @@ def test_extract_route_family_round_trip_and_render(tmp_path):
 
 
 def test_extract_route_family_rejects_quarantined_snapshot_without_override(tmp_path):
-    module = load_module("agent-workspace/domain-skills/airbnb/scripts/extract_route_family.py", "airbnb_extract_route_family")
+    module = load_module("domain-skills/airbnb/scripts/extract_route_family.py", "airbnb_extract_route_family")
     source = tmp_path / "run.json"
     payload = {
         "run_id": "run-1",

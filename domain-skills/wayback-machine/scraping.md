@@ -2,7 +2,7 @@
 
 `https://web.archive.org` — all public data, no auth or API key required. Everything here is pure `http_get` — no browser needed.
 
-> **NOTE:** A comprehensive Internet Archive skill (covering CDX, item metadata, and search) already exists at `agent-workspace/domain-skills/archive-org/scraping.md`. This file is a focused, CDX-first quick-reference for Wayback Machine snapshot work specifically.
+> **NOTE:** A comprehensive Internet Archive skill (covering CDX, item metadata, and search) already exists at `domain-skills/archive-org/scraping.md`. This file is a focused, CDX-first quick-reference for Wayback Machine snapshot work specifically.
 
 ## Start here: CDX API
 

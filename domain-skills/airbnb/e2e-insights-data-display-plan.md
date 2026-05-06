@@ -5,7 +5,7 @@
 Verify an end-to-end chain for authenticated Airbnb host Insights data:
 
 1. Source truth from logged-in Airbnb Insights surfaces and authenticated API
-2. Collector output from `agent-workspace/domain-skills/airbnb/scripts/collect_insights.py`
+2. Collector output from `domain-skills/airbnb/scripts/collect_insights.py`
 3. Display payload and rendered output from `data_display.render_dataset(...)`
 
 The test passes only when key metrics and chart points are preserved across
@@ -24,10 +24,10 @@ source -> collected artifacts -> rendered display without loss or fabrication.
 
 - Airbnb host session is logged in and available in browser harness context.
 - Complete listing inventory exists in:
-  - `agent-workspace/domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-*.json`
+  - `domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-*.json`
 - Private output paths are writable:
-  - `agent-workspace/domain-skills/airbnb/.private-data/insights-collections/`
-  - `agent-workspace/domain-skills/airbnb/.session-store/capability/`
+  - `domain-skills/airbnb/.private-data/insights-collections/`
+  - `domain-skills/airbnb/.session-store/capability/`
 
 ## Execution Steps
 
@@ -91,14 +91,14 @@ Open produced HTML report(s) and verify:
 Primary outputs:
 
 - Insights JSON/CSV under:
-  - `agent-workspace/domain-skills/airbnb/.private-data/insights-collections/`
+  - `domain-skills/airbnb/.private-data/insights-collections/`
 - Capability receipts under:
-  - `agent-workspace/domain-skills/airbnb/.session-store/capability/`
+  - `domain-skills/airbnb/.session-store/capability/`
 - Rendered HTML outputs co-located with rendered source files
 
 Optional E2E evidence folder:
 
-- `agent-workspace/domain-skills/airbnb/.private-data/.e2e/`
+- `domain-skills/airbnb/.private-data/.e2e/`
   - source manifests
   - screenshots
   - parity-check receipts
@@ -119,7 +119,7 @@ Optional E2E evidence folder:
 
 Use the year-view runner for the standard workflow:
 
-- `python3 agent-workspace/domain-skills/airbnb/scripts/sync_insights_year_view.py`
+- `python3 domain-skills/airbnb/scripts/sync_insights_year_view.py`
 
 This command performs preflight, optional granularity probe refresh, incremental
 collector sync with ledger-backed gap planning, per-family extraction

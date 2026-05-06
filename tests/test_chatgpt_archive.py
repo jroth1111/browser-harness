@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 
 import sys
-sys.path.insert(0, str(Path(__file__).parent / "agent-workspace" / "domain-skills" / "ai-chat-archive"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "domain-skills" / "ai-chat-archive"))
 
 from lib.schema import init_db
 from lib.archive_db import (

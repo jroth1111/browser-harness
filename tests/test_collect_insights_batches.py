@@ -7,7 +7,7 @@ import pytest
 
 
 def load_batch_functions():
-    source = Path("agent-workspace/domain-skills/airbnb/scripts/collect_insights.py").read_text(encoding="utf-8")
+    source = Path("domain-skills/airbnb/scripts/collect_insights.py").read_text(encoding="utf-8")
     start = source.index("def result_key")
     end = source.index("\n\ndef components")
     namespace = {"json": json, "os": __import__("os"), "time": time}
@@ -16,7 +16,7 @@ def load_batch_functions():
 
 
 def load_collect_module():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/collect_insights.py")
+    path = Path("domain-skills/airbnb/scripts/collect_insights.py")
     spec = importlib.util.spec_from_file_location("airbnb_collect_insights", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

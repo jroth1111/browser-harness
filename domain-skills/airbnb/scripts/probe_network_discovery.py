@@ -15,12 +15,12 @@ from pathlib import Path
 
 
 BASE = "https://www.airbnb.com.au"
-OUTPUT_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/network-discovery")
-SESSION_PATH = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
+OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/network-discovery")
+SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

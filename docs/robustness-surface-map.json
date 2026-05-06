@@ -304,7 +304,7 @@
     {
       "id": "extraction_contracts",
       "scope": "Browser and parser extraction field semantics, selector probes, primary keys, fixtures, and coverage triage.",
-      "files": ["interaction-skills/extraction-coverage.md", "agent-workspace/domain-skills/surface-map-pattern.md", "agent-workspace/domain-skills/README.md", "test_domain_surface_maps.py"],
+      "files": ["interaction-skills/extraction-coverage.md", "domain-skills/surface-map-pattern.md", "domain-skills/README.md", "test_domain_surface_maps.py"],
       "contracts": [
         "fields distinguish value, confirmed absent, __UNOBSERVABLE__, and not checked",
         "selectors are probed before extractor code is trusted",
@@ -334,7 +334,7 @@
     {
       "id": "domain_skill_loading",
       "scope": "Root router, domain index, packaged domain assets, surface maps, and empirical skill promotion.",
-      "files": ["SKILL.md", "agent-workspace/domain-skills/README.md", "interaction-skills/README.md", "skill_learning_gate.py", "test_skill_learning_gate.py", "test_domain_surface_maps.py"],
+      "files": ["SKILL.md", "domain-skills/README.md", "interaction-skills/README.md", "skill_learning_gate.py", "test_skill_learning_gate.py", "test_domain_surface_maps.py"],
       "contracts": [
         "known domains route to overview.md or the most specific file",
         "domain skills contain durable rules, not task narration or secrets",
@@ -349,7 +349,7 @@
       "positive_probe": "Tests prove packaged domain skill discovery and surface-map contract validity.",
       "negative_probe": "Private/generated directories must be excluded from reusable guidance and package artifacts.",
       "reachability": {
-        "entry": "SKILL.md router and agent-workspace/domain-skills/README.md cold start",
+        "entry": "SKILL.md router and domain-skills/README.md cold start",
         "validation": "domain folder, overview/readme presence, surface-map schema",
         "routing": "root skill -> domain skill -> interaction skill for mechanics",
         "execution": "agent reads skill files and optional scripts/assets",

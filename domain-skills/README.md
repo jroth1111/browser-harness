@@ -3,7 +3,7 @@
 This file serves two purposes: a discovery index for existing domain skills,
 and the routed destination for "Build a scraper for a new site" (see "Creating
 a New Domain Skill" below). SKILL.md also routes directly to
-`agent-workspace/domain-skills/<site>/overview.md` or the first .md file in a domain folder for
+`domain-skills/<site>/overview.md` or the first .md file in a domain folder for
 known sites. Use the discovery index when you need to find which domain skills
 exist, the cold-read path for a rich bundle, or the full folder inventory.
 
@@ -34,7 +34,7 @@ four-state extraction for browser-based extraction.
 
 ### Phase 2: Build
 
-1. Create `agent-workspace/domain-skills/<site>/` with `overview.md` containing confirmed URL
+1. Create `domain-skills/<site>/` with `overview.md` containing confirmed URL
    patterns, source classification, DOM selectors, anti-bot classification, and
    gotchas.
 
@@ -178,13 +178,13 @@ cross-references and index updates together.
 For the exhaustive top-level inventory, run:
 
 ```bash
-find agent-workspace/domain-skills -mindepth 1 -maxdepth 1 -type d | sort
+find domain-skills -mindepth 1 -maxdepth 1 -type d | sort
 ```
 
 For one site, run:
 
 ```bash
-rg --files agent-workspace/domain-skills/<site>
+rg --files domain-skills/<site>
 ```
 
 ## Buckets

@@ -2,7 +2,7 @@
   "warehouse_exports": [
     {
       "table": "airbnb_public_search_result_snapshot",
-      "path": "agent-workspace/domain-skills/airbnb/.private-data/public-market-collections/run-search-results.csv",
+      "path": "domain-skills/airbnb/.private-data/public-market-collections/run-search-results.csv",
       "row_count": 2,
       "grain": "search_run_id + result_position",
       "source_family": "public_market",

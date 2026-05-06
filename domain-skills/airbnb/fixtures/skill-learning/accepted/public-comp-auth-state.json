@@ -4,7 +4,7 @@
   "domain": "airbnb",
   "affected_skill_paths": [
     "interaction-skills/cross-domain-control-flow.md",
-    "agent-workspace/domain-skills/airbnb/public-market.md"
+    "domain-skills/airbnb/public-market.md"
   ],
   "observed_surface": {
     "origin": "https://www.airbnb.com.au",
@@ -49,6 +49,6 @@
   "confidence": "high",
   "promotion_decision": "accept",
   "holdout_refs": [
-    "agent-workspace/domain-skills/airbnb/fixtures/skill-learning/holdout/host-dashboard-auth-state.json"
+    "domain-skills/airbnb/fixtures/skill-learning/holdout/host-dashboard-auth-state.json"
   ]
 }

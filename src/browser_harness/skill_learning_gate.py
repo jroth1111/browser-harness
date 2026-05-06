@@ -146,7 +146,7 @@ def validate_candidate(candidate, *, source_path=None):
         errors.append({"field": "affected_skill_paths", "reason": "at least one skill path is required"})
     else:
         for path in candidate.get("affected_skill_paths") or []:
-            if not str(path).startswith(("agent-workspace/domain-skills/", "interaction-skills/", "SKILL.md")):
+            if not str(path).startswith(("domain-skills/", "interaction-skills/", "SKILL.md")):
                 errors.append({"field": "affected_skill_paths", "reason": f"path is outside shared skill artifacts: {path}"})
 
     source_contextuality = candidate.get("source_contextuality") or {}

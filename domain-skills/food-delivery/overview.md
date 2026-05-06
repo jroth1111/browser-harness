@@ -30,7 +30,7 @@ Phase 4: Export CSV + JSON        ->  food_data.csv / food_data.json
 ```bash
 REPO=/Users/gwizz/.claude/skills/browser-harness
 PY=$REPO/.venv/bin/python3
-S=$REPO/agent-workspace/domain-skills/food-delivery/scripts
+S=$REPO/domain-skills/food-delivery/scripts
 
 # Phase 2: Enumerate (browse-all mode, single query covers all categories)
 $PY $S/enumerate_restaurants.py --platform doordash --output $S/dd_restaurants.json

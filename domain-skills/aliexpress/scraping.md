@@ -732,7 +732,7 @@ discovery and search directly by product name.
 
 ## Batch search scripts
 
-Scripts in `agent-workspace/domain-skills/aliexpress/scripts/` automate maximum-coverage searches
+Scripts in `domain-skills/aliexpress/scripts/` automate maximum-coverage searches
 for any product type:
 
 - **`search.py plan <query>`** — generates layered search URLs with early
@@ -863,7 +863,7 @@ Not all queries need all layers. Use early stopping based on product type:
 
 ```bash
 # 1. Generate layered URLs with early termination guidance
-python3 agent-workspace/domain-skills/aliexpress/scripts/search.py plan "RTX 4090" \
+python3 domain-skills/aliexpress/scripts/search.py plan "RTX 4090" \
   --specs "24GB" "48GB" --modifiers "graphics card" "GPU" "gaming PC"
 
 # 2. Reset accumulation, then navigate to each URL and run extraction JS
@@ -872,7 +872,7 @@ python3 agent-workspace/domain-skills/aliexpress/scripts/search.py plan "RTX 409
 # 3. Dump all accumulated results from browser, save to file
 
 # 4. Merge, dedup, filter noise, classify
-python3 agent-workspace/domain-skills/aliexpress/scripts/search.py merge results.json \
+python3 domain-skills/aliexpress/scripts/search.py merge results.json \
   --require "rtx" "gpu" "graphics card" \
   --exclude "water block" "bridge" "cooler" --min-price 100
 ```

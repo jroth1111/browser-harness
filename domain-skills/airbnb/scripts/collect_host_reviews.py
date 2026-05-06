@@ -11,7 +11,7 @@ Reads:
 
 Produces:
     - `airbnb_review`-shaped rows under `.private-data/review-collections/`.
-    - `agent-workspace/domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
 
 Requires (env, optional unless noted):
     - `AIRBNB_HOST_REVIEWS_LISTING_SCOPE` — `all`, `statuses:ACTIVE,UNLISTED`,
@@ -27,9 +27,9 @@ Run from the browser-harness repo against an authenticated Airbnb host browser
 context:
 
     BH_NAME=airbnb-host-reviews BH_CDP_WS=http://127.0.0.1:52862 \
-      python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_host_reviews.py
+      python3 run.py < domain-skills/airbnb/scripts/collect_host_reviews.py
 
-Private outputs are written under ignored agent-workspace/domain-skills/airbnb/.private-data/.
+Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 """
 
 from __future__ import annotations
@@ -52,9 +52,9 @@ import login_session
 
 BASE = "https://www.airbnb.com.au"
 HOST_REVIEWS_URL = BASE + "/performance/quality/overall"
-LISTINGS_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/listing-collections")
-OUTPUT_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/review-collections")
-SESSION_PATH = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
+LISTINGS_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
+OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/review-collections")
+SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
 
 DEFAULT_PAGE_LIMIT = 50
 DEFAULT_MAX_PAGES = 50
@@ -83,7 +83,7 @@ CATEGORY_LABELS = {
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

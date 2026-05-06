@@ -11,8 +11,8 @@ URLs, source receipts, and local manifest fields.
 This repo ignores domain-local session paths, including:
 
 ```text
-agent-workspace/domain-skills/airbnb/.session-store/
-agent-workspace/domain-skills/airbnb/.private-data/
+domain-skills/airbnb/.session-store/
+domain-skills/airbnb/.private-data/
 ```
 
 Use `.session-store/` for Airbnb continuity manifests and capability receipts.
@@ -37,7 +37,7 @@ logged-in personalization.
 The restorable auth bundle is a single self-contained JSON file:
 
 ```text
-agent-workspace/domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json
+domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json
 ```
 
 Format: `browser-harness.login_session.v1`. Contains all cookies, localStorage,
@@ -65,7 +65,7 @@ evaluation, then navigates to protected URLs to verify the session is live.
 Recommended layout:
 
 ```text
-agent-workspace/domain-skills/airbnb/.session-store/
+domain-skills/airbnb/.session-store/
   profiles/
     <profile-label>.json
   capability/

@@ -6,7 +6,7 @@ import pytest
 
 
 def load_module():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/operation_hashes.py")
+    path = Path("domain-skills/airbnb/scripts/operation_hashes.py")
     spec = importlib.util.spec_from_file_location("airbnb_operation_hashes", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

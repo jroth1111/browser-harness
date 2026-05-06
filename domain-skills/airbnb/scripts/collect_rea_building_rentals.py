@@ -21,7 +21,7 @@ Produces:
       `.private-data/realestate-rental-collections/`.
     - Idempotent observation, event, and building-price JSONL ledgers in the
       same directory.
-    - `agent-workspace/domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
 
 Requires:
     - A real, persistent headful Chrome profile for REA pages. REA commonly
@@ -31,7 +31,7 @@ Requires:
 Run from the browser-harness repo:
 
     BH_NAME=rea-building-rentals BH_CDP_WS=http://127.0.0.1:<port> \
-      python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_rea_building_rentals.py
+      python3 run.py < domain-skills/airbnb/scripts/collect_rea_building_rentals.py
 
 Useful env:
     - `REA_BUILDING_RENTALS_LISTING_SCOPE` default `active`
@@ -50,7 +50,7 @@ Useful env:
     - `REA_BUILDING_RENTALS_RETRY_BASE_DELAY_SEC` default `15`
     - `REA_BUILDING_RENTALS_RETRY_MAX_DELAY_SEC` default `180`
 
-Private outputs are written under ignored agent-workspace/domain-skills/airbnb/.private-data/.
+Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ from pathlib import Path
 from urllib.parse import quote_plus, unquote, urlsplit, urlunsplit
 
 
-AIRBNB_DIR = Path("agent-workspace/domain-skills/airbnb")
+AIRBNB_DIR = Path("domain-skills/airbnb")
 LISTINGS_PATH = AIRBNB_DIR / ".private-data" / "listing-collections"
 OUTPUT_PATH = AIRBNB_DIR / ".private-data" / "realestate-rental-collections"
 SESSION_PATH = AIRBNB_DIR / ".session-store" / "capability"
@@ -247,7 +247,7 @@ COMMON_PROPERTY_FEATURES = {
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

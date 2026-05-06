@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/collect_exports.py")
+    path = Path("domain-skills/airbnb/scripts/collect_exports.py")
     spec = importlib.util.spec_from_file_location("airbnb_collect_exports", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -12,7 +12,7 @@ def load_module():
 
 def test_earnings_csv_parser_normalizes_money_and_source_metadata():
     module = load_module()
-    text = Path("agent-workspace/domain-skills/airbnb/fixtures/parser-contracts/exports/earnings.csv").read_text()
+    text = Path("domain-skills/airbnb/fixtures/parser-contracts/exports/earnings.csv").read_text()
 
     rows = module.parse_earnings_csv(
         text,
@@ -32,7 +32,7 @@ def test_earnings_csv_parser_normalizes_money_and_source_metadata():
 
 def test_reservation_detail_parser_extracts_print_export_fields_without_raw_guest_name():
     module = load_module()
-    text = Path("agent-workspace/domain-skills/airbnb/fixtures/parser-contracts/exports/reservation-detail.txt").read_text()
+    text = Path("domain-skills/airbnb/fixtures/parser-contracts/exports/reservation-detail.txt").read_text()
 
     rows = module.parse_reservation_detail_text(
         text,

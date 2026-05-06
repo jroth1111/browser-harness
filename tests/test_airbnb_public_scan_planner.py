@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/public_scan_planner.py")
+    path = Path("domain-skills/airbnb/scripts/public_scan_planner.py")
     spec = importlib.util.spec_from_file_location("airbnb_public_scan_planner", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

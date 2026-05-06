@@ -16,10 +16,10 @@ Reads:
       `/api/v3/ChartQuery/<hash>` from inside the browser context.
 
 Produces:
-    - `agent-workspace/domain-skills/airbnb/.private-data/insights-collections/<run_id>.json`
+    - `domain-skills/airbnb/.private-data/insights-collections/<run_id>.json`
       (summary + daily rows + sentinels).
     - Ledger appends in the same directory.
-    - `agent-workspace/domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
 
 Requires (env, optional unless noted):
     - `AIRBNB_INSIGHTS_RUN_ID`, `AIRBNB_INSIGHTS_PATIENT_MODE`,
@@ -41,9 +41,9 @@ returned granularity (`DAY`/`WEEK`/`MONTH`).
 Run from the browser-harness repo with an authenticated browser context:
 
     BH_NAME=airbnb-insights BH_CDP_WS=http://127.0.0.1:52862 \
-      python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_insights.py
+      python3 run.py < domain-skills/airbnb/scripts/collect_insights.py
 
-Private outputs are written under ignored agent-workspace/domain-skills/airbnb/.private-data/.
+Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 """
 
 from __future__ import annotations
@@ -63,9 +63,9 @@ import login_session
 
 
 BASE = "https://www.airbnb.com.au"
-LISTINGS_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/listing-collections")
-SESSION_PATH = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
-OUTPUT_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/insights-collections")
+LISTINGS_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
+SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
+OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/insights-collections")
 # AIRBNB_INSIGHTS_LEDGER_PATH lets isolated/test runs target a sandbox ledger
 # rather than the production one.
 LEDGER_PATH = Path(os.environ.get("AIRBNB_INSIGHTS_LEDGER_PATH", str(OUTPUT_PATH / ".ledger.jsonl")))
@@ -102,7 +102,7 @@ ROUTES = [
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -199,18 +199,18 @@ Executable collector: `scripts/collect_listings.py`.
    not contain enough detail: full address after the `Location` label, `Number
    of guests`, `Property type`, room/photo lines, and photo count.
 10. Save private JSON/CSV under
-   `agent-workspace/domain-skills/airbnb/.private-data/listing-collections/` and save a compact
+   `domain-skills/airbnb/.private-data/listing-collections/` and save a compact
    receipt under `.session-store/capability/`.
 
 Recommended run shape:
 
 ```bash
-python3 run.py --launch-profile agent-workspace/domain-skills/airbnb/.session-store/profiles/listings \
+python3 run.py --launch-profile domain-skills/airbnb/.session-store/profiles/listings \
   --port 52862 --url about:blank --json
 
-AIRBNB_AUTH_STATE_PATH=agent-workspace/domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json \
+AIRBNB_AUTH_STATE_PATH=domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json \
 BH_NAME=airbnb-listings BH_CDP_WS=http://127.0.0.1:52862 \
-  python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_listings.py
+  python3 run.py < domain-skills/airbnb/scripts/collect_listings.py
 ```
 
 Useful controls:
@@ -536,7 +536,7 @@ advisor or official government source.
 
 Canonical runner:
 
-- `python3 agent-workspace/domain-skills/airbnb/scripts/sync_insights_year_view.py`
+- `python3 domain-skills/airbnb/scripts/sync_insights_year_view.py`
 
 This workflow is now tiered and incremental:
 
@@ -548,7 +548,7 @@ This workflow is now tiered and incremental:
 
 Cross-run gap state:
 
-- ledger file: `agent-workspace/domain-skills/airbnb/.private-data/insights-collections/.ledger.jsonl`
+- ledger file: `domain-skills/airbnb/.private-data/insights-collections/.ledger.jsonl`
 - key fields:
   `listing_id`, `route_family`, `route_subroute`, `series_index`, `ds`,
   `primary_metric_name`.

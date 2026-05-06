@@ -122,7 +122,7 @@ would the guest still feel accurately informed on arrival?
 
 ## Output artifacts
 
-Private run data goes under ignored `agent-workspace/domain-skills/airbnb/.private-data/`. Each
+Private run data goes under ignored `domain-skills/airbnb/.private-data/`. Each
 subdirectory holds collected raw data from a specific source family:
 
 | Directory | Contents |
@@ -171,12 +171,12 @@ When reviewing or searching the reusable skill surface, exclude private run
 stores unless the task explicitly asks for local evidence records:
 
 ```bash
-rg "pattern" agent-workspace/domain-skills/airbnb \
-  --glob '!agent-workspace/domain-skills/airbnb/.private-data/**' \
-  --glob '!agent-workspace/domain-skills/airbnb/.session-store/**' \
+rg "pattern" domain-skills/airbnb \
+  --glob '!domain-skills/airbnb/.private-data/**' \
+  --glob '!domain-skills/airbnb/.session-store/**' \
   --glob '!outputs/**'
 
-find agent-workspace/domain-skills/airbnb \
+find domain-skills/airbnb \
   -path '*/.private-data' -prune -o \
   -path '*/.session-store' -prune -o \
   -path '*/outputs' -prune -o \

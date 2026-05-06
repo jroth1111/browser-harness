@@ -6,20 +6,20 @@ z2u.com digital marketplace — exhaustive multi-category product search returni
 
 ```bash
 # Plan an exhaustive search
-python3 agent-workspace/domain-skills/z2u/scripts/search.py plan "google" --filter "ultra" --output results.csv
+python3 domain-skills/z2u/scripts/search.py plan "google" --filter "ultra" --output results.csv
 
 # Plan without filter (get everything)
-python3 agent-workspace/domain-skills/z2u/scripts/search.py plan "chatgpt" --output chatgpt_all.csv
+python3 domain-skills/z2u/scripts/search.py plan "chatgpt" --output chatgpt_all.csv
 
 # Get individual JS snippets
-python3 agent-workspace/domain-skills/z2u/scripts/search.py extract-js --reset
-python3 agent-workspace/domain-skills/z2u/scripts/search.py extract-js --categories
-python3 agent-workspace/domain-skills/z2u/scripts/search.py extract-js --products
-python3 agent-workspace/domain-skills/z2u/scripts/search.py extract-js --detail
-python3 agent-workspace/domain-skills/z2u/scripts/search.py extract-js --dump
+python3 domain-skills/z2u/scripts/search.py extract-js --reset
+python3 domain-skills/z2u/scripts/search.py extract-js --categories
+python3 domain-skills/z2u/scripts/search.py extract-js --products
+python3 domain-skills/z2u/scripts/search.py extract-js --detail
+python3 domain-skills/z2u/scripts/search.py extract-js --dump
 
 # Merge extracted JSON into filtered CSV
-python3 agent-workspace/domain-skills/z2u/scripts/search.py merge products.json --filter "ultra" --output results.csv
+python3 domain-skills/z2u/scripts/search.py merge products.json --filter "ultra" --output results.csv
 ```
 
 ## Backend

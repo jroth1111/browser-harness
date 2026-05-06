@@ -252,7 +252,7 @@ recs = more_like_this("tt0111161")   # Shawshank -> ~12 recommendations
 
 **CSS class hashes churn.** Selectors like `.sc-300a8231-6` (a styled-components hash) WILL break — use them only as a last-resort fallback alongside the stable `ipc-*` names.
 
-**"More Like This" requires scroll to mount.** It is mounted via IntersectionObserver and will not appear in the initial DOM. Two `scroll(500, 500, dy=3000)` calls with a `wait()` after each is the verified minimum. Positive `dy` is scroll-down in CDP's mouseWheel convention (matches the reddit/facebook agent-workspace/domain-skills).
+**"More Like This" requires scroll to mount.** It is mounted via IntersectionObserver and will not appear in the initial DOM. Two `scroll(500, 500, dy=3000)` calls with a `wait()` after each is the verified minimum. Positive `dy` is scroll-down in CDP's mouseWheel convention (matches the reddit/facebook domain-skills).
 
 **Heading text is the stable anchor, not the container class.** IMDb rewrites its layout containers frequently; the strings "More Like This", "Top Cast", and "User reviews" are kept stable for SEO. Always locate panels by heading-regex and walk up to find the section root.
 

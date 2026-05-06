@@ -435,7 +435,7 @@ If the coverage gap is small (< 3% of total), single-sort is sufficient.
 
 ## Scripts
 
-Executable scripts in `agent-workspace/domain-skills/g2g/scripts/`:
+Executable scripts in `domain-skills/g2g/scripts/`:
 
 | Script | Purpose |
 |--------|---------|
@@ -445,19 +445,19 @@ Executable scripts in `agent-workspace/domain-skills/g2g/scripts/`:
 
 ```bash
 # Full exhaustive search:
-python3 agent-workspace/domain-skills/g2g/scripts/search.py search "google" --output results.csv
+python3 domain-skills/g2g/scripts/search.py search "google" --output results.csv
 
 # With target keywords:
-python3 agent-workspace/domain-skills/g2g/scripts/search.py search "netflix" --output netflix.csv --target-keywords "premium" "family" "4k"
+python3 domain-skills/g2g/scripts/search.py search "netflix" --output netflix.csv --target-keywords "premium" "family" "4k"
 
 # Discover categories only:
-python3 agent-workspace/domain-skills/g2g/scripts/search.py categories "spotify"
+python3 domain-skills/g2g/scripts/search.py categories "spotify"
 
 # Enrich with detailed seller info:
-python3 agent-workspace/domain-skills/g2g/scripts/search.py seller results.csv --output seller-results.csv
+python3 domain-skills/g2g/scripts/search.py seller results.csv --output seller-results.csv
 
 # Generate coverage report from existing CSV:
-python3 agent-workspace/domain-skills/g2g/scripts/search.py coverage results.csv
+python3 domain-skills/g2g/scripts/search.py coverage results.csv
 ```
 
 ## Workflow Algorithm

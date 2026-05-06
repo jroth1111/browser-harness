@@ -16,7 +16,7 @@ def test_package_config_installs_runtime_modules_and_skill_assets():
         "browser_harness_docs",
         "browser_harness_assets",
     }
-    assert setuptools["package-dir"]["browser_harness_domain_skills"] == "agent-workspace/domain-skills"
+    assert setuptools["package-dir"]["browser_harness_domain_skills"] == "domain-skills"
     assert setuptools["package-dir"]["browser_harness_assets"] == "browser_harness_assets"
     assert "**/*.md" in setuptools["package-data"]["browser_harness_domain_skills"]
     assert "**/*.json" in setuptools["package-data"]["browser_harness_docs"]

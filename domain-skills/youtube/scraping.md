@@ -94,16 +94,16 @@ timedtext bodies into fabricated data.
 For local changes, run:
 
 ```bash
-uv run --group dev pytest -q agent-workspace/domain-skills/youtube/tests/test_primitives.py test_youtube_domain_skill.py
-python3 agent-workspace/domain-skills/youtube/scripts/render_docs.py
-python3 agent-workspace/domain-skills/youtube/scripts/summarize_reports.py
-python3 agent-workspace/domain-skills/youtube/scripts/assert_no_forbidden_paths.py
+uv run --group dev pytest -q domain-skills/youtube/tests/test_primitives.py test_youtube_domain_skill.py
+python3 domain-skills/youtube/scripts/render_docs.py
+python3 domain-skills/youtube/scripts/summarize_reports.py
+python3 domain-skills/youtube/scripts/assert_no_forbidden_paths.py
 ```
 
 For live browser evidence, run from the repo root:
 
 ```bash
-browser-harness < agent-workspace/domain-skills/youtube/scripts/live_smoke.py
+browser-harness < domain-skills/youtube/scripts/live_smoke.py
 ```
 
 Do not commit, print, or paste cookies, visitor IDs, account payloads, raw

@@ -34,14 +34,14 @@ from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 
-OUTPUT_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/calendar-export-collections")
-SESSION_PATH = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
+OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/calendar-export-collections")
+SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
 
 BOOKING_CODE_RE = re.compile(r"\b[A-Z][A-Z0-9]{9}\b")
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

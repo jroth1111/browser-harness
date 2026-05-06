@@ -15,7 +15,7 @@ Generalizable:
 - the renderer and its auto-detect rules
 - override knobs
 
-Site-specific display logic belongs in `agent-workspace/domain-skills/<site>/`:
+Site-specific display logic belongs in `domain-skills/<site>/`:
 
 - which file is the canonical snapshot for a given question
 - site-specific field labels or display overrides
@@ -229,4 +229,4 @@ The report keeps interactive state in the URL hash for reload/share continuity:
 - `data_display.render_dataset` — the renderer entry point
 - [data-source-exploration.md](data-source-exploration.md) — use that to discover and
   inventory data sources before displaying them
-- `agent-workspace/domain-skills/<site>/` — site-specific schema and canonical file locations
+- `domain-skills/<site>/` — site-specific schema and canonical file locations

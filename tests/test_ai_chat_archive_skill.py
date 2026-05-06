@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-SKILL_DIR = ROOT / "agent-workspace/domain-skills" / "ai-chat-archive"
+SKILL_DIR = ROOT / "domain-skills" / "ai-chat-archive"
 
 
 def read(name: str) -> str:

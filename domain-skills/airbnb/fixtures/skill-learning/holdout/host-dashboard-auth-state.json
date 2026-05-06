@@ -3,7 +3,7 @@
   "candidate_id": "airbnb-host-dashboard-auth-state-holdout",
   "domain": "airbnb",
   "affected_skill_paths": [
-    "agent-workspace/domain-skills/airbnb/host-sources.md"
+    "domain-skills/airbnb/host-sources.md"
   ],
   "observed_surface": {
     "origin": "https://www.airbnb.com.au",

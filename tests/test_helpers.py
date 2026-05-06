@@ -57,7 +57,7 @@ def test_goto_url_prepares_page_load_events_before_navigation():
 
 
 def test_goto_url_discovers_packaged_domain_skill_assets(tmp_path):
-    domain_root = tmp_path / "agent-workspace/domain-skills"
+    domain_root = tmp_path / "domain-skills"
     skill_dir = domain_root / "airbnb"
     skill_dir.mkdir(parents=True)
     (skill_dir / "overview.md").write_text("# Airbnb\n", encoding="utf-8")
@@ -73,7 +73,7 @@ def test_goto_url_discovers_packaged_domain_skill_assets(tmp_path):
          patch("helpers._asset_dir", return_value=domain_root) as asset_dir:
         result = helpers.goto_url("https://www.airbnb.com/hosting")
 
-    asset_dir.assert_called_once_with("agent-workspace/domain-skills", "browser_harness_domain_skills")
+    asset_dir.assert_called_once_with("domain-skills", "browser_harness_domain_skills")
     assert result == {"frameId": "frame-1", "domain_skills": ["overview.md"]}
 
 

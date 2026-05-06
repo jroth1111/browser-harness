@@ -28,8 +28,8 @@ import login_session
 
 
 BASE = "https://www.airbnb.com.au"
-LISTINGS_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/listing-collections")
-OUTPUT_JSON = Path("agent-workspace/domain-skills/airbnb/.private-data/insights-collections/airbnb-insights-single-day-window-probe.json")
+LISTINGS_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
+OUTPUT_JSON = Path("domain-skills/airbnb/.private-data/insights-collections/airbnb-insights-single-day-window-probe.json")
 HASH = "3e1e441e3bac1937e60c1b0409b53286e338804dd94c68575c556289a3b07580"
 
 WINDOWS = [
@@ -50,7 +50,7 @@ ROUTES = [
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

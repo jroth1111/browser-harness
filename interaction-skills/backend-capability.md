@@ -110,5 +110,5 @@ that domain/session.
 
 For `realestate.com.au`, fresh headless Chrome and Lightpanda have been observed
 to return a Kasada/KPSDK shell. The domain-specific URLs, field order, and
-Argonaut payload keys live in `agent-workspace/domain-skills/realestate-com-au/scraping.md`; the
+Argonaut payload keys live in `domain-skills/realestate-com-au/scraping.md`; the
 general diagnosis and solved-session mechanics belong here.

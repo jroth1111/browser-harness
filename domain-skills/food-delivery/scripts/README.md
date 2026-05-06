@@ -13,7 +13,7 @@ Extract all vendors, products, and prices from DoorDash and Uber Eats.
 ```bash
 REPO=/Users/gwizz/.claude/skills/browser-harness
 PY=$REPO/.venv/bin/python3
-S=$REPO/agent-workspace/domain-skills/food-delivery/scripts
+S=$REPO/domain-skills/food-delivery/scripts
 
 # Phase 2: Enumerate restaurants (browse-all mode, covers all categories)
 $PY $S/enumerate_restaurants.py --platform doordash --output $S/dd_restaurants.json

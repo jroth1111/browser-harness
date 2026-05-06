@@ -6,7 +6,7 @@ Use this pattern when a domain skill grows beyond a single simple recipe.
 
 Create a `surface-map.json` before writing detailed prose. The map is the
 machine-readable contract; Markdown files are operator-facing views over it.
-Validate the shared shape against `agent-workspace/domain-skills/surface-map.schema.json`, then
+Validate the shared shape against `domain-skills/surface-map.schema.json`, then
 add domain-specific checks for surfaces such as search, product detail, checkout,
 or profile pages.
 

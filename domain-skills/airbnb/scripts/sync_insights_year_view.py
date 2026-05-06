@@ -6,7 +6,7 @@ Role: runner (canonical Insights workflow). Use this script instead of calling
 Reads:
     - Latest complete `airbnb-live-listings-*.json` (consumed by
       `collect_insights.py`).
-    - `agent-workspace/domain-skills/airbnb/insights-granularity-map.md` (refreshed via
+    - `domain-skills/airbnb/insights-granularity-map.md` (refreshed via
       `probe_chart_granularity.py` when stale).
     - Cross-run ledger at `.private-data/insights-collections/.ledger.jsonl`.
 
@@ -55,7 +55,7 @@ if str(ROOT) not in sys.path:
 
 from data_display import render_dataset
 
-AIRBNB_DIR = ROOT / "agent-workspace/domain-skills" / "airbnb"
+AIRBNB_DIR = ROOT / "domain-skills" / "airbnb"
 SCRIPTS_DIR = AIRBNB_DIR / "scripts"
 OUTPUT_PATH = AIRBNB_DIR / ".private-data" / "insights-collections"
 SESSION_PATH = AIRBNB_DIR / ".session-store" / "capability"
@@ -124,7 +124,7 @@ PY"""
 
 
 def run_probe():
-    command = "python3 run.py < agent-workspace/domain-skills/airbnb/scripts/probe_chart_granularity.py"
+    command = "python3 run.py < domain-skills/airbnb/scripts/probe_chart_granularity.py"
     return run_shell(command)
 
 
@@ -161,7 +161,7 @@ def run_collect(run_id):
         "AIRBNB_INSIGHTS_RUN_ID": run_id,
         "AIRBNB_INSIGHTS_PATIENT_MODE": "1",
     }
-    command = "python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_insights.py"
+    command = "python3 run.py < domain-skills/airbnb/scripts/collect_insights.py"
     return run_shell(command, env=env)
 
 

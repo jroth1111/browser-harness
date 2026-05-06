@@ -7,7 +7,7 @@ description: Direct browser control via CDP. Use when the user wants to automate
 
 Direct browser control via CDP. For task-specific edits, use `agent-workspace/agent_helpers.py`. For setup, install, or connection problems, read install.md.
 
-Domain skills (community-contributed per-site playbooks under `agent-workspace/domain-skills/`) are off by default. Set `BH_DOMAIN_SKILLS=1` to enable them; see the bottom section.
+Domain skills (community-contributed per-site playbooks under `domain-skills/`) are off by default. Set `BH_DOMAIN_SKILLS=1` to enable them; see the bottom section.
 
 ## Usage
 
@@ -40,19 +40,19 @@ Match your task to one row. Open the file in "Go to" — that's your action file
 | Auth wall, login, session reuse | `interaction-skills/session-continuity.md` | `interaction-skills/cookies.md` for cookie extraction/setting mechanics |
 | Browser dialog (alert/confirm/prompt) | `interaction-skills/dialogs.md` | — |
 | Render data as HTML table/explorer | `interaction-skills/data-display.md` | — |
-| Build a scraper for a new site | `agent-workspace/domain-skills/README.md` → Creating a New Domain Skill | `interaction-skills/extraction-coverage.md` for selector verification and four-state extraction |
+| Build a scraper for a new site | `domain-skills/README.md` → Creating a New Domain Skill | `interaction-skills/extraction-coverage.md` for selector verification and four-state extraction |
 | Audit site APIs / find structured backends | `interaction-skills/api-schema-audit.md` | `interaction-skills/data-source-exploration.md` for source exploration workflow |
 | Capture / inspect browser network traffic | NetworkCapture class below | `interaction-skills/api-schema-audit.md` |
 | Replay captured requests as plain HTTP | `replay_endpoints()` below | `interaction-skills/api-schema-audit.md` |
 | Track crawl completeness metrics | `interaction-skills/coverage-accounting.md` | `interaction-skills/extraction-coverage.md` for field-level coverage |
 | Extract data from fetched HTML | `response.py` Response class via `fetch()` | `interaction-skills/data-source-exploration.md` for source strategy |
-| Work with a known site (see list below) | `agent-workspace/domain-skills/<site>/overview.md` or first .md | `interaction-skills/data-source-exploration.md` if the domain skill lacks the field you need |
-| Dating platforms (Tinder, Hinge, Feeld) | `agent-workspace/domain-skills/dating/overview.md` | `agent-workspace/domain-skills/dating/safety.md` for consent, rate limits, anti-detection |
-| Food delivery (Uber Eats, DoorDash) | `agent-workspace/domain-skills/food-delivery/overview.md` | `agent-workspace/domain-skills/food-delivery/safety.md` for order consent gates, rate limits |
+| Work with a known site (see list below) | `domain-skills/<site>/overview.md` or first .md | `interaction-skills/data-source-exploration.md` if the domain skill lacks the field you need |
+| Dating platforms (Tinder, Hinge, Feeld) | `domain-skills/dating/overview.md` | `domain-skills/dating/safety.md` for consent, rate limits, anti-detection |
+| Food delivery (Uber Eats, DoorDash) | `domain-skills/food-delivery/overview.md` | `domain-skills/food-delivery/safety.md` for order consent gates, rate limits |
 | Promote learned rule into a skill | `interaction-skills/empirical-learning-gate.md` | — |
 | Clean up or reorganize a skill | `interaction-skills/cross-domain-control-flow.md` | — |
 
-If nothing matches: scan `agent-workspace/domain-skills/` with `rg --files agent-workspace/domain-skills/<site>`, or read `interaction-skills/README.md` for the full mechanic index.
+If nothing matches: scan `domain-skills/` with `rg --files domain-skills/<site>`, or read `interaction-skills/README.md` for the full mechanic index.
 
 ## Playbook: What actually works
 
@@ -82,12 +82,12 @@ If nothing matches: scan `agent-workspace/domain-skills/` with `rg --files agent
 - Google referrer trick: `navigate_via_google(url)` opens Google first, then redirects to the target. Some WAF systems treat search-engine referrals as organic traffic.
 - Block detection: `detect_block_page()` now identifies Kasada, Akamai, PerimeterX, Imperva, and generic WAF challenge shells (not just Kasada).
 
-## Search agent-workspace/domain-skills/ first
+## Search domain-skills/ first
 
 Before inventing a new approach, check if a domain skill exists. A site is
-"known" when it has a folder under `agent-workspace/domain-skills/<site>/`:
+"known" when it has a folder under `domain-skills/<site>/`:
 
-    rg --files agent-workspace/domain-skills/<site>
+    rg --files domain-skills/<site>
 
 Rich domain bundles (read overview.md first):
 - `airbnb/` — host intelligence, comp analysis, pricing
@@ -103,7 +103,7 @@ Multi-file site skills with scripts:
 - `z2u/` — exhaustive product search, 3-level crawl
 
 Single-file domains: `amazon/`, `reddit/`, `spotify/`, and 70+ others.
-Full list: `find agent-workspace/domain-skills -mindepth 1 -maxdepth 1 -type d | sort`
+Full list: `find domain-skills -mindepth 1 -maxdepth 1 -type d | sort`
 
 ## Contribute back
 
@@ -117,7 +117,7 @@ traps and selectors that *don't* work.
 
 Do not write: raw pixel coordinates (describe how to locate, not where it was),
 run narration or step-by-step of your specific task, secrets/cookies/session
-tokens/user-specific state (agent-workspace/domain-skills/ is shared and public).
+tokens/user-specific state (domain-skills/ is shared and public).
 
 For the empirical learning gate and skill update rules, see
 `docs/contributing-guide.md`.
@@ -213,8 +213,8 @@ If you start struggling with a specific mechanic while navigating, look in inter
 
 ## Domain skills (opt-in)
 
-Only applies when `BH_DOMAIN_SKILLS=1`. Otherwise ignore — `agent-workspace/domain-skills/` is dormant and `goto_url` won't surface skill files.
+Only applies when `BH_DOMAIN_SKILLS=1`. Otherwise ignore — `domain-skills/` is dormant and `goto_url` won't surface skill files.
 
-When enabled, search `agent-workspace/domain-skills/<host>/` before inventing an approach. `goto_url` returns up to 10 skill filenames for the navigated host.
+When enabled, search `domain-skills/<host>/` before inventing an approach. `goto_url` returns up to 10 skill filenames for the navigated host.
 
-If you learn anything non-obvious — a private API, stable selector, framework quirk, URL pattern, hidden wait, or site-specific trap — open a PR to `agent-workspace/domain-skills/<site>/`. Capture the durable shape of the site (the map, not the diary). Don't write pixel coordinates (break on layout), task narration, or secrets — the directory is public.
+If you learn anything non-obvious — a private API, stable selector, framework quirk, URL pattern, hidden wait, or site-specific trap — open a PR to `domain-skills/<site>/`. Capture the durable shape of the site (the map, not the diary). Don't write pixel coordinates (break on layout), task narration, or secrets — the directory is public.

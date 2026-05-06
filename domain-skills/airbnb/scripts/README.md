@@ -31,7 +31,7 @@ Directory roles:
 
 Keep the scripts physically flat unless a task explicitly accepts a broad path
 migration. Collectors and tests load helpers from
-`agent-workspace/domain-skills/airbnb/scripts/<name>.py`, so subdirectories would require a
+`domain-skills/airbnb/scripts/<name>.py`, so subdirectories would require a
 coordinated update across docs, tests, import loaders, and command examples.
 
 ## Runners
@@ -44,7 +44,7 @@ coordinated update across docs, tests, import loaders, and command examples.
 ## Collectors
 
 All collectors write private outputs under ignored
-`agent-workspace/domain-skills/airbnb/.private-data/...` and a compact receipt under
+`domain-skills/airbnb/.private-data/...` and a compact receipt under
 `.session-store/capability/`. None type credentials; if login is required the
 script stops at the login wall.
 
@@ -54,7 +54,7 @@ are preloaded:
 
 ```bash
 BH_NAME=<profile-name> BH_CDP_WS=http://127.0.0.1:<port> \
-  python3 run.py < agent-workspace/domain-skills/airbnb/scripts/<collector>.py
+  python3 run.py < domain-skills/airbnb/scripts/<collector>.py
 ```
 
 Do not invoke these collector files as plain `python3 <collector>.py`; they are
@@ -69,7 +69,7 @@ browser-harness programs, not standalone Python CLIs.
 | `collect_host_reviews.py` | collector | collection | host review capture | `host_private` | logged-in (host) | latest complete listing inventory; default scope `ACTIVE` | `airbnb_review`-shaped rows under `.private-data/review-collections/` | listing inventory missing or partial unless `AIRBNB_HOST_REVIEWS_LISTING_SCOPE` is set explicitly | `../host-sources.md` (Reviews and quality themes) |
 | `collect_competitors.py` | collector | collection | logged-out public comp capture | `public_market` | logged-out (fresh profile) | latest complete listing inventory | search runs, search-card rows, comp price matrix, target-comp links, deduplicated comp listing snapshots under `.private-data/public-market-collections/` | known Airbnb authenticated-session cookies are present, or listing inventory is `partial_run: true` | `../public-market.md` (Executable competitor collection), `../workflows-current-state.md` Workflow 2 |
 | `collect_own_public.py` | collector | collection | logged-out own-public capture | `own_public` | logged-out (fresh profile) | latest complete listing inventory | own public listing audits, review summaries, review snapshots, search-appearance rows under `.private-data/own-public-collections/` | known Airbnb authenticated-session cookies are present, or listing inventory is `partial_run: true` | `../public-market.md` (Executable own public collection), `../workflows-current-state.md` Workflow 4 |
-| `collect_rea_building_rentals.py` | collector | collection | REA building rent capture | `external_public_market` | public REA browser session | latest complete listing inventory; optional private building watchlist; prior REA observation/building-price ledgers | building-level REA rental observations, building price snapshots, event rows, raw listing text, run-state checkpoints, and idempotent cross-run JSONL ledgers under `.private-data/realestate-rental-collections/` | no complete Airbnb listing inventory is available, or REA pages are served as challenge/blocked pages | `../realestate-building-rentals.md`, `agent-workspace/domain-skills/realestate-com-au/scraping.md` |
+| `collect_rea_building_rentals.py` | collector | collection | REA building rent capture | `external_public_market` | public REA browser session | latest complete listing inventory; optional private building watchlist; prior REA observation/building-price ledgers | building-level REA rental observations, building price snapshots, event rows, raw listing text, run-state checkpoints, and idempotent cross-run JSONL ledgers under `.private-data/realestate-rental-collections/` | no complete Airbnb listing inventory is available, or REA pages are served as challenge/blocked pages | `../realestate-building-rentals.md`, `domain-skills/realestate-com-au/scraping.md` |
 
 Owner-cookie refusal exists because logged-in profiles personalize Airbnb search
 ranking toward the owner's listings; rank/visibility numbers from such a run
@@ -131,11 +131,11 @@ have moved.
 | Scan Airbnb fixtures/docs/receipts for raw secrets before committing | `redaction_scan.py` |
 
 For workflow context (when, why, acceptance criteria) read
-`agent-workspace/domain-skills/airbnb/workflows-current-state.md`. For the executable details
-of each surface, read `agent-workspace/domain-skills/airbnb/host-sources.md` (private) and
-`agent-workspace/domain-skills/airbnb/public-market.md` (public).
+`domain-skills/airbnb/workflows-current-state.md`. For the executable details
+of each surface, read `domain-skills/airbnb/host-sources.md` (private) and
+`domain-skills/airbnb/public-market.md` (public).
 
 For decision-helper selection, read the **Decision-helper lookup** in
-`agent-workspace/domain-skills/airbnb/overview.md`. `decision_gates.py` is import-only: it
+`domain-skills/airbnb/overview.md`. `decision_gates.py` is import-only: it
 evaluates already-collected rows and should not be used as a browser or
 collection entry point.

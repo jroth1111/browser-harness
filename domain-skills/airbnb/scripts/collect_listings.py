@@ -11,9 +11,9 @@ Reads:
       fresh agent profile to verify cross-process auth restore).
 
 Produces:
-    - `agent-workspace/domain-skills/airbnb/.private-data/listing-collections/<run_id>.json`
-    - `agent-workspace/domain-skills/airbnb/.private-data/listing-collections/<run_id>.csv`
-    - `agent-workspace/domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`
+    - `domain-skills/airbnb/.private-data/listing-collections/<run_id>.json`
+    - `domain-skills/airbnb/.private-data/listing-collections/<run_id>.csv`
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`
 
 Requires (env, optional unless noted):
     - `AIRBNB_AUTH_STATE_PATH` — path to a private auth bundle. Required only
@@ -39,19 +39,19 @@ Run from the browser-harness repo against an authenticated Airbnb host browser
 context:
 
     BH_NAME=airbnb-listings BH_CDP_WS=http://127.0.0.1:52862 \
-      python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_listings.py
+      python3 run.py < domain-skills/airbnb/scripts/collect_listings.py
 
 For a fresh agent-owned profile, launch Chrome first, then optionally restore a
 private auth bundle without printing cookie values:
 
-    python3 run.py --launch-profile agent-workspace/domain-skills/airbnb/.session-store/profiles/listings \
+    python3 run.py --launch-profile domain-skills/airbnb/.session-store/profiles/listings \
       --port 52862 --url about:blank --json
 
-    AIRBNB_AUTH_STATE_PATH=agent-workspace/domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json \
+    AIRBNB_AUTH_STATE_PATH=domain-skills/airbnb/.private-data/auth-state/host-main-cdp-state.json \
     BH_NAME=airbnb-listings BH_CDP_WS=http://127.0.0.1:52862 \
-      python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_listings.py
+      python3 run.py < domain-skills/airbnb/scripts/collect_listings.py
 
-Private outputs are written under ignored agent-workspace/domain-skills/airbnb/.private-data/.
+Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 Receipts are compact and avoid private addresses and cookie values.
 """
 
@@ -75,8 +75,8 @@ import login_session
 
 BASE = "https://www.airbnb.com.au"
 HOST_LISTINGS_URL = BASE + "/hosting/listings"
-OUTPUT_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/listing-collections")
-SESSION_PATH = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
+OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
+SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
 CAPABILITY_REGISTRY_PATH = SESSION_PATH / "capability-registry.json"
 
 OPERATION_NAME = "BeehiveGetListingsQuery"
@@ -96,7 +96,7 @@ _NAVIGATED = False
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

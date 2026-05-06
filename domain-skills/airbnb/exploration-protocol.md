@@ -201,7 +201,7 @@ for a backend capability comparison rather than host intelligence.
 ## Airbnb private-session continuity
 
 Before private exploration, read both `../../interaction-skills/session-continuity.md`
-and `agent-workspace/domain-skills/airbnb/session-continuity.md`. Store only session metadata and
+and `domain-skills/airbnb/session-continuity.md`. Store only session metadata and
 capability receipts in the local ignored session store. The normal auth
 continuity mechanism is the user's persistent browser profile, not checked-in
 cookie files.

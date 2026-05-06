@@ -3,7 +3,7 @@
   "candidate_id": "airbnb-universal-logged-out",
   "domain": "airbnb",
   "affected_skill_paths": [
-    "agent-workspace/domain-skills/airbnb/public-market.md"
+    "domain-skills/airbnb/public-market.md"
   ],
   "observed_surface": {
     "origin": "https://www.airbnb.com.au",

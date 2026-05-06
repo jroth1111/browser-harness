@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 
 def load_probe_module():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/probe_chart_granularity.py")
+    path = Path("domain-skills/airbnb/scripts/probe_chart_granularity.py")
     spec = importlib.util.spec_from_file_location("airbnb_probe_chart_granularity", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -13,7 +13,7 @@ def load_probe_module():
 
 
 def test_single_day_probe_import_does_not_execute_main():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/probe_single_day_windows.py")
+    path = Path("domain-skills/airbnb/scripts/probe_single_day_windows.py")
     spec = importlib.util.spec_from_file_location("airbnb_probe_single_day_windows", path)
     module = importlib.util.module_from_spec(spec)
 

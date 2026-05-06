@@ -13,7 +13,7 @@ Produces:
     - Search runs, search-card price rows, target-comp links, comp listing
       snapshots, and price matrix rows under
       `.private-data/public-market-collections/`.
-    - `agent-workspace/domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
+    - `domain-skills/airbnb/.session-store/capability/<run_id>-receipt.json`.
 
 Requires (env, optional unless noted):
     - `AIRBNB_COMP_CHECKIN_DATES`, `AIRBNB_COMP_CHECKIN_OFFSETS`,
@@ -33,13 +33,13 @@ Refuses to run if:
 Run from the browser-harness repo against a fresh logged-out agent Chrome
 profile:
 
-    browser-harness --launch-profile agent-workspace/domain-skills/airbnb/.session-store/profiles/public-comps \
+    browser-harness --launch-profile domain-skills/airbnb/.session-store/profiles/public-comps \
       --port 52870 --url about:blank --json
 
     BH_NAME=airbnb-public-comps BH_CDP_WS=http://127.0.0.1:52870 \
-      python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_competitors.py
+      python3 run.py < domain-skills/airbnb/scripts/collect_competitors.py
 
-Private outputs are written under ignored agent-workspace/domain-skills/airbnb/.private-data/.
+Private outputs are written under ignored domain-skills/airbnb/.private-data/.
 """
 
 from __future__ import annotations
@@ -56,9 +56,9 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 
 BASE = "https://www.airbnb.com.au"
-LISTINGS_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/listing-collections")
-OUTPUT_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/public-market-collections")
-SESSION_PATH = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
+LISTINGS_PATH = Path("domain-skills/airbnb/.private-data/listing-collections")
+OUTPUT_PATH = Path("domain-skills/airbnb/.private-data/public-market-collections")
+SESSION_PATH = Path("domain-skills/airbnb/.session-store/capability")
 
 DEFAULT_CHECKIN_OFFSETS = "14,30,60,90"
 DEFAULT_NIGHTS = "3"
@@ -81,7 +81,7 @@ AUTH_COOKIE_NAMES = {
 
 
 def _load_local_module(module_filename, module_name):
-    path = Path("agent-workspace/domain-skills/airbnb/scripts") / module_filename
+    path = Path("domain-skills/airbnb/scripts") / module_filename
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

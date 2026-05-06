@@ -68,7 +68,7 @@ stricter `max_age=0` value when Coles/NAB has generated it.
 Default path:
 
 ```text
-agent-workspace/domain-skills/coles_card/.private-data/coles_card.sqlite3
+domain-skills/coles_card/.private-data/coles_card.sqlite3
 ```
 
 Tables:
@@ -86,21 +86,21 @@ Tables:
 Use `--dry-run` first after a manual login refresh:
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py --dry-run
+python3 domain-skills/coles_card/scripts/sync.py --dry-run
 ```
 
 Then run the persisted sync:
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py
-sqlite3 agent-workspace/domain-skills/coles_card/.private-data/coles_card.sqlite3 \
+python3 domain-skills/coles_card/scripts/sync.py
+sqlite3 domain-skills/coles_card/.private-data/coles_card.sqlite3 \
   "select status, summary_json from sync_runs order by started_at desc limit 1"
 ```
 
 To validate the broader export-backed path:
 
 ```bash
-python3 agent-workspace/domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --require-transactions
+python3 domain-skills/coles_card/scripts/sync.py --interactive-login --export-csv --require-transactions
 ```
 
 If selectors drift, inspect the run summary and the current authenticated page.

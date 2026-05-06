@@ -456,17 +456,17 @@ AIRBNB_COMP_MAX_SEARCH_SCROLLS=6
 AIRBNB_COMP_LISTING_SCOPE=active
 AIRBNB_COMP_NAV_DELAY_SEC=4
 AIRBNB_COMP_LIMIT_LISTINGS=1
-AIRBNB_LISTINGS_FILE=agent-workspace/domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
+AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
 ```
 
 Run against a fresh logged-out agent Chrome profile:
 
 ```bash
-browser-harness --launch-profile agent-workspace/domain-skills/airbnb/.session-store/profiles/public-comps \
+browser-harness --launch-profile domain-skills/airbnb/.session-store/profiles/public-comps \
   --port 52870 --url about:blank --json
 
 BH_NAME=airbnb-public-comps BH_CDP_WS=http://127.0.0.1:52870 \
-  python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_competitors.py
+  python3 run.py < domain-skills/airbnb/scripts/collect_competitors.py
 ```
 
 Empirical run on 2026-04-27:
@@ -534,17 +534,17 @@ AIRBNB_OWN_PUBLIC_MAX_SEARCH_SCROLLS=6
 AIRBNB_OWN_PUBLIC_LISTING_SCOPE=active
 AIRBNB_OWN_PUBLIC_NAV_DELAY_SEC=2
 AIRBNB_OWN_PUBLIC_LIMIT_LISTINGS=1
-AIRBNB_LISTINGS_FILE=agent-workspace/domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
+AIRBNB_LISTINGS_FILE=domain-skills/airbnb/.private-data/listing-collections/<explicit-complete-or-smoke>.json
 ```
 
 Run against a fresh logged-out agent Chrome profile:
 
 ```bash
-browser-harness --launch-profile agent-workspace/domain-skills/airbnb/.session-store/profiles/own-public \
+browser-harness --launch-profile domain-skills/airbnb/.session-store/profiles/own-public \
   --port 52872 --url about:blank --json
 
 BH_NAME=airbnb-own-public BH_CDP_WS=http://127.0.0.1:52872 \
-  python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_own_public.py
+  python3 run.py < domain-skills/airbnb/scripts/collect_own_public.py
 ```
 
 Search-card parsing trap: Airbnb cards may put date lines such as

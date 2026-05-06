@@ -14,11 +14,11 @@ def load_module(path, name):
 
 
 def load_own_public_module():
-    return load_module("agent-workspace/domain-skills/airbnb/scripts/collect_own_public.py", "airbnb_collect_own_public")
+    return load_module("domain-skills/airbnb/scripts/collect_own_public.py", "airbnb_collect_own_public")
 
 
 def load_competitors_module():
-    return load_module("agent-workspace/domain-skills/airbnb/scripts/collect_competitors.py", "airbnb_collect_competitors")
+    return load_module("domain-skills/airbnb/scripts/collect_competitors.py", "airbnb_collect_competitors")
 
 
 def test_parse_listing_text_extracts_review_distribution_and_categories():

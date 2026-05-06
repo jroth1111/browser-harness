@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 
 
-LISTINGS_FILE = Path("agent-workspace/domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-20260427T080658Z.json")
-SESSION_DIR = Path("agent-workspace/domain-skills/airbnb/.session-store/capability")
-LEDGER_PATH = Path("agent-workspace/domain-skills/airbnb/.private-data/insights-collections/.ledger.jsonl")
+LISTINGS_FILE = Path("domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-20260427T080658Z.json")
+SESSION_DIR = Path("domain-skills/airbnb/.session-store/capability")
+LEDGER_PATH = Path("domain-skills/airbnb/.private-data/insights-collections/.ledger.jsonl")
 
 
 def test_429_storm_simulation_stops_with_partial_receipt():
@@ -35,7 +35,7 @@ def test_429_storm_simulation_stops_with_partial_receipt():
         }
     )
     subprocess.run(
-        ["python3", "agent-workspace/domain-skills/airbnb/scripts/collect_insights.py"],
+        ["python3", "domain-skills/airbnb/scripts/collect_insights.py"],
         env=env,
         check=True,
         capture_output=True,

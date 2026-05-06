@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source": "agent-workspace/domain-skills/youtube/workflows.md",
+  "source": "domain-skills/youtube/workflows.md",
   "workflows": [
     {
       "id": "single_video_metadata",

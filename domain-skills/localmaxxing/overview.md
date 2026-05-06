@@ -7,22 +7,22 @@ covering tok/s, TTFT, VRAM, and hardware efficiency across GPUs, Apple Silicon, 
 
 ```bash
 # Full rankings (balanced profile, top 30)
-python3 agent-workspace/domain-skills/localmaxxing/hardware-scorer.py
+python3 domain-skills/localmaxxing/hardware-scorer.py
 
 # GPUs only, optimized for value
-python3 agent-workspace/domain-skills/localmaxxing/hardware-scorer.py --class DISCRETE_GPU --profile value
+python3 domain-skills/localmaxxing/hardware-scorer.py --class DISCRETE_GPU --profile value
 
 # Apple Silicon / unified memory
-python3 agent-workspace/domain-skills/localmaxxing/hardware-scorer.py --class UNIFIED
+python3 domain-skills/localmaxxing/hardware-scorer.py --class UNIFIED
 
 # Machine-readable JSON output
-python3 agent-workspace/domain-skills/localmaxxing/hardware-scorer.py --json
+python3 domain-skills/localmaxxing/hardware-scorer.py --json
 
 # Re-fetch latest data from API
-python3 agent-workspace/domain-skills/localmaxxing/hardware-scorer.py --refresh
+python3 domain-skills/localmaxxing/hardware-scorer.py --refresh
 
 # Full breakdown for a specific rank
-python3 agent-workspace/domain-skills/localmaxxing/hardware-scorer.py --details 1
+python3 domain-skills/localmaxxing/hardware-scorer.py --details 1
 ```
 
 ## Scoring Model

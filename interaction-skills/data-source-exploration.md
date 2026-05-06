@@ -16,7 +16,7 @@ Generalizable:
 - primitive registry shape
 - extraction coverage and four-state field semantics (see `extraction-coverage.md`)
 
-Site-specific details belong in `agent-workspace/domain-skills/<site>/`:
+Site-specific details belong in `domain-skills/<site>/`:
 
 - URLs, route patterns, query parameters
 - exact source names and UI navigation paths
@@ -121,7 +121,7 @@ reverse-engineering. Check for embedded JSON before building DOM extractors.
 | Global variable | varies by site | Search results, video metadata, player config |
 | Generic | `window.__APOLLO_STATE__` | GraphQL cache with normalized entities |
 
-Site-specific variable names belong in `agent-workspace/domain-skills/<site>/`. This table shows the
+Site-specific variable names belong in `domain-skills/<site>/`. This table shows the
 pattern categories; actual variable names are discovered per site during exploration.
 
 ### Discovery workflow

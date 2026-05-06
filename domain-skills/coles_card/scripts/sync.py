@@ -25,7 +25,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 DEFAULT_START_URL = "https://secure.coles.com.au/home/account_dashboard"
 DEFAULT_AUTH_MAX_AGE = 20
 DEFAULT_DB = (
-    Path("agent-workspace/domain-skills")
+    Path("domain-skills")
     / "coles_card"
     / ".private-data"
     / "coles_card.sqlite3"

@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def load_module():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/run_integrity.py")
+    path = Path("domain-skills/airbnb/scripts/run_integrity.py")
     spec = importlib.util.spec_from_file_location("airbnb_run_integrity", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -595,7 +595,7 @@ This document covers steps from two phases of domain skill creation. Steps
   source inventory (step 6).
 - **Coverage probes** plug into `product-search.md` Step 5 (coverage
   verification) as a per-page check alongside the existing cross-query checks.
-- **Field triage** plugs into `../agent-workspace/domain-skills/surface-map-pattern.md` Verification
+- **Field triage** plugs into `../domain-skills/surface-map-pattern.md` Verification
   section as a per-extraction check alongside the existing structural checks.
 - **Entity-type identification** is a domain-specific analysis step — document
   the results in each domain skill's `overview.md`.

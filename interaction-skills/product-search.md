@@ -34,14 +34,14 @@ From the user's request, extract:
 | Platforms | Which marketplaces | eBay, Walmart, Amazon, AliExpress |
 
 If the user doesn't specify platforms, search all available platforms where
-domain skills exist. Check `agent-workspace/domain-skills/<platform>/` for availability.
+domain skills exist. Check `domain-skills/<platform>/` for availability.
 
 ## Step 2: For each platform, run the search plan
 
 ### AliExpress
 
 ```bash
-python3 agent-workspace/domain-skills/aliexpress/scripts/search.py plan "{QUERY}" \
+python3 domain-skills/aliexpress/scripts/search.py plan "{QUERY}" \
   --synonyms {SYNONYMS} --specs {SPECS} --modifiers {MODIFIERS}
 ```
 
@@ -56,19 +56,19 @@ python3 agent-workspace/domain-skills/aliexpress/scripts/search.py plan "{QUERY}
 6. Verify extraction coverage — see `extraction-coverage.md` for
    per-page coverage probes and per-entity-type field triage
 
-**Extraction details:** See `agent-workspace/domain-skills/aliexpress/scraping.md` for selectors,
+**Extraction details:** See `domain-skills/aliexpress/scraping.md` for selectors,
 accumulation strategy, and platform-specific gotchas.
 
 **Merge:**
 ```bash
-python3 agent-workspace/domain-skills/aliexpress/scripts/search.py merge results.json \
+python3 domain-skills/aliexpress/scripts/search.py merge results.json \
   --require {KEYWORDS} --exclude {NOISE} --min-price {FLOOR}
 ```
 
 ### eBay
 
 ```bash
-python3 agent-workspace/domain-skills/ebay/scripts/search.py search "{QUERY}" \
+python3 domain-skills/ebay/scripts/search.py search "{QUERY}" \
   --synonyms {SYNONYMS} --modifiers {MODIFIERS} --output results.csv
 ```
 
@@ -76,35 +76,35 @@ python3 agent-workspace/domain-skills/ebay/scripts/search.py search "{QUERY}" \
 
 **Workflow:** Single command fetches all pages, extracts, deduplicates, classifies.
 
-**Extraction details:** See `agent-workspace/domain-skills/ebay/scraping.md` for rate limits,
+**Extraction details:** See `domain-skills/ebay/scraping.md` for rate limits,
 cookie handling, URL params, and platform-specific gotchas.
 
 ### Walmart
 
 **Transport:** `http_get` with bare `Mozilla/5.0` UA. No browser needed.
 
-**Workflow:** Manual — no batch scripts yet. Use the patterns from `agent-workspace/domain-skills/walmart/scraping.md`:
+**Workflow:** Manual — no batch scripts yet. Use the patterns from `domain-skills/walmart/scraping.md`:
 
 1. Build search URL with query and sort params
 2. Fetch with appropriate UA (see domain skill for required UA)
 3. Extract from embedded JSON
 4. Filter results by title relevance and price
 
-**Extraction details:** See `agent-workspace/domain-skills/walmart/scraping.md` for URL patterns,
+**Extraction details:** See `domain-skills/walmart/scraping.md` for URL patterns,
 JSON paths, UA requirements, and platform-specific gotchas.
 
 ### Amazon
 
 **Transport:** CDP (browser). Amazon requires browser session.
 
-**Workflow:** Manual — no batch scripts yet. Use patterns from `agent-workspace/domain-skills/amazon/product-search.md`:
+**Workflow:** Manual — no batch scripts yet. Use patterns from `domain-skills/amazon/product-search.md`:
 
 1. Navigate to search URL with query
 2. Wait for dynamic content
 3. Extract from search result cards
 4. Handle pagination if needed
 
-**Extraction details:** See `agent-workspace/domain-skills/amazon/product-search.md` for URL patterns,
+**Extraction details:** See `domain-skills/amazon/product-search.md` for URL patterns,
 currency handling, and platform-specific gotchas.
 
 ## Step 3: Cross-platform orchestration
@@ -230,7 +230,7 @@ implement classification using this framework with site-specific patterns.
 ## Key constraints by platform
 
 Domain-specific filter parameters, URL patterns, and extraction details live in
-each `agent-workspace/domain-skills/<platform>/` skill. The table below summarizes constraints
+each `domain-skills/<platform>/` skill. The table below summarizes constraints
 for quick reference during cross-platform orchestration.
 
 | Platform | Items/page | Has URL sort | Has URL price filter | Bot detection |
@@ -415,7 +415,7 @@ Many platforms embed filter and sort metadata in their page JSON. Extract this
 to discover all available URL parameters without reverse-engineering the UI. See
 `interaction-skills/data-source-exploration.md` for the generic discovery
 workflow and common framework patterns. Platform-specific variable names and
-JSON paths belong in each `agent-workspace/domain-skills/<platform>/` skill.
+JSON paths belong in each `domain-skills/<platform>/` skill.
 
 Run a metadata extraction pass on any new marketplace to build the URL parameter
 reference before building extractors. If the platform adds new filters, they'll

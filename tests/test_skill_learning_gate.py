@@ -5,8 +5,8 @@ import skill_learning_gate
 
 
 ROOT = Path(__file__).resolve().parent
-SCHEMA_PATH = ROOT / "agent-workspace/domain-skills" / "skill-learning-candidate.schema.json"
-FIXTURE_DIR = ROOT / "agent-workspace/domain-skills" / "airbnb" / "fixtures" / "skill-learning"
+SCHEMA_PATH = ROOT / "domain-skills" / "skill-learning-candidate.schema.json"
+FIXTURE_DIR = ROOT / "domain-skills" / "airbnb" / "fixtures" / "skill-learning"
 
 
 def load_module():

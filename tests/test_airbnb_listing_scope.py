@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def load_scope_module():
-    path = Path("agent-workspace/domain-skills/airbnb/scripts/listing_scope.py")
+    path = Path("domain-skills/airbnb/scripts/listing_scope.py")
     spec = importlib.util.spec_from_file_location("airbnb_listing_scope", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

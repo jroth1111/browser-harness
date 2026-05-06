@@ -152,14 +152,14 @@ the playbook; it should not replace the playbook.
 Use timestamped run directories under ignored private data:
 
 ```text
-agent-workspace/domain-skills/airbnb/.private-data/photo-observations/{run_id}/
+domain-skills/airbnb/.private-data/photo-observations/{run_id}/
   photo_manifest.json
   visual_observations.json
   contact-sheets/{listing_id}.jpg
   images/{listing_id}/{ordinal}_{photo_key}.jpg
 
-agent-workspace/domain-skills/airbnb/.private-data/image-improvement-prompts/{run_id}.json
-agent-workspace/domain-skills/airbnb/.private-data/interior-design-opportunities/{run_id}.json
+domain-skills/airbnb/.private-data/image-improvement-prompts/{run_id}.json
+domain-skills/airbnb/.private-data/interior-design-opportunities/{run_id}.json
 outputs/{run_id}/visual_profit_correlation.xlsx
 ```
 
@@ -1764,7 +1764,7 @@ accuracy_risk_notes
 Persist the visual observations as an additive sidecar:
 
 ```text
-agent-workspace/domain-skills/airbnb/.private-data/photo-observations/{run_id}/visual_observations.json
+domain-skills/airbnb/.private-data/photo-observations/{run_id}/visual_observations.json
 ```
 
 Write an enriched listing copy:

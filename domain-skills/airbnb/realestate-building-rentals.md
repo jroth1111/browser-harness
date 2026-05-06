@@ -29,7 +29,7 @@ The monitored building universe starts with the latest complete Airbnb host
 listing inventory:
 
 ```text
-agent-workspace/domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-*.json
+domain-skills/airbnb/.private-data/listing-collections/airbnb-live-listings-*.json
 ```
 
 The collector reads the `records` array, selects active listings by default, and
@@ -46,7 +46,7 @@ does not currently operate. Use
 file:
 
 ```text
-agent-workspace/domain-skills/airbnb/.private-data/realestate-rental-collections/rea-building-watchlist.json
+domain-skills/airbnb/.private-data/realestate-rental-collections/rea-building-watchlist.json
 ```
 
 Example shape:
@@ -79,7 +79,7 @@ Run through the browser harness against a persistent headful Chrome profile:
 
 ```bash
 BH_NAME=rea-building-rentals BH_CDP_WS=http://127.0.0.1:<port> \
-  python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_rea_building_rentals.py
+  python3 run.py < domain-skills/airbnb/scripts/collect_rea_building_rentals.py
 ```
 
 REA commonly serves Kasada/KPSDK challenge shells to direct HTTP, fresh
@@ -93,7 +93,7 @@ REA_BUILDING_RENTALS_LIMIT_BUILDINGS=1 \
 REA_BUILDING_RENTALS_MAX_SEARCH_PAGES=1 \
 REA_BUILDING_RENTALS_RETRY_MAX_ATTEMPTS=2 \
 BH_NAME=rea-building-rentals BH_CDP_WS=http://127.0.0.1:<port> \
-  python3 run.py < agent-workspace/domain-skills/airbnb/scripts/collect_rea_building_rentals.py
+  python3 run.py < domain-skills/airbnb/scripts/collect_rea_building_rentals.py
 ```
 
 ## Outputs
@@ -101,7 +101,7 @@ BH_NAME=rea-building-rentals BH_CDP_WS=http://127.0.0.1:<port> \
 Run snapshots are written to:
 
 ```text
-agent-workspace/domain-skills/airbnb/.private-data/realestate-rental-collections/
+domain-skills/airbnb/.private-data/realestate-rental-collections/
 ```
 
 Each run produces:
