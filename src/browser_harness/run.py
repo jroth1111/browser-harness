@@ -30,6 +30,7 @@ from .admin import (
     sync_local_profile,
 )
 from .helpers import *
+from .agent_helpers import *  # noqa: F401,F403  agent-editable namespace
 from .response import Response
 
 HELP = """Browser Harness

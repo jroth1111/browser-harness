@@ -1,7 +1,6 @@
 """Agent-editable browser helpers.
 
-Add task-specific browser primitives here. Functions defined here are
-automatically imported into browser-harness -c sessions via _load_agent_helpers()
-in browser_harness.helpers.
+Add task-specific browser primitives here. Public names defined in this module
+are star-imported into browser-harness -c exec sessions (see run.py), so any
+function you define is callable directly from -c snippets.
 """
-
