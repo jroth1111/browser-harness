@@ -1,15 +1,33 @@
 import importlib.util
-import os, sys
+import os
+import sys
+import urllib.request
 from pathlib import Path
+
+# Windows default stdout encoding is cp1252, which can't encode the 🟢 marker
+# helpers prepend to tab titles (or anything else outside Latin-1). Force UTF-8
+# so `print(page_info())` doesn't UnicodeEncodeError on Windows.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from .admin import (
     _version,
+    NAME,
+    daemon_alive,
     ensure_daemon,
+    list_cloud_profiles,
+    print_update_banner,
     restart_daemon,
     run_launch_profile,
     run_doctor,
     run_setup,
     run_update,
+    start_remote_daemon,
+    stop_remote_daemon,
+    sync_local_profile,
 )
 from .helpers import *
 from .response import Response
@@ -52,6 +70,33 @@ def _skill_learning_gate_main():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module.main
+
+
+# Probe /json/version (not a bare TCP connect) so a non-Chrome process bound to
+# 9222/9223 doesn't masquerade as Chrome and skip the cloud bootstrap. Mirrors
+# daemon.py's fallback probe.
+def _local_chrome_listening():
+    for port in (9222, 9223):
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=0.3).close()
+            return True
+        except OSError:
+            pass
+    return False
+
+
+# BU_CDP_URL / BU_CDP_WS (and BH_* aliases) are documented to override local
+# Chrome discovery, so they must also block cloud auto-bootstrap. Without this
+# guard, start_remote_daemon() in admin.py overwrites the WS in the daemon env
+# with a cloud WebSocket URL, silently replacing the user's explicit endpoint
+# and billing them for a cloud browser they never asked for.
+def _explicit_cdp_configured():
+    return bool(
+        os.environ.get("BU_CDP_URL")
+        or os.environ.get("BU_CDP_WS")
+        or os.environ.get("BH_CDP_URL")
+        or os.environ.get("BH_CDP_WS")
+    )
 
 
 def main():
@@ -148,6 +193,20 @@ def main():
             sys.exit("Usage: browser-harness -c \"print(page_info())\"")
     else:
         sys.exit("Usage: browser-harness -c \"print(page_info())\"")
+    print_update_banner()
+    # Auto-bootstrap a cloud browser is opt-in via BU_AUTOSPAWN — BROWSER_USE_API_KEY alone
+    # is not enough, since the key is commonly set for unrelated reasons (profile sync,
+    # cloud API calls, parent agents managing their own session). An explicit BU_CDP_URL
+    # / BU_CDP_WS (or BH_* alias) also blocks the spawn so we honour the precedence
+    # install.md promises.
+    if (
+        not daemon_alive()
+        and not _local_chrome_listening()
+        and not _explicit_cdp_configured()
+        and os.environ.get("BROWSER_USE_API_KEY")
+        and os.environ.get("BU_AUTOSPAWN")
+    ):
+        start_remote_daemon(NAME)
     ensure_daemon()
     exec(code, globals())
 

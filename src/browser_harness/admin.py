@@ -1,9 +1,96 @@
 import json
 import os
 import socket
+import subprocess
+import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
+
+from . import _ipc as ipc
+
+
+def _process_start_time(pid):
+    """Opaque process-start-time fingerprint at PID, or None if unavailable.
+
+    Two reads returning the same non-None value mean the PID still refers to
+    the same process; a different value means the PID was reused. Used by
+    restart_daemon() to keep the force-kill recovery path working even when
+    the daemon has already torn down its IPC socket (e.g. during a slow
+    remote shutdown), without falling back to "trust the pid file" — which
+    would re-introduce the PID-reuse hazard.
+
+    Linux:   /proc/<pid>/stat field 22 (starttime in clock ticks since boot).
+    macOS:   `ps -o lstart= -p <pid>` (an absolute timestamp string).
+    Windows: GetProcessTimes via ctypes (FILETIME creation time, 100-ns since 1601).
+    """
+    if type(pid) is not int or pid <= 0:
+        return None
+    if sys.platform.startswith("linux"):
+        try:
+            with open(f"/proc/{pid}/stat", "rb") as f:
+                raw = f.read().decode("ascii", errors="replace")
+        except (FileNotFoundError, PermissionError, OSError):
+            return None
+        # Field 2 is `(comm)`; comm can contain spaces and parens, so split off
+        # everything after the LAST `)` and index from there.
+        try:
+            tail = raw[raw.rindex(")") + 2:].split()
+            return tail[19]
+        except (ValueError, IndexError):
+            return None
+    if sys.platform == "darwin":
+        try:
+            out = subprocess.check_output(
+                ["ps", "-o", "lstart=", "-p", str(pid)],
+                stderr=subprocess.DEVNULL, timeout=2,
+            )
+        except (subprocess.SubprocessError, OSError):
+            return None
+        s = out.decode("ascii", errors="replace").strip()
+        return s or None
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+        except ImportError:
+            return None
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        try:
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+            kernel32.GetProcessTimes.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(wintypes.FILETIME),
+                ctypes.POINTER(wintypes.FILETIME),
+                ctypes.POINTER(wintypes.FILETIME),
+                ctypes.POINTER(wintypes.FILETIME),
+            ]
+            kernel32.GetProcessTimes.restype = wintypes.BOOL
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            kernel32.CloseHandle.restype = wintypes.BOOL
+        except (OSError, AttributeError):
+            return None
+        h = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return None
+        try:
+            creation = wintypes.FILETIME()
+            exit_ft = wintypes.FILETIME()
+            kernel_ft = wintypes.FILETIME()
+            user_ft = wintypes.FILETIME()
+            ok = kernel32.GetProcessTimes(
+                h, ctypes.byref(creation), ctypes.byref(exit_ft),
+                ctypes.byref(kernel_ft), ctypes.byref(user_ft),
+            )
+            if not ok:
+                return None
+            return (creation.dwHighDateTime << 32) | creation.dwLowDateTime
+        finally:
+            kernel32.CloseHandle(h)
+    return None
 
 
 def _load_env():
@@ -20,27 +107,17 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BH_NAME", "default")
+NAME = os.environ.get("BU_NAME") or os.environ.get("BH_NAME", "default")
+BU_API = "https://api.browser-use.com/api/v3"
 GH_RELEASES = "https://api.github.com/repos/browser-use/browser-harness/releases/latest"
-VERSION_CACHE = Path("/tmp/bh-version-cache.json")
+VERSION_CACHE = Path(tempfile.gettempdir()) / "bh-version-cache.json"
 VERSION_CACHE_TTL = 24 * 3600
-
-
-def _paths(name):
-    n = name or NAME
-    return f"/tmp/bh-{n}.sock", f"/tmp/bh-{n}.pid"
-
-
-def _legacy_paths(name):
-    n = name or NAME
-    prefix = "/tmp/" + "bu-"
-    return f"{prefix}{n}.sock", f"{prefix}{n}.pid", f"{prefix}{n}.log"
+DOCTOR_TEXT_LIMIT = 140
 
 
 def _log_tail(name):
-    p = f"/tmp/bh-{name or NAME}.log"
     try:
-        return Path(p).read_text().strip().splitlines()[-1]
+        return ipc.log_path(name or NAME).read_text().strip().splitlines()[-1]
     except (FileNotFoundError, IndexError):
         return None
 
@@ -66,17 +143,76 @@ def _needs_chrome_remote_debugging_prompt(msg):
 
 def _is_local_chrome_mode(env=None):
     """True when the daemon discovers a local Chrome instead of a remote CDP WS."""
-    return not (env or {}).get("BH_CDP_WS") and not os.environ.get("BH_CDP_WS")
+    e = env or {}
+    return not (
+        e.get("BU_CDP_WS") or e.get("BH_CDP_WS")
+        or os.environ.get("BU_CDP_WS") or os.environ.get("BH_CDP_WS")
+    )
 
 
 def daemon_alive(name=None):
+    # Ping handshake (not a bare connect) so a stale .port file + port reuse
+    # after a daemon crash doesn't make us mistake an unrelated listener for ours.
+    return ipc.ping(name or NAME, timeout=1.0)
+
+
+def _daemon_endpoint_names():
+    # BH_TMP_DIR isolates one daemon per dir → no filename-prefix discovery,
+    # just check whether our local endpoint exists. Without BH_TMP_DIR, _TMP
+    # is the shared default (`/tmp` etc.) and we glob `bu-*.<suffix>` to find
+    # every daemon on the machine.
+    suffix = ".port" if ipc.IS_WINDOWS else ".sock"
+    if ipc.BH_TMP_DIR:
+        return [NAME] if (ipc._TMP / f"bu{suffix}").exists() else []
+    names = []
+    for p in sorted(ipc._TMP.glob(f"bu-*{suffix}")):
+        raw = p.name[3:-len(suffix)]
+        try:
+            ipc._check(raw)
+        except ValueError:
+            continue
+        names.append(raw)
+    return names
+
+
+def _daemon_browser_connection(name):
+    c = None
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(1)
-            s.connect(_paths(name)[0])
-        return True
-    except (FileNotFoundError, ConnectionRefusedError, socket.timeout):
-        return False
+        c, token = ipc.connect(name, timeout=1.0)
+        response = ipc.request(c, token, {"meta": "connection_status"})
+        if "error" in response:
+            return None
+        page = response.get("page")
+        if page:
+            page = {"title": page.get("title") or "(untitled)", "url": page.get("url") or ""}
+        return {"name": name, "page": page}
+    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, socket.timeout, OSError, KeyError, ValueError, json.JSONDecodeError):
+        return None
+    finally:
+        if c:
+            try: c.close()
+            except OSError: pass
+
+
+def browser_connections():
+    """Live browser-harness daemons with healthy CDP browser connections and their attached page."""
+    out = []
+    for name in _daemon_endpoint_names():
+        conn = _daemon_browser_connection(name)
+        if conn:
+            out.append(conn)
+    return out
+
+
+def active_browser_connections():
+    """Count live browser-harness daemons with a healthy CDP browser connection."""
+    return len(browser_connections())
+
+
+def _doctor_short_text(value, limit=None):
+    limit = limit or DOCTOR_TEXT_LIMIT
+    value = str(value)
+    return value if len(value) <= limit else value[:limit - 3] + "..."
 
 
 def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog=False):
@@ -85,28 +221,26 @@ def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog
         # Stale daemons accept connects AND reply to meta:* (pure Python) even when the
         # CDP WS to Chrome is dead — probe with a real CDP call and require "result".
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                s.settimeout(3)
-                s.connect(_paths(name)[0])
-                s.sendall(b'{"method":"Target.getTargets","params":{}}\n')
-                data = b""
-                while not data.endswith(b"\n"):
-                    chunk = s.recv(1 << 16)
-                    if not chunk: break
-                    data += chunk
-            if b'"result"' in data: return
-        except Exception: pass
+            s, token = ipc.connect(name or NAME, timeout=3.0)
+            try:
+                resp = ipc.request(s, token, {"method": "Target.getTargets", "params": {}})
+                if isinstance(resp, dict) and "result" in resp:
+                    return
+            finally:
+                try: s.close()
+                except OSError: pass
+        except Exception:
+            pass
         restart_daemon(name)
 
-    import subprocess, sys
     local = _is_local_chrome_mode(env)
     for attempt in (0, 1):
-        e = {**os.environ, **({"BH_NAME": name} if name else {}), **(env or {})}
+        e = {**os.environ, **({"BH_NAME": name, "BU_NAME": name} if name else {}), **(env or {})}
         root = os.path.dirname(os.path.abspath(__file__))
         p = subprocess.Popen(
             [sys.executable, os.path.join(root, "daemon.py")],
             cwd=root,
-            env=e, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            env=e, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **ipc.spawn_kwargs(),
         )
         deadline = time.time() + wait
         while time.time() < deadline:
@@ -133,78 +267,237 @@ def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog
         if p.poll() is None:
             try: p.wait(timeout=3)
             except Exception: pass
-        raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check /tmp/bh-{name or NAME}.log")
+        raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check {ipc.log_path(name or NAME)}")
+
+
+def stop_remote_daemon(name="remote"):
+    """Stop a remote daemon and its backing Browser Use cloud browser.
+
+    Triggers the daemon's clean shutdown, which PATCHes
+    /browsers/{id} {"action":"stop"} so billing ends and any profile
+    state in the session is persisted."""
+    restart_daemon(name)
 
 
 def restart_daemon(name=None):
     """Best-effort daemon shutdown + socket/pid cleanup.
 
-    Name is historical: callers typically follow this with another
-    `browser-harness` invocation, which auto-spawns a fresh daemon via
-    ensure_daemon(). The function itself only stops."""
+    Identity is verified via ipc.identify() before any process signal, so
+    a stale pid file whose number has been reused by an unrelated process
+    is never SIGTERM'd. If the daemon is unreachable, we just clean up the
+    pid file and socket and return — never escalate to a kill-by-pid-file.
+    """
     import signal
 
-    sock, pid_path = _paths(name)
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(5)
-            s.connect(sock)
-            s.sendall(b'{"meta":"shutdown"}\n')
-            s.recv(1024)
-    except Exception:
-        pass
-    try:
-        pid = int(Path(pid_path).read_text())
-    except (FileNotFoundError, ValueError):
-        pid = None
-    if pid:
+    name = name or NAME
+    pid_path = str(ipc.pid_path(name))
+
+    # Two pieces of information are tracked separately:
+    #   - daemon_pid: the daemon's self-reported PID, or None. Only daemons
+    #     running this version (or newer) include `pid` in the ping response;
+    #     pre-upgrade daemons return {pong: True} only and yield None here.
+    #   - daemon_alive: whether ANY daemon answers ping. Keeps the shutdown
+    #     IPC path working across upgrades — without it, a still-running
+    #     pre-upgrade daemon would have its socket deleted out from under it
+    #     while the process stayed alive.
+    daemon_pid = ipc.identify(name, timeout=5.0)
+    daemon_alive = daemon_pid is not None or ipc.ping(name, timeout=1.0)
+    # Snapshot the daemon's process start-time as a secondary identity check.
+    # The IPC socket can disappear before the process exits (e.g. the shutdown
+    # path tears down the socket and then waits on a slow remote `stop` PATCH),
+    # so identify() going None partway through is not proof of process death.
+    daemon_start = _process_start_time(daemon_pid)
+
+    if daemon_alive:
+        try:
+            c, token = ipc.connect(name, timeout=5.0)
+            ipc.request(c, token, {"meta": "shutdown"})
+            try: c.close()
+            except (OSError, AttributeError): pass
+        except Exception:
+            pass
+
+    if daemon_pid is not None:
         for _ in range(75):
             try:
-                os.kill(pid, 0)
+                os.kill(daemon_pid, 0)
                 time.sleep(0.2)
-            except ProcessLookupError:
+            except (ProcessLookupError, OSError, SystemError, OverflowError):
                 break
         else:
-            if _pid_matches_daemon(pid):
+            # Re-verify identity before escalating to SIGTERM.
+            verified_pid = ipc.identify(name, timeout=1.0)
+            same_process = verified_pid == daemon_pid or (
+                daemon_start is not None
+                and _process_start_time(daemon_pid) == daemon_start
+            )
+            if same_process:
                 try:
-                    os.kill(pid, signal.SIGTERM)
-                except ProcessLookupError:
+                    os.kill(daemon_pid, signal.SIGTERM)
+                except (ProcessLookupError, OSError, SystemError, OverflowError):
                     pass
-    for f in (sock, pid_path):
-        try:
-            os.unlink(f)
-        except FileNotFoundError:
-            pass
 
-
-def _pid_matches_daemon(pid):
-    """Best-effort guard before signaling a pid read from a stale pid file."""
-    import subprocess
-
+    ipc.cleanup_endpoint(name)
     try:
-        command = subprocess.check_output(
-            ["ps", "-p", str(pid), "-o", "command="],
-            text=True,
-            stderr=subprocess.DEVNULL,
-            timeout=2,
-        ).strip()
-    except Exception:
-        return False
-    if not command:
-        return False
-    root = str(Path(__file__).resolve().parent)
-    return "daemon.py" in command and root in command
-    for f in _legacy_paths(name):
-        try:
-            os.unlink(f)
-        except FileNotFoundError:
-            pass
+        os.unlink(pid_path)
+    except FileNotFoundError:
+        pass
+
+
+def _browser_use(path, method, body=None):
+    key = os.environ.get("BROWSER_USE_API_KEY")
+    if not key:
+        raise RuntimeError("BROWSER_USE_API_KEY missing -- see .env.example")
+    req = urllib.request.Request(
+        f"{BU_API}{path}",
+        method=method,
+        data=(json.dumps(body).encode() if body is not None else None),
+        headers={"X-Browser-Use-API-Key": key, "Content-Type": "application/json"},
+    )
+    return json.loads(urllib.request.urlopen(req, timeout=60).read() or b"{}")
+
+
+def _stop_cloud_browser(browser_id):
+    if not browser_id:
+        return
+    try:
+        _browser_use(f"/browsers/{browser_id}", "PATCH", {"action": "stop"})
+    except BaseException:
+        pass
+
+
+def _cdp_ws_from_url(cdp_url):
+    return json.loads(urllib.request.urlopen(f"{cdp_url}/json/version", timeout=15).read())["webSocketDebuggerUrl"]
+
+
+def _has_local_gui():
+    """True when this machine plausibly has a browser we can open. False on headless servers."""
+    import platform
+    system = platform.system()
+    if system in ("Darwin", "Windows"):
+        return True
+    if system == "Linux":
+        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return False
+
+
+def _show_live_url(url):
+    """Print liveUrl and auto-open it locally if there's a GUI."""
+    import webbrowser
+    if not url:
+        return
+    print(url)
+    if not _has_local_gui():
+        print("(no local GUI — share the liveUrl with the user)", file=sys.stderr)
+        return
+    try:
+        webbrowser.open(url, new=2)
+        print("(opened liveUrl in your default browser)", file=sys.stderr)
+    except Exception as e:
+        print(f"(couldn't auto-open: {e} — share the liveUrl with the user)", file=sys.stderr)
+
+
+def list_cloud_profiles():
+    """List cloud profiles under the current API key.
+
+    Paginates through all pages — the API caps `pageSize` at 100."""
+    out, page = [], 1
+    while True:
+        listing = _browser_use(f"/profiles?pageSize=100&pageNumber={page}", "GET")
+        items = listing.get("items") if isinstance(listing, dict) else listing
+        if not items:
+            break
+        for p in items:
+            detail = _browser_use(f"/profiles/{p['id']}", "GET")
+            out.append({
+                "id": detail["id"],
+                "name": detail.get("name"),
+                "userId": detail.get("userId"),
+                "cookieDomains": detail.get("cookieDomains") or [],
+                "lastUsedAt": detail.get("lastUsedAt"),
+            })
+        if isinstance(listing, dict) and len(out) >= listing.get("totalItems", len(out)):
+            break
+        page += 1
+    return out
+
+
+def _resolve_profile_name(profile_name):
+    """Find a single cloud profile by exact name; raise if 0 or >1 match."""
+    matches = [p for p in list_cloud_profiles() if p.get("name") == profile_name]
+    if not matches:
+        raise RuntimeError(f"no cloud profile named {profile_name!r} -- call list_cloud_profiles() or sync_local_profile() first")
+    if len(matches) > 1:
+        raise RuntimeError(f"{len(matches)} cloud profiles named {profile_name!r} -- pass profileId=<uuid> instead")
+    return matches[0]["id"]
+
+
+def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
+    """Provision a Browser Use cloud browser and start a daemon attached to it.
+
+    Returns the full browser dict including `liveUrl`. Prints the liveUrl and
+    auto-opens it locally when a GUI is detected, so the user can watch along."""
+    if daemon_alive(name):
+        raise RuntimeError(f"daemon {name!r} already alive -- restart_daemon({name!r}) first")
+    if profileName:
+        if "profileId" in create_kwargs:
+            raise RuntimeError("pass profileName OR profileId, not both")
+        create_kwargs["profileId"] = _resolve_profile_name(profileName)
+    browser = _browser_use("/browsers", "POST", create_kwargs)
+    ws = _cdp_ws_from_url(browser["cdpUrl"])
+    try:
+        ensure_daemon(
+            name=name,
+            env={
+                "BU_CDP_WS": ws,
+                "BH_CDP_WS": ws,
+                "BU_BROWSER_ID": browser["id"],
+                "BH_BROWSER_ID": browser["id"],
+            },
+        )
+    except BaseException:
+        _stop_cloud_browser(browser.get("id"))
+        raise
+    _show_live_url(browser.get("liveUrl"))
+    return browser
+
+
+def sync_local_profile(profile_name, browser=None, cloud_profile_id=None,
+                        include_domains=None, exclude_domains=None):
+    """Sync a local profile's cookies to a cloud profile. Returns the cloud UUID.
+
+    Shells out to `profile-use sync` (v1.0.5+). Requires BROWSER_USE_API_KEY."""
+    import re, shutil
+    if not shutil.which("profile-use"):
+        raise RuntimeError("profile-use not installed -- curl -fsSL https://browser-use.com/profile.sh | sh")
+    if not os.environ.get("BROWSER_USE_API_KEY"):
+        raise RuntimeError("BROWSER_USE_API_KEY missing")
+    cmd = ["profile-use", "sync", "--profile", profile_name]
+    if browser:
+        cmd += ["--browser", browser]
+    if cloud_profile_id:
+        cmd += ["--cloud-profile-id", cloud_profile_id]
+    for d in include_domains or []:
+        cmd += ["--domain", d]
+    for d in exclude_domains or []:
+        cmd += ["--exclude-domain", d]
+    r = subprocess.run(cmd, text=True, capture_output=True)
+    sys.stdout.write(r.stdout)
+    sys.stderr.write(r.stderr)
+    if r.returncode != 0:
+        raise RuntimeError(f"profile-use sync failed (exit {r.returncode})")
+    if cloud_profile_id:
+        return cloud_profile_id
+    m = re.search(r"Profile created:\s+([0-9a-f-]{36})", r.stdout)
+    if not m:
+        raise RuntimeError(f"profile-use did not report a profile UUID (exit {r.returncode})")
+    return m.group(1)
 
 
 def list_local_profiles():
     """Detected local browser profiles on this machine. Shells out to `profile-use list --json`.
     Returns [{BrowserName, BrowserPath, ProfileName, ProfilePath, DisplayName}, ...]."""
-    import json, shutil, subprocess
+    import shutil
     if not shutil.which("profile-use"):
         raise RuntimeError("profile-use not installed; use `browser-harness --setup` or configure local Chrome remote debugging")
     return json.loads(subprocess.check_output(["profile-use", "list", "--json"], text=True))
@@ -224,8 +517,10 @@ def _version():
 
 def _repo_dir():
     """Return the repo root if this install is an editable git clone, else None."""
-    p = Path(__file__).resolve().parent
-    return p if (p / ".git").is_dir() else None
+    for p in Path(__file__).resolve().parents:
+        if (p / ".git").is_dir():
+            return p
+    return None
 
 
 def _install_mode():
@@ -287,9 +582,24 @@ def check_for_update():
     return cur, latest, newer
 
 
+def print_update_banner(out=None):
+    """Print the update banner to stderr once per day. Silent when up-to-date or offline."""
+    out = out or sys.stderr
+    cache = _cache_read()
+    today = time.strftime("%Y-%m-%d")
+    if cache.get("banner_shown_on") == today:
+        return
+    cur, latest, newer = check_for_update()
+    if not newer:
+        return
+    print(f"[browser-harness] update available: {cur} -> {latest}", file=out)
+    print(f"[browser-harness] agents: run `browser-harness --update -y` to upgrade and restart the daemon", file=out)
+    _cache_write({**cache, "banner_shown_on": today})
+
+
 def _chrome_running():
     """Cross-platform best-effort check for a running Chrome/Edge process."""
-    import platform, subprocess
+    import platform
     system = platform.system()
     try:
         if system == "Windows":
@@ -304,27 +614,21 @@ def _chrome_running():
 
 
 def _daemon_meta(meta, name=None, timeout=2.0):
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-        s.settimeout(timeout)
-        s.connect(_paths(name)[0])
-        s.sendall((json.dumps({"meta": meta}) + "\n").encode())
-        data = b""
-        while not data.endswith(b"\n"):
-            chunk = s.recv(1 << 16)
-            if not chunk:
-                break
-            data += chunk
-    if not data:
-        return {}
+    c = None
     try:
-        return json.loads(data)
-    except (ValueError, TypeError):
+        c, token = ipc.connect(name or NAME, timeout=timeout)
+        return ipc.request(c, token, {"meta": meta})
+    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, socket.timeout, OSError, ValueError, json.JSONDecodeError):
         return {}
+    finally:
+        if c:
+            try: c.close()
+            except OSError: pass
 
 
 def _open_chrome_inspect():
     """Open chrome://inspect/#remote-debugging so the user can tick the checkbox."""
-    import platform, subprocess, webbrowser
+    import platform, webbrowser
     url = "chrome://inspect/#remote-debugging"
     if platform.system() == "Darwin":
         try:
@@ -360,7 +664,7 @@ def _remote_debugging_keyboard_applescript(wait=1.0, app_name="Google Chrome"):
 
 def _accept_remote_debugging_dialog_keyboard(wait=1.0, app_name="Google Chrome"):
     """Opt-in keyboard-only consent for Chrome's native remote-debugging dialog."""
-    import platform, subprocess
+    import platform
     if platform.system() != "Darwin":
         return {"ok": False, "reason": "keyboard consent automation is implemented for macOS only"}
     args = ["osascript"]
@@ -451,7 +755,6 @@ _HEADLESS_HARMFUL_ARGS = (
 def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_path=None,
                            headless=False, window_size=None):
     """Launch Chrome with a loopback CDP endpoint and explicit profile."""
-    import subprocess
     profile = Path(profile_path).expanduser()
     profile.mkdir(parents=True, exist_ok=True)
     port = _validate_port(port)
@@ -487,7 +790,6 @@ def launch_headful_profile(profile_path, port=9222, url="about:blank", chrome_pa
 def run_launch_profile(profile_path, port=9222, url="about:blank", chrome_path=None,
                        headless=False, window_size=None, json_output=False):
     """CLI wrapper for launching an agent-owned Chrome profile."""
-    import sys
     try:
         result = launch_headful_profile(profile_path, port=port, url=url, chrome_path=chrome_path,
                                         headless=headless, window_size=window_size)
@@ -510,7 +812,7 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
 
     Returns dict with pid, port, ws_url, profile_path, temp_profile.
     """
-    import shutil, subprocess, tempfile
+    import shutil
     chrome = chrome_path or os.environ.get("BH_CHROME_PATH") or _default_chrome_executable()
     if not chrome:
         raise RuntimeError("Chrome not found; set BH_CHROME_PATH or install Chrome")
@@ -571,7 +873,6 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
     os.environ["BH_CDP_WS"] = env_ws
     restart_daemon()
     ensure_daemon()
-    # Close stderr pipe to avoid leaking the file descriptor
     if proc.stderr:
         proc.stderr.close()
     return {
@@ -596,7 +897,6 @@ def close_browser(launch_info):
         except ProcessLookupError:
             pass
         else:
-            # Wait for the process to actually exit so file handles are released
             if proc is not None:
                 try:
                     proc.wait(timeout=10)
@@ -610,7 +910,6 @@ def run_setup(accept_remote_debugging_dialog=False):
     """Interactive bootstrap: attach to the running browser, guiding the user through chrome://inspect if needed.
 
     Exit code 0 on success, 1 on failure."""
-    import sys
     print("browser-harness setup: attaching to your browser...")
 
     if daemon_alive():
@@ -621,7 +920,6 @@ def run_setup(accept_remote_debugging_dialog=False):
         print("no Chrome/Edge process detected. please start your browser and rerun `browser-harness --setup`.")
         return 1
 
-    # First attach attempt.
     try:
         ensure_daemon(wait=20.0, accept_remote_debugging_dialog=accept_remote_debugging_dialog)
         print("daemon is up.")
@@ -666,46 +964,6 @@ def _check(status, check_id, detail="", fix=None):
     return {"id": check_id, "status": status, "detail": detail, "fix": fix}
 
 
-def _scan_active_files(patterns):
-    import re
-    pkg = Path(__file__).resolve().parent
-    repo = pkg.parent.parent
-    files = [
-        (pkg, "daemon.py"),
-        (pkg, "admin.py"),
-        (pkg, "run.py"),
-        (pkg, "helpers.py"),
-        (repo, "SKILL.md"),
-        (repo, "install.md"),
-        (repo, "README.md"),
-        (repo, "pyproject.toml"),
-        (repo, "docs/local-cdp-providers.md"),
-        (repo, "docs/reference.md"),
-        (repo, "docs/contributing-guide.md"),
-    ]
-    hits = []
-    rx = re.compile(patterns)
-    for base, rel in files:
-        path = base / rel
-        if not path.exists():
-            continue
-        for lineno, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
-            if rx.search(line):
-                hits.append(f"{rel}:{lineno}")
-    return hits
-
-
-def _page_info_uses_runtime():
-    import ast
-    path = Path(__file__).resolve().parent / "helpers.py"
-    tree = ast.parse(path.read_text())
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == "page_info":
-            source = ast.get_source_segment(path.read_text(), node) or ""
-            return "Runtime.evaluate" in source
-    return True
-
-
 def _doctor_checks(network=False):
     import platform
     checks = []
@@ -713,65 +971,62 @@ def _doctor_checks(network=False):
     daemon = daemon_alive()
 
     checks.append(_check("pass", "platform.info", f"{platform.system()} {platform.release()}"))
-    checks.append(_check("pass" if chrome else "warn", "browser.process", "Chrome/Edge process detected" if chrome else "Chrome/Edge process not detected", "start Chrome/Edge and rerun `browser-harness --setup`" if not chrome else None))
-    checks.append(_check("pass" if daemon else "fail", "daemon.alive", "daemon socket responds" if daemon else "daemon socket is not responding", "run `browser-harness --setup` to attach" if not daemon else None))
+    checks.append(_check("pass" if chrome else "warn", "browser.process",
+                         "Chrome/Edge process detected" if chrome else "Chrome/Edge process not detected",
+                         "start Chrome/Edge and rerun `browser-harness --setup`" if not chrome else None))
+    checks.append(_check("pass" if daemon else "fail", "daemon.alive",
+                         "daemon socket responds" if daemon else "daemon socket is not responding",
+                         "run `browser-harness --setup` to attach" if not daemon else None))
 
     if daemon:
-        sock, _ = _paths(None)
         try:
-            mode = Path(sock).stat().st_mode & 0o777
-            checks.append(_check("pass" if mode == 0o600 else "fail", "daemon.socket_permissions", oct(mode), f"expected {sock} to have mode 0600"))
+            mode = ipc._sock_path(NAME).stat().st_mode & 0o777
+            checks.append(_check("pass" if mode == 0o600 else "fail", "daemon.socket_permissions", oct(mode),
+                                 f"expected {ipc._sock_path(NAME)} to have mode 0600"))
         except OSError as e:
-            checks.append(_check("fail", "daemon.socket_permissions", str(e), "restart the daemon with `browser-harness --reload`"))
+            checks.append(_check("warn", "daemon.socket_permissions", str(e),
+                                 "restart the daemon with `browser-harness --reload`"))
         try:
             endpoint = _daemon_meta("endpoint_info").get("endpoint_info") or {}
         except Exception as e:
             endpoint = {}
-            checks.append(_check("warn", "endpoint.info", str(e), "restart the daemon with `browser-harness --reload`"))
+            checks.append(_check("warn", "endpoint.info", str(e),
+                                 "restart the daemon with `browser-harness --reload`"))
     else:
         endpoint = {}
 
     if endpoint:
         checks.append(_check("pass", "endpoint.present", endpoint.get("resolved_url", "")))
         checks.append(_check("pass", "endpoint.source", endpoint.get("source", "unknown")))
-        checks.append(_check("pass" if endpoint.get("is_loopback") else ("warn" if endpoint.get("remote_allowed") else "fail"), "endpoint.loopback", endpoint.get("host") or "", "use a 127.0.0.1/localhost endpoint or set BH_CDP_ALLOW_REMOTE=1 only for user-owned self-hosted CDP"))
+        checks.append(_check(
+            "pass" if endpoint.get("is_loopback") else ("warn" if endpoint.get("remote_allowed") else "fail"),
+            "endpoint.loopback", endpoint.get("host") or "",
+            "use a 127.0.0.1/localhost endpoint or set BH_CDP_ALLOW_REMOTE=1 only for user-owned self-hosted CDP"))
         if endpoint.get("remote_allowed"):
-            checks.append(_check("warn", "endpoint.remote_allowed", "BH_CDP_ALLOW_REMOTE=1", "bind CDP to loopback when possible"))
+            checks.append(_check("warn", "endpoint.remote_allowed", "BH_CDP_ALLOW_REMOTE=1",
+                                 "bind CDP to loopback when possible"))
         for warning in endpoint.get("warnings") or []:
             if "BH_CDP_ALLOW_REMOTE" in warning and endpoint.get("remote_allowed"):
                 continue
-            checks.append(_check("warn", "endpoint.warning", warning, "review BH_CDP_WS and prefer a loopback ws/http endpoint when possible"))
+            checks.append(_check("warn", "endpoint.warning", warning,
+                                 "review BH_CDP_WS and prefer a loopback ws/http endpoint when possible"))
         checks.append(_check("pass", "endpoint.scheme", endpoint.get("resolved_url", "").split(":", 1)[0]))
         version_detail = " ".join(x for x in (endpoint.get("browser"), endpoint.get("protocol_version")) if x)
-        checks.append(_check("pass" if version_detail else "warn", "endpoint.version", version_detail, "use a DevTools HTTP base URL in BH_CDP_WS when product/version detail is needed" if not version_detail else None))
+        checks.append(_check("pass" if version_detail else "warn", "endpoint.version", version_detail,
+                             "use a DevTools HTTP base URL in BH_CDP_WS when product/version detail is needed" if not version_detail else None))
+    elif daemon:
+        # Daemon up but endpoint metadata not yet available: warn (transient), don't fail.
+        checks.append(_check("warn", "endpoint.present", "no live endpoint metadata",
+                             "restart the daemon with `browser-harness --reload`"))
     else:
-        checks.append(_check("fail", "endpoint.present", "no live endpoint metadata", "run `browser-harness --setup` or set BH_CDP_WS to a local CDP endpoint"))
+        checks.append(_check("fail", "endpoint.present", "no live endpoint metadata",
+                             "run `browser-harness --setup` or set BH_CDP_WS to a local CDP endpoint"))
 
-    legacy_pattern = "|".join([
-        r"BU" + r"_CDP_WS",
-        r"BU" + r"_NAME",
-        r"/tmp/" + r"bu-",
-        r"browser-use\.com/profile",
-        r"api\.browser-use",
-        r"cloud\.browser-use",
-    ])
-    cloud_hits = _scan_active_files(legacy_pattern)
-    checks.append(_check("pass" if not cloud_hits else "fail", "strings.no_cloud_runtime", ", ".join(cloud_hits), "remove legacy Browser Use/cloud runtime strings from active files" if cloud_hits else None))
-
-    root = Path(__file__).resolve().parent
-    daemon_text = (root / "daemon.py").read_text(errors="ignore")
-    helpers_text = (root / "helpers.py").read_text(errors="ignore")
-    attach_bad = [m for m in ("Runtime.enable", "DOM.enable", "Network.enable") if m in daemon_text]
-    checks.append(_check("pass" if not attach_bad else "fail", "cdp.attach_minimal", ", ".join(attach_bad), "remove automatic CDP domain enables from daemon attach" if attach_bad else None))
-    checks.append(_check("pass" if "Console.enable" not in daemon_text + helpers_text else "fail", "cdp.no_console_enable", "", "remove Console.enable from core"))
-    marker_bad = "document.title.startsWith" in daemon_text + helpers_text or "\\U0001F7E2" in daemon_text + helpers_text
-    checks.append(_check("pass" if not marker_bad else "fail", "page.no_title_marker", "", "remove hidden title marker mutation" if marker_bad else None))
-    page_info_bad = _page_info_uses_runtime()
-    checks.append(_check("pass" if not page_info_bad else "fail", "helpers.page_info_no_runtime", "", "rewrite page_info to avoid Runtime.evaluate" if page_info_bad else None))
     checks.append(_check("pass", "network.default_offline", "default doctor performs local checks only"))
 
     if network:
-        checks.append(_check("warn", "network.external", "network checks are not implemented yet", "keep public IP/WebRTC checks behind --network"))
+        checks.append(_check("warn", "network.external", "network checks are not implemented yet",
+                             "keep public IP/WebRTC checks behind --network"))
     return checks
 
 
@@ -781,14 +1036,20 @@ def _doctor_status(checks):
 
 def run_doctor(json_output=False, network=False):
     """Read-only diagnostics. Exit 0 unless a required local check fails."""
-    import platform, sys
+    import platform
     cur = _version()
     mode = _install_mode()
     cur_display = cur or "(unknown)"
     checks = _doctor_checks(network=network)
     status = _doctor_status(checks)
+    connections = browser_connections()
     if json_output:
-        print(json.dumps({"status": status, "checks": checks}, indent=2))
+        payload = {
+            "status": status,
+            "checks": checks,
+            "browser_connections": connections,
+        }
+        print(json.dumps(payload, indent=2))
         return 1 if status == "fail" else 0
 
     print("browser-harness doctor")
@@ -800,6 +1061,18 @@ def run_doctor(json_output=False, network=False):
         detail = f" - {check['detail']}" if check.get("detail") else ""
         fix = f" ({check['fix']})" if check.get("fix") else ""
         print(f"  [{mark}] {check['id']}{detail}{fix}")
+
+    # Modern row-style summary so agents can grep "active browser connections".
+    conn_mark = "ok  " if connections else "WARN"
+    print(f"  [{conn_mark}] active browser connections — {len(connections)}")
+    for conn in connections:
+        page = conn.get("page")
+        if page:
+            title = _doctor_short_text(page["title"])
+            url = _doctor_short_text(page["url"])
+            print(f"        {conn['name']} — active page: {title} — {url}")
+        else:
+            print(f"        {conn['name']} — active page: (no real page)")
     return 1 if status == "fail" else 0
 
 
@@ -820,10 +1093,7 @@ def run_update(yes=False):
     """Pull the latest version and (after prompt) restart the daemon so it picks up changed code.
 
     Exit 0 on success, non-zero on failure."""
-    import subprocess, sys
     cur, latest, newer = check_for_update()
-    # Only short-circuit as "up to date" when we actually know the installed
-    # version. Otherwise `newer=False` just means "couldn't compare" — proceed.
     if cur and latest and not newer:
         print(f"browser-harness is up to date ({cur}).")
         return 0
@@ -851,7 +1121,6 @@ def run_update(yes=False):
     elif mode == "pypi":
         tool_upgrade = subprocess.run(["uv", "tool", "upgrade", "browser-harness"])
         if tool_upgrade.returncode != 0:
-            # Fall back to pip in case this wasn't a `uv tool install`.
             pip = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "browser-harness"])
             if pip.returncode != 0:
                 return pip.returncode
@@ -859,7 +1128,6 @@ def run_update(yes=False):
         print("unknown install mode; can't auto-update.", file=sys.stderr)
         return 1
 
-    # Invalidate banner/tag cache so the new version doesn't keep nagging.
     cache = _cache_read()
     cache.pop("banner_shown_on", None)
     _cache_write(cache)

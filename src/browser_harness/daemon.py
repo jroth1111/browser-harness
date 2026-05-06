@@ -260,7 +260,7 @@ class Daemon:
     def __init__(self):
         self.cdp = None
         self.session = None
-        self._attached_target_id = None
+        self.target_id = None
         self.endpoint_info = None
         self.events = deque(maxlen=BUF)
         self.dialog = None
@@ -278,9 +278,25 @@ class Daemon:
         self.session = (await self.cdp.send_raw(
             "Target.attachToTarget", {"targetId": pages[0]["targetId"], "flatten": True}
         ))["sessionId"]
-        self._attached_target_id = pages[0]["targetId"]
+        self.target_id = pages[0]["targetId"]
         log(f"attached {pages[0]['targetId']} ({pages[0].get('url','')[:80]}) session={self.session}")
+        await self._enable_default_domains(self.session)
         return pages[0]
+
+    async def _enable_default_domains(self, session_id):
+        # Each fresh CDP session starts with all domains disabled. Without
+        # this, wait_for_network_idle() silently stops receiving Network
+        # events after switch_tab() / new_tab() routes through set_session
+        # and lands on a session that was never enabled.
+        async def enable_one(d):
+            try:
+                await asyncio.wait_for(
+                    self.cdp.send_raw(f"{d}.enable", session_id=session_id),
+                    timeout=4,
+                )
+            except Exception as e:
+                log(f"enable {d} on {session_id}: {e}")
+        await asyncio.gather(*(enable_one(d) for d in ("Page", "DOM", "Runtime", "Network")))
 
     async def start(self):
         self.stop = asyncio.Event()
@@ -310,14 +326,14 @@ class Daemon:
                 self.blockers.append({"kind": method.split(".")[-1], "params": params, "t": time.time()})
             elif method == "Target.targetDestroyed":
                 destroyed_id = (params or {}).get("targetId")
-                if destroyed_id and destroyed_id == self._attached_target_id:
+                if destroyed_id and destroyed_id == self.target_id:
                     log(f"attached target {destroyed_id} destroyed, re-attaching")
                     try:
                         await self.attach_first_page()
                     except Exception as e:
                         log(f"re-attach failed: {e}")
                         self.session = None
-                        self._attached_target_id = None
+                        self.target_id = None
             elif method == "Target.targetCreated":
                 t = (params or {}).get("targetInfo") or {}
                 if t.get("type") == "page" and not t.get("url", "").startswith(INTERNAL):
@@ -339,8 +355,25 @@ class Daemon:
         if meta == "session":     return {"session_id": self.session}
         if meta == "endpoint_info": return {"endpoint_info": self.endpoint_info}
         if meta == "set_session":
+            old_session = self.session
             self.session = req.get("session_id")
-            self._attached_target_id = req.get("target_id", self._attached_target_id)
+            self.target_id = req.get("target_id") or self.target_id
+            tasks = []
+            if old_session and old_session != self.session:
+                # Background tabs (polling, SSE) keep emitting Network events
+                # into the global buffer that wait_for_network_idle reads —
+                # disable on the old session in parallel with the new enables.
+                async def disable_old():
+                    try:
+                        await asyncio.wait_for(
+                            self.cdp.send_raw("Network.disable", session_id=old_session),
+                            timeout=2,
+                        )
+                    except Exception:
+                        pass
+                tasks.append(disable_old())
+            tasks.append(self._enable_default_domains(self.session))
+            await asyncio.gather(*tasks)
             return {"session_id": self.session}
         if meta == "pending_dialog": return {"dialog": self.dialog}
         if meta == "pending_blockers":

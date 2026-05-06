@@ -198,33 +198,41 @@ def test_unknown_scheme_rejected():
             raise AssertionError("expected RuntimeError")
 
 
-def test_attach_first_page_is_cdp_minimal():
+def test_attach_first_page_attaches_then_enables_default_domains():
     d = daemon.Daemon()
     d.cdp = FakeCDP()
     asyncio.run(d.attach_first_page())
-    assert d.cdp.calls == [
+    assert d.cdp.calls[:2] == [
         ("Target.getTargets", {}, None),
         ("Target.attachToTarget", {"targetId": "page-1", "flatten": True}, None),
     ]
+    enabled = {m for (m, _p, sid) in d.cdp.calls[2:] if sid == "session-1" and m.endswith(".enable")}
+    assert enabled == {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}
 
 
 def test_attach_first_page_creates_blank_when_no_real_page():
     d = daemon.Daemon()
     d.cdp = FakeCDP({"Target.getTargets": {"targetInfos": []}})
     asyncio.run(d.attach_first_page())
-    assert d.cdp.calls == [
+    assert d.cdp.calls[:3] == [
         ("Target.getTargets", {}, None),
         ("Target.createTarget", {"url": "about:blank"}, None),
         ("Target.attachToTarget", {"targetId": "page-new", "flatten": True}, None),
     ]
+    enabled = {m for (m, _p, sid) in d.cdp.calls[3:] if sid == "session-1" and m.endswith(".enable")}
+    assert enabled == {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}
 
 
-def test_set_session_does_not_enable_domains_or_evaluate_js():
+def test_set_session_does_not_run_runtime_evaluate():
+    """Negative guard preserved from the pre-domain-enables daemon: set_session
+    must not fire Runtime.evaluate. Domain enables on the new session are
+    expected (covered by tests/unit/test_daemon.py)."""
     d = daemon.Daemon()
     d.cdp = FakeCDP()
     result = asyncio.run(d.handle({"meta": "set_session", "session_id": "session-2"}))
     assert result == {"session_id": "session-2"}
-    assert d.cdp.calls == []
+    runtime_evals = [c for c in d.cdp.calls if c[0] == "Runtime.evaluate"]
+    assert runtime_evals == []
 
 
 def test_browser_scoped_cdp_methods_do_not_use_page_session():

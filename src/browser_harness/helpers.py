@@ -1,5 +1,5 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
-import atexit, base64, functools, json, os, re, socket, time, urllib.error, urllib.request
+import atexit, base64, functools, json, os, re, socket, sys, time, urllib.error, urllib.request
 from collections import deque
 from importlib.resources import files
 from pathlib import Path
@@ -399,8 +399,11 @@ def page_info():
     dialog = _send({"meta": "pending_dialog"}).get("dialog")
     if dialog:
         return {"dialog": dialog}
-    target = cdp("Target.getTargetInfo").get("targetInfo", {})
+    target_resp = cdp("Target.getTargetInfo")
+    _raise_if_cdp_exception(target_resp, "page_info")
+    target = target_resp.get("targetInfo", {})
     metrics = cdp("Page.getLayoutMetrics")
+    _raise_if_cdp_exception(metrics, "page_info")
     viewport = metrics.get("cssLayoutViewport") or metrics.get("layoutViewport") or {}
     content = metrics.get("cssContentSize") or metrics.get("contentSize") or {}
     return {
@@ -413,6 +416,13 @@ def page_info():
         "pw": int(content.get("width") or 0),
         "ph": int(content.get("height") or 0),
     }
+
+
+def _raise_if_cdp_exception(resp, ctx):
+    if not isinstance(resp, dict) or "exceptionDetails" not in resp:
+        return
+    desc = (resp.get("result") or {}).get("description") or resp["exceptionDetails"].get("text") or "JS exception"
+    raise RuntimeError(f"{ctx}: {desc}")
 
 def page_info_js():
     """JS-based page info fallback. This explicitly executes page JavaScript."""
@@ -924,13 +934,127 @@ def scroll(x, y, dy=-300, dx=0):
     cdp("Input.dispatchMouseEvent", type="mouseWheel", x=x, y=y, deltaX=dx, deltaY=dy)
 
 
+def fill_input(selector, text, clear_first=True, timeout=0.0):
+    """Fill a framework-managed input (React controlled, Vue v-model, Ember tracked).
+
+    type_text() uses Input.insertText which bypasses framework event listeners
+    and leaves submit buttons disabled. This focuses the element, optionally
+    clears it via select-all+Backspace, types via real key events, then fires
+    synthetic input+change events so the framework sees the update.
+
+    Pass ``timeout > 0`` to wait for late-rendered elements (route changes,
+    data fetches) before typing. Raises RuntimeError if not found.
+    """
+    if timeout > 0:
+        if not wait_for_element(selector, timeout=timeout):
+            raise RuntimeError(f"fill_input: element not found: {selector!r}")
+    focused = js(
+        f"(()=>{{const e=document.querySelector({json.dumps(selector)});"
+        f"if(!e)return false;e.focus();return true;}})()"
+    )
+    if not focused:
+        raise RuntimeError(f"fill_input: element not found: {selector!r}")
+    if clear_first:
+        # Dispatch select-all directly. press_key would emit a `char` event
+        # for "a", and with Cmd/Ctrl held Chrome treats that as a printable
+        # letter instead of a shortcut, leaving the field uncleared.
+        mods = 4 if sys.platform == "darwin" else 2  # Cmd on macOS, Ctrl elsewhere
+        select_all = {"key": "a", "code": "KeyA", "modifiers": mods,
+                      "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65}
+        cdp("Input.dispatchKeyEvent", type="rawKeyDown", **select_all)
+        cdp("Input.dispatchKeyEvent", type="keyUp", **select_all)
+        press_key("Backspace")
+    for ch in text:
+        press_key(ch)
+    js(
+        f"(()=>{{const e=document.querySelector({json.dumps(selector)});"
+        f"if(!e)return;"
+        f"e.dispatchEvent(new Event('input',{{bubbles:true}}));"
+        f"e.dispatchEvent(new Event('change',{{bubbles:true}}));}})();"
+    )
+
+
+def wait_for_element(selector, timeout=10.0, visible=False):
+    """Poll until ``document.querySelector(selector)`` exists, or timeout.
+
+    wait_for_load() returns 'complete' before SPAs finish rendering. Use this
+    after route changes, data fetches, or any async render path. With
+    ``visible=True``, also requires the element to be non-hidden and in-layout
+    (uses checkVisibility with a getComputedStyle fallback for older Chrome —
+    NOT offsetParent, which fails for ``position: fixed`` elements).
+    """
+    if visible:
+        check = (
+            f"(()=>{{const e=document.querySelector({json.dumps(selector)});"
+            f"if(!e)return false;"
+            f"if(typeof e.checkVisibility==='function')"
+            f"return e.checkVisibility({{checkOpacity:true,checkVisibilityCSS:true}});"
+            f"const s=getComputedStyle(e);"
+            f"return s.display!=='none'&&s.visibility!=='hidden'&&s.opacity!=='0'}})()"
+        )
+    else:
+        check = f"!!document.querySelector({json.dumps(selector)})"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if js(check): return True
+        time.sleep(0.3)
+    return False
+
+
+def wait_for_network_idle(timeout=10.0, idle_ms=500):
+    """Wait until inflight requests finish and Network.* events go quiet for ``idle_ms``.
+
+    Useful after form submits, SPA route transitions, and any action triggering
+    XHR/fetch without a visible DOM change. Builds on drain_events() — no
+    daemon changes. Returns True if idle window reached, False on timeout.
+
+    Events are filtered to the active session — a previously-attached
+    background tab keeps emitting Network events into the daemon's global
+    buffer; without this filter they would poison the idle check on the
+    current tab.
+    """
+    deadline = time.time() + timeout
+    last_activity = time.time()
+    inflight = set()
+    active_session = _send({"meta": "session"}).get("session_id")
+    while time.time() < deadline:
+        for e in drain_events():
+            if e.get("session_id") != active_session:
+                continue
+            method = e.get("method", "")
+            params = e.get("params") or {}
+            if method == "Network.requestWillBeSent":
+                inflight.add(params.get("requestId"))
+                last_activity = time.time()
+            elif method in ("Network.loadingFinished", "Network.loadingFailed"):
+                inflight.discard(params.get("requestId"))
+                last_activity = time.time()
+            elif method.startswith("Network."):
+                last_activity = time.time()
+        if not inflight and (time.time() - last_activity) * 1000 >= idle_ms:
+            return True
+        time.sleep(0.1)
+    return False
+
+
 # --- visual ---
 @_recovered
-def capture_screenshot(path="/tmp/shot.png", full=False):
+def capture_screenshot(path="/tmp/shot.png", full=False, max_dim=None):
+    """Save a PNG of the current viewport (or full page if full=True).
+
+    Set ``max_dim`` (e.g. 1800) to downsize the image so its longer side
+    fits — useful on 2× HiDPI displays where the raw screenshot exceeds
+    the per-side pixel limit some image-aware LLMs enforce."""
     r = cdp("Page.captureScreenshot", format="png", captureBeyondViewport=full)
     data = base64.b64decode(_require_key(r, "data", "Page.captureScreenshot response"))
     with open(path, "wb") as f:
         f.write(data)
+    if max_dim:
+        from PIL import Image
+        img = Image.open(path)
+        if max(img.size) > max_dim:
+            img.thumbnail((max_dim, max_dim))
+            img.save(path)
     return path
 
 
