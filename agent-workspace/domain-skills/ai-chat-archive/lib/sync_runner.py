@@ -282,16 +282,32 @@ def _capture_one(
             "source_json": cit.source_json,
         })
 
-    # Step 5: artifact bytes (if the provider supports it).
+    # Step 5: artifact bytes (if the provider supports it). A downloaded body
+    # can have a stronger hash than metadata-only discovery, so upsert the
+    # artifact row before writing the blob. Otherwise artifact_blobs may point
+    # at a key that was never inserted into artifacts.
     try:
         for art in provider.capture_artifacts(ctx, captured):
             if art.bytes is None:
                 continue
             ah = art.content_hash or archive_db.compute_content_hash(art.bytes)
-            artifact_key = archive_db.compute_artifact_key(
-                stub.thread_key,
-                art.provider_artifact_id or art.source_url or art.label,
-                ah,
+            artifact_key = archive_db.upsert_artifact(
+                db,
+                {
+                    "thread_key": stub.thread_key,
+                    "provider_artifact_id": art.provider_artifact_id,
+                    "label": art.label,
+                    "artifact_type": art.artifact_type,
+                    "source_url": art.source_url,
+                    "mime_type": art.mime_type,
+                    "byte_length": art.byte_length or len(art.bytes),
+                    "content_hash": ah,
+                    "storage_kind": "inline_blob",
+                    "capture_id": capture_id,
+                },
+                run_id=ctx.run_id,
+                provider_id=provider.provider_id,
+                account_key=ctx.account.account_key,
             )
             archive_db.store_artifact_blob(db, artifact_key, ah, art.bytes)
     except Exception as e:

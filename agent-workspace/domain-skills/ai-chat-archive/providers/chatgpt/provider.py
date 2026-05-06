@@ -130,11 +130,14 @@ class ChatGPTProvider(Provider):
             for a in raw_artifacts
         ]
 
-        # Citations: scrape from message metadata only on the HTTP path; the
-        # DOM-side citation surface is captured separately when capabilities
-        # include 'dom'. ChatGPT's mapping rarely carries top-level citations
-        # so this typically resolves to an empty list — by design.
-        citations: list[CapturedCitation] = []
+        citations = [
+            CapturedCitation(
+                label=c.get("label") or c.get("title"),
+                url=c.get("url"),
+                source_json=c,
+            )
+            for c in _extract_citations_from_mapping(detail)
+        ]
 
         title = detail.get("title") or stub.title or ""
         canonical_url = stub.canonical_url
@@ -175,6 +178,22 @@ class ChatGPTProvider(Provider):
 
         rendered = render_chatgpt_markdown(normalized)
 
+        capture_notes: dict[str, Any] = {"stub_updated_at": stub.updated_at}
+        completion_state = "complete"
+        if artifacts:
+            completion_state = "partial"
+            capture_notes["artifact_bytes"] = (
+                "HTTP mapping exposed artifact metadata, but this provider path "
+                "does not download UI-only artifact bytes."
+            )
+        if not citations:
+            capture_notes["citations"] = (
+                "No structured citations were present in the backend mapping; "
+                "visible Sources controls still require DOM verification."
+            )
+            if completion_state == "complete":
+                completion_state = "partial"
+
         return CapturedThread(
             stub=stub,
             messages=messages,
@@ -182,8 +201,8 @@ class ChatGPTProvider(Provider):
             citations=citations,
             normalized_json=normalized,
             rendered_markdown=rendered,
-            completion_state="complete",
-            capture_notes={"stub_updated_at": stub.updated_at},
+            completion_state=completion_state,
+            capture_notes=capture_notes,
         )
 
     def capture_artifacts(self, ctx: ProviderContext, thread: CapturedThread):
@@ -205,3 +224,43 @@ def _coerce_epoch(v: Any) -> float | None:
 def _artifact_source_url(a: dict[str, Any]) -> str | None:
     rp = a.get("rich_part") or {}
     return rp.get("source_url") or rp.get("url") or rp.get("download_url")
+
+
+def _extract_citations_from_mapping(detail: dict[str, Any]) -> list[dict[str, Any]]:
+    """Best-effort citation extraction from ChatGPT backend metadata.
+
+    ChatGPT does not consistently expose the UI Sources panel in the mapping
+    response. When URL-bearing citation/source entries are present, preserve
+    them; when absent, the provider marks the capture partial instead of
+    pretending the HTTP surface proved citation completeness.
+    """
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    mapping = detail.get("mapping") or {}
+    for node in mapping.values():
+        msg = (node or {}).get("message") or {}
+        metadata = msg.get("metadata") or {}
+        for item in _walk_citation_candidates(metadata):
+            url = item.get("url")
+            if not url:
+                continue
+            title = item.get("title") or item.get("name") or item.get("label")
+            key = (url, title or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({"url": url, "title": title, "source": item})
+    return out
+
+
+def _walk_citation_candidates(value: Any):
+    if isinstance(value, dict):
+        url = value.get("url")
+        if isinstance(url, str) and url.startswith(("http://", "https://")):
+            yield value
+        for key, child in value.items():
+            if key.lower() in {"citations", "sources", "source", "references"}:
+                yield from _walk_citation_candidates(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_citation_candidates(child)
