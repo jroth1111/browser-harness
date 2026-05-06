@@ -56,11 +56,4 @@ domain-skills/*/auth-state/
 domain-skills/*/session-state/
 domain-skills/*/browser-profile/
 domain-skills/*/chrome-profile/
-agent-workspace/domain-skills/*/.session-store/
-agent-workspace/domain-skills/*/.private-data/
-agent-workspace/domain-skills/*/outputs/
-agent-workspace/domain-skills/*/auth-state/
-agent-workspace/domain-skills/*/session-state/
-agent-workspace/domain-skills/*/browser-profile/
-agent-workspace/domain-skills/*/chrome-profile/
 outputs/

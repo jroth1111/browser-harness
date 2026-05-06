@@ -57,7 +57,7 @@ packages = [
 
 [tool.setuptools.package-dir]
 browser_harness = "src/browser_harness"
-browser_harness_domain_skills = "agent-workspace/domain-skills"
+browser_harness_domain_skills = "domain-skills"
 browser_harness_interaction_skills = "interaction-skills"
 browser_harness_docs = "docs"
 browser_harness_assets = "browser_harness_assets"

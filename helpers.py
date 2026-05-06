@@ -332,7 +332,7 @@ def goto_url(url, wait_until=None):
     cdp("Page.enable")
     drain_events()
     r = cdp("Page.navigate", url=url)
-    d = (_asset_dir("agent-workspace/domain-skills", "browser_harness_domain_skills") / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
+    d = (_asset_dir("domain-skills", "browser_harness_domain_skills") / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
     ds = sorted(p.name for p in d.rglob("*.md"))[:10] if d.is_dir() else []
 
     if wait_until is None:

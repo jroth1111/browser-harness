@@ -12,7 +12,7 @@ from . import _ipc as ipc
 
 CORE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = CORE_DIR.parent.parent
-AGENT_WORKSPACE = Path(os.environ.get("BH_AGENT_WORKSPACE", REPO_ROOT / "agent-workspace")).expanduser()
+AGENT_WORKSPACE = Path(os.environ.get("BH_AGENT_WORKSPACE", REPO_ROOT)).expanduser()
 
 
 def _load_env():
@@ -476,7 +476,7 @@ def http_get(url, headers=None, timeout=20.0):
 
 
 def _load_agent_helpers():
-    p = AGENT_WORKSPACE / "agent_helpers.py"
+    p = CORE_DIR / "agent_helpers.py"
     if not p.exists():
         return
     spec = importlib.util.spec_from_file_location("browser_harness_agent_helpers", p)
