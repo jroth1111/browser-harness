@@ -29,26 +29,20 @@ def test_max_dim_default_is_no_resize(fake_png):
     assert _run(fake_png, 4592, 2286) == (4592, 2286)
 
 
-def _seed_skill(tmp_path):
-    site = tmp_path / "domain-skills" / "example"
-    site.mkdir(parents=True)
-    (site / "scraping.md").write_text("hi")
-
-
-def test_goto_url_omits_domain_skills_by_default(tmp_path, monkeypatch):
-    monkeypatch.delenv("BH_DOMAIN_SKILLS", raising=False)
-    monkeypatch.setattr(helpers, "AGENT_WORKSPACE", tmp_path)
-    _seed_skill(tmp_path)
-    with patch("browser_harness.helpers.cdp", return_value={"frameId": "f"}):
+def test_goto_url_omits_domain_skills_when_no_skill_dir(tmp_path):
+    # tmp_path has no "example" subdirectory → domain_skills absent from result
+    with patch("browser_harness.helpers.cdp", return_value={"frameId": "f"}), \
+         patch("browser_harness.helpers._asset_dir", return_value=tmp_path):
         result = helpers.goto_url("https://www.example.com/")
     assert result == {"frameId": "f"}
 
 
-def test_goto_url_includes_domain_skills_when_enabled(tmp_path, monkeypatch):
-    monkeypatch.setenv("BH_DOMAIN_SKILLS", "1")
-    monkeypatch.setattr(helpers, "AGENT_WORKSPACE", tmp_path)
-    _seed_skill(tmp_path)
-    with patch("browser_harness.helpers.cdp", return_value={"frameId": "f"}):
+def test_goto_url_includes_domain_skills_when_skill_dir_present(tmp_path):
+    site = tmp_path / "example"
+    site.mkdir()
+    (site / "scraping.md").write_text("hi")
+    with patch("browser_harness.helpers.cdp", return_value={"frameId": "f"}), \
+         patch("browser_harness.helpers._asset_dir", return_value=tmp_path):
         result = helpers.goto_url("https://www.example.com/")
     assert result == {"frameId": "f", "domain_skills": ["scraping.md"]}
 
