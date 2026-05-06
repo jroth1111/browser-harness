@@ -5,7 +5,7 @@ description: Install browser-harness into the current agent and connect it to a 
 
 # `browser-harness` installation
 
-Use this file only for browser-harness install, browser connection setup, and connection troubleshooting. For day-to-day browser work, read `SKILL.md`. Task-specific edits belong in `agent-workspace/agent_helpers.py` and `domain-skills/`.
+Use this file only for browser-harness install, browser connection setup, and connection troubleshooting. For day-to-day browser work, read `SKILL.md`. Task-specific edits belong in `src/browser_harness/agent_helpers.py` and `domain-skills/`.
 
 ## Recommended `browser-harness` setup
 
@@ -18,7 +18,7 @@ uv tool install -e .
 command -v browser-harness
 ```
 
-That keeps the command global while still pointing at the real repo checkout, so when the agent edits `agent-workspace/agent_helpers.py` the next `browser-harness` uses the new code immediately. Prefer a stable path like `~/Developer/browser-harness`, not `/tmp`.
+That keeps the command global while still pointing at the real repo checkout, so when the agent edits `src/browser_harness/agent_helpers.py` the next `browser-harness` uses the new code immediately. Prefer a stable path like `~/Developer/browser-harness`, not `/tmp`.
 
 ## Make browser-harness global for the current agent
 

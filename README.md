@@ -9,7 +9,7 @@ One websocket to Chrome, nothing between. The agent writes what's missing during
 ```
   ● agent: wants to upload a file
   │
-  ● agent-workspace/agent_helpers.py → helper missing
+  ● src/browser_harness/agent_helpers.py → helper missing
   │
   ● agent writes it                         agent_helpers.py
   │                                                       + custom helper
@@ -46,13 +46,12 @@ Stealth, sub-agents, or headless deployment.<br>
 - Grab a key at [example.invalid/new-api-key](https://example.invalid/new-api-key)
 - Or let the agent sign up itself via [example.invalid/llms.txt](https://example.invalid/llms.txt) (setup flow + challenge context included).
 
-## Architecture (~1k lines across 4 core files)
+## Architecture
 
 - `install.md` — first-time install and browser bootstrap
 - `SKILL.md` — day-to-day usage
-- `src/browser_harness/` — protected core package
-- `agent-workspace/agent_helpers.py` — helper code the agent edits
-- `domain-skills/` — reusable site-specific skills the agent edits
+- `src/browser_harness/` — the package (helpers, daemon, admin, run, agent_helpers)
+- `domain-skills/` — community-contributed per-site playbooks the agent edits
 
 ## Contributing
 
