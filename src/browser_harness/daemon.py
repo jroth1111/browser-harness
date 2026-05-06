@@ -1,23 +1,28 @@
-"""CDP WS holder + IPC relay (Unix socket on POSIX, TCP loopback on Windows). One daemon per BU_NAME."""
-import asyncio, json, os, socket, sys, time, urllib.error, urllib.request
-from urllib.parse import urlparse
+"""CDP WS holder + Unix socket relay. One daemon per BH_NAME."""
+import asyncio
+import errno
+import fcntl
+import ipaddress
+import json
+import os
+import socket
+import sys
+import time
+import urllib.request
 from collections import deque
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from . import _ipc as ipc
-from cdp_use.client import CDPClient
+try:
+    from cdp_use.client import CDPClient
+except ModuleNotFoundError:  # optional dependency; tests import daemon without CDP runtime
+    CDPClient = None
 
 
 def _load_env():
-    repo_root = Path(__file__).resolve().parents[2]
-    workspace = Path(os.environ.get("BH_AGENT_WORKSPACE", repo_root)).expanduser()
-    for p in (repo_root / ".env", workspace / ".env"):
-        if not p.exists():
-            continue
-        _load_env_file(p)
-
-
-def _load_env_file(p):
+    p = Path(__file__).parent / ".env"
+    if not p.exists():
+        return
     for line in p.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -28,21 +33,17 @@ def _load_env_file(p):
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME", "default")
-SOCK = ipc.sock_addr(NAME)
-LOG = str(ipc.log_path(NAME))
-PID = str(ipc.pid_path(NAME))
+NAME = os.environ.get("BH_NAME", "default")
+SOCK = f"/tmp/bh-{NAME}.sock"
+LOG = f"/tmp/bh-{NAME}.log"
+PID = f"/tmp/bh-{NAME}.pid"
 BUF = 500
 PROFILES = [
     Path.home() / "Library/Application Support/Google/Chrome",
-    Path.home() / "Library/Application Support/Comet",
-    Path.home() / "Library/Application Support/Arc/User Data",
-    Path.home() / "Library/Application Support/Dia/User Data",
     Path.home() / "Library/Application Support/Microsoft Edge",
     Path.home() / "Library/Application Support/Microsoft Edge Beta",
     Path.home() / "Library/Application Support/Microsoft Edge Dev",
     Path.home() / "Library/Application Support/Microsoft Edge Canary",
-    Path.home() / "Library/Application Support/BraveSoftware/Brave-Browser",
     Path.home() / ".config/google-chrome",
     Path.home() / ".config/chromium",
     Path.home() / ".config/chromium-browser",
@@ -59,118 +60,196 @@ PROFILES = [
     Path.home() / "AppData/Local/Microsoft/Edge Beta/User Data",
     Path.home() / "AppData/Local/Microsoft/Edge Dev/User Data",
     Path.home() / "AppData/Local/Microsoft/Edge SxS/User Data",
-    Path.home() / "AppData/Local/BraveSoftware/Brave-Browser/User Data",
 ]
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
-BU_API = "https://api.browser-use.com/api/v3"
-REMOTE_ID = os.environ.get("BU_BROWSER_ID")
-API_KEY = os.environ.get("BROWSER_USE_API_KEY")
+BROWSER_SCOPED_PREFIXES = ("Browser.", "Target.", "Storage.")
+_SENSITIVE_QUERY_KEY_RE = __import__("re").compile(
+    r"(token|secret|password|passwd|auth|authorization|credential|key|signature|sig|session)",
+    __import__("re").I,
+)
 
 
 def log(msg):
-    open(LOG, "a").write(f"{msg}\n")
+    with open(LOG, "a") as f:
+        f.write(f"{msg}\n")
 
 
-async def _silent(coro):
+def _is_loopback_host(host):
+    if not host:
+        return False
+    host = host.strip("[]").lower()
+    if host in {"localhost", "localhost."}:
+        return True
     try:
-        await coro
-    except Exception:
-        pass
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
-def _ws_from_devtools_active_port(http_url: str) -> str | None:
-    """When /json/version returns 404 (Chrome 147+ default profile), match DevToolsActivePort by port."""
-    p = urlparse(http_url)
-    want_port = str(p.port) if p.port else ""
-    if not want_port:
+def _is_unspecified_host(host):
+    if not host:
+        return False
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_unspecified
+    except ValueError:
+        return False
+
+
+def _merge_warnings(*warning_lists):
+    out = []
+    seen = set()
+    for warnings in warning_lists:
+        for warning in warnings:
+            if warning in seen:
+                continue
+            seen.add(warning)
+            out.append(warning)
+    return out
+
+
+def _redact_url(url):
+    parsed = urlparse(url)
+    query = parsed.query
+    if query:
+        pairs = []
+        changed = False
+        for key, value in parse_qsl(query, keep_blank_values=True):
+            if _SENSITIVE_QUERY_KEY_RE.search(key):
+                pairs.append((key, "REDACTED"))
+                changed = True
+            else:
+                pairs.append((key, value))
+        if changed:
+            query = urlencode(pairs)
+    if not parsed.username and not parsed.password:
+        if query != parsed.query:
+            return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", query, parsed.fragment))
+        return url
+    host = parsed.hostname or ""
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    return urlunparse((parsed.scheme, host, parsed.path, "", query, parsed.fragment))
+
+
+def _remote_allowed():
+    return os.environ.get("BH_CDP_ALLOW_REMOTE") == "1"
+
+
+def _validate_endpoint_url(url, *, source, http_base=None):
+    parsed = urlparse(url)
+    if parsed.scheme not in {"ws", "wss", "http", "https"}:
+        raise RuntimeError(f"unsupported CDP endpoint scheme: {parsed.scheme or '(missing)'}")
+    if parsed.username or parsed.password:
+        raise RuntimeError("CDP endpoint URLs must not contain credentials")
+    host = parsed.hostname
+    port = parsed.port
+    if _is_unspecified_host(host):
+        raise RuntimeError(f"CDP endpoint host {host} is unsafe; use 127.0.0.1 or localhost")
+    is_loopback = _is_loopback_host(host)
+    allowed_remote = _remote_allowed()
+    warnings = []
+    if not is_loopback:
+        if not allowed_remote:
+            raise RuntimeError(
+                "refusing non-loopback CDP endpoint; set BH_CDP_ALLOW_REMOTE=1 only for a user-owned self-hosted browser"
+            )
+        warnings.append("remote CDP endpoint allowed by BH_CDP_ALLOW_REMOTE=1")
+    if parsed.scheme in {"wss", "https"} and is_loopback:
+        warnings.append(f"{parsed.scheme} on loopback is unusual; ws/http to 127.0.0.1 is the normal local shape")
+    return {
+        "source": source,
+        "input": "BH_CDP_WS" if source == "env" else "DevToolsActivePort",
+        "resolved_url": _redact_url(url),
+        "http_base": _redact_url(http_base) if http_base else None,
+        "host": host,
+        "port": port,
+        "is_loopback": is_loopback,
+        "remote_allowed": allowed_remote and not is_loopback,
+        "warnings": warnings,
+        "browser": None,
+        "protocol_version": None,
+    }
+
+
+def _devtools_version_url(url):
+    parsed = urlparse(url)
+    path = parsed.path.rstrip("/")
+    path = f"{path}/json/version" if path else "/json/version"
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", parsed.query, ""))
+
+
+def _resolve_devtools_http_base(url):
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise RuntimeError(f"unsupported DevTools HTTP endpoint scheme: {parsed.scheme or '(missing)'}")
+    info = _validate_endpoint_url(url, source="env", http_base=url)
+    with urllib.request.urlopen(_devtools_version_url(url), timeout=5) as resp:
+        data = json.loads(resp.read().decode())
+    ws_url = data.get("webSocketDebuggerUrl")
+    if not ws_url:
+        raise RuntimeError(f"{_redact_url(url)}/json/version did not include webSocketDebuggerUrl")
+    ws_info = _validate_endpoint_url(ws_url, source="env", http_base=url)
+    ws_info["browser"] = data.get("Browser")
+    ws_info["protocol_version"] = data.get("Protocol-Version")
+    ws_info["warnings"] = _merge_warnings(info["warnings"], ws_info["warnings"])
+    return ws_url, ws_info
+
+
+def _resolve_cdp_endpoint_from_env():
+    url = os.environ.get("BH_CDP_WS")
+    if not url:
         return None
-    host = p.hostname or "127.0.0.1"
-    if ":" in host:  # urlparse strips IPv6 brackets; restore them for the ws:// URL
-        host = f"[{host}]"
+    parsed = urlparse(url)
+    if parsed.scheme in {"http", "https"}:
+        return _resolve_devtools_http_base(url)
+    info = _validate_endpoint_url(url, source="env")
+    return url, info
+
+
+def _resolve_cdp_endpoint_from_devtools_active_port(wait_for_port=True):
     for base in PROFILES:
         try:
-            active = (base / "DevToolsActivePort").read_text().splitlines()
-        except (FileNotFoundError, NotADirectoryError):
+            port, path = (base / "DevToolsActivePort").read_text().strip().split("\n", 1)
+        except (FileNotFoundError, NotADirectoryError, ValueError):
             continue
-        port = active[0].strip() if active else ""
-        ws_path = active[1].strip() if len(active) > 1 else ""
-        if port == want_port and ws_path:
-            return f"ws://{host}:{port}{ws_path}"
-    return None
+        port = port.strip()
+        path = path.strip()
+        if wait_for_port:
+            try:
+                port_num = int(port)
+            except (ValueError, TypeError):
+                continue
+            deadline = time.time() + 30
+            while True:
+                probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                probe.settimeout(1)
+                try:
+                    probe.connect(("127.0.0.1", port_num))
+                    break
+                except OSError:
+                    if time.time() >= deadline:
+                        raise RuntimeError(
+                            "Chrome's remote-debugging page is open, but DevTools is not live yet "
+                            f"on 127.0.0.1:{port} - if Chrome opened a profile picker, choose your "
+                            "normal profile first, then tick the checkbox and click Allow if shown"
+                        )
+                    time.sleep(1)
+                finally:
+                    probe.close()
+        url = f"ws://127.0.0.1:{port}{path}"
+        return url, _validate_endpoint_url(url, source="devtools_active_port")
+    raise RuntimeError(f"DevToolsActivePort not found in {[str(p) for p in PROFILES]} - enable chrome://inspect/#remote-debugging")
+
+
+def resolve_cdp_endpoint(wait_for_port=True):
+    env_endpoint = _resolve_cdp_endpoint_from_env()
+    if env_endpoint:
+        return env_endpoint
+    return _resolve_cdp_endpoint_from_devtools_active_port(wait_for_port=wait_for_port)
 
 
 def get_ws_url():
-    if url := os.environ.get("BU_CDP_WS"):
-        return url
-    if url := os.environ.get("BU_CDP_URL"):
-        # HTTP DevTools endpoint (e.g. http://127.0.0.1:9333) — resolve to ws via /json/version.
-        # Use this for a dedicated automation Chrome on a non-default profile, which avoids the
-        # M144 "Allow remote debugging" dialog and the M136 default-profile lockdown.
-        deadline = time.time() + 30
-        last_err = None
-        base_url = url.rstrip("/")
-        while time.time() < deadline:
-            try:
-                return json.loads(urllib.request.urlopen(f"{base_url}/json/version", timeout=5).read())["webSocketDebuggerUrl"]
-            except urllib.error.HTTPError as e:
-                last_err = e
-                if e.code == 404 and (ws := _ws_from_devtools_active_port(url)):
-                    return ws
-                time.sleep(1)
-            except Exception as e:
-                last_err = e
-                time.sleep(1)
-        raise RuntimeError(f"BU_CDP_URL={url} unreachable after 30s: {last_err} -- is the dedicated automation Chrome running?")
-    for base in PROFILES:
-        try:
-            active = (base / "DevToolsActivePort").read_text().splitlines()
-        except (FileNotFoundError, NotADirectoryError):
-            continue
-        port = active[0].strip() if active else ""
-        ws_path = active[1].strip() if len(active) > 1 else ""
-        if not port:
-            continue
-        # Resolve the live WS URL via /json/version instead of trusting the path stored
-        # alongside the port in DevToolsActivePort: if Chrome was previously launched
-        # with a different --user-data-dir on the same port, that file is left behind
-        # with a stale browser UUID and the WS upgrade returns 404.
-        deadline = time.time() + 30
-        while time.time() < deadline:
-            try:
-                return json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=1).read())["webSocketDebuggerUrl"]
-            except urllib.error.HTTPError as e:
-                # Chrome 147+ disables /json/* HTTP discovery on the default user-data-dir;
-                # the ws path Chrome wrote to DevToolsActivePort still works.
-                if e.code == 404 and ws_path:
-                    return f"ws://127.0.0.1:{port}{ws_path}"
-                time.sleep(1)
-            except (OSError, KeyError, ValueError):
-                time.sleep(1)
-        raise RuntimeError(
-            f"Chrome's remote-debugging page is open, but DevTools is not live yet on 127.0.0.1:{port} — if Chrome opened a profile picker, choose your normal profile first, then tick the checkbox and click Allow if shown"
-        )
-    for probe_port in (9222, 9223):
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{probe_port}/json/version", timeout=1) as r:
-                return json.loads(r.read())["webSocketDebuggerUrl"]
-        except (OSError, KeyError, ValueError):
-            continue
-    raise RuntimeError(f"DevToolsActivePort not found in {[str(p) for p in PROFILES]} — enable chrome://inspect/#remote-debugging, or set BU_CDP_WS for a remote browser")
-
-
-def stop_remote():
-    if not REMOTE_ID or not API_KEY: return
-    try:
-        req = urllib.request.Request(
-            f"{BU_API}/browsers/{REMOTE_ID}",
-            data=json.dumps({"action": "stop"}).encode(),
-            method="PATCH",
-            headers={"X-Browser-Use-API-Key": API_KEY, "Content-Type": "application/json"},
-        )
-        urllib.request.urlopen(req, timeout=15).read()
-        log(f"stopped remote browser {REMOTE_ID}")
-    except Exception as e:
-        log(f"stop_remote failed ({REMOTE_ID}): {e}")
+    return resolve_cdp_endpoint()[0]
 
 
 def is_real_page(t):
@@ -181,9 +260,11 @@ class Daemon:
     def __init__(self):
         self.cdp = None
         self.session = None
-        self.target_id = None
+        self._attached_target_id = None
+        self.endpoint_info = None
         self.events = deque(maxlen=BUF)
         self.dialog = None
+        self.blockers = deque(maxlen=200)
         self.stop = None  # asyncio.Event, set inside start()
 
     async def attach_first_page(self):
@@ -191,146 +272,87 @@ class Daemon:
         targets = (await self.cdp.send_raw("Target.getTargets"))["targetInfos"]
         pages = [t for t in targets if is_real_page(t)]
         if not pages:
-            # No real pages — create one instead of attaching to omnibox popup
             tid = (await self.cdp.send_raw("Target.createTarget", {"url": "about:blank"}))["targetId"]
             log(f"no real pages found, created about:blank ({tid})")
             pages = [{"targetId": tid, "url": "about:blank", "type": "page"}]
         self.session = (await self.cdp.send_raw(
             "Target.attachToTarget", {"targetId": pages[0]["targetId"], "flatten": True}
         ))["sessionId"]
-        self.target_id = pages[0]["targetId"]
+        self._attached_target_id = pages[0]["targetId"]
         log(f"attached {pages[0]['targetId']} ({pages[0].get('url','')[:80]}) session={self.session}")
-        await self._enable_default_domains(self.session)
         return pages[0]
-
-    async def _enable_default_domains(self, session_id):
-        """Enable Page/DOM/Runtime/Network on a CDP session.
-
-        Used by both initial attach and set_session (called after switch_tab/
-        new_tab). Without this, helpers that depend on Network.* events —
-        notably wait_for_network_idle() — silently stop receiving events
-        after a tab switch, because each fresh CDP session starts with all
-        domains disabled.
-
-        Runs the four enables in parallel via gather so the worst-case time is
-        bounded by a single CDP round trip rather than four sequential ones —
-        important on the set_session path, where the helper's IPC socket has
-        a 5s read timeout.
-        """
-        async def enable_one(d):
-            try:
-                await asyncio.wait_for(
-                    self.cdp.send_raw(f"{d}.enable", session_id=session_id),
-                    timeout=4,
-                )
-            except Exception as e:
-                log(f"enable {d} on {session_id}: {e}")
-        await asyncio.gather(*(enable_one(d) for d in ("Page", "DOM", "Runtime", "Network")))
 
     async def start(self):
         self.stop = asyncio.Event()
-        url = get_ws_url()
-        log(f"connecting to {url}")
+        url, self.endpoint_info = resolve_cdp_endpoint()
+        log(f"connecting to {_redact_url(url)}")
+        if CDPClient is None:
+            raise RuntimeError(
+                "cdp_use is not installed. Install it (or run in an environment that includes it) "
+                "to use the browser-harness daemon."
+            )
         self.cdp = CDPClient(url)
         try:
             await self.cdp.start()
         except Exception as e:
-            if os.environ.get("BU_CDP_WS"):
-                raise RuntimeError(
-                    f"CDP WS handshake failed: {e} -- remote browser WebSocket connection failed. "
-                    "This can happen when network policy blocks the connection, the WS URL is wrong or expired, or the remote endpoint is down. "
-                    "If you use Browser Use cloud, verify BROWSER_USE_API_KEY and get a fresh URL via start_remote_daemon()."
-                )
             raise RuntimeError(f"CDP WS handshake failed: {e} -- click Allow in Chrome if prompted, then retry")
         await self.attach_first_page()
         orig = self.cdp._event_registry.handle_event
-        mark_js = "if(!document.title.startsWith('\U0001F7E2'))document.title='\U0001F7E2 '+document.title"
+
         async def tap(method, params, session_id=None):
             self.events.append({"method": method, "params": params, "session_id": session_id})
             if method == "Page.javascriptDialogOpening":
                 self.dialog = params
+                self.blockers.append({"kind": "dialog", "params": params, "t": time.time()})
             elif method == "Page.javascriptDialogClosed":
                 self.dialog = None
-            elif method in ("Page.loadEventFired", "Page.domContentEventFired"):
-                asyncio.create_task(_silent(asyncio.wait_for(self.cdp.send_raw("Runtime.evaluate", {"expression": mark_js}, session_id=self.session), timeout=2)))
-            return await orig(method, params, session_id)
+            elif method in ("Page.fileChooserOpened", "Page.downloadWillBegin"):
+                self.blockers.append({"kind": method.split(".")[-1], "params": params, "t": time.time()})
+            elif method == "Target.targetDestroyed":
+                destroyed_id = (params or {}).get("targetId")
+                if destroyed_id and destroyed_id == self._attached_target_id:
+                    log(f"attached target {destroyed_id} destroyed, re-attaching")
+                    try:
+                        await self.attach_first_page()
+                    except Exception as e:
+                        log(f"re-attach failed: {e}")
+                        self.session = None
+                        self._attached_target_id = None
+            elif method == "Target.targetCreated":
+                t = (params or {}).get("targetInfo") or {}
+                if t.get("type") == "page" and not t.get("url", "").startswith(INTERNAL):
+                    log(f"new page target: {t.get('targetId')} {t.get('url', '')[:80]}")
+            try:
+                return await orig(method, params, session_id)
+            except Exception as e:
+                log(f"event handler error for {method}: {e}")
+                return None
+
         self.cdp._event_registry.handle_event = tap
+        await self.cdp.send_raw("Target.setDiscoverTargets", {"discover": True})
 
     async def handle(self, req):
-        # Token guard for Windows TCP loopback: any local process can otherwise
-        # connect and issue CDP commands. expected_token() is None on POSIX so
-        # this check is a no-op there (AF_UNIX + chmod 600 is the boundary).
-        expected = ipc.expected_token()
-        if expected is not None and req.get("token") != expected:
-            return {"error": "unauthorized"}
         meta = req.get("meta")
-        # Liveness probe — lets clients confirm the listener is actually this
-        # daemon and not an unrelated process that reused our port post-crash.
-        # `pid` lets restart_daemon() verify the live daemon's identity before
-        # signaling — protects against SIGTERM-by-stale-pid-file after PID reuse.
-        if meta == "ping":        return {"pong": True, "pid": os.getpid()}
         if meta == "drain_events":
             out = list(self.events); self.events.clear()
             return {"events": out}
         if meta == "session":     return {"session_id": self.session}
-        if meta == "connection_status":
-            if not self.target_id:
-                return {"error": "not_attached"}
-            try:
-                info = (await self.cdp.send_raw("Target.getTargetInfo", {"targetId": self.target_id}))["targetInfo"]
-            except Exception:
-                return {"error": "cdp_disconnected"}
-            page = None
-            if is_real_page(info):
-                page = {
-                    "targetId": info.get("targetId"),
-                    "title": info.get("title") or "(untitled)",
-                    "url": info.get("url") or "",
-                }
-            return {"target_id": self.target_id, "session_id": self.session, "page": page}
+        if meta == "endpoint_info": return {"endpoint_info": self.endpoint_info}
         if meta == "set_session":
-            old_session = self.session
             self.session = req.get("session_id")
-            self.target_id = req.get("target_id") or self.target_id
-            # Run the old-session Network.disable (defense in depth — keeps
-            # background-tab traffic out of the global event buffer; the
-            # consumer-side filter in wait_for_network_idle is the actual
-            # correctness gate) in parallel with the four enables on the new
-            # session. Different sessions, independent CDP requests. Keeps
-            # the synchronous reply under the helper's 5s IPC read timeout
-            # even on a remote daemon — sequentially these would have stacked
-            # to ~22s worst case.
-            tasks = []
-            if old_session and old_session != self.session:
-                async def disable_old():
-                    try:
-                        await asyncio.wait_for(
-                            self.cdp.send_raw("Network.disable", session_id=old_session),
-                            timeout=2,
-                        )
-                    except Exception: pass
-                tasks.append(disable_old())
-            tasks.append(self._enable_default_domains(self.session))
-            await asyncio.gather(*tasks)
-            # 🟢 tab-marker title prefix is purely cosmetic — fire-and-forget so
-            # it doesn't add to the synchronous IPC budget.
-            asyncio.create_task(_silent(asyncio.wait_for(
-                self.cdp.send_raw(
-                    "Runtime.evaluate",
-                    {"expression": "if(!document.title.startsWith('\U0001F7E2'))document.title='\U0001F7E2 '+document.title"},
-                    session_id=self.session,
-                ),
-                timeout=2,
-            )))
+            self._attached_target_id = req.get("target_id", self._attached_target_id)
             return {"session_id": self.session}
         if meta == "pending_dialog": return {"dialog": self.dialog}
+        if meta == "pending_blockers":
+            out = list(self.blockers); self.blockers.clear()
+            return {"blockers": out}
         if meta == "shutdown":    self.stop.set(); return {"ok": True}
 
         method = req["method"]
         params = req.get("params") or {}
-        # Browser-level Target.* calls must not use a session (stale or otherwise).
+        # Browser-level calls must not use a page session (stale or otherwise).
         # For everything else, explicit session in req wins; else default.
-        sid = None if method.startswith("Target.") else (req.get("session_id") or self.session)
+        sid = None if method.startswith(BROWSER_SCOPED_PREFIXES) else (req.get("session_id") or self.session)
         try:
             return {"result": await self.cdp.send_raw(method, params, session_id=sid)}
         except Exception as e:
@@ -343,13 +365,18 @@ class Daemon:
 
 
 async def serve(d):
+    if os.path.exists(SOCK):
+        os.unlink(SOCK)
+
     async def handler(reader, writer):
         try:
-            line = await reader.readline()
-            if not line: return
-            resp = await d.handle(json.loads(line))
-            writer.write((json.dumps(resp, default=str) + "\n").encode())
-            await writer.drain()
+            while True:
+                line = await reader.readline()
+                if not line:
+                    break
+                resp = await d.handle(json.loads(line))
+                writer.write((json.dumps(resp, default=str) + "\n").encode())
+                await writer.drain()
         except Exception as e:
             log(f"conn: {e}")
             try:
@@ -359,20 +386,16 @@ async def serve(d):
                 pass
         finally:
             writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
 
-    serve_task = asyncio.create_task(ipc.serve(NAME, handler))
-    stop_task = asyncio.create_task(d.stop.wait())
-    await asyncio.sleep(0.05)  # let serve() bind so sock_addr() resolves to the live endpoint
-    log(f"listening on {ipc.sock_addr(NAME)} (name={NAME}, remote={REMOTE_ID or 'local'})")
-    try:
-        await asyncio.wait({serve_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
-        if serve_task.done(): await serve_task  # surfaces a serve crash
-    finally:
-        for t in (serve_task, stop_task):
-            t.cancel()
-            try: await t
-            except (asyncio.CancelledError, Exception): pass
-        ipc.cleanup_endpoint(NAME)
+    server = await asyncio.start_unix_server(handler, path=SOCK)
+    os.chmod(SOCK, 0o600)
+    log(f"listening on {SOCK} (name={NAME})")
+    async with server:
+        await d.stop.wait()
 
 
 async def main():
@@ -382,17 +405,42 @@ async def main():
 
 
 def already_running():
-    # Ping handshake (not a bare connect) so a stale .port file + port reuse
-    # after a daemon crash doesn't make us mistake an unrelated listener for ours.
-    return ipc.ping(NAME, timeout=1.0)
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            s.connect(SOCK)
+            return True
+    except OSError:
+        return False
+
+
+def acquire_daemon_lock():
+    lock_file = open(PID, "a+")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as e:
+        lock_file.close()
+        if e.errno in {errno.EACCES, errno.EAGAIN}:
+            raise RuntimeError(f"daemon already running according to {PID}") from e
+        raise
+    lock_file.seek(0)
+    lock_file.truncate()
+    lock_file.write(str(os.getpid()))
+    lock_file.flush()
+    return lock_file
 
 
 if __name__ == "__main__":
     if already_running():
         print(f"daemon already running on {SOCK}", file=sys.stderr)
-        sys.exit(0)
-    open(LOG, "w").close()
-    open(PID, "w").write(str(os.getpid()))
+        sys.exit(1)
+    with open(LOG, "w"):
+        pass
+    try:
+        pid_lock = acquire_daemon_lock()
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
@@ -401,6 +449,6 @@ if __name__ == "__main__":
         log(f"fatal: {e}")
         sys.exit(1)
     finally:
-        stop_remote()
+        pid_lock.close()
         try: os.unlink(PID)
         except FileNotFoundError: pass
