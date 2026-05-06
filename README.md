@@ -66,7 +66,7 @@ If you're not sure where to start, open an issue and we'll point you somewhere u
 
 ## Domain skills
 
-Set `BH_DOMAIN_SKILLS=1` to enable [domain-skills/](domain-skills/) — community-contributed per-site playbooks `goto_url` surfaces by domain. Contribute via PR.
+[domain-skills/](domain-skills/) — community-contributed per-site playbooks. `goto_url` surfaces them by domain when present. Contribute via PR.
 
 ---
 

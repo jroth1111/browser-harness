@@ -47,7 +47,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-import login_session
+from browser_harness import login_session
 
 
 BASE = "https://www.airbnb.com.au"

@@ -64,5 +64,5 @@ browser_harness_domain_skills = [
 "share/browser-harness" = ["README.md", "SKILL.md", "install.md", "LICENSE"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "src"]
 testpaths = ["tests"]

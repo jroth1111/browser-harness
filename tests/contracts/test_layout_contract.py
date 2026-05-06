@@ -1,5 +1,6 @@
 """Layout contract: asserts the repo follows standard Python package structure."""
 
+import ast
 import importlib.resources
 import subprocess
 import sys
@@ -56,6 +57,40 @@ def test_domain_skills_package_resolvable():
     # At least one domain skill directory must exist
     children = list(pkg.iterdir())
     assert len(children) > 0, "browser_harness_domain_skills appears empty"
+
+
+def test_no_bare_intrapackage_imports_in_src():
+    """Modules in src/browser_harness/ must use relative or fully-qualified imports
+    when referencing siblings — never bare `import response` or `from helpers ...`,
+    which would silently work in `exec` sessions but break installed wheels."""
+    sibling_stems = {
+        p.stem for p in SRC.glob("*.py") if p.stem != "__init__"
+    } | {p.name for p in SRC.iterdir() if p.is_dir() and (p / "__init__.py").exists()}
+
+    violations = []
+    for path in SRC.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    head = alias.name.split(".", 1)[0]
+                    if head in sibling_stems:
+                        violations.append(
+                            f"{path.relative_to(REPO_ROOT)}:{node.lineno}: "
+                            f"bare `import {alias.name}` — use `from . import {head}` instead"
+                        )
+            elif isinstance(node, ast.ImportFrom):
+                if node.level == 0 and node.module:
+                    head = node.module.split(".", 1)[0]
+                    if head in sibling_stems:
+                        violations.append(
+                            f"{path.relative_to(REPO_ROOT)}:{node.lineno}: "
+                            f"bare `from {node.module} import ...` — use `from .{node.module} import ...`"
+                        )
+    assert violations == [], "Bare intra-package imports forbidden:\n  " + "\n  ".join(violations)
 
 
 def test_entry_points_reference_package():

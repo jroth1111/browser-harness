@@ -33,9 +33,7 @@ from typing import Any, Optional
 from urllib.parse import urlencode
 from urllib.error import URLError
 
-# Import http_get from helpers.py (parent tree root)
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-from helpers import http_get  # noqa: E402
+from browser_harness.helpers import http_get
 
 # --- Constants ---
 

@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-import login_session
+from browser_harness import login_session
 
 
 BASE = "https://www.airbnb.com.au"

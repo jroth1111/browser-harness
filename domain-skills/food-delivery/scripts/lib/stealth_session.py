@@ -7,7 +7,7 @@ import json
 import time
 from pathlib import Path
 
-from stealth_helpers import stealth_session
+from browser_harness.stealth_helpers import stealth_session
 
 PRIVATE_DATA = Path(__file__).parent.parent.parent / ".private-data"
 

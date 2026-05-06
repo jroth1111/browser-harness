@@ -7,7 +7,7 @@ description: Direct browser control via CDP. Use when the user wants to automate
 
 Direct browser control via CDP. For task-specific edits, use `src/browser_harness/agent_helpers.py`. For setup, install, or connection problems, read install.md.
 
-Domain skills (community-contributed per-site playbooks under `domain-skills/`) are off by default. Set `BH_DOMAIN_SKILLS=1` to enable them; see the bottom section.
+Domain skills (community-contributed per-site playbooks under `domain-skills/`) surface automatically through `goto_url` when a per-site folder exists; see the bottom section.
 
 ## Usage
 
@@ -211,10 +211,8 @@ If you start struggling with a specific mechanic while navigating, look in inter
 - Prefer compositor-level actions over framework hacks. Try screenshots, coordinate clicks, and raw key input before adding DOM-specific workarounds.
 - If you need framework-specific DOM tricks, check interaction-skills/ first. That is where dropdown, dialog, iframe, shadow DOM, and form-specific guidance belongs.
 
-## Domain skills (opt-in)
+## Domain skills
 
-Only applies when `BH_DOMAIN_SKILLS=1`. Otherwise ignore — `domain-skills/` is dormant and `goto_url` won't surface skill files.
-
-When enabled, search `domain-skills/<host>/` before inventing an approach. `goto_url` returns up to 10 skill filenames for the navigated host.
+Search `domain-skills/<host>/` before inventing an approach. `goto_url` returns up to 10 skill filenames for the navigated host when a matching folder exists.
 
 If you learn anything non-obvious — a private API, stable selector, framework quirk, URL pattern, hidden wait, or site-specific trap — open a PR to `domain-skills/<site>/`. Capture the durable shape of the site (the map, not the diary). Don't write pixel coordinates (break on layout), task narration, or secrets — the directory is public.

@@ -50,11 +50,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-_pkg = ROOT / "src" / "browser_harness"
-if str(_pkg) not in sys.path:
-    sys.path.insert(0, str(_pkg))
 
-from data_display import render_dataset
+from browser_harness.data_display import render_dataset
 
 AIRBNB_DIR = ROOT / "domain-skills" / "airbnb"
 SCRIPTS_DIR = AIRBNB_DIR / "scripts"
