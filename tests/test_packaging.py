@@ -3,19 +3,26 @@ from pathlib import Path
 
 
 def test_package_config_installs_runtime_modules_and_skill_assets():
-    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    root = Path(__file__).resolve().parent.parent
+    config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     setuptools = config["tool"]["setuptools"]
 
-    assert "data_display" in setuptools["py-modules"]
-    assert "skill_learning_gate" in setuptools["py-modules"]
-    assert config["project"]["scripts"]["browser-harness"] == "run:main"
-    assert config["project"]["scripts"]["browser-harness-skill-learning-gate"] == "skill_learning_gate:main"
+    # All runtime modules now live inside the browser_harness package; no py-modules.
+    assert "py-modules" not in setuptools
+    assert "browser_harness" in setuptools["packages"]
+
+    # Entry-points reference the package, not bare module names.
+    assert config["project"]["scripts"]["browser-harness"] == "browser_harness.run:main"
+    assert config["project"]["scripts"]["browser-harness-skill-learning-gate"] == "browser_harness.skill_learning_gate:main"
+
     assert set(setuptools["packages"]) >= {
+        "browser_harness",
         "browser_harness_domain_skills",
         "browser_harness_interaction_skills",
         "browser_harness_docs",
         "browser_harness_assets",
     }
+    assert setuptools["package-dir"]["browser_harness"] == "src/browser_harness"
     assert setuptools["package-dir"]["browser_harness_domain_skills"] == "domain-skills"
     assert setuptools["package-dir"]["browser_harness_assets"] == "browser_harness_assets"
     assert "**/*.md" in setuptools["package-data"]["browser_harness_domain_skills"]

@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 YOUTUBE = ROOT / "domain-skills" / "youtube"
 
 

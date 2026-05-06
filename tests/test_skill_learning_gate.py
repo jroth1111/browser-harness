@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 
-import skill_learning_gate
+from browser_harness import skill_learning_gate
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = ROOT / "domain-skills" / "skill-learning-candidate.schema.json"
 FIXTURE_DIR = ROOT / "domain-skills" / "airbnb" / "fixtures" / "skill-learning"
 

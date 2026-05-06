@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-import lightpanda_control
+from browser_harness import lightpanda_control
 
 
 def test_evaluate_field_contract_requires_page_text_and_named_fields():
@@ -45,7 +45,7 @@ def test_wait_for_field_contract_polls_until_fields_present():
         {"ok": True, "missing": []},
     ]
 
-    with patch("lightpanda_control.evaluate_field_contract", side_effect=results) as evaluate:
+    with patch("browser_harness.lightpanda_control.evaluate_field_contract", side_effect=results) as evaluate:
         result = lightpanda_control.wait_for_field_contract(
             object(),
             {"room_links": "true"},
@@ -116,8 +116,8 @@ def test_lightpanda_server_launches_serve_and_closes_process(tmp_path):
     proc.pid = 12345
 
     with patch("subprocess.Popen", return_value=proc) as popen, \
-         patch("lightpanda_control.wait_json_version", return_value={"webSocketDebuggerUrl": "ws://127.0.0.1:9222/"}) as wait_version, \
-         patch("lightpanda_control.LightpandaCDP") as cdp_class:
+         patch("browser_harness.lightpanda_control.wait_json_version", return_value={"webSocketDebuggerUrl": "ws://127.0.0.1:9222/"}) as wait_version, \
+         patch("browser_harness.lightpanda_control.LightpandaCDP") as cdp_class:
         cdp_class.return_value.ensure_page.return_value = "SID-1"
         server = lightpanda_control.LightpandaServer("/bin/lightpanda", port=9222, log_path=tmp_path / "lp.log")
         server.start()

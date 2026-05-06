@@ -22,8 +22,8 @@ def test_page_info_uses_target_and_layout_metrics_not_runtime():
             }
         raise AssertionError(method)
 
-    with patch("helpers._send", return_value={"dialog": None}), \
-         patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers._send", return_value={"dialog": None}), \
+         patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         assert helpers.page_info() == {
             "url": "https://example.com",
             "title": "Example",
@@ -46,8 +46,8 @@ def test_goto_url_prepares_page_load_events_before_navigation():
         calls.append((method, params))
         return {"frameId": "frame-1"} if method == "Page.navigate" else {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers.drain_events", return_value=[]):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers.drain_events", return_value=[]):
         assert helpers.goto_url("https://example.com") == {"frameId": "frame-1"}
 
     assert calls == [
@@ -68,9 +68,9 @@ def test_goto_url_discovers_packaged_domain_skill_assets(tmp_path):
         calls.append((method, params))
         return {"frameId": "frame-1"} if method == "Page.navigate" else {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers.drain_events", return_value=[]), \
-         patch("helpers._asset_dir", return_value=domain_root) as asset_dir:
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers.drain_events", return_value=[]), \
+         patch("browser_harness.helpers._asset_dir", return_value=domain_root) as asset_dir:
         result = helpers.goto_url("https://www.airbnb.com/hosting")
 
     asset_dir.assert_called_once_with("domain-skills", "browser_harness_domain_skills")
@@ -78,18 +78,18 @@ def test_goto_url_discovers_packaged_domain_skill_assets(tmp_path):
 
 
 def test_goto_with_auth_loads_profile_before_navigation():
-    with patch("helpers.login_session.load_auth_profile", return_value=True) as mock_load, \
-         patch("helpers.cdp", return_value={"frameId": "f1"}), \
-         patch("helpers.drain_events", return_value=[]):
+    with patch("browser_harness.helpers.login_session.load_auth_profile", return_value=True) as mock_load, \
+         patch("browser_harness.helpers.cdp", return_value={"frameId": "f1"}), \
+         patch("browser_harness.helpers.drain_events", return_value=[]):
         result = helpers.goto_with_auth("https://www.airbnb.com/rooms/123")
     mock_load.assert_called_once()
     assert mock_load.call_args[0][1] == "www.airbnb.com"
 
 
 def test_goto_with_auth_navigates_even_without_profile():
-    with patch("helpers.login_session.load_auth_profile", return_value=False), \
-         patch("helpers.cdp", return_value={"frameId": "f1"}), \
-         patch("helpers.drain_events", return_value=[]):
+    with patch("browser_harness.helpers.login_session.load_auth_profile", return_value=False), \
+         patch("browser_harness.helpers.cdp", return_value={"frameId": "f1"}), \
+         patch("browser_harness.helpers.drain_events", return_value=[]):
         result = helpers.goto_with_auth("https://example.com")
     assert result == {"frameId": "f1"}
 
@@ -103,8 +103,8 @@ def test_switch_tab_does_not_mutate_title():
             return {"sessionId": "session-2"}
         return {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers._send", return_value={"session_id": "session-2"}) as send:
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers._send", return_value={"session_id": "session-2"}) as send:
         assert helpers.switch_tab("target-2") == "session-2"
 
     assert calls == [
@@ -216,7 +216,7 @@ def test_switch_tab_reports_missing_session_id():
     def fake_cdp(method, **params):
         return {} if method == "Target.attachToTarget" else {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         try:
             helpers.switch_tab("target-2")
         except RuntimeError as e:
@@ -243,8 +243,8 @@ def test_close_tab_closes_current_and_switches_to_remaining_real_tab():
             return {"sessionId": "session-2"}
         return {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers._send", return_value={"session_id": "session-2"}) as send:
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers._send", return_value={"session_id": "session-2"}) as send:
         assert helpers.close_tab() is True
 
     assert calls == [
@@ -269,7 +269,7 @@ def test_close_tab_closes_non_current_without_switching():
             return {"success": True}
         raise AssertionError(method)
 
-    with patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         assert helpers.close_tab("target-2") is True
 
     assert calls == [
@@ -279,7 +279,7 @@ def test_close_tab_closes_non_current_without_switching():
 
 
 def test_close_tab_reports_missing_target_id():
-    with patch("helpers.current_tab", return_value={"targetId": "target-1"}):
+    with patch("browser_harness.helpers.current_tab", return_value={"targetId": "target-1"}):
         try:
             helpers.close_tab({})
         except RuntimeError as e:
@@ -305,8 +305,8 @@ def test_close_tabs_closes_many_and_switches_once_if_current_closed():
             return {"sessionId": "session-3"}
         return {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers._send", return_value={"session_id": "session-3"}):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers._send", return_value={"session_id": "session-3"}):
         assert helpers.close_tabs(["target-1", {"targetId": "target-2"}]) == {
             "target-1": True,
             "target-2": True,
@@ -333,7 +333,7 @@ def test_close_tabs_does_not_switch_when_current_survives():
             return {"success": True}
         raise AssertionError(method)
 
-    with patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         assert helpers.close_tabs(["target-2", None, {}]) == {"target-2": True}
 
     assert calls == [
@@ -343,8 +343,8 @@ def test_close_tabs_does_not_switch_when_current_survives():
 
 
 def test_new_tab_reports_missing_target_id():
-    with patch("helpers.cdp", return_value={}), \
-         patch("helpers.list_tabs", return_value=[]):
+    with patch("browser_harness.helpers.cdp", return_value={}), \
+         patch("browser_harness.helpers.list_tabs", return_value=[]):
         try:
             helpers.new_tab()
         except RuntimeError as e:
@@ -356,7 +356,7 @@ def test_new_tab_reports_missing_target_id():
 
 def test_new_tab_enforces_tab_limit():
     five_tabs = [{"targetId": f"t-{i}"} for i in range(5)]
-    with patch("helpers.list_tabs", return_value=five_tabs):
+    with patch("browser_harness.helpers.list_tabs", return_value=five_tabs):
         try:
             helpers.new_tab()
         except RuntimeError as e:
@@ -368,16 +368,16 @@ def test_new_tab_enforces_tab_limit():
 
 def test_new_tab_allows_under_limit():
     three_tabs = [{"targetId": f"t-{i}"} for i in range(3)]
-    with patch("helpers.list_tabs", return_value=three_tabs), \
-         patch("helpers.cdp", return_value={"targetId": "new-1"}), \
-         patch("helpers.switch_tab"):
+    with patch("browser_harness.helpers.list_tabs", return_value=three_tabs), \
+         patch("browser_harness.helpers.cdp", return_value={"targetId": "new-1"}), \
+         patch("browser_harness.helpers.switch_tab"):
         helpers.new_tab()
 
 
 def test_new_tab_respects_bh_max_tabs_env(monkeypatch):
     monkeypatch.setattr(helpers, "_MAX_TABS", 2)
     two_tabs = [{"targetId": f"t-{i}"} for i in range(2)]
-    with patch("helpers.list_tabs", return_value=two_tabs):
+    with patch("browser_harness.helpers.list_tabs", return_value=two_tabs):
         try:
             helpers.new_tab()
         except RuntimeError as e:
@@ -403,7 +403,7 @@ def test_with_session_recovery_retries_on_recoverable():
             raise RuntimeError("Session with given id not found")
         return "ok"
 
-    with patch("helpers._reconnect"):
+    with patch("browser_harness.helpers._reconnect"):
         result = helpers.with_session_recovery(flaky)
     assert result == "ok"
     assert calls["n"] == 2
@@ -413,7 +413,7 @@ def test_with_session_recovery_propagates_non_recoverable():
     def bad():
         raise RuntimeError("something else")
 
-    with patch("helpers._reconnect"):
+    with patch("browser_harness.helpers._reconnect"):
         try:
             helpers.with_session_recovery(bad)
         except RuntimeError as e:
@@ -429,7 +429,7 @@ def test_with_session_recovery_no_infinite_retry():
         calls["n"] += 1
         raise RuntimeError("Target closed")
 
-    with patch("helpers._reconnect"):
+    with patch("browser_harness.helpers._reconnect"):
         try:
             helpers.with_session_recovery(always_fails)
         except RuntimeError:
@@ -438,8 +438,8 @@ def test_with_session_recovery_no_infinite_retry():
 
 
 def test_smart_wait_resolves_on_load():
-    with patch("helpers.page_content_status", return_value={"textLength": 50, "block": {}}), \
-         patch("helpers._wait_until_load", return_value={"ok": True, "reason": "load"}), \
+    with patch("browser_harness.helpers.page_content_status", return_value={"textLength": 50, "block": {}}), \
+         patch("browser_harness.helpers._wait_until_load", return_value={"ok": True, "reason": "load"}), \
          patch("time.sleep"):
         result = helpers.smart_wait(timeout=5.0)
     assert result["phase"] == "load"
@@ -456,9 +456,9 @@ def test_smart_wait_resolves_on_network_idle():
     def fake_wait_until_network_idle(timeout=15.0):
         return idle_ok
 
-    with patch("helpers.page_content_status", return_value={"textLength": 50, "block": {}}), \
-         patch("helpers._wait_until_load", side_effect=fake_wait_until_load), \
-         patch("helpers._wait_until_network_idle", side_effect=fake_wait_until_network_idle), \
+    with patch("browser_harness.helpers.page_content_status", return_value={"textLength": 50, "block": {}}), \
+         patch("browser_harness.helpers._wait_until_load", side_effect=fake_wait_until_load), \
+         patch("browser_harness.helpers._wait_until_network_idle", side_effect=fake_wait_until_network_idle), \
          patch("time.sleep"):
         result = helpers.smart_wait(timeout=5.0)
     assert result["phase"] == "networkidle"
@@ -467,7 +467,7 @@ def test_smart_wait_resolves_on_network_idle():
 
 def test_smart_wait_detects_waf_block():
     blocked_status = {"textLength": 0, "block": {"blocked": True, "waf": "cloudflare"}}
-    with patch("helpers.page_content_status", return_value=blocked_status), \
+    with patch("browser_harness.helpers.page_content_status", return_value=blocked_status), \
          patch("time.sleep"):
         result = helpers.smart_wait(timeout=2.0, waf_timeout=0.5)
     assert result["phase"] == "waf_blocked"
@@ -479,10 +479,10 @@ def test_smart_wait_returns_timeout_when_all_phases_fail():
     idle_fail = {"ok": False, "reason": "timeout", "pending_requests": 3}
     content_fail = {"ok": False, "reason": "timeout", "textLength": 0}
 
-    with patch("helpers.page_content_status", return_value={"textLength": 0, "block": {}}), \
-         patch("helpers._wait_until_load", return_value=load_fail), \
-         patch("helpers._wait_until_network_idle", return_value=idle_fail), \
-         patch("helpers.wait_for_content", return_value=content_fail), \
+    with patch("browser_harness.helpers.page_content_status", return_value={"textLength": 0, "block": {}}), \
+         patch("browser_harness.helpers._wait_until_load", return_value=load_fail), \
+         patch("browser_harness.helpers._wait_until_network_idle", return_value=idle_fail), \
+         patch("browser_harness.helpers.wait_for_content", return_value=content_fail), \
          patch("time.sleep"):
         result = helpers.smart_wait(timeout=5.0)
     assert result["phase"] == "timeout"
@@ -497,8 +497,8 @@ def test_wait_for_load_uses_page_events_not_runtime():
         calls.append((method, params))
         return {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers.drain_events", side_effect=[[], [{"method": "Page.loadEventFired"}]]), \
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers.drain_events", side_effect=[[], [{"method": "Page.loadEventFired"}]]), \
          patch("time.sleep"):
         assert helpers.wait_for_load(timeout=1)
 
@@ -512,8 +512,8 @@ def test_wait_for_load_sees_already_queued_load_event():
         calls.append((method, params))
         return {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp), \
-         patch("helpers.drain_events", return_value=[{"method": "Page.loadEventFired"}]):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers.drain_events", return_value=[{"method": "Page.loadEventFired"}]):
         assert helpers.wait_for_load(timeout=0.1)
 
     assert calls == [("Page.enable", {})]
@@ -526,34 +526,34 @@ def test_click_humanize_is_opt_in():
         calls.append((method, params))
         return {}
 
-    with patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         helpers.click_at_xy(10, 20)
     assert [params["type"] for _, params in calls] == ["mousePressed", "mouseReleased"]
 
     calls.clear()
-    with patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         helpers.click_at_xy(10, 20, humanize=True, steps=3)
     assert [params["type"] for _, params in calls] == ["mouseMoved", "mouseMoved", "mouseMoved", "mousePressed", "mouseReleased"]
 
 
 def test_debug_click_dpr_uses_page_info_not_js():
-    with patch("helpers.page_info", return_value={"w": 500}), \
-         patch("helpers.js", side_effect=AssertionError("debug overlay must not execute page JS")):
+    with patch("browser_harness.helpers.page_info", return_value={"w": 500}), \
+         patch("browser_harness.helpers.js", side_effect=AssertionError("debug overlay must not execute page JS")):
         assert helpers._debug_click_dpr(1000) == 2
 
 
 def test_debug_click_dpr_falls_back_without_viewport_width():
-    with patch("helpers.page_info", return_value={"dialog": {"type": "alert"}}):
+    with patch("browser_harness.helpers.page_info", return_value={"dialog": {"type": "alert"}}):
         assert helpers._debug_click_dpr(1000) == 1
 
 
 def test_debug_click_dpr_falls_back_when_metrics_fail():
-    with patch("helpers.page_info", side_effect=RuntimeError("metrics unavailable")):
+    with patch("browser_harness.helpers.page_info", side_effect=RuntimeError("metrics unavailable")):
         assert helpers._debug_click_dpr(1000) == 1
 
 
 def test_ax_snapshot_compacts_accessibility_tree():
-    with patch("helpers.cdp", return_value={"nodes": [
+    with patch("browser_harness.helpers.cdp", return_value={"nodes": [
         {"nodeId": "1", "role": {"value": "button"}, "name": {"value": "Save"}},
         {"nodeId": "2", "role": {"value": ""}, "name": {"value": ""}},
     ]}):
@@ -568,7 +568,7 @@ def test_ax_snapshot_compact_filters_structural_roles():
         {"backendDOMNodeId": 4, "role": {"value": "StaticText"}, "name": {"value": ""}},
         {"backendDOMNodeId": 5, "role": {"value": "link"}, "name": {"value": "Home"}},
     ]
-    with patch("helpers.cdp", return_value={"nodes": nodes}):
+    with patch("browser_harness.helpers.cdp", return_value={"nodes": nodes}):
         result = helpers.ax_snapshot(compact=True)
     assert len(result) == 3
     assert result[0].startswith("button")
@@ -582,7 +582,7 @@ def test_ax_snapshot_compact_assigns_sequential_refs():
         {"backendDOMNodeId": 20, "role": {"value": "textbox"}, "name": {"value": "Email"}},
         {"backendDOMNodeId": 30, "role": {"value": "link"}, "name": {"value": "Help"}},
     ]
-    with patch("helpers.cdp", return_value={"nodes": nodes}):
+    with patch("browser_harness.helpers.cdp", return_value={"nodes": nodes}):
         result = helpers.ax_snapshot(compact=True)
     assert "[ref=e0]" in result[0]
     assert "[ref=e1]" in result[1]
@@ -599,7 +599,7 @@ def test_ax_snapshot_compact_includes_props():
         {"backendDOMNodeId": 1, "role": {"value": "checkbox"}, "name": {"value": "Agree"},
          "properties": [{"name": "checked", "value": {"value": True}}]},
     ]
-    with patch("helpers.cdp", return_value={"nodes": nodes}):
+    with patch("browser_harness.helpers.cdp", return_value={"nodes": nodes}):
         result = helpers.ax_snapshot(compact=True)
     assert "checked=True" in result[0]
 
@@ -609,14 +609,14 @@ def test_ax_snapshot_default_unchanged():
         {"nodeId": "1", "role": {"value": "button"}, "name": {"value": "Save"}},
         {"nodeId": "2", "role": {"value": ""}, "name": {"value": ""}},
     ]
-    with patch("helpers.cdp", return_value={"nodes": nodes}):
+    with patch("browser_harness.helpers.cdp", return_value={"nodes": nodes}):
         result = helpers.ax_snapshot()
     assert result == [{"ref": "1", "role": "button", "name": "Save", "value": ""}]
 
 
 def test_screenshot_trace_is_opt_in(tmp_path):
     trace_dir = tmp_path / "trace"
-    with patch("helpers.capture_screenshot", side_effect=lambda path, full=False: path) as capture, \
+    with patch("browser_harness.helpers.capture_screenshot", side_effect=lambda path, full=False: path) as capture, \
          patch("time.sleep"):
         paths = helpers.capture_screenshot_trace(directory=trace_dir, frames=2, interval=0.01)
     assert paths == [str(trace_dir / "frame-000.png"), str(trace_dir / "frame-001.png")]
@@ -626,14 +626,14 @@ def test_screenshot_trace_is_opt_in(tmp_path):
 def test_capture_screenshot_writes_with_context_manager(tmp_path):
     path = tmp_path / "shot.png"
     encoded = base64.b64encode(b"png-data").decode()
-    with patch("helpers.cdp", return_value={"data": encoded}):
+    with patch("browser_harness.helpers.cdp", return_value={"data": encoded}):
         assert helpers.capture_screenshot(str(path)) == str(path)
     assert path.read_bytes() == b"png-data"
 
 
 def test_capture_screenshot_decodes_before_opening_file(tmp_path):
     path = tmp_path / "shot.png"
-    with patch("helpers.cdp", return_value={"data": "not-base64!!"}):
+    with patch("browser_harness.helpers.cdp", return_value={"data": "not-base64!!"}):
         try:
             helpers.capture_screenshot(str(path))
         except Exception:
@@ -708,7 +708,7 @@ def test_discover_local_cdp_endpoints_brackets_ipv6_loopback():
 
 
 def test_page_info_js_reports_missing_runtime_value():
-    with patch("helpers.cdp", return_value={"result": {}}):
+    with patch("browser_harness.helpers.cdp", return_value={"result": {}}):
         try:
             helpers.page_info_js()
         except RuntimeError as e:
@@ -719,7 +719,7 @@ def test_page_info_js_reports_missing_runtime_value():
 
 
 def test_endpoint_info_reads_daemon_metadata():
-    with patch("helpers._send", return_value={"endpoint_info": {"browser": "Chrome/135"}}):
+    with patch("browser_harness.helpers._send", return_value={"endpoint_info": {"browser": "Chrome/135"}}):
         assert helpers.endpoint_info() == {"browser": "Chrome/135"}
 
 
@@ -754,7 +754,7 @@ def test_page_content_status_reports_block_state():
         "text": "",
         "html": "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>",
     }
-    with patch("helpers.js", return_value=state):
+    with patch("browser_harness.helpers.js", return_value=state):
         result = helpers.page_content_status()
     assert result["block"]["blocked"] is True
     assert result["block"]["kind"] == "kasada_kpsdk"
@@ -770,7 +770,7 @@ def test_wait_for_content_stops_on_block_without_waiting_for_timeout():
         "text": "",
         "html": "<script>window.KPSDK={}</script><script src='/ips.js?KP_UIDz=x&x-kpsdk-im=y'></script>",
     }
-    with patch("helpers.page_content_status", return_value={
+    with patch("browser_harness.helpers.page_content_status", return_value={
         **state,
         "block": helpers.detect_block_page(html=state["html"], text=state["text"], url=state["url"]),
     }), patch("time.sleep", side_effect=AssertionError("blocked pages should return immediately")):
@@ -780,7 +780,7 @@ def test_wait_for_content_stops_on_block_without_waiting_for_timeout():
 
 
 def test_wait_for_content_accepts_useful_text():
-    with patch("helpers.page_content_status", return_value={
+    with patch("browser_harness.helpers.page_content_status", return_value={
         "url": "https://example.com",
         "textLength": 250,
         "htmlLength": 500,
@@ -822,7 +822,7 @@ def test_browser_cookie_header_filters_to_target_domain():
         {"name": "other", "value": "prop", "domain": ".property.com.au", "path": "/", "secure": True},
         {"name": "empty", "value": "", "domain": ".realestate.com.au", "path": "/", "secure": True},
     ]
-    with patch("helpers.login_session.browser_cookies", return_value=cookies):
+    with patch("browser_harness.helpers.login_session.browser_cookies", return_value=cookies):
         assert helpers.browser_cookie_header("https://www.realestate.com.au/property/1") == "KP_UIDz=rea; empty="
 
 
@@ -845,8 +845,8 @@ def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
         opened.append((req, timeout))
         return Response()
 
-    with patch("login_session.browser_user_agent", return_value="Browser UA"), \
-         patch("login_session.cookie_header", return_value="KP_UIDz=rea"), \
+    with patch("browser_harness.login_session.browser_user_agent", return_value="Browser UA"), \
+         patch("browser_harness.login_session.cookie_header", return_value="KP_UIDz=rea"), \
          patch("urllib.request.OpenerDirector.open", side_effect=fake_open):
         assert helpers.http_get_browser_session("https://www.realestate.com.au/property/1") == "<html>ok</html>"
 
@@ -857,7 +857,7 @@ def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
 
 
 def test_login_session_manifest_uses_redacted_generic_module():
-    with patch("helpers.login_session.session_manifest", return_value={"cookie_names": ["sid"]}) as manifest:
+    with patch("browser_harness.helpers.login_session.session_manifest", return_value={"cookie_names": ["sid"]}) as manifest:
         assert helpers.login_session_manifest("https://example.com", site="example") == {"cookie_names": ["sid"]}
     manifest.assert_called_once_with(
         helpers.cdp,
@@ -870,7 +870,7 @@ def test_login_session_manifest_uses_redacted_generic_module():
 
 
 def test_prompt_user_login_delegates_to_generic_module():
-    with patch("helpers.login_session.prompt_user_login", return_value={"ok": True}) as prompt:
+    with patch("browser_harness.helpers.login_session.prompt_user_login", return_value={"ok": True}) as prompt:
         assert helpers.prompt_user_login("https://example.com/login", success_url_contains="/account") == {"ok": True}
     prompt.assert_called_once_with(
         helpers.cdp,
@@ -892,8 +892,8 @@ def test_http_get_browser_session_response_captures_blocking_http_error():
         io.BytesIO(gzip.compress(html.encode())),
     )
 
-    with patch("login_session.browser_user_agent", return_value="Browser UA"), \
-         patch("login_session.cookie_header", return_value="KP_UIDz=rea"), \
+    with patch("browser_harness.login_session.browser_user_agent", return_value="Browser UA"), \
+         patch("browser_harness.login_session.cookie_header", return_value="KP_UIDz=rea"), \
          patch("urllib.request.urlopen", side_effect=err):
         result = helpers.http_get_browser_session_response("https://www.realestate.com.au/property/1")
 
@@ -905,19 +905,19 @@ def test_http_get_browser_session_response_captures_blocking_http_error():
 
 
 def test_seed_browser_session_closes_tab_and_returns_cookie_names():
-    with patch("helpers.new_tab", return_value="target-1") as new_tab, \
-         patch("helpers.wait_for_load", return_value=True) as wait_for_load, \
-         patch("helpers.wait_for_content", return_value={
+    with patch("browser_harness.helpers.new_tab", return_value="target-1") as new_tab, \
+         patch("browser_harness.helpers.wait_for_load", return_value=True) as wait_for_load, \
+         patch("browser_harness.helpers.wait_for_content", return_value={
              "ok": True,
              "reason": "content",
              "textLength": 800,
              "block": {"blocked": False, "kind": None, "evidence": []},
          }) as wait_for_content, \
-         patch("helpers.browser_cookies", return_value=[
+         patch("browser_harness.helpers.browser_cookies", return_value=[
              {"name": "KP_UIDz", "value": "rea", "domain": ".realestate.com.au", "path": "/", "secure": True},
              {"name": "other", "value": "prop", "domain": ".property.com.au", "path": "/", "secure": True},
          ]), \
-         patch("helpers.close_tab") as close_tab:
+         patch("browser_harness.helpers.close_tab") as close_tab:
         result = helpers.seed_browser_session("https://www.realestate.com.au/property/1", min_text=500, timeout=7)
 
     new_tab.assert_called_once_with("https://www.realestate.com.au/property/1")
@@ -930,9 +930,9 @@ def test_seed_browser_session_closes_tab_and_returns_cookie_names():
 
 
 def test_browser_backend_info_detects_lightpanda_risks():
-    with patch("helpers.endpoint_info", return_value={"browser": "Lightpanda/1.0"}), \
-         patch("helpers.cdp", return_value={"product": "Lightpanda/1.0", "userAgent": "Lightpanda"}), \
-         patch("helpers.js", return_value={
+    with patch("browser_harness.helpers.endpoint_info", return_value={"browser": "Lightpanda/1.0"}), \
+         patch("browser_harness.helpers.cdp", return_value={"product": "Lightpanda/1.0", "userAgent": "Lightpanda"}), \
+         patch("browser_harness.helpers.js", return_value={
              "userAgent": "Lightpanda",
              "webdriver": False,
              "plugins": 0,
@@ -945,9 +945,9 @@ def test_browser_backend_info_detects_lightpanda_risks():
 
 
 def test_browser_backend_info_detects_headless_chrome():
-    with patch("helpers.endpoint_info", return_value={"browser": "Chrome/135"}), \
-         patch("helpers.cdp", return_value={"product": "Chrome/135", "userAgent": "HeadlessChrome/135"}), \
-         patch("helpers.js", return_value={
+    with patch("browser_harness.helpers.endpoint_info", return_value={"browser": "Chrome/135"}), \
+         patch("browser_harness.helpers.cdp", return_value={"product": "Chrome/135", "userAgent": "HeadlessChrome/135"}), \
+         patch("browser_harness.helpers.js", return_value={
              "userAgent": "Mozilla/5.0 HeadlessChrome/135",
              "webdriver": True,
              "plugins": 3,
@@ -960,9 +960,9 @@ def test_browser_backend_info_detects_headless_chrome():
 
 
 def test_diagnose_url_capability_reports_backend_recommendation_and_closes_tab():
-    with patch("helpers.new_tab", return_value="target-1"), \
-         patch("helpers.wait_for_load", return_value=True), \
-         patch("helpers.wait_for_content", return_value={
+    with patch("browser_harness.helpers.new_tab", return_value="target-1"), \
+         patch("browser_harness.helpers.wait_for_load", return_value=True), \
+         patch("browser_harness.helpers.wait_for_content", return_value={
              "ok": False,
              "reason": "blocked",
              "url": "https://www.realestate.com.au/property/1",
@@ -971,8 +971,8 @@ def test_diagnose_url_capability_reports_backend_recommendation_and_closes_tab()
              "htmlLength": 800,
              "block": {"blocked": True, "kind": "kasada_kpsdk", "evidence": []},
          }), \
-         patch("helpers.browser_backend_info", return_value={"kind": "headless_chrome", "risks": []}), \
-         patch("helpers.close_tab") as close_tab:
+         patch("browser_harness.helpers.browser_backend_info", return_value={"kind": "headless_chrome", "risks": []}), \
+         patch("browser_harness.helpers.close_tab") as close_tab:
         result = helpers.diagnose_url_capability("https://www.realestate.com.au/property/1", timeout=4)
 
     assert result["ok"] is False
@@ -1005,7 +1005,7 @@ def test_extract_argonaut_exchange_returns_empty_dict_when_missing():
 
 
 def test_js_reports_missing_iframe_session_id():
-    with patch("helpers.cdp", return_value={}):
+    with patch("browser_harness.helpers.cdp", return_value={}):
         try:
             helpers.js("document.title", target_id="frame-1")
         except RuntimeError as e:
@@ -1023,7 +1023,7 @@ def test_upload_file_reports_missing_node_id():
             return {}
         raise AssertionError(method)
 
-    with patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         try:
             helpers.upload_file("input[type=file]", "/tmp/file.txt")
         except RuntimeError as e:
@@ -1100,12 +1100,12 @@ def test_detect_block_page_passes_normal_content():
 
 
 def test_js_returns_undefined_dict_for_undefined():
-    with patch("helpers.cdp", return_value={"result": {"type": "undefined"}}):
+    with patch("browser_harness.helpers.cdp", return_value={"result": {"type": "undefined"}}):
         assert helpers.js("void 0") == {"_js_undefined": True}
 
 
 def test_js_returns_error_dict_for_exception():
-    with patch("helpers.cdp", return_value={
+    with patch("browser_harness.helpers.cdp", return_value={
         "result": {"type": "undefined"},
         "exceptionDetails": {"text": "SyntaxError", "exception": {"description": "SyntaxError: bad"}},
     }):
@@ -1114,8 +1114,8 @@ def test_js_returns_error_dict_for_exception():
 
 
 def test_detect_turnstile_returns_not_found_when_no_targets():
-    with patch("helpers.cdp", return_value={"targetInfos": []}), \
-         patch("helpers.js", return_value=None), \
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": []}), \
+         patch("browser_harness.helpers.js", return_value=None), \
          patch("time.sleep"):
         result = helpers.detect_turnstile(timeout=0.1)
         assert result["found"] is False
@@ -1123,7 +1123,7 @@ def test_detect_turnstile_returns_not_found_when_no_targets():
 
 
 def test_detect_turnstile_finds_cloudflare_iframe():
-    with patch("helpers.cdp", return_value={"targetInfos": [
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
         {"type": "iframe", "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/turnstile", "targetId": "abc123"},
     ]}):
         result = helpers.detect_turnstile(timeout=0.1)
@@ -1133,7 +1133,7 @@ def test_detect_turnstile_finds_cloudflare_iframe():
 
 
 def test_response_turnstile_solved_flag():
-    from response import Response
+    from browser_harness.response import Response
     r = Response(html="<html></html>", text="", url="https://example.com",
                  status=200, source="browser", turnstile_solved=True)
     assert r.turnstile_solved is True
@@ -1143,7 +1143,7 @@ def test_response_turnstile_solved_flag():
 
 
 def test_response_preserves_readiness_reason_and_block_state():
-    from response import Response
+    from browser_harness.response import Response
 
     block = {"blocked": True, "kind": "auth_gate", "evidence": ["/login"]}
     r = Response(
@@ -1163,17 +1163,17 @@ def test_response_preserves_readiness_reason_and_block_state():
 
 def test_fetch_browser_preserves_blocked_readiness_state():
     block = {"blocked": True, "kind": "auth_gate", "evidence": ["/login"]}
-    with patch("helpers.new_tab", return_value="target-1"), \
-         patch("helpers.wait_for_load"), \
-         patch("helpers.wait_for_content", return_value={
+    with patch("browser_harness.helpers.new_tab", return_value="target-1"), \
+         patch("browser_harness.helpers.wait_for_load"), \
+         patch("browser_harness.helpers.wait_for_content", return_value={
              "ok": False,
              "reason": "blocked",
              "url": "https://example.com/login",
              "text": "log in to continue",
              "block": block,
          }), \
-         patch("helpers.js", return_value="<html>log in to continue</html>"), \
-         patch("helpers.close_tab") as close_tab:
+         patch("browser_harness.helpers.js", return_value="<html>log in to continue</html>"), \
+         patch("browser_harness.helpers.close_tab") as close_tab:
         response = helpers.fetch("https://example.com/private", source="browser")
 
     assert response.status == 403
@@ -1184,17 +1184,17 @@ def test_fetch_browser_preserves_blocked_readiness_state():
 
 
 def test_fetch_browser_timeout_is_not_reported_as_empty_success():
-    with patch("helpers.new_tab", return_value="target-1"), \
-         patch("helpers.wait_for_load"), \
-         patch("helpers.wait_for_content", return_value={
+    with patch("browser_harness.helpers.new_tab", return_value="target-1"), \
+         patch("browser_harness.helpers.wait_for_load"), \
+         patch("browser_harness.helpers.wait_for_content", return_value={
              "ok": False,
              "reason": "timeout",
              "url": "https://example.com/slow",
              "text": "",
              "block": {"blocked": False, "kind": None, "evidence": []},
          }), \
-         patch("helpers.js", return_value="<html></html>"), \
-         patch("helpers.close_tab"):
+         patch("browser_harness.helpers.js", return_value="<html></html>"), \
+         patch("browser_harness.helpers.close_tab"):
         response = helpers.fetch("https://example.com/slow", source="browser")
 
     assert response.status == 504
@@ -1203,7 +1203,7 @@ def test_fetch_browser_timeout_is_not_reported_as_empty_success():
 
 
 def test_response_repr():
-    from response import Response
+    from browser_harness.response import Response
     r = Response(html="<html></html>", text="content", url="https://example.com",
                  status=200, source="http")
     assert "example.com" in repr(r)
@@ -1211,7 +1211,7 @@ def test_response_repr():
 
 
 def test_send_passes_timeout_to_recv():
-    import helpers
+    import browser_harness.helpers as helpers
     calls = []
     original_send = helpers._send
 
@@ -1219,7 +1219,7 @@ def test_send_passes_timeout_to_recv():
         calls.append(timeout)
         return {"result": {}}
 
-    with patch("helpers._send", side_effect=fake_send):
+    with patch("browser_harness.helpers._send", side_effect=fake_send):
         helpers.cdp("Page.navigate", url="https://example.com", timeout=60)
     assert 60 in calls
 
@@ -1501,14 +1501,14 @@ def test_safety_gate_summary():
 # --- NetworkCapture ---
 
 def test_network_capture_start_enables_network_domain():
-    with patch("helpers.cdp") as mock_cdp:
+    with patch("browser_harness.helpers.cdp") as mock_cdp:
         cap = helpers.NetworkCapture()
         cap.start()
     mock_cdp.assert_called_with("Network.enable")
 
 
 def test_network_capture_stop_disables_network_domain():
-    with patch("helpers.cdp") as mock_cdp:
+    with patch("browser_harness.helpers.cdp") as mock_cdp:
         cap = helpers.NetworkCapture()
         cap.stop()
     assert ("Network.disable",) in [c.args for c in mock_cdp.call_args_list]
@@ -1527,7 +1527,7 @@ def test_network_capture_poll_processes_request_events():
         }},
         {"method": "Page.loadEventFired", "params": {}},
     ]
-    with patch("helpers.drain_events", return_value=events):
+    with patch("browser_harness.helpers.drain_events", return_value=events):
         cap = helpers.NetworkCapture()
         cap.poll()
 
@@ -1555,7 +1555,7 @@ def test_network_capture_endpoints_deduplicates():
         }},
     ]
     cap = helpers.NetworkCapture()
-    with patch("helpers.drain_events", side_effect=[events_a, events_b]):
+    with patch("browser_harness.helpers.drain_events", side_effect=[events_a, events_b]):
         cap.poll()
         cap.poll()
 
@@ -1579,7 +1579,7 @@ def test_network_capture_responses_for_filters():
             "requestId": "r2", "response": {"status": 200, "headers": {}, "mimeType": "js"},
         }},
     ]
-    with patch("helpers.drain_events", return_value=events):
+    with patch("browser_harness.helpers.drain_events", return_value=events):
         cap = helpers.NetworkCapture()
         cap.poll()
 
@@ -1601,7 +1601,7 @@ def test_network_capture_handles_redirect():
             "requestId": "r1", "response": {"status": 200, "headers": {}, "mimeType": "text/html"},
         }},
     ]
-    with patch("helpers.drain_events", return_value=events):
+    with patch("browser_harness.helpers.drain_events", return_value=events):
         cap = helpers.NetworkCapture()
         cap.poll()
 
@@ -1677,8 +1677,8 @@ def test_network_capture_body_capture_is_bounded():
         assert method == "Network.getResponseBody"
         return {"body": "abcdef"}
 
-    with patch("helpers.drain_events", return_value=events), \
-         patch("helpers.cdp", side_effect=fake_cdp):
+    with patch("browser_harness.helpers.drain_events", return_value=events), \
+         patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
         cap = helpers.NetworkCapture(capture_bodies=True, max_body_chars=3)
         cap.poll()
 
@@ -1723,7 +1723,7 @@ def test_url_cluster_empty():
 
 def test_discover_api_endpoints_extracts_fetch_urls():
     html = '<html><script>fetch("/api/data"); fetch("/api/users");</script></html>'
-    with patch("helpers.http_get", return_value=html):
+    with patch("browser_harness.helpers.http_get", return_value=html):
         result = helpers.discover_api_endpoints("https://example.com/page")
     urls = [e["url"] for e in result["endpoints"]]
     assert "https://example.com/api/data" in urls
@@ -1733,7 +1733,7 @@ def test_discover_api_endpoints_extracts_fetch_urls():
 def test_discover_api_endpoints_extracts_from_external_scripts():
     html = '<html><script src="/app.js"></script></html>'
     js_code = 'fetch("/api/v2/items"); axios.get("/api/products");'
-    with patch("helpers.http_get", side_effect=[html, js_code]):
+    with patch("browser_harness.helpers.http_get", side_effect=[html, js_code]):
         result = helpers.discover_api_endpoints("https://example.com/page")
     urls = [e["url"] for e in result["endpoints"]]
     assert "https://example.com/api/v2/items" in urls
@@ -1741,8 +1741,8 @@ def test_discover_api_endpoints_extracts_from_external_scripts():
 
 
 def test_discover_api_endpoints_handles_fetch_failure():
-    with patch("helpers.http_get", side_effect=Exception("fail")), \
-         patch("helpers.http_get_browser_session_response", side_effect=Exception("also fail")):
+    with patch("browser_harness.helpers.http_get", side_effect=Exception("fail")), \
+         patch("browser_harness.helpers.http_get_browser_session_response", side_effect=Exception("also fail")):
         result = helpers.discover_api_endpoints("https://example.com")
     assert result["endpoints"] == []
     assert len(result["errors"]) == 1
@@ -1750,7 +1750,7 @@ def test_discover_api_endpoints_handles_fetch_failure():
 
 def test_discover_api_endpoints_skips_template_literals():
     html = '<script>fetch(`/api/${id}`);</script>'
-    with patch("helpers.http_get", return_value=html):
+    with patch("browser_harness.helpers.http_get", return_value=html):
         result = helpers.discover_api_endpoints("https://example.com")
     assert result["endpoints"] == []
 
@@ -1768,8 +1768,8 @@ def test_replay_endpoints_status_match():
     mock_resp.headers.get.return_value = "application/json"
     mock_resp.__enter__ = MagicMock(return_value=mock_resp)
     mock_resp.__exit__ = MagicMock(return_value=False)
-    with patch("helpers.urllib.request.urlopen", return_value=mock_resp), \
-         patch("helpers._real_user_agent", return_value="TestAgent/1.0"), \
+    with patch("browser_harness.helpers.urllib.request.urlopen", return_value=mock_resp), \
+         patch("browser_harness.helpers._real_user_agent", return_value="TestAgent/1.0"), \
          patch("time.sleep"):
         result = helpers.replay_endpoints(cap)
     assert result["results"][0]["status_match"] is True
@@ -1794,9 +1794,9 @@ def test_replay_endpoints_captures_errors():
         {"url": "https://api.example.com/a", "method": "GET", "status": 200,
          "content_type": "json", "response_headers": {}, "resource_type": "XHR"},
     ]
-    with patch("helpers.urllib.request.urlopen", side_effect=urllib.error.HTTPError(
+    with patch("browser_harness.helpers.urllib.request.urlopen", side_effect=urllib.error.HTTPError(
         "https://api.example.com/a", 403, "Forbidden", {}, io.BytesIO(b""))), \
-         patch("helpers._real_user_agent", return_value="TestAgent/1.0"), \
+         patch("browser_harness.helpers._real_user_agent", return_value="TestAgent/1.0"), \
          patch("time.sleep"):
         result = helpers.replay_endpoints(cap)
     assert result["results"][0]["status_match"] is False
@@ -1806,7 +1806,7 @@ def test_replay_endpoints_captures_errors():
 
 def test_install_blocker_probe_enables_page_and_injects_script():
     calls = []
-    with patch("helpers.cdp", side_effect=lambda m, **kw: calls.append(m) or {"identifier": "1"}):
+    with patch("browser_harness.helpers.cdp", side_effect=lambda m, **kw: calls.append(m) or {"identifier": "1"}):
         result = helpers.install_blocker_probe()
     assert calls == ["Page.enable", "Page.addScriptToEvaluateOnNewDocument"]
     assert result["identifier"] == "1"
@@ -1815,31 +1815,31 @@ def test_install_blocker_probe_enables_page_and_injects_script():
 def test_pending_blockers_returns_cdp_and_js_sides():
     cdp_blockers = [{"kind": "dialog", "params": {"type": "alert"}, "t": 1.0}]
     js_blockers = [{"kind": "geolocation", "t": 2.0}]
-    with patch("helpers._send", return_value={"blockers": cdp_blockers}), \
-         patch("helpers.js", return_value=js_blockers):
+    with patch("browser_harness.helpers._send", return_value={"blockers": cdp_blockers}), \
+         patch("browser_harness.helpers.js", return_value=js_blockers):
         result = helpers.pending_blockers()
     assert result["cdp"] == cdp_blockers
     assert result["js"] == js_blockers
 
 
 def test_pending_blockers_clears_js_when_requested():
-    with patch("helpers._send", return_value={"blockers": []}), \
-         patch("helpers.js", return_value=[]) as mock_js:
+    with patch("browser_harness.helpers._send", return_value={"blockers": []}), \
+         patch("browser_harness.helpers.js", return_value=[]) as mock_js:
         helpers.pending_blockers(clear_js=True)
     expr = mock_js.call_args[0][0]
     assert "window.__bh_blockers__=[]" in expr
 
 
 def test_pending_blockers_handles_js_frozen_gracefully():
-    with patch("helpers._send", return_value={"blockers": []}), \
-         patch("helpers.js", side_effect=RuntimeError("JS frozen")):
+    with patch("browser_harness.helpers._send", return_value={"blockers": []}), \
+         patch("browser_harness.helpers.js", side_effect=RuntimeError("JS frozen")):
         result = helpers.pending_blockers()
     assert result == {"cdp": [], "js": []}
 
 
 def test_pending_blockers_empty_when_no_blockers():
-    with patch("helpers._send", return_value={"blockers": []}), \
-         patch("helpers.js", return_value=None):
+    with patch("browser_harness.helpers._send", return_value={"blockers": []}), \
+         patch("browser_harness.helpers.js", return_value=None):
         result = helpers.pending_blockers()
     assert result == {"cdp": [], "js": []}
 
@@ -1849,8 +1849,8 @@ def test_dismiss_dialog_accepts_and_returns_info():
         "method": "Page.javascriptDialogOpening",
         "params": {"type": "confirm", "message": "Are you sure?", "url": "https://example.com"},
     }
-    with patch("helpers.drain_events", return_value=[dialog_event]), \
-         patch("helpers.cdp", return_value={}):
+    with patch("browser_harness.helpers.drain_events", return_value=[dialog_event]), \
+         patch("browser_harness.helpers.cdp", return_value={}):
         info = helpers.dismiss_dialog(accept=True)
     assert info["type"] == "confirm"
     assert info["message"] == "Are you sure?"
@@ -1858,14 +1858,14 @@ def test_dismiss_dialog_accepts_and_returns_info():
 
 
 def test_dismiss_dialog_returns_none_when_no_dialog():
-    with patch("helpers.drain_events", return_value=[]), \
-         patch("helpers.cdp", side_effect=Exception("no dialog")):
+    with patch("browser_harness.helpers.drain_events", return_value=[]), \
+         patch("browser_harness.helpers.cdp", side_effect=Exception("no dialog")):
         info = helpers.dismiss_dialog()
     assert info is None
 
 
 def test_capture_dialogs_stubs_window_methods():
-    with patch("helpers.js") as mock_js:
+    with patch("browser_harness.helpers.js") as mock_js:
         helpers.capture_dialogs()
     expr = mock_js.call_args[0][0]
     assert "window.__bh_dialogs__" in expr
@@ -1875,13 +1875,13 @@ def test_capture_dialogs_stubs_window_methods():
 
 
 def test_dialogs_returns_captured_messages():
-    with patch("helpers.js", return_value=["hello", "world"]):
+    with patch("browser_harness.helpers.js", return_value=["hello", "world"]):
         result = helpers.dialogs()
     assert result == ["hello", "world"]
 
 
 def test_grant_permissions_calls_browser_grantPermissions():
-    with patch("helpers.cdp", return_value={}) as mock_cdp:
+    with patch("browser_harness.helpers.cdp", return_value={}) as mock_cdp:
         helpers.grant_permissions("https://example.com", ["geolocation", "notifications"])
     mock_cdp.assert_called_once_with(
         "Browser.grantPermissions",
@@ -1891,7 +1891,7 @@ def test_grant_permissions_calls_browser_grantPermissions():
 
 
 def test_set_geolocation_calls_emulation_setGeolocationOverride():
-    with patch("helpers.cdp", return_value={}) as mock_cdp:
+    with patch("browser_harness.helpers.cdp", return_value={}) as mock_cdp:
         helpers.set_geolocation(37.7749, -122.4194, accuracy=50)
     mock_cdp.assert_called_once_with(
         "Emulation.setGeolocationOverride",

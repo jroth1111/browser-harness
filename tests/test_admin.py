@@ -103,7 +103,7 @@ def test_ensure_daemon_spawns_with_current_python_interpreter():
         def poll(self):
             return None
 
-    with patch("admin.daemon_alive", side_effect=[False, True]), \
+    with patch("browser_harness.admin.daemon_alive", side_effect=[False, True]), \
          patch("subprocess.Popen", return_value=Proc()) as popen:
         admin.ensure_daemon(wait=0.1)
 
@@ -130,10 +130,10 @@ def test_restart_daemon_does_not_sigterm_unrelated_stale_pid(tmp_path):
     def fake_kill(pid, sig):
         calls.append((pid, sig))
 
-    with patch("admin._paths", return_value=(str(tmp_path / "bh.sock"), str(pid_path))), \
-         patch("admin._legacy_paths", return_value=()), \
+    with patch("browser_harness.admin._paths", return_value=(str(tmp_path / "bh.sock"), str(pid_path))), \
+         patch("browser_harness.admin._legacy_paths", return_value=()), \
          patch("socket.socket", return_value=RefusingSocket()), \
-         patch("admin._pid_matches_daemon", return_value=False), \
+         patch("browser_harness.admin._pid_matches_daemon", return_value=False), \
          patch("time.sleep"), \
          patch("os.kill", side_effect=fake_kill):
         admin.restart_daemon()
@@ -160,10 +160,10 @@ def test_restart_daemon_sigterms_matching_daemon_pid(tmp_path):
     def fake_kill(pid, sig):
         calls.append((pid, sig))
 
-    with patch("admin._paths", return_value=(str(tmp_path / "bh.sock"), str(pid_path))), \
-         patch("admin._legacy_paths", return_value=()), \
+    with patch("browser_harness.admin._paths", return_value=(str(tmp_path / "bh.sock"), str(pid_path))), \
+         patch("browser_harness.admin._legacy_paths", return_value=()), \
          patch("socket.socket", return_value=RefusingSocket()), \
-         patch("admin._pid_matches_daemon", return_value=True), \
+         patch("browser_harness.admin._pid_matches_daemon", return_value=True), \
          patch("time.sleep"), \
          patch("os.kill", side_effect=fake_kill):
         admin.restart_daemon()
@@ -181,10 +181,10 @@ def test_pid_matches_daemon_requires_this_repo_daemon():
 
 def test_doctor_default_does_not_check_latest_release():
     stdout = StringIO()
-    with patch("admin._latest_release_tag", side_effect=AssertionError("network release check")), \
+    with patch("browser_harness.admin._latest_release_tag", side_effect=AssertionError("network release check")), \
          patch("urllib.request.urlopen", side_effect=AssertionError("unexpected network")), \
-         patch("admin._chrome_running", return_value=False), \
-         patch("admin.daemon_alive", return_value=False), \
+         patch("browser_harness.admin._chrome_running", return_value=False), \
+         patch("browser_harness.admin.daemon_alive", return_value=False), \
          patch("sys.stdout", stdout):
         assert admin.run_doctor() == 1
     assert "latest release" not in stdout.getvalue()
@@ -192,8 +192,8 @@ def test_doctor_default_does_not_check_latest_release():
 
 def test_doctor_json_shape():
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=False), \
-         patch("admin.daemon_alive", return_value=False), \
+    with patch("browser_harness.admin._chrome_running", return_value=False), \
+         patch("browser_harness.admin.daemon_alive", return_value=False), \
          patch("sys.stdout", stdout):
         assert admin.run_doctor(json_output=True) == 1
     assert '"status": "fail"' in stdout.getvalue()
@@ -215,9 +215,9 @@ def test_doctor_reports_endpoint_metadata():
     }
 
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=True), \
-         patch("admin.daemon_alive", return_value=True), \
-         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+    with patch("browser_harness.admin._chrome_running", return_value=True), \
+         patch("browser_harness.admin.daemon_alive", return_value=True), \
+         patch("browser_harness.admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
          patch("pathlib.Path.stat", return_value=Stat()), \
          patch("sys.stdout", stdout):
         assert admin.run_doctor() == 0
@@ -229,15 +229,15 @@ def test_doctor_reports_endpoint_metadata():
 
 def test_doctor_network_check_only_appears_when_requested():
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=False), \
-         patch("admin.daemon_alive", return_value=False), \
+    with patch("browser_harness.admin._chrome_running", return_value=False), \
+         patch("browser_harness.admin.daemon_alive", return_value=False), \
          patch("sys.stdout", stdout):
         admin.run_doctor(json_output=True)
     assert "network.external" not in stdout.getvalue()
 
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=False), \
-         patch("admin.daemon_alive", return_value=False), \
+    with patch("browser_harness.admin._chrome_running", return_value=False), \
+         patch("browser_harness.admin.daemon_alive", return_value=False), \
          patch("sys.stdout", stdout):
         admin.run_doctor(json_output=True, network=True)
     assert "network.external" in stdout.getvalue()
@@ -258,9 +258,9 @@ def test_doctor_remote_endpoint_with_allowance_warns_not_fails():
     }
 
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=True), \
-         patch("admin.daemon_alive", return_value=True), \
-         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+    with patch("browser_harness.admin._chrome_running", return_value=True), \
+         patch("browser_harness.admin.daemon_alive", return_value=True), \
+         patch("browser_harness.admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
          patch("pathlib.Path.stat", return_value=Stat()), \
          patch("sys.stdout", stdout):
         assert admin.run_doctor(json_output=True) == 0
@@ -285,9 +285,9 @@ def test_doctor_reports_endpoint_metadata_warnings():
     }
 
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=True), \
-         patch("admin.daemon_alive", return_value=True), \
-         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+    with patch("browser_harness.admin._chrome_running", return_value=True), \
+         patch("browser_harness.admin.daemon_alive", return_value=True), \
+         patch("browser_harness.admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
          patch("pathlib.Path.stat", return_value=Stat()), \
          patch("sys.stdout", stdout):
         assert admin.run_doctor(json_output=True) == 0
@@ -313,9 +313,9 @@ def test_doctor_does_not_duplicate_remote_allowed_warning():
     }
 
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=True), \
-         patch("admin.daemon_alive", return_value=True), \
-         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+    with patch("browser_harness.admin._chrome_running", return_value=True), \
+         patch("browser_harness.admin.daemon_alive", return_value=True), \
+         patch("browser_harness.admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
          patch("pathlib.Path.stat", return_value=Stat()), \
          patch("sys.stdout", stdout):
         assert admin.run_doctor(json_output=True) == 0
@@ -339,9 +339,9 @@ def test_doctor_remote_endpoint_without_allowance_fails():
     }
 
     stdout = StringIO()
-    with patch("admin._chrome_running", return_value=True), \
-         patch("admin.daemon_alive", return_value=True), \
-         patch("admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+    with patch("browser_harness.admin._chrome_running", return_value=True), \
+         patch("browser_harness.admin.daemon_alive", return_value=True), \
+         patch("browser_harness.admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
          patch("pathlib.Path.stat", return_value=Stat()), \
          patch("sys.stdout", stdout):
         assert admin.run_doctor(json_output=True) == 1

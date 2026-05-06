@@ -1,5 +1,5 @@
 from unittest.mock import patch, call
-import network_capture
+from browser_harness import network_capture
 
 
 def test_capture_network_requests_parses_events():
@@ -18,10 +18,10 @@ def test_capture_network_requests_parses_events():
         }},
     ]
 
-    with patch("network_capture.helpers.cdp"), \
-         patch("network_capture.helpers.drain_events", return_value=events), \
-         patch("network_capture.helpers.goto_url"), \
-         patch("network_capture.time.sleep"):
+    with patch("browser_harness.network_capture.helpers.cdp"), \
+         patch("browser_harness.network_capture.helpers.drain_events", return_value=events), \
+         patch("browser_harness.network_capture.helpers.goto_url"), \
+         patch("browser_harness.network_capture.time.sleep"):
         result = network_capture.capture_network_requests("https://x.com")
 
     assert len(result) == 2
@@ -52,10 +52,10 @@ def test_capture_with_bodies_fetches_response_body():
             return {"body": '{"key": "value"}', "base64Encoded": False}
         return {}
 
-    with patch("network_capture.helpers.cdp", side_effect=fake_cdp), \
-         patch("network_capture.helpers.drain_events", return_value=events), \
-         patch("network_capture.helpers.goto_url"), \
-         patch("network_capture.time.sleep"):
+    with patch("browser_harness.network_capture.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.network_capture.helpers.drain_events", return_value=events), \
+         patch("browser_harness.network_capture.helpers.goto_url"), \
+         patch("browser_harness.network_capture.time.sleep"):
         result = network_capture.capture_network_requests("https://x.com", capture_bodies=True)
 
     assert result[0]["body"] == '{"key": "value"}'
@@ -71,10 +71,10 @@ def test_capture_without_bodies_omits_body_key():
         }},
     ]
 
-    with patch("network_capture.helpers.cdp"), \
-         patch("network_capture.helpers.drain_events", return_value=events), \
-         patch("network_capture.helpers.goto_url"), \
-         patch("network_capture.time.sleep"):
+    with patch("browser_harness.network_capture.helpers.cdp"), \
+         patch("browser_harness.network_capture.helpers.drain_events", return_value=events), \
+         patch("browser_harness.network_capture.helpers.goto_url"), \
+         patch("browser_harness.network_capture.time.sleep"):
         result = network_capture.capture_network_requests("https://x.com", capture_bodies=False)
 
     assert "body" not in result[0]
@@ -87,10 +87,10 @@ def test_capture_handles_request_without_response():
         }},
     ]
 
-    with patch("network_capture.helpers.cdp"), \
-         patch("network_capture.helpers.drain_events", return_value=events), \
-         patch("network_capture.helpers.goto_url"), \
-         patch("network_capture.time.sleep"):
+    with patch("browser_harness.network_capture.helpers.cdp"), \
+         patch("browser_harness.network_capture.helpers.drain_events", return_value=events), \
+         patch("browser_harness.network_capture.helpers.goto_url"), \
+         patch("browser_harness.network_capture.time.sleep"):
         result = network_capture.capture_network_requests("https://x.com")
 
     assert len(result) == 1

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 SHARED_SCHEMA = ROOT / "domain-skills" / "surface-map.schema.json"
 ALLOWED_PATH_TYPES = {"api", "browser", "hybrid", "static", "local"}
 FILTER_STATUSES = {"available", "default", "disabled", "selected"}
@@ -28,7 +28,7 @@ def surface_maps():
 
 
 def helpers_defined():
-    tree = ast.parse((ROOT / "helpers.py").read_text(encoding="utf-8"))
+    tree = ast.parse((ROOT / "src" / "browser_harness" / "helpers.py").read_text(encoding="utf-8"))
     return {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
 
 

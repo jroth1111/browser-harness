@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 MAP_PATH = ROOT / "docs" / "robustness-surface-map.json"
 
 REQUIRED_SURFACES = {

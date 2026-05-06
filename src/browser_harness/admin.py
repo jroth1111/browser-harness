@@ -668,24 +668,25 @@ def _check(status, check_id, detail="", fix=None):
 
 def _scan_active_files(patterns):
     import re
+    pkg = Path(__file__).resolve().parent
+    repo = pkg.parent.parent
     files = [
-        "daemon.py",
-        "admin.py",
-        "run.py",
-        "helpers.py",
-        "SKILL.md",
-        "install.md",
-        "README.md",
-        "pyproject.toml",
-        "docs/local-cdp-providers.md",
-        "docs/reference.md",
-        "docs/contributing-guide.md",
+        (pkg, "daemon.py"),
+        (pkg, "admin.py"),
+        (pkg, "run.py"),
+        (pkg, "helpers.py"),
+        (repo, "SKILL.md"),
+        (repo, "install.md"),
+        (repo, "README.md"),
+        (repo, "pyproject.toml"),
+        (repo, "docs/local-cdp-providers.md"),
+        (repo, "docs/reference.md"),
+        (repo, "docs/contributing-guide.md"),
     ]
     hits = []
-    root = Path(__file__).resolve().parent
     rx = re.compile(patterns)
-    for rel in files:
-        path = root / rel
+    for base, rel in files:
+        path = base / rel
         if not path.exists():
             continue
         for lineno, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):

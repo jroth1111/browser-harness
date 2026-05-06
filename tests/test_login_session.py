@@ -8,7 +8,7 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
-import login_session
+from browser_harness import login_session
 
 
 def test_send_cdp_supports_callable_client():
@@ -472,9 +472,9 @@ def test_save_and_load_auth_profile_roundtrip(tmp_path):
         return {}
 
     with patch.object(login_session, "_PROFILES_DIR", profiles_dir), \
-         patch("login_session.session_manifest", return_value={"site": "example.com"}), \
-         patch("login_session.session_state", return_value=fake_state), \
-         patch("login_session.restore_session_state") as mock_restore:
+         patch("browser_harness.login_session.session_manifest", return_value={"site": "example.com"}), \
+         patch("browser_harness.login_session.session_state", return_value=fake_state), \
+         patch("browser_harness.login_session.restore_session_state") as mock_restore:
         path = login_session.save_auth_profile(fake_client, "www.example.com")
         assert (profiles_dir / "example.com" / "manifest.json").exists()
         assert (profiles_dir / "example.com" / "state.json").exists()

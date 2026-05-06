@@ -2,7 +2,7 @@
 import base64
 import time
 
-import helpers
+from . import helpers
 
 _MAX_BODY_CHARS = 2 * 1024 * 1024  # 2MB
 

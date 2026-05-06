@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-import data_display
+from browser_harness import data_display
 
 
 def test_load_records_csv_coercion(tmp_path):

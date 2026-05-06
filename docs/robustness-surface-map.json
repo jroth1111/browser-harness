@@ -43,7 +43,12 @@
     {
       "id": "cli_entrypoint",
       "scope": "browser-harness command execution, setup/doctor/update flags, and stdin or -c code execution.",
-      "files": ["run.py", "admin.py", "SKILL.md", "README.md"],
+      "files": [
+        "src/browser_harness/run.py",
+        "src/browser_harness/admin.py",
+        "SKILL.md",
+        "README.md"
+      ],
       "contracts": [
         "ensure_daemon runs before user code execution",
         "first navigation guidance remains new_tab(url), not goto_url(url)",
@@ -71,7 +76,12 @@
     {
       "id": "daemon_socket_lifecycle",
       "scope": "Daemon startup, endpoint discovery, Unix socket/pid/log files, stale process recovery, and shutdown cleanup.",
-      "files": ["daemon.py", "admin.py", "test_daemon.py", "test_admin.py"],
+      "files": [
+        "src/browser_harness/daemon.py",
+        "src/browser_harness/admin.py",
+        "tests/unit/test_daemon.py",
+        "tests/unit/test_admin.py"
+      ],
       "contracts": [
         "CDP endpoints default to loopback only",
         "endpoint URLs must not contain credentials",
@@ -101,7 +111,10 @@
     {
       "id": "cdp_transport",
       "scope": "helpers.py socket client, raw CDP request/response handling, reconnect behavior, and recoverable session errors.",
-      "files": ["helpers.py", "test_helpers.py"],
+      "files": [
+        "src/browser_harness/helpers.py",
+        "tests/test_helpers.py"
+      ],
       "contracts": [
         "mutating CDP methods are not automatically retried after socket errors",
         "non-mutating requests may reconnect once",
@@ -130,7 +143,12 @@
     {
       "id": "navigation_readiness",
       "scope": "new_tab/goto_url/load waits, meaningful content readiness, blank renders, and stale/internal tab recovery.",
-      "files": ["helpers.py", "interaction-skills/extraction-coverage.md", "interaction-skills/ui-mechanics.md", "test_helpers.py"],
+      "files": [
+        "src/browser_harness/helpers.py",
+        "interaction-skills/extraction-coverage.md",
+        "interaction-skills/ui-mechanics.md",
+        "tests/test_helpers.py"
+      ],
       "contracts": [
         "extraction workflows use wait_for_content rather than fixed sleep or load-only readiness",
         "internal/stale tabs are recoverable with ensure_real_tab",
@@ -158,7 +176,12 @@
     {
       "id": "block_and_auth_detection",
       "scope": "WAF, bot-detection, auth gate, login redirect, and Turnstile handling boundaries.",
-      "files": ["helpers.py", "interaction-skills/waf-bypass.md", "interaction-skills/session-continuity.md", "test_helpers.py"],
+      "files": [
+        "src/browser_harness/helpers.py",
+        "interaction-skills/waf-bypass.md",
+        "interaction-skills/session-continuity.md",
+        "tests/test_helpers.py"
+      ],
       "contracts": [
         "detect blocks and auth gates before extraction",
         "authorized recovery paths only",
@@ -187,7 +210,12 @@
     {
       "id": "session_continuity",
       "scope": "Authenticated browser profile reuse, redacted manifests, private auth bundles, same-domain cookie headers, and restore verification.",
-      "files": ["login_session.py", "interaction-skills/session-continuity.md", "docs/local-cdp-providers.md", "test_login_session.py"],
+      "files": [
+        "src/browser_harness/login_session.py",
+        "interaction-skills/session-continuity.md",
+        "docs/local-cdp-providers.md",
+        "tests/test_login_session.py"
+      ],
       "contracts": [
         "the user's browser profile is the primary auth store",
         "raw cookies/storage belong only in ignored private paths when explicitly requested",
@@ -216,7 +244,13 @@
     {
       "id": "fetch_source_selection",
       "scope": "fetch(source=auto/http/session/browser), HTTP helpers, browser-session HTTP, source receipts, and fallback decisions.",
-      "files": ["helpers.py", "response.py", "interaction-skills/data-source-exploration.md", "interaction-skills/cross-domain-control-flow.md", "test_helpers.py"],
+      "files": [
+        "src/browser_harness/helpers.py",
+        "src/browser_harness/response.py",
+        "interaction-skills/data-source-exploration.md",
+        "interaction-skills/cross-domain-control-flow.md",
+        "tests/test_helpers.py"
+      ],
       "contracts": [
         "exports and structured APIs are preferred when complete",
         "field-level parity decides canonical source",
@@ -245,7 +279,12 @@
     {
       "id": "network_capture",
       "scope": "CDP Network event capture, response body capture, endpoint clustering, replay, and API promotion.",
-      "files": ["helpers.py", "network_capture.py", "interaction-skills/api-schema-audit.md", "test_helpers.py"],
+      "files": [
+        "src/browser_harness/helpers.py",
+        "src/browser_harness/network_capture.py",
+        "interaction-skills/api-schema-audit.md",
+        "tests/test_helpers.py"
+      ],
       "contracts": [
         "body capture is opt-in",
         "smart_wait/network_idle must not drain events during active capture",
@@ -274,7 +313,11 @@
     {
       "id": "crawl_safety",
       "scope": "CrawlState dedupe/saturation/accounting and SafetyGate request/time/block/429 budgets.",
-      "files": ["helpers.py", "interaction-skills/coverage-accounting.md", "test_helpers.py"],
+      "files": [
+        "src/browser_harness/helpers.py",
+        "interaction-skills/coverage-accounting.md",
+        "tests/test_helpers.py"
+      ],
       "contracts": [
         "long crawls have a key field and dedupe accounting",
         "bounded crawls enforce request/time/block budgets",
@@ -304,7 +347,12 @@
     {
       "id": "extraction_contracts",
       "scope": "Browser and parser extraction field semantics, selector probes, primary keys, fixtures, and coverage triage.",
-      "files": ["interaction-skills/extraction-coverage.md", "domain-skills/surface-map-pattern.md", "domain-skills/README.md", "test_domain_surface_maps.py"],
+      "files": [
+        "interaction-skills/extraction-coverage.md",
+        "domain-skills/surface-map-pattern.md",
+        "domain-skills/README.md",
+        "tests/test_domain_surface_maps.py"
+      ],
       "contracts": [
         "fields distinguish value, confirmed absent, __UNOBSERVABLE__, and not checked",
         "selectors are probed before extractor code is trusted",
@@ -334,7 +382,14 @@
     {
       "id": "domain_skill_loading",
       "scope": "Root router, domain index, packaged domain assets, surface maps, and empirical skill promotion.",
-      "files": ["SKILL.md", "domain-skills/README.md", "interaction-skills/README.md", "skill_learning_gate.py", "test_skill_learning_gate.py", "test_domain_surface_maps.py"],
+      "files": [
+        "SKILL.md",
+        "domain-skills/README.md",
+        "interaction-skills/README.md",
+        "src/browser_harness/skill_learning_gate.py",
+        "tests/test_skill_learning_gate.py",
+        "tests/test_domain_surface_maps.py"
+      ],
       "contracts": [
         "known domains route to overview.md or the most specific file",
         "domain skills contain durable rules, not task narration or secrets",
@@ -363,7 +418,13 @@
     {
       "id": "report_rendering",
       "scope": "data_display.py generated HTML reports, assets, disabled states, and browser-visible render checks.",
-      "files": ["data_display.py", "browser_harness_assets/alpinejs-3.14.9-cdn.min.js", "browser_harness_assets/echarts-5.5.1.min.js", "interaction-skills/data-display.md", "test_data_display.py"],
+      "files": [
+        "src/browser_harness/data_display.py",
+        "browser_harness_assets/alpinejs-3.14.9-cdn.min.js",
+        "browser_harness_assets/echarts-5.5.1.min.js",
+        "interaction-skills/data-display.md",
+        "tests/test_data_display.py"
+      ],
       "contracts": [
         "report HTML renders data without overlapping or missing controls",
         "disabled reasons and missing data are explicit",
@@ -392,7 +453,13 @@
     {
       "id": "packaging_release",
       "scope": "pyproject package config, wheel contents, clean install smoke, console scripts, package data, and artifact exclusions.",
-      "files": ["pyproject.toml", "test_packaging.py", "README.md", "SKILL.md", "install.md"],
+      "files": [
+        "pyproject.toml",
+        "tests/test_packaging.py",
+        "README.md",
+        "SKILL.md",
+        "install.md"
+      ],
       "contracts": [
         "runtime modules and skill/assets packages are included",
         "private/generated/session/cache artifacts are excluded",
@@ -421,7 +488,11 @@
     {
       "id": "quality_gates",
       "scope": "Repo-native verification commands, hygiene scans, optional live/E2E gates, and session close checks.",
-      "files": ["README.md", "pyproject.toml", "test_packaging.py"],
+      "files": [
+        "README.md",
+        "pyproject.toml",
+        "tests/test_packaging.py"
+      ],
       "contracts": [
         "default gate uses uv sync --group dev and uv run --group dev pytest -q",
         "plugin-conflict fallback disables pytest plugin autoload",

@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).parent / "domain-skills" / "coles_card" / "scripts" / "sync.py"
+MODULE_PATH = Path(__file__).parent.parent / "domain-skills" / "coles_card" / "scripts" / "sync.py"
 spec = importlib.util.spec_from_file_location("coles_card_sync", MODULE_PATH)
 coles_card_sync = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
