@@ -43,7 +43,7 @@ Commands:
 
 def _skill_learning_gate_main():
     try:
-        from skill_learning_gate import main
+        from .skill_learning_gate import main
 
         return main
     except ModuleNotFoundError:

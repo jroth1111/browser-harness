@@ -1,4 +1,4 @@
-import admin
+import browser_harness.admin as admin
 import signal
 import sys
 from io import StringIO

@@ -1,6 +1,6 @@
 import pytest
 
-from extraction_contracts import (
+from browser_harness.extraction_contracts import (
     UNOBSERVABLE,
     classify_field,
     summarize_extraction_coverage,

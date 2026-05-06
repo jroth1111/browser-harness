@@ -4,7 +4,7 @@ import json
 import os
 from unittest.mock import patch
 
-import daemon
+import browser_harness.daemon as daemon
 
 
 class FakeCDP:

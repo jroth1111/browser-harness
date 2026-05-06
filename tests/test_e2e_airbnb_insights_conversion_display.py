@@ -4,7 +4,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from data_display import render_dataset
+from browser_harness.data_display import render_dataset
 
 
 BASE = Path("agent-workspace/domain-skills/airbnb/.private-data/insights-collections")

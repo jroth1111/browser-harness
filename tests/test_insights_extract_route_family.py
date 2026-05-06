@@ -3,7 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-from data_display import render_dataset
+from browser_harness.data_display import render_dataset
 
 
 def load_module(path, name):

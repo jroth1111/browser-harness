@@ -5,7 +5,7 @@ import io
 import json
 import urllib.error
 
-import helpers
+import browser_harness.helpers as helpers
 
 
 def test_page_info_uses_target_and_layout_metrics_not_runtime():

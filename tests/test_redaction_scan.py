@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from redaction_scan import scan_paths, scan_text
+from browser_harness.redaction_scan import scan_paths, scan_text
 
 
 def test_redaction_scan_allows_redacted_session_manifest_shape():

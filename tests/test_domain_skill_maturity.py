@@ -1,6 +1,6 @@
 import json
 
-from domain_skill_maturity import evaluate_domain_skill
+from browser_harness.domain_skill_maturity import evaluate_domain_skill
 
 
 def test_domain_skill_maturity_detects_all_tiers(tmp_path):

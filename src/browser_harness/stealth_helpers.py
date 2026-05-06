@@ -6,7 +6,7 @@ avoids Runtime.enable and Console.enable CDP commands — the primary vectors
 for automation detection.
 
 Usage from scripts:
-    from stealth_helpers import stealth_session
+    from .stealth_helpers import stealth_session
     with stealth_session() as s:
         s.goto("https://chatgpt.com/c/abc123")
         html = s.content()

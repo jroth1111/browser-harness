@@ -1,4 +1,4 @@
-from response import Response, _MAX_RESPONSE_CHARS
+from browser_harness.response import Response, _MAX_RESPONSE_CHARS
 
 
 def test_small_response_not_truncated():

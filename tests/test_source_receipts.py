@@ -1,6 +1,6 @@
 import pytest
 
-from source_receipts import build_source_receipt, validate_source_receipt
+from browser_harness.source_receipts import build_source_receipt, validate_source_receipt
 
 
 def test_build_source_receipt_accepts_canonical_api_source():

@@ -196,13 +196,13 @@ def endpoint_info(): return _send({"meta": "endpoint_info"}).get("endpoint_info"
 
 def launch_browser(**kwargs):
     """Launch Chrome with CDP and connect the daemon. Returns {pid, port, ws_url}."""
-    from admin import launch_browser as _launch
+    from .admin import launch_browser as _launch
     return _launch(**kwargs)
 
 
 def close_browser(launch_info):
     """Close a browser launched by launch_browser()."""
-    from admin import close_browser as _close
+    from .admin import close_browser as _close
     return _close(launch_info)
 
 
@@ -2289,7 +2289,7 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
     The returned Response may include a ``turnstile_solved`` key set to True when
     Cloudflare Turnstile was detected and solved during the browser fallback.
     """
-    from response import Response
+    from .response import Response
 
     def _readiness_status_code(status):
         if status.get("ok"):

@@ -116,6 +116,6 @@ class Response:
 
     def embedded_json(self, var_name):
         """Extract window.VAR_NAME = {...} assignment as parsed JSON."""
-        from helpers import _extract_json_assignment
+        from .helpers import _extract_json_assignment
         raw = _extract_json_assignment(self.html, var_name)
         return json.loads(raw) if raw else None
