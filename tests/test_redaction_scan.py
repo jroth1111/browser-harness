@@ -38,6 +38,15 @@ def test_redaction_scan_cookie_values_may_contain_n_or_s():
     assert all("session-secret-nonce-value" not in finding["excerpt"] for finding in findings)
 
 
+def test_redaction_scan_redacts_bare_cookie_header_excerpt():
+    secret = "abcdefghijklmnopqrstuvwxyz012345"
+    findings = scan_text(f"Cookie: {secret}\n")
+
+    assert {finding["kind"] for finding in findings} == {"cookie_header"}
+    assert secret not in findings[0]["excerpt"]
+    assert "REDACTED" in findings[0]["excerpt"]
+
+
 def test_redaction_scan_paths_skip_private_dirs_and_flag_public_files(tmp_path):
     private = tmp_path / ".private-data"
     private.mkdir()

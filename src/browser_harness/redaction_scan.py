@@ -31,6 +31,7 @@ def _should_skip(path):
 
 
 def _redact_excerpt(text):
+    text = re.sub(r"(?i)\b((?:set-)?cookie\s*:\s*)[^\n]+", r"\1REDACTED", text)
     text = re.sub(r"(?i)(bearer\s+)[a-z0-9._~+/=-]+", r"\1REDACTED", text)
     text = re.sub(r"(?i)(=\s*)[^\s;,]{8,}", r"\1REDACTED", text)
     text = re.sub(r'(:\s*")[^"]{8,}(")', r"\1REDACTED\2", text)
