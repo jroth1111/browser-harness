@@ -1819,7 +1819,7 @@ class CrawlState:
             if field in data and not isinstance(data[field], expected_type):
                 raise ValueError(f"{path}: crawl checkpoint field '{field}' must be {expected_type.__name__}")
         for field in ("dup_attempts", "missing_key", "marginal_window"):
-            if field in data and not isinstance(data[field], int):
+            if field in data and (isinstance(data[field], bool) or not isinstance(data[field], int)):
                 raise ValueError(f"{path}: crawl checkpoint field '{field}' must be int")
 
 

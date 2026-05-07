@@ -24,3 +24,12 @@ def test_standalone_crawl_state_load_rejects_malformed_checkpoint_shapes(tmp_pat
 
     with pytest.raises(ValueError, match="occurrences.*dict"):
         module.CrawlState.load(path)
+
+
+def test_standalone_crawl_state_load_rejects_boolean_integer_fields(tmp_path):
+    module = load_module()
+    path = tmp_path / "checkpoint.json"
+    path.write_text(json.dumps({"key_field": "store_id", "marginal_window": True}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="marginal_window.*int"):
+        module.CrawlState.load(path)

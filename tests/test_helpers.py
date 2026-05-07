@@ -1788,6 +1788,14 @@ def test_crawl_state_load_rejects_malformed_checkpoint_shapes(tmp_path):
         helpers.CrawlState.load(path)
 
 
+def test_crawl_state_load_rejects_boolean_integer_fields(tmp_path):
+    path = tmp_path / "checkpoint.json"
+    path.write_text(json.dumps({"key_field": "id", "dup_attempts": True}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="dup_attempts.*int"):
+        helpers.CrawlState.load(path)
+
+
 def test_crawl_state_save_handles_non_serializable(tmp_path):
     state = helpers.CrawlState("id")
     state.add({"id": "a", "ts": object()})
