@@ -1045,6 +1045,12 @@ def test_wait_for_content_tolerates_malformed_block_metadata():
     assert result["reason"] == "content"
 
 
+def test_detect_block_page_tolerates_scalar_inputs():
+    result = helpers.detect_block_page(html=12345, text=67890, url=98765)
+
+    assert result == {"blocked": False, "kind": None, "evidence": []}
+
+
 def test_cookie_matches_url_respects_domain_path_and_secure():
     assert helpers._cookie_matches_url(
         {"domain": ".realestate.com.au", "path": "/", "secure": True},

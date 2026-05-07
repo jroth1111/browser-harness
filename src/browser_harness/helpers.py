@@ -509,9 +509,9 @@ def detect_block_page(html="", text="", url=""):
     or hide automation; callers use it to avoid mistaking an empty challenge page
     for real content.
     """
-    html = html or ""
-    text = text or ""
-    url = url or ""
+    html = str(html or "")
+    text = str(text or "")
+    url = str(url or "")
     # Single lowercased copy for substring matching — avoids per-needle regex.
     haystack = (html + "\n" + text + "\n" + url).lower()
     html_len = len(html)
