@@ -63,6 +63,26 @@ def test_upsert_best_capability_replaces_not_observed_with_observed():
     assert records[0]["matched_resource_count"] == 1
 
 
+def test_upsert_best_capability_treats_malformed_counts_as_zero():
+    module = load_module()
+    records = [
+        {
+            "surface_id": "public_comp_search",
+            "status": "capability_observed",
+            "matched_resource_count": "not-a-count",
+        }
+    ]
+    observed = {
+        "surface_id": "public_comp_search",
+        "status": "capability_observed",
+        "matched_resource_count": 1,
+    }
+
+    module.upsert_best_capability(records, observed)
+
+    assert records == [observed]
+
+
 def test_build_staleness_plan_uses_surface_cadence():
     module = load_module()
 

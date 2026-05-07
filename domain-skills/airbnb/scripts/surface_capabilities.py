@@ -289,14 +289,20 @@ def capability_record(
 
 def upsert_best_capability(records, record):
     """Keep the strongest receipt for a surface without duplicating it."""
+    def safe_int(value) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
     surface_id = record.get("surface_id")
     for index, existing in enumerate(records):
         if existing.get("surface_id") != surface_id:
             continue
         existing_observed = existing.get("status") == "capability_observed"
         record_observed = record.get("status") == "capability_observed"
-        existing_count = int(existing.get("matched_resource_count") or 0)
-        record_count = int(record.get("matched_resource_count") or 0)
+        existing_count = safe_int(existing.get("matched_resource_count"))
+        record_count = safe_int(record.get("matched_resource_count"))
         if (record_observed and not existing_observed) or record_count > existing_count:
             records[index] = record
         return records
