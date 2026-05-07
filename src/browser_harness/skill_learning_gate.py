@@ -81,7 +81,7 @@ def scan_text_for_redaction_findings(text, *, source_path=None, max_findings=50)
                 "kind": kind,
                 "source_path": str(source_path) if source_path else None,
                 "start": match.start(),
-                "snippet_prefix": match.group(0)[:24],
+                "snippet_prefix": f"{kind}:REDACTED",
             })
             if len(findings) >= max_findings:
                 return findings

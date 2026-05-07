@@ -87,6 +87,9 @@ def test_candidate_rejects_secret_payloads_even_if_marked_pass():
 
     assert result["decision"] == "reject"
     assert any(error["reason"] == "redaction findings present" for error in result["errors"])
+    findings = next(error["findings"] for error in result["errors"] if error["reason"] == "redaction findings present")
+    assert findings[0]["snippet_prefix"] == "bearer_token:REDACTED"
+    assert "abcdefghijklmnopqrstuvwxyz" not in json.dumps(findings)
 
 
 def test_candidate_rejects_auth_state_overgeneralization():
