@@ -60,6 +60,29 @@ def test_list_active_browsers_tolerates_malformed_total_items(monkeypatch):
     assert calls[-1] == ("GET", "/browsers?pageSize=100&pageNumber=2")
 
 
+def test_list_active_browsers_rejects_boolean_total_items(monkeypatch):
+    module = load_cleanup_module()
+    calls = []
+    pages = iter([
+        {
+            "items": [
+                {"id": "active", "startedAt": "2026-05-07T00:00:00Z"},
+            ],
+            "totalItems": True,
+        },
+        {"items": []},
+    ])
+
+    def fake_call(method, path):
+        calls.append((method, path))
+        return next(pages)
+
+    monkeypatch.setattr(module, "_call", fake_call)
+
+    assert module.list_active_browsers() == [{"id": "active", "startedAt": "2026-05-07T00:00:00Z"}]
+    assert calls[-1] == ("GET", "/browsers?pageSize=100&pageNumber=2")
+
+
 def test_main_skips_active_rows_with_malformed_runtime_fields(monkeypatch, capsys):
     module = load_cleanup_module()
     monkeypatch.setattr(module.sys, "argv", ["cleanup-zombies.py", "--older-than", "0", "--dry-run", "--json"])

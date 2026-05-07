@@ -34,6 +34,8 @@ API = "https://api.browser-use.com/api/v3"
 
 
 def _safe_int(value, default=None):
+    if isinstance(value, bool):
+        return default
     try:
         return int(value)
     except (TypeError, ValueError):
