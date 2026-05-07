@@ -73,6 +73,12 @@ def test_last_good_guard_quarantines_empty_after_prior_nonempty():
     )["status"] == "accepted"
 
 
+def test_collection_status_tolerates_malformed_failure_count():
+    module = load_module()
+
+    assert module.collection_status(complete=True, failures_count="not-a-count") == "complete"
+
+
 def test_warehouse_manifest_records_table_grain_and_auth_context():
     module = load_module()
 

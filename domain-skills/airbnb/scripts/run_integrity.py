@@ -110,7 +110,7 @@ def collection_status(*, last_good_guard_record=None, failures_count=0, complete
     guard = last_good_guard_record or {}
     if guard.get("quarantined_empty_after_prior_nonempty"):
         return "quarantined_empty_after_prior_nonempty"
-    if int(failures_count or 0):
+    if safe_int(failures_count, 0):
         return "partial_failed"
     return "complete" if complete else "partial_unverified"
 
