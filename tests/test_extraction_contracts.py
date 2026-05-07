@@ -63,3 +63,17 @@ def test_summarize_extraction_coverage_counts_states_and_key_failures():
     assert summary["fields"]["title"]["absent"] == 1
     assert summary["fields"]["price"]["unobservable"] == 1
     assert summary["fields"]["seller"]["not_checked"] == 1
+
+
+def test_summarize_extraction_coverage_counts_failed_key_outside_expected_fields():
+    summary = summarize_extraction_coverage(
+        [
+            {"id": None, "title": "A"},
+        ],
+        expected_fields=["title"],
+        key_field="id",
+    )
+
+    assert summary["primary_key_failures"] == 1
+    assert summary["fields"]["title"]["value"] == 1
+    assert summary["fields"]["id"]["absent"] == 1

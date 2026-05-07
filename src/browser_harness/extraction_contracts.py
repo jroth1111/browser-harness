@@ -75,6 +75,12 @@ def summarize_extraction_coverage(
                     field: classify_field(record, field, allow_empty_string=allow_empty_string)
                     for field in expected_fields
                 }
+                if key_field not in states:
+                    states[key_field] = classify_field(
+                        record,
+                        key_field,
+                        allow_empty_string=allow_empty_string,
+                    )
             else:
                 raise
         for field, state in states.items():
