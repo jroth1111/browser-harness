@@ -106,6 +106,8 @@ def contract_summary(surface_map: dict) -> dict:
 
 
 def safe_int(value, default=0) -> int:
+    if isinstance(value, bool):
+        return default
     try:
         return int(value or default)
     except (TypeError, ValueError):

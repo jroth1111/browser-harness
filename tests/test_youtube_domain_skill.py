@@ -692,6 +692,7 @@ def test_youtube_live_smoke_content_status_tolerates_malformed_shapes():
 
     assert module.content_is_usable("bad-status") is False
     assert module.content_is_usable({"textLength": "not-a-count", "block": {}}) is False
+    assert module.content_is_usable({"textLength": True, "block": {}}, min_text=1) is False
     assert module.content_is_usable({"textLength": 250, "block": {"blocked": True}}) is False
     assert module.content_is_usable({"textLength": 250, "block": "not-an-object"}) is True
     assert module.content_is_usable({"textLength": 250, "block": {}}) is True
