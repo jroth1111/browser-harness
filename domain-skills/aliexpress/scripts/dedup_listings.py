@@ -36,13 +36,13 @@ def load_input(input_source: str) -> list[dict]:
     """Load from stdin (JSON) or file path (CSV or JSON)."""
     if input_source == "-":
         raw = sys.stdin.read().strip()
-        return json.loads(raw)
+        return normalize_records(json.loads(raw))
 
     with open(input_source) as f:
         raw = f.read().strip()
 
     if raw.startswith("[") or raw.startswith("{"):
-        return json.loads(raw)
+        return normalize_records(json.loads(raw))
 
     results = []
     with open(input_source, newline="") as f:
@@ -50,6 +50,24 @@ def load_input(input_source: str) -> list[dict]:
         for row in reader:
             results.append(dict(row))
     return results
+
+
+def normalize_records(data) -> list[dict]:
+    if not isinstance(data, list):
+        raise ValueError("JSON input must be an array of objects")
+    for item in data:
+        if not isinstance(item, dict):
+            raise ValueError("JSON input must be an array of objects")
+    return data
+
+
+def fieldnames_for(records: list[dict]) -> list[str]:
+    seen = []
+    for record in records:
+        for key in record:
+            if key not in seen:
+                seen.append(key)
+    return seen
 
 
 def main():
@@ -107,6 +125,7 @@ def main():
 
     existing_ids = load_existing_ids(args.existing_csv)
     new_items = load_input(args.input)
+    input_fieldnames = fieldnames_for(new_items)
 
     total_input = len(new_items)
     after_dedup = [item for item in new_items if item.get("product_id", "") not in existing_ids]
@@ -177,8 +196,9 @@ def main():
             json.dump(new_items, out, indent=2)
             out.write("\n")
         else:
-            if new_items:
-                writer = csv.DictWriter(out, fieldnames=new_items[0].keys())
+            fieldnames = fieldnames_for(new_items) or input_fieldnames
+            if fieldnames:
+                writer = csv.DictWriter(out, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(new_items)
     finally:
