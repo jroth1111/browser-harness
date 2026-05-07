@@ -1,5 +1,7 @@
 import csv
 import importlib.util
+import json
+import subprocess
 import sys
 from types import SimpleNamespace
 from pathlib import Path
@@ -48,6 +50,40 @@ def test_z2u_product_payload_accepts_list_and_wrapped_products():
     rows, coverage = z2u.normalize_product_payload({"products": [{"title": "B"}], "coverage": {"ok": True}})
     assert rows == [{"title": "B"}]
     assert coverage == {"ok": True}
+
+
+def test_z2u_merge_tolerates_scalar_text_fields(tmp_path):
+    script = ROOT / "domain-skills/z2u/scripts/search.py"
+    input_json = tmp_path / "products.json"
+    output_csv = tmp_path / "products.csv"
+    input_json.write_text(
+        json.dumps(
+            [
+                {
+                    "title": 12345,
+                    "category": 99,
+                    "description": 101,
+                    "sold_out": False,
+                    "type": "product",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [sys.executable, str(script), "merge", str(input_json), "--filter", "101", "--output", str(output_csv)],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    with output_csv.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert rows[0]["product_name"] == "12345"
+    assert rows[0]["category"] == "99"
+    assert rows[0]["description"] == "101"
 
 
 def test_ebay_verified_and_coverage_paths_handle_missing_or_uppercase_suffix(tmp_path):

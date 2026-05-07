@@ -400,13 +400,19 @@ def make_relevance_filter(filter_term: str):
 
     def is_relevant(item: dict) -> bool:
         searchable = ' '.join([
-            item.get('product_name', '') or item.get('title', ''),
-            item.get('description', ''),
-            item.get('category', ''),
+            text_value(item.get('product_name') or item.get('title')),
+            text_value(item.get('description')),
+            text_value(item.get('category')),
         ]).lower()
         return term_lower in searchable
 
     return is_relevant
+
+
+def text_value(value):
+    if value is None:
+        return ""
+    return str(value)
 
 
 # --- Field value normalisation for CSV ---
@@ -591,18 +597,18 @@ def cmd_merge(args):
     products, coverage = normalize_product_payload(data)
     for p in products:
         item = {
-            'product_name': p.get('title', p.get('product_name', '')),
-            'category': p.get('category', ''),
-            'description': p.get('description', ''),
-            'seller': p.get('seller', ''),
-            'price': p.get('price', ''),
-            'url': p.get('url', ''),
-            'region': p.get('region', p.get('region_attr', '')),
-            'platform': p.get('platform', ''),
-            'delivery_time': p.get('delivery_time', ''),
-            'stock': p.get('stock', ''),
+            'product_name': text_value(p.get('title', p.get('product_name', ''))),
+            'category': text_value(p.get('category', '')),
+            'description': text_value(p.get('description', '')),
+            'seller': text_value(p.get('seller', '')),
+            'price': text_value(p.get('price', '')),
+            'url': text_value(p.get('url', '')),
+            'region': text_value(p.get('region', p.get('region_attr', ''))),
+            'platform': text_value(p.get('platform', '')),
+            'delivery_time': text_value(p.get('delivery_time', '')),
+            'stock': text_value(p.get('stock', '')),
             'sold_out': str(p.get('sold_out', False)).lower(),
-            'type': p.get('type', 'product'),
+            'type': text_value(p.get('type', 'product')),
         }
         items.append(item)
 
@@ -615,7 +621,7 @@ def cmd_merge(args):
         print(f"Filter '{args.filter}': {before} -> {len(items)} ({filtered} removed)", file=sys.stderr)
 
     # Sort by product_name
-    items.sort(key=lambda x: x.get('product_name', '').lower())
+    items.sort(key=lambda x: text_value(x.get('product_name')).lower())
 
     # Field triage report (pre-export)
     _report_field_triage(items, label=" (pre-filter)" if args.filter else "")
