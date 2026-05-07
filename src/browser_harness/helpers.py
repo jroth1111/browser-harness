@@ -175,6 +175,14 @@ def _int_count(value):
         return 0
 
 
+def _env_int(name, default):
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
 _RECOVERABLE_PATTERNS = (
     "Session with given id not found",
     "Not attached to target",
@@ -1189,7 +1197,7 @@ def close_tabs(targets):
             switch_tab(tabs[0])
     return out
 
-_MAX_TABS = int(os.environ.get("BH_MAX_TABS", "5"))
+_MAX_TABS = _env_int("BH_MAX_TABS", 5)
 
 
 def _enforce_tab_limit():

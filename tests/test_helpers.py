@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import subprocess
 
 import pytest
 from PIL import Image
@@ -500,6 +501,23 @@ def test_new_tab_respects_bh_max_tabs_env(monkeypatch):
             assert "2/2" in str(e)
         else:
             raise AssertionError("expected RuntimeError")
+
+
+def test_helpers_import_tolerates_malformed_bh_max_tabs_env():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import browser_harness.helpers as h; print(h._MAX_TABS)",
+        ],
+        env={**os.environ, "BH_MAX_TABS": "not-a-number"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "5"
 
 
 def test_is_recoverable_matches_session_errors():
