@@ -90,7 +90,10 @@ def _parse_started(b: dict) -> datetime.datetime:
 
 def _to_float(v: str | None) -> float:
     """Cost / proxy fields come back as strings; tolerate `None` and empty."""
-    return float(v) if v else 0.0
+    try:
+        return float(v) if v else 0.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def stop_browser(browser_id: str) -> dict:
@@ -124,8 +127,27 @@ def main() -> int:
         return 1
 
     stopped = 0
+    would_stop = 0
     for b in active:
-        started = _parse_started(b)
+        try:
+            started = _parse_started(b)
+        except (KeyError, AttributeError, ValueError) as e:
+            record = {
+                "id": b.get("id", "?"),
+                "started_at": b.get("startedAt", ""),
+                "age_minutes": None,
+                "browser_cost": _to_float(b.get("browserCost")),
+                "proxy_cost": _to_float(b.get("proxyCost")),
+                "proxy_used_mb": _to_float(b.get("proxyUsedMb")),
+                "is_zombie": False,
+                "action": "skipped_malformed",
+                "error": f"invalid startedAt: {e}",
+            }
+            if args.json:
+                print(json.dumps(record))
+            else:
+                print(f"[MALFORMED] {record['id']}  {record['error']}")
+            continue
         age_min = (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds() / 60
         is_zombie = started < cutoff
         record = {
@@ -141,6 +163,7 @@ def main() -> int:
         if is_zombie:
             if args.dry_run:
                 record["action"] = "would_stop"
+                would_stop += 1
             else:
                 try:
                     final = stop_browser(b["id"])
@@ -168,7 +191,7 @@ def main() -> int:
 
     if not args.json:
         verb = "would stop" if args.dry_run else "stopped"
-        print(f"summary: {len(active)} active session(s), {verb} {stopped if not args.dry_run else sum(1 for b in active if _parse_started(b) < cutoff)}")
+        print(f"summary: {len(active)} active session(s), {verb} {stopped if not args.dry_run else would_stop}")
     return 0
 
 

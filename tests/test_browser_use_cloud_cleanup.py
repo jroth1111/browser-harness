@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -57,6 +58,34 @@ def test_list_active_browsers_tolerates_malformed_total_items(monkeypatch):
 
     assert module.list_active_browsers() == [{"id": "active", "startedAt": "2026-05-07T00:00:00Z"}]
     assert calls[-1] == ("GET", "/browsers?pageSize=100&pageNumber=2")
+
+
+def test_main_skips_active_rows_with_malformed_runtime_fields(monkeypatch, capsys):
+    module = load_cleanup_module()
+    monkeypatch.setattr(module.sys, "argv", ["cleanup-zombies.py", "--older-than", "0", "--dry-run", "--json"])
+    monkeypatch.setattr(module, "stop_browser", lambda browser_id: {})
+    monkeypatch.setattr(module, "list_active_browsers", lambda: [
+        {"id": "bad-time", "startedAt": "not-a-date"},
+        {
+            "id": "bad-cost",
+            "startedAt": "2026-05-07T00:00:00Z",
+            "browserCost": "not-a-cost",
+            "proxyCost": "also-bad",
+            "proxyUsedMb": "bad-mb",
+        },
+    ])
+
+    assert module.main() == 0
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert rows[0]["id"] == "bad-time"
+    assert rows[0]["action"] == "skipped_malformed"
+    assert "startedAt" in rows[0]["error"]
+    assert rows[1]["id"] == "bad-cost"
+    assert rows[1]["browser_cost"] == 0.0
+    assert rows[1]["proxy_cost"] == 0.0
+    assert rows[1]["proxy_used_mb"] == 0.0
+    assert rows[1]["action"] == "would_stop"
 
 
 @pytest.mark.parametrize("listing, message", [
