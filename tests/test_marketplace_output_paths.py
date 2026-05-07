@@ -26,6 +26,30 @@ def test_z2u_default_csv_path_never_equals_input_without_json_suffix(tmp_path):
     assert output_path != input_path
 
 
+def test_z2u_product_payload_rejects_unsupported_json_shapes():
+    z2u = load_module("z2u_search_payloads", "domain-skills/z2u/scripts/search.py")
+
+    for payload in ("not a payload", {"products": {"title": "not a list"}}, ["not a product"]):
+        try:
+            z2u.normalize_product_payload(payload)
+        except ValueError as exc:
+            assert "input JSON" in str(exc)
+        else:
+            raise AssertionError(f"payload should have been rejected: {payload!r}")
+
+
+def test_z2u_product_payload_accepts_list_and_wrapped_products():
+    z2u = load_module("z2u_search_valid_payloads", "domain-skills/z2u/scripts/search.py")
+
+    rows, coverage = z2u.normalize_product_payload([{"title": "A"}])
+    assert rows == [{"title": "A"}]
+    assert coverage is None
+
+    rows, coverage = z2u.normalize_product_payload({"products": [{"title": "B"}], "coverage": {"ok": True}})
+    assert rows == [{"title": "B"}]
+    assert coverage == {"ok": True}
+
+
 def test_ebay_verified_and_coverage_paths_handle_missing_or_uppercase_suffix(tmp_path):
     ebay = load_module("ebay_search_paths", "domain-skills/ebay/scripts/search.py")
 

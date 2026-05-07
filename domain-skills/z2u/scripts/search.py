@@ -43,6 +43,23 @@ def derive_output_path(path: str, expected_suffix: str, replacement_suffix: str)
     return str(source.with_name(f"{name}{replacement_suffix}"))
 
 
+def normalize_product_payload(data):
+    if isinstance(data, list):
+        products = data
+        coverage = None
+    elif isinstance(data, dict):
+        products = data.get('products', [])
+        coverage = data.get('coverage')
+    else:
+        raise ValueError("input JSON must be an array or an object with a products array")
+    if not isinstance(products, list):
+        raise ValueError("input JSON field 'products' must be an array")
+    for product in products:
+        if not isinstance(product, dict):
+            raise ValueError("input JSON products must be objects")
+    return products, coverage
+
+
 # --- Field semantics ---
 # In extraction JS:
 #   value                = found and extracted
@@ -571,7 +588,7 @@ def cmd_merge(args):
 
     # Collect items
     items = []
-    products = data if isinstance(data, list) else data.get('products', [])
+    products, coverage = normalize_product_payload(data)
     for p in products:
         item = {
             'product_name': p.get('title', p.get('product_name', '')),
@@ -628,7 +645,6 @@ def cmd_merge(args):
         print(f"  {cat}: {count}", file=sys.stderr)
 
     # Coverage report if available
-    coverage = data.get('coverage') if isinstance(data, dict) else None
     if coverage:
         declared = coverage.get('declared')
         if declared:
@@ -642,8 +658,7 @@ def cmd_verify(args):
     with open(args.input) as f:
         data = json.load(f)
 
-    products = data if isinstance(data, list) else data.get('products', [])
-    coverage = data.get('coverage') if isinstance(data, dict) else None
+    products, coverage = normalize_product_payload(data)
 
     if not products:
         print("No products found in input.", file=sys.stderr)
