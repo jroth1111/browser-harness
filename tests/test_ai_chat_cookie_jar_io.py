@@ -28,6 +28,8 @@ def test_flatten_cookies_skips_malformed_host_jars():
         ".bad.example": ["not", "a", "jar"],
         ".example.com": {
             "sid": {"value": "abc"},
+            "bool": {"value": True},
+            "num": {"value": 123},
             "flat": "xyz",
             "missing": {"path": "/"},
         },

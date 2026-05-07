@@ -32,7 +32,7 @@ def flatten_cookies(rich: dict[str, dict[str, Any]]) -> dict[str, dict[str, str]
         for name, entry in jar.items():
             if isinstance(entry, dict):
                 v = entry.get("value")
-                if v is not None:
+                if isinstance(v, str):
                     flat[host][name] = v
             elif isinstance(entry, str):
                 flat[host][name] = entry
