@@ -35,6 +35,10 @@ def _write_csv(path, rows):
         writer.writerows(rows)
 
 
+def _dict_rows(value):
+    return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
+
+
 def extract_family(snapshot_json_path, family, *, allow_partial=False, allow_quarantined=False):
     source_path = Path(snapshot_json_path)
     payload = json.loads(source_path.read_text(encoding="utf-8"))
@@ -44,8 +48,8 @@ def extract_family(snapshot_json_path, family, *, allow_partial=False, allow_qua
         allow_partial=allow_partial,
         allow_quarantined=allow_quarantined,
     )
-    summary_rows = [row for row in payload.get("summary_rows", []) if row.get("route_family") == family]
-    daily_rows = [row for row in payload.get("daily_rows", []) if row.get("route_family") == family]
+    summary_rows = [row for row in _dict_rows(payload.get("summary_rows")) if row.get("route_family") == family]
+    daily_rows = [row for row in _dict_rows(payload.get("daily_rows")) if row.get("route_family") == family]
 
     out_json = source_path.with_name(source_path.stem + f"-{family}-only.json")
     out_summary_csv = source_path.with_name(source_path.stem + f"-{family}-only-summary.csv")

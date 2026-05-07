@@ -49,6 +49,33 @@ def test_extract_route_family_round_trip_and_render(tmp_path):
     assert 'id="payload-json"' in html
 
 
+def test_extract_route_family_skips_malformed_snapshot_rows(tmp_path):
+    module = load_module("domain-skills/airbnb/scripts/extract_route_family.py", "airbnb_extract_route_family")
+    source = tmp_path / "run.json"
+    payload = {
+        "run_id": "run-1",
+        "observed_at": "2026-04-28T00:00:00Z",
+        "listing_count": 1,
+        "summary_rows": [
+            "bad-summary-row",
+            {"route_family": "conversion", "route_subroute": "p3_impressions", "value": 5},
+            {"route_family": "quality", "route_subroute": "overall", "value": 0.0},
+        ],
+        "daily_rows": [
+            ["bad-daily-row"],
+            {"route_family": "conversion", "route_subroute": "p3_impressions", "ds": "2026-04-20", "value": 2},
+        ],
+    }
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    out = module.extract_family(source, "conversion")
+    out_json = json.loads(Path(out["json_path"]).read_text(encoding="utf-8"))
+
+    assert out_json["summary_rows_count"] == 1
+    assert out_json["daily_rows_count"] == 1
+    assert out_json["routes_present"] == ["p3_impressions"]
+
+
 def test_extract_route_family_rejects_quarantined_snapshot_without_override(tmp_path):
     module = load_module("domain-skills/airbnb/scripts/extract_route_family.py", "airbnb_extract_route_family")
     source = tmp_path / "run.json"
