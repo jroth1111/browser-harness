@@ -361,6 +361,44 @@ def test_settings_drift_allows_explicit_slow_season_discount_above_floor():
     assert result["settings_drift_findings"] == []
 
 
+def test_settings_drift_tolerates_malformed_nested_strategy_rows():
+    module = load_module()
+
+    malformed_strategy = module.audit_settings_drift({
+        "listing_id": "100",
+        "margin_floor": 200,
+        "source_staleness_days": 10,
+        "intended_strategy": "not-a-strategy",
+        "pricing_settings": "not-settings",
+        "calendar_rows": [{
+            "calendar_date": "2026-08-11",
+            "nightly_price": 300,
+            "active_rule_set_count": "not-a-count",
+        }],
+        "evidence_refs": ["calendar:2026-08-11"],
+    })
+
+    assert malformed_strategy["decision"] == "needs_more_data"
+    assert "intended_strategy" in malformed_strategy["missing_required_evidence"]
+
+    result = module.audit_settings_drift({
+        "listing_id": "100",
+        "margin_floor": 200,
+        "source_staleness_days": 10,
+        "intended_strategy": {"max_source_staleness_days": 7},
+        "pricing_settings": "not-settings",
+        "calendar_rows": [{
+            "calendar_date": "2026-08-11",
+            "nightly_price": 300,
+            "active_rule_set_count": "not-a-count",
+        }],
+        "evidence_refs": ["calendar:2026-08-11"],
+    })
+
+    assert result["decision"] == "monitor"
+    assert result["settings_drift_findings"][0]["drift_type"] == "stale_pricing_evidence"
+
+
 def test_conversion_diagnosis_distinguishes_visibility_click_booking_and_price():
     module = load_module()
 

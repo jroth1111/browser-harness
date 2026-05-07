@@ -1900,7 +1900,7 @@ def audit_settings_drift(row):
     row = row or {}
     evidence_refs = as_list(row.get("evidence_refs"))
     calendar_rows = as_list(row.get("calendar_rows"))
-    strategy = row.get("intended_strategy") or {}
+    strategy = as_dict(row.get("intended_strategy"))
     missing = missing_fields(row, ["listing_id"])
     if not calendar_rows:
         missing.append("calendar_rows")
@@ -1924,7 +1924,7 @@ def audit_settings_drift(row):
         )
 
     findings = []
-    pricing_settings = row.get("pricing_settings") or {}
+    pricing_settings = as_dict(row.get("pricing_settings"))
     max_staleness_days = int(as_number(strategy.get("max_source_staleness_days"), as_number(row.get("max_source_staleness_days"), 7)) or 7)
     source_staleness_days = as_number(row.get("source_staleness_days"), as_number(pricing_settings.get("source_staleness_days")))
     if source_staleness_days is not None and source_staleness_days > max_staleness_days:
