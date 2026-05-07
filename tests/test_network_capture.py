@@ -123,6 +123,7 @@ def test_capture_handles_request_without_response():
 
 def test_capture_skips_malformed_cdp_event_shapes():
     events = [
+        "not an event",
         {"method": "Network.requestWillBeSent", "params": "bad-params"},
         {"method": "Network.requestWillBeSent", "params": {
             "requestId": "r1", "request": "bad-request", "type": "XHR",
@@ -146,3 +147,14 @@ def test_capture_skips_malformed_cdp_event_shapes():
         "mime_type": "",
         "response_headers": {},
     }]
+
+
+def test_redacted_capture_entries_ignores_scalar_header_maps():
+    redacted = network_capture.redacted_capture_entries([{
+        "url": "https://x.com/api",
+        "headers": "not headers",
+        "response_headers": ["not", "headers"],
+    }])[0]
+
+    assert redacted["headers"] == {}
+    assert redacted["response_headers"] == {}

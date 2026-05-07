@@ -17,9 +17,10 @@ def redact_capture_entry(entry):
     """Return a receipt-safe copy of a captured network entry."""
     safe = dict(entry)
     for header_key in ("headers", "response_headers"):
+        headers = _dict(safe.get(header_key))
         safe[header_key] = {
             key: ("REDACTED" if str(key).lower() in _SENSITIVE_HEADERS else value)
-            for key, value in (safe.get(header_key) or {}).items()
+            for key, value in headers.items()
         }
     if "body" in safe:
         body = safe.pop("body") or ""
@@ -59,6 +60,7 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
     responses = {}
 
     for ev in events:
+        ev = _dict(ev)
         method = ev.get("method", "")
         params = _dict(ev.get("params"))
         rid = params.get("requestId")
@@ -77,7 +79,7 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
                 "requestId": rid,
                 "status": resp.get("status", 0),
                 "mime_type": resp.get("mimeType", ""),
-                "response_headers": resp.get("headers", {}),
+                "response_headers": _dict(resp.get("headers")),
             }
 
     try:
