@@ -118,10 +118,20 @@ def _assign_categories_from_dom(s, menu_items):
     categories = json.loads(raw)
     if not isinstance(categories, list):
         return
-    categories = [cat for cat in categories if isinstance(cat, dict)]
+    categories = [
+        cat
+        for cat in categories
+        if isinstance(cat, dict)
+        and isinstance(cat.get("text"), str)
+        and isinstance(cat.get("y"), (int, float))
+    ]
 
     # Get Y positions of H3 elements (menu item names)
-    names_str = json.dumps([m["item_name"] for m in menu_items[:100]])
+    names_str = json.dumps([
+        str(m.get("item_name"))
+        for m in menu_items[:100]
+        if isinstance(m, dict) and m.get("item_name") is not None
+    ])
     js2 = f"""
     (() => {{
         var targetNames = {names_str};
@@ -149,8 +159,14 @@ def _assign_categories_from_dom(s, menu_items):
 
     # Assign categories based on Y position
     for item in menu_items:
-        y = positions.get(item["item_name"])
+        if not isinstance(item, dict):
+            continue
+        y = positions.get(item.get("item_name"))
         if y is None:
+            continue
+        try:
+            y = float(y)
+        except (TypeError, ValueError):
             continue
         for cat in reversed(categories):
             if cat["y"] <= y:

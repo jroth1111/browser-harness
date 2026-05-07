@@ -93,3 +93,26 @@ def test_assign_categories_from_dom_ignores_malformed_browser_json():
     module._assign_categories_from_dom(FakeSession(), menu_items)
 
     assert menu_items == [{"item_name": "Toast"}]
+
+
+def test_assign_categories_from_dom_ignores_malformed_category_rows():
+    module = load_module()
+    menu_items = [{"item_name": "Toast"}]
+
+    class FakeSession:
+        def __init__(self):
+            self.calls = 0
+
+        def js(self, script):
+            self.calls += 1
+            if self.calls == 1:
+                return json.dumps([
+                    {"text": "Breakfast"},
+                    {"y": 10},
+                    {"text": "Valid", "y": "top"},
+                ])
+            return json.dumps({"Toast": 25})
+
+    module._assign_categories_from_dom(FakeSession(), menu_items)
+
+    assert menu_items == [{"item_name": "Toast"}]
