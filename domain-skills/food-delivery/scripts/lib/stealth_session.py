@@ -32,7 +32,8 @@ def create_stealth_session(platform, headless=False):
     cp = cookie_path(platform)
     if cp.exists():
         cookies = json.loads(cp.read_text())
-        s.add_cookies(cookies)
+        if isinstance(cookies, list):
+            s.add_cookies([cookie for cookie in cookies if isinstance(cookie, dict)])
 
     s.goto(PLATFORM_URLS[platform])
     time.sleep(2)

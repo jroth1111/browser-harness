@@ -44,8 +44,12 @@ def inject_cookies(sb, platform):
     if not cp.exists():
         return 0
     cookies = json.loads(cp.read_text())
+    if not isinstance(cookies, list):
+        return 0
     injected = 0
     for c in cookies:
+        if not isinstance(c, dict):
+            continue
         try:
             sb.driver.add_cookie(c)
             injected += 1
