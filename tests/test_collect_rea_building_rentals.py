@@ -123,6 +123,26 @@ def test_building_watchlist_targets_add_new_buildings_and_merge_existing():
     assert merged["source_watchlist_labels"] == ["Existing Bank benchmark"]
 
 
+def test_building_watchlist_targets_skip_malformed_rows_and_default_bad_priority():
+    module = load_module()
+
+    targets = module.merge_building_watchlist_targets(
+        [{"building_key": "legacy", "building_address": "Legacy", "target_priority": "not-a-priority"}],
+        [
+            "not-a-row",
+            {
+                "id": "short-001",
+                "address": "9 Power Street, Southbank VIC 3006",
+                "priority": "not-a-priority",
+            },
+        ],
+    )
+
+    by_key = {target["building_key"]: target for target in targets}
+    assert by_key["9 power st|southbank|VIC|3006"]["target_priority"] == 100
+    assert by_key["legacy"]["target_priority"] == "not-a-priority"
+
+
 def test_building_watchlist_records_from_json_object_file(tmp_path):
     module = load_module()
     path = tmp_path / "watchlist.json"
@@ -152,6 +172,18 @@ def test_read_jsonl_skips_malformed_and_non_object_rows(tmp_path):
     assert [row["building_key"] for row in rows] == ["bank", "power"]
     known = module.known_listing_urls_by_building(path)
     assert sorted(known) == ["bank", "power"]
+
+
+def test_dedupe_observations_tolerates_malformed_rows_and_text_length():
+    module = load_module()
+
+    rows = module.dedupe_observations([
+        "not-a-row",
+        {"listing_key": "listing-1", "text_length": "not-a-length", "listing_state": "active"},
+        {"listing_key": "listing-1", "text_length": 25},
+    ])
+
+    assert rows == [{"listing_key": "listing-1", "text_length": "not-a-length", "listing_state": "active"}]
 
 
 def test_parse_rea_rental_listing_text_extracts_active_price_and_unit():

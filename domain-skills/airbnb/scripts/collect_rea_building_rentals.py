@@ -574,6 +574,13 @@ def parse_int_list(value):
     return out
 
 
+def safe_int(value, default=0):
+    try:
+        return int(value if value is not None and value != "" else default)
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def empty_building_target(parsed):
     return {
         "building_key": parsed["building_key"],
@@ -602,7 +609,10 @@ def empty_building_target(parsed):
 
 
 def sort_building_targets(targets):
-    return sorted(targets, key=lambda row: (int(row.get("target_priority") or 100), row["building_address"]))
+    return sorted(
+        (row for row in targets if isinstance(row, dict)),
+        key=lambda row: (safe_int(row.get("target_priority"), 100), row.get("building_address", "")),
+    )
 
 
 def building_targets_from_airbnb_records(records):
@@ -667,9 +677,16 @@ def building_watchlist_records_from_file(path):
 
 
 def merge_building_watchlist_targets(targets, watchlist_records):
-    by_key = {target["building_key"]: dict(target) for target in targets or []}
+    by_key = {
+        target["building_key"]: dict(target)
+        for target in targets or []
+        if isinstance(target, dict) and target.get("building_key")
+    }
     dropped = []
     for index, record in enumerate(watchlist_records or [], start=1):
+        if not isinstance(record, dict):
+            dropped.append(record)
+            continue
         address = record.get("address") or record.get("building_address")
         parsed = parse_australian_address(address)
         if not parsed:
@@ -692,7 +709,7 @@ def merge_building_watchlist_targets(targets, watchlist_records):
             except ValueError:
                 priority_int = None
             if priority_int is not None:
-                target["target_priority"] = min(int(target.get("target_priority") or 100), priority_int)
+                target["target_priority"] = min(safe_int(target.get("target_priority"), 100), priority_int)
                 if priority_int not in target["source_watchlist_priorities"]:
                     target["source_watchlist_priorities"].append(priority_int)
     for target in by_key.values():
@@ -706,7 +723,10 @@ def merge_building_watchlist_targets(targets, watchlist_records):
             "warning": "watchlist_buildings_dropped_unparseable_address",
             "dropped_count": len(dropped),
             "total_records": len(watchlist_records or []),
-            "sample_addresses": [(r.get("address") or r.get("building_address")) for r in dropped[:5]],
+            "sample_addresses": [
+                (r.get("address") or r.get("building_address")) if isinstance(r, dict) else None
+                for r in dropped[:5]
+            ],
         }), flush=True)
     return sort_building_targets(by_key.values())
 
@@ -1471,6 +1491,8 @@ def write_csv(path, rows):
 def dedupe_observations(rows):
     best = {}
     for row in rows:
+        if not isinstance(row, dict):
+            continue
         key = row.get("listing_key")
         if not key:
             continue
@@ -1479,7 +1501,7 @@ def dedupe_observations(rows):
             5 if row.get("rent_per_week_aud") is not None else 0,
             3 if row.get("match_confidence") == "parsed_address_key" else 0,
             1 if row.get("discovery_source") != "rea_search_page" else 0,
-            int(row.get("text_length") or 0),
+            safe_int(row.get("text_length"), 0),
         )
         current = best.get(key)
         if not current or score > current[0]:
