@@ -369,7 +369,16 @@ def _stop_cloud_browser(browser_id):
 
 
 def _cdp_ws_from_url(cdp_url):
-    return json.loads(urllib.request.urlopen(f"{cdp_url}/json/version", timeout=15).read())["webSocketDebuggerUrl"]
+    response = json.loads(urllib.request.urlopen(f"{cdp_url}/json/version", timeout=15).read())
+    if not isinstance(response, dict):
+        raise RuntimeError(
+            "CDP /json/version returned invalid response shape: "
+            f"expected object, got {type(response).__name__}"
+        )
+    ws = response.get("webSocketDebuggerUrl")
+    if not ws:
+        raise RuntimeError("CDP /json/version response missing required field: webSocketDebuggerUrl")
+    return ws
 
 
 def _has_local_gui():

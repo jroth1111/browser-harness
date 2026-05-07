@@ -20,6 +20,15 @@ class FakeSocket:
         self.closed = True
 
 
+class FakeUrlopenResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def read(self):
+        import json
+        return json.dumps(self.payload).encode()
+
+
 def test_local_chrome_mode_is_false_when_env_provides_remote_cdp():
     assert not admin._is_local_chrome_mode({"BU_CDP_WS": "ws://example.test/devtools/browser/1"})
     assert not admin._is_local_chrome_mode({"BH_CDP_URL": "http://127.0.0.1:9222"})
@@ -394,6 +403,36 @@ def test_start_remote_daemon_rejects_malformed_create_response(monkeypatch, brow
         admin.start_remote_daemon()
 
     assert calls == [("/browsers", "POST", {})]
+
+
+def test_cdp_ws_from_url_returns_browser_websocket(monkeypatch):
+    monkeypatch.setattr(
+        admin.urllib.request,
+        "urlopen",
+        lambda url, timeout=0: FakeUrlopenResponse({"webSocketDebuggerUrl": "ws://example.test/devtools/browser/1"}),
+    )
+
+    assert admin._cdp_ws_from_url("http://127.0.0.1:9333") == "ws://example.test/devtools/browser/1"
+
+
+@pytest.mark.parametrize("payload, message", [
+    (["not", "an", "object"], "expected object, got list"),
+    ({}, "missing required field: webSocketDebuggerUrl"),
+    ({"webSocketDebuggerUrl": ""}, "missing required field: webSocketDebuggerUrl"),
+])
+def test_cdp_ws_from_url_rejects_malformed_version_response(monkeypatch, payload, message):
+    opened = []
+
+    def fake_urlopen(url, timeout=0):
+        opened.append((url, timeout))
+        return FakeUrlopenResponse(payload)
+
+    monkeypatch.setattr(admin.urllib.request, "urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError, match=message):
+        admin._cdp_ws_from_url("http://127.0.0.1:9333")
+
+    assert opened == [("http://127.0.0.1:9333/json/version", 15)]
 
 
 # --- restart_daemon: PID-reuse safety ---
