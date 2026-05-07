@@ -354,6 +354,20 @@ def extract_menus_for_restaurants(s, platform, restaurants, checkpoint_path=None
     return state
 
 
+def load_restaurant_input(path):
+    data = json.loads(Path(path).read_text())
+    if isinstance(data, list):
+        return data, "doordash"
+    if not isinstance(data, dict):
+        raise ValueError("restaurant input must be a JSON object or array")
+    restaurants = data.get("restaurants")
+    if restaurants is None:
+        restaurants = []
+    if not isinstance(restaurants, list):
+        raise ValueError("restaurant input field 'restaurants' must be an array")
+    return restaurants, data.get("platform", "doordash")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract menus from restaurant pages")
     parser.add_argument("--input", required=True, help="Restaurant list JSON from enumerate_restaurants.py")
@@ -363,9 +377,7 @@ def main():
     args = parser.parse_args()
 
     # Load restaurant list
-    data = json.loads(Path(args.input).read_text())
-    restaurants = data.get("restaurants", data if isinstance(data, list) else [])
-    platform = data.get("platform", "doordash")
+    restaurants, platform = load_restaurant_input(args.input)
 
     if args.limit:
         restaurants = restaurants[:args.limit]
