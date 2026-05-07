@@ -169,6 +169,7 @@ def main() -> int:
             else:
                 try:
                     final = stop_browser(b["id"])
+                    final = final if isinstance(final, dict) else {}
                     record["action"] = "stopped"
                     record["final_browser_cost"] = _to_float(final.get("browserCost"))
                     record["final_proxy_cost"] = _to_float(final.get("proxyCost"))

@@ -111,6 +111,34 @@ def test_main_skips_active_rows_with_malformed_runtime_fields(monkeypatch, capsy
     assert rows[1]["action"] == "would_stop"
 
 
+def test_main_tolerates_malformed_stop_response(monkeypatch, capsys):
+    module = load_cleanup_module()
+    monkeypatch.setattr(module.sys, "argv", ["cleanup-zombies.py", "--older-than", "0", "--json"])
+    monkeypatch.setattr(module, "list_active_browsers", lambda: [
+        {
+            "id": "zombie",
+            "startedAt": "2026-05-07T00:00:00Z",
+        },
+    ])
+    monkeypatch.setattr(module, "stop_browser", lambda browser_id: ["not", "an", "object"])
+
+    assert module.main() == 0
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert rows == [{
+        "id": "zombie",
+        "started_at": "2026-05-07T00:00:00Z",
+        "age_minutes": rows[0]["age_minutes"],
+        "browser_cost": 0.0,
+        "proxy_cost": 0.0,
+        "proxy_used_mb": 0.0,
+        "is_zombie": True,
+        "action": "stopped",
+        "final_browser_cost": 0.0,
+        "final_proxy_cost": 0.0,
+    }]
+
+
 @pytest.mark.parametrize("listing, message", [
     (["not", "an", "object"], "expected object, got list"),
     ({"items": "not-a-list"}, "items.*must be a list"),
