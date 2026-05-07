@@ -68,6 +68,7 @@ def test_send_cdp_supports_send_keyword_client():
 
 def test_cookie_header_filters_cookie_scope():
     cookies = [
+        "not a cookie",
         {"name": "sid", "value": "abc", "domain": ".example.com", "path": "/", "secure": True},
         {"name": "other", "value": "bad", "domain": ".other.test", "path": "/", "secure": True},
         {"name": "path", "value": "bad", "domain": ".example.com", "path": "/admin", "secure": True},

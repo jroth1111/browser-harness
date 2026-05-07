@@ -194,6 +194,8 @@ def cookie_header(client, url, cookie_urls=None, cookies=None, session_id=None):
     pairs = []
     seen = set()
     for cookie in source_cookies:
+        if not isinstance(cookie, dict):
+            continue
         name = cookie.get("name")
         value = cookie.get("value")
         if not name or value is None or not cookie_matches_url(cookie, url):
