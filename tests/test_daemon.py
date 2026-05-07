@@ -287,6 +287,24 @@ def test_attach_first_page_skips_malformed_targets_before_creating_blank():
     ]
 
 
+def test_attach_first_page_tolerates_scalar_target_url():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP({
+        "Target.getTargets": {
+            "targetInfos": [
+                {"targetId": "scalar-url", "type": "page", "url": 12345},
+            ],
+        },
+    })
+
+    asyncio.run(d.attach_first_page())
+
+    assert d.cdp.calls[:2] == [
+        ("Target.getTargets", {}, None),
+        ("Target.attachToTarget", {"targetId": "scalar-url", "flatten": True}, None),
+    ]
+
+
 def test_attach_first_page_rejects_malformed_get_targets_response():
     d = daemon.Daemon()
     d.cdp = FakeCDP({"Target.getTargets": {"targetInfos": "not-a-list"}})

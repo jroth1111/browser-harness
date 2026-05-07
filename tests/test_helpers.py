@@ -353,9 +353,11 @@ def test_list_tabs_skips_malformed_and_partial_target_rows():
         ["not", "an", "object"],
         {"type": "page", "url": "https://missing-target.example"},
         {"type": "iframe", "targetId": "iframe-1", "url": "https://frame.example"},
+        {"type": "page", "targetId": "target-scalar", "url": 12345, "title": 67890},
         {"type": "page", "targetId": "target-1", "url": "https://example.com", "title": "Example"},
     ]}):
-        assert helpers.list_tabs() == [
+        assert helpers.list_tabs(include_chrome=False) == [
+            {"targetId": "target-scalar", "title": "67890", "url": "12345"},
             {"targetId": "target-1", "title": "Example", "url": "https://example.com"}
         ]
 
@@ -369,6 +371,15 @@ def test_list_tabs_rejects_malformed_target_infos_envelope():
 def test_current_tab_tolerates_malformed_target_info():
     with patch("browser_harness.helpers.cdp", return_value={"targetInfo": "not-an-object"}):
         assert helpers.current_tab() == {"targetId": None, "url": "", "title": ""}
+
+
+def test_current_tab_stringifies_scalar_target_fields():
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfo": {
+        "targetId": "target-1",
+        "url": 12345,
+        "title": 67890,
+    }}):
+        assert helpers.current_tab() == {"targetId": "target-1", "url": "12345", "title": "67890"}
 
 
 def test_iframe_target_skips_malformed_and_partial_target_rows():

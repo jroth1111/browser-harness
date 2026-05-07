@@ -168,6 +168,10 @@ def _dict_value(value):
     return value if isinstance(value, dict) else {}
 
 
+def _text_value(value):
+    return "" if value is None else str(value)
+
+
 def _int_count(value):
     try:
         return int(value or 0)
@@ -1141,14 +1145,14 @@ def list_tabs(include_chrome=True):
         if t.get("type") != "page": continue
         target_id = t.get("targetId")
         if not target_id: continue
-        url = t.get("url", "")
+        url = _text_value(t.get("url"))
         if not include_chrome and url.startswith(INTERNAL): continue
-        out.append({"targetId": target_id, "title": t.get("title", ""), "url": url})
+        out.append({"targetId": target_id, "title": _text_value(t.get("title")), "url": url})
     return out
 
 def current_tab():
     t = _dict_value(cdp("Target.getTargetInfo").get("targetInfo"))
-    return {"targetId": t.get("targetId"), "url": t.get("url", ""), "title": t.get("title", "")}
+    return {"targetId": t.get("targetId"), "url": _text_value(t.get("url")), "title": _text_value(t.get("title"))}
 
 def switch_tab(target):
     # Accept either a raw targetId string or the dict returned by current_tab() / list_tabs(),

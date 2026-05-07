@@ -274,7 +274,7 @@ def get_ws_url():
 
 
 def is_real_page(t):
-    return t.get("type") == "page" and not t.get("url", "").startswith(INTERNAL)
+    return t.get("type") == "page" and not str(t.get("url") or "").startswith(INTERNAL)
 
 
 def _require_cdp_object(value, context):
@@ -333,7 +333,7 @@ class Daemon:
             "Target.attachToTarget",
         )
         self.target_id = pages[0]["targetId"]
-        log(f"attached {pages[0]['targetId']} ({pages[0].get('url','')[:80]}) session={self.session}")
+        log(f"attached {pages[0]['targetId']} ({str(pages[0].get('url') or '')[:80]}) session={self.session}")
         await self._enable_default_domains(self.session)
         return pages[0]
 
