@@ -41,6 +41,31 @@ def test_evaluate_field_contract_requires_page_text_and_named_fields():
     assert result["missing"] == ["min_text", "room_links"]
 
 
+def test_evaluate_field_contract_tolerates_malformed_page_text_length():
+    class Client:
+        def __init__(self):
+            self.calls = 0
+
+        def send_raw(self, method, params, session_id=None):
+            self.calls += 1
+            if self.calls == 1:
+                return {"result": {"value": {"textLength": "not-a-count"}}}
+            return {"result": {"value": True}}
+
+    result = lightpanda_control.evaluate_field_contract(
+        Client(),
+        {"aud_prices": "true"},
+        min_text=1500,
+    )
+
+    assert result == {
+        "ok": False,
+        "page": {"textLength": "not-a-count"},
+        "passed": {"aud_prices": True},
+        "missing": ["min_text"],
+    }
+
+
 def test_wait_for_field_contract_polls_until_fields_present():
     results = [
         {"ok": False, "missing": ["room_links"]},

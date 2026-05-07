@@ -66,6 +66,17 @@ def _require_field(value, key, context):
     return data[key]
 
 
+def _dict_value(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _int_count(value):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def runtime_value(client, expression, session_id=None):
     result = client.send_raw(
         "Runtime.evaluate",
@@ -86,7 +97,7 @@ def evaluate_field_contract(client, checks, min_text=0, session_id=None):
     field expression are present. This keeps Lightpanda/headful comparison at
     the canonical-field layer instead of accepting a merely loaded page.
     """
-    page = runtime_value(client, _PAGE_EVIDENCE_JS, session_id=session_id) or {}
+    page = _dict_value(runtime_value(client, _PAGE_EVIDENCE_JS, session_id=session_id))
     passed = {}
     for name, expression in (checks or {}).items():
         passed[name] = bool(runtime_value(
@@ -95,7 +106,7 @@ def evaluate_field_contract(client, checks, min_text=0, session_id=None):
             session_id=session_id,
         ))
     missing = [name for name, ok in passed.items() if not ok]
-    if int(page.get("textLength") or 0) < int(min_text or 0):
+    if _int_count(page.get("textLength")) < _int_count(min_text):
         missing.insert(0, "min_text")
     return {
         "ok": not missing,
