@@ -31,6 +31,24 @@ def test_public_page_failure_tolerates_malformed_block_metadata():
     assert competitors.page_failure(status) is None
 
 
+def test_public_live_listing_file_rejects_malformed_counts(tmp_path):
+    own = load_own_public_module()
+    competitors = load_competitors_module()
+    path = tmp_path / "airbnb-live-listings-bad-counts.json"
+    path.write_text(
+        """{
+          "records": [{"status": "ACTIVE"}],
+          "active_count": "not-a-count",
+          "status_counts": {"ACTIVE": "not-a-count"},
+          "field_validation": {"all_active_detail_pages_ok": true}
+        }""",
+        encoding="utf-8",
+    )
+
+    assert own.is_complete_live_listing_file(path) is False
+    assert competitors.is_complete_live_listing_file(path) is False
+
+
 def test_parse_listing_text_extracts_review_distribution_and_categories():
     module = load_own_public_module()
     parsed = module.parse_listing_text(
