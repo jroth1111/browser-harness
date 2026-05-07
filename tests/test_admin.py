@@ -160,6 +160,33 @@ def test_doctor_reports_endpoint_metadata():
     assert "endpoint.version - Chrome/123 1.3" in output
 
 
+def test_doctor_tolerates_malformed_endpoint_metadata():
+    class Stat:
+        st_mode = 0o100600
+
+    endpoint = {
+        "source": 123,
+        "resolved_url": 456,
+        "host": 789,
+        "is_loopback": True,
+        "remote_allowed": False,
+        "browser": 101,
+        "protocol_version": 202,
+        "warnings": [303],
+    }
+
+    stdout = StringIO()
+    with patch("browser_harness.admin._chrome_running", return_value=True), \
+         patch("browser_harness.admin.daemon_alive", return_value=True), \
+         patch("browser_harness.admin._daemon_meta", return_value={"endpoint_info": endpoint}), \
+         patch("pathlib.Path.stat", return_value=Stat()), \
+         patch("sys.stdout", stdout):
+        assert admin.run_doctor(json_output=True) == 0
+    output = stdout.getvalue()
+    assert '"id": "endpoint.scheme"' in output
+    assert '"detail": "456"' in output
+
+
 def test_doctor_network_check_only_appears_when_requested():
     stdout = StringIO()
     with patch("browser_harness.admin._chrome_running", return_value=False), \

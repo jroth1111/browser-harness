@@ -228,6 +228,10 @@ def _doctor_short_text(value, limit=None):
     return value if len(value) <= limit else value[:limit - 3] + "..."
 
 
+def _doctor_text(value):
+    return "" if value is None else str(value)
+
+
 def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog=False):
     """Idempotent. Self-heals stale daemon, cold Chrome, and missing Allow on chrome://inspect."""
     if daemon_alive(name):
@@ -1076,22 +1080,24 @@ def _doctor_checks(network=False):
         endpoint = {}
 
     if endpoint:
-        checks.append(_check("pass", "endpoint.present", endpoint.get("resolved_url", "")))
-        checks.append(_check("pass", "endpoint.source", endpoint.get("source", "unknown")))
+        resolved_url = _doctor_text(endpoint.get("resolved_url"))
+        checks.append(_check("pass", "endpoint.present", resolved_url))
+        checks.append(_check("pass", "endpoint.source", _doctor_text(endpoint.get("source") or "unknown")))
         checks.append(_check(
             "pass" if endpoint.get("is_loopback") else ("warn" if endpoint.get("remote_allowed") else "fail"),
-            "endpoint.loopback", endpoint.get("host") or "",
+            "endpoint.loopback", _doctor_text(endpoint.get("host")),
             "use a 127.0.0.1/localhost endpoint or set BH_CDP_ALLOW_REMOTE=1 only for user-owned self-hosted CDP"))
         if endpoint.get("remote_allowed"):
             checks.append(_check("warn", "endpoint.remote_allowed", "BH_CDP_ALLOW_REMOTE=1",
                                  "bind CDP to loopback when possible"))
         for warning in endpoint.get("warnings") or []:
+            warning = _doctor_text(warning)
             if "BH_CDP_ALLOW_REMOTE" in warning and endpoint.get("remote_allowed"):
                 continue
             checks.append(_check("warn", "endpoint.warning", warning,
                                  "review BH_CDP_WS and prefer a loopback ws/http endpoint when possible"))
-        checks.append(_check("pass", "endpoint.scheme", endpoint.get("resolved_url", "").split(":", 1)[0]))
-        version_detail = " ".join(x for x in (endpoint.get("browser"), endpoint.get("protocol_version")) if x)
+        checks.append(_check("pass", "endpoint.scheme", resolved_url.split(":", 1)[0]))
+        version_detail = " ".join(_doctor_text(x) for x in (endpoint.get("browser"), endpoint.get("protocol_version")) if x)
         checks.append(_check("pass" if version_detail else "warn", "endpoint.version", version_detail,
                              "use a DevTools HTTP base URL in BH_CDP_WS when product/version detail is needed" if not version_detail else None))
     elif daemon:
