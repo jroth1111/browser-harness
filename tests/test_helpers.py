@@ -1669,6 +1669,7 @@ def test_network_capture_poll_processes_request_events():
 
 def test_network_capture_poll_skips_malformed_cdp_event_shapes():
     events = [
+        "not an event",
         {"method": "Network.requestWillBeSent", "params": "bad-params"},
         {"method": "Network.requestWillBeSent", "params": {
             "requestId": "r1",
@@ -1694,6 +1695,20 @@ def test_network_capture_poll_skips_malformed_cdp_event_shapes():
         "response_headers": {},
         "content_type": "",
     }]
+
+
+def test_network_capture_redacted_entries_ignore_scalar_header_maps():
+    cap = helpers.NetworkCapture()
+    cap._entries.append({
+        "url": "https://api.example.com/private",
+        "method": "GET",
+        "headers": "not headers",
+        "response_headers": ["not", "headers"],
+    })
+
+    redacted = cap.redacted_entries()[0]
+    assert redacted["headers"] == {}
+    assert redacted["response_headers"] == {}
 
 
 def test_network_capture_endpoints_deduplicates():

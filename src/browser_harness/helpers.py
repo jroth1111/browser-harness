@@ -2236,6 +2236,8 @@ class NetworkCapture:
         """Drain CDP events and process network events. Returns new entry count."""
         n = 0
         for ev in drain_events():
+            if not isinstance(ev, dict):
+                continue
             m = ev.get("method", "")
             p = ev.get("params") if isinstance(ev.get("params"), dict) else {}
             rid = p.get("requestId")
@@ -2245,13 +2247,13 @@ class NetworkCapture:
                 redir = p.get("redirectResponse") if isinstance(p.get("redirectResponse"), dict) else None
                 if redir and rid in self._requests:
                     self._finalize(rid, redir.get("status"),
-                                   redir.get("headers", {}),
+                                   redir.get("headers") if isinstance(redir.get("headers"), dict) else {},
                                    redir.get("mimeType", ""))
                 request = p.get("request") if isinstance(p.get("request"), dict) else {}
                 self._requests[rid] = {
                     "url": request.get("url", ""),
                     "method": request.get("method", "GET"),
-                    "headers": request.get("headers", {}),
+                    "headers": request.get("headers") if isinstance(request.get("headers"), dict) else {},
                     "resource_type": p.get("type", ""),
                 }
                 n += 1
@@ -2259,7 +2261,7 @@ class NetworkCapture:
                 resp = p.get("response") if isinstance(p.get("response"), dict) else {}
                 self._responses[rid] = {
                     "status": resp.get("status", 0),
-                    "headers": resp.get("headers", {}),
+                    "headers": resp.get("headers") if isinstance(resp.get("headers"), dict) else {},
                     "content_type": resp.get("mimeType", ""),
                 }
                 if self._capture_bodies:
@@ -2273,7 +2275,7 @@ class NetworkCapture:
                 if rid in self._requests:
                     self._finalize(rid,
                                    resp.get("status", 0),
-                                   resp.get("headers", {}),
+                                   resp.get("headers") if isinstance(resp.get("headers"), dict) else {},
                                    resp.get("mimeType", ""))
                     n += 1
             elif m == "Network.loadingFailed":
@@ -2341,8 +2343,10 @@ class NetworkCapture:
 
     @classmethod
     def _redact_headers(cls, headers):
+        if not isinstance(headers, dict):
+            return {}
         redacted = {}
-        for key, value in (headers or {}).items():
+        for key, value in headers.items():
             if str(key).lower() in cls._SENSITIVE_HEADERS:
                 redacted[key] = "REDACTED"
             else:
