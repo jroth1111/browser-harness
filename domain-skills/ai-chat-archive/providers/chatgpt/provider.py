@@ -71,10 +71,17 @@ class ChatGPTProvider(Provider):
         since_f = _coerce_epoch(since)
         emitted = 0
         for item in items:
+            if not isinstance(item, dict):
+                continue
+            cid = item.get("id")
+            if not isinstance(cid, str) or not cid:
+                continue
             updated = item.get("update_time")
-            if since_f is not None and updated is not None and float(updated) <= since_f:
+            updated_f = _coerce_epoch(updated)
+            if updated is not None and updated_f is None:
+                continue
+            if since_f is not None and updated_f is not None and updated_f <= since_f:
                 break
-            cid = item["id"]
             yield ThreadStub(
                 thread_key=self.thread_key_for(cid),
                 provider_thread_id=cid,

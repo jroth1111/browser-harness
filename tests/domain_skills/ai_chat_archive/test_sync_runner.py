@@ -151,11 +151,40 @@ def test_stub_unchanged_rejects_malformed_delta_summary_shape():
 
 
 class FakeChatGPTAPI:
-    def __init__(self, detail):
+    def __init__(self, detail=None, conversations=None):
         self.detail = detail
+        self.conversations = conversations or []
+
+    def all_conversations(self, max_pages=100):
+        return self.conversations
 
     def conversation_detail(self, conversation_id: str):
         return self.detail
+
+
+def test_chatgpt_inventory_skips_malformed_conversation_rows():
+    db = sqlite3.connect(":memory:")
+    provider = ChatGPTProvider()
+    ctx = ProviderContext(
+        provider_id="chatgpt",
+        cookies_by_domain={},
+        db=db,
+        options={"_chatgpt_api": FakeChatGPTAPI(conversations=[
+            "not a row",
+            {"title": "Missing id", "update_time": 2},
+            {"id": "", "title": "Blank id", "update_time": 2},
+            {"id": "bad-time", "title": "Bad time", "update_time": "not-float"},
+            {"id": "ok", "title": "Valid", "update_time": 3, "create_time": 1},
+        ])},
+    )
+
+    stubs = list(provider.inventory(ctx, since=1))
+
+    assert len(stubs) == 1
+    assert stubs[0].provider_thread_id == "ok"
+    assert stubs[0].thread_key == "ok"
+    assert stubs[0].canonical_url == "https://chatgpt.com/c/ok"
+    assert stubs[0].title == "Valid"
 
 
 def test_chatgpt_http_artifact_metadata_is_partial_not_complete():
