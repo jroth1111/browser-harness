@@ -382,6 +382,8 @@ def _storage_map(value):
 
 
 def _int_count(value):
+    if isinstance(value, bool):
+        return 0
     try:
         return int(value or 0)
     except (TypeError, ValueError):

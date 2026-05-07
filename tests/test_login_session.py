@@ -800,6 +800,29 @@ def test_auth_restore_ok_ignores_malformed_storage_maps_and_counts():
     ) is True
 
 
+def test_auth_restore_ok_rejects_boolean_restore_counts():
+    state = {
+        "cookies": [{"name": "sid", "value": "secret"}],
+        "origins": [{
+            "origin": "https://example.com",
+            "localStorage": {"token": "abc"},
+            "sessionStorage": {},
+        }],
+    }
+
+    assert login_session.auth_restore_ok(
+        {
+            "cookies": {"restored": True},
+            "storage": [{
+                "ok": True,
+                "localStorageRestored": True,
+                "sessionStorageRestored": False,
+            }],
+        },
+        state,
+    ) is False
+
+
 def test_load_auth_profile_restores_storage_on_saved_origin_from_blank_page(tmp_path):
     domain_dir = tmp_path / "example.com"
     domain_dir.mkdir()
