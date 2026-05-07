@@ -360,6 +360,17 @@ def _dict_items(value):
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
 
+def _storage_map(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _int_count(value):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _state_dict(state):
     return state if isinstance(state, dict) else {}
 
@@ -801,19 +812,19 @@ def auth_restore_ok(restore, state=None):
     state = _state_dict(state)
     restore = _state_dict(restore)
     cookies = restore.get("cookies") or {}
-    cookie_count = int(cookies.get("restored") or 0)
+    cookie_count = _int_count(cookies.get("restored"))
     expected_cookies = len([c for c in _dict_items(state.get("cookies") or []) if c.get("name") and c.get("value") is not None])
     expected_storage = 0
     for origin_state in _dict_items(state.get("origins") or []):
-        expected_storage += len(origin_state.get("localStorage") or {})
-        expected_storage += len(origin_state.get("sessionStorage") or {})
+        expected_storage += len(_storage_map(origin_state.get("localStorage")))
+        expected_storage += len(_storage_map(origin_state.get("sessionStorage")))
     storage_count = 0
     storage_failures = 0
     for item in _dict_items(restore.get("storage") or []):
         if item.get("ok") is False:
             storage_failures += 1
-        storage_count += int(item.get("localStorageRestored") or 0)
-        storage_count += int(item.get("sessionStorageRestored") or 0)
+        storage_count += _int_count(item.get("localStorageRestored"))
+        storage_count += _int_count(item.get("sessionStorageRestored"))
     cookies_ok = cookie_count >= expected_cookies
     storage_ok = storage_count >= expected_storage
     return cookies_ok and storage_ok and storage_failures == 0 and (expected_cookies > 0 or expected_storage > 0)
