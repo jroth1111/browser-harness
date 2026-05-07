@@ -1378,6 +1378,26 @@ def test_detect_turnstile_finds_cloudflare_iframe():
         assert result["iframe_target_id"] == "abc123"
 
 
+def test_solve_turnstile_tolerates_malformed_block_metadata():
+    js_results = iter([
+        "",
+        {"x": 10, "y": 20, "w": 300, "h": 65},
+        "Example",
+    ])
+
+    with patch("browser_harness.helpers.detect_turnstile", return_value={"found": True}), \
+         patch("browser_harness.helpers.js", side_effect=lambda *args, **kwargs: next(js_results)), \
+         patch("browser_harness.helpers.click_at_xy"), \
+         patch("browser_harness.helpers.page_content_status", return_value={"textLength": 500, "block": "not-an-object"}), \
+         patch("browser_harness.helpers.wait"), \
+         patch("time.sleep"):
+        assert helpers.solve_turnstile(timeout=0.1, poll=0.0, max_attempts=1) == {
+            "solved": True,
+            "reason": "content_appeared",
+            "attempts": 1,
+        }
+
+
 def test_response_turnstile_solved_flag():
     from browser_harness.response import Response
     r = Response(html="<html></html>", text="", url="https://example.com",

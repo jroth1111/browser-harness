@@ -2161,7 +2161,7 @@ def solve_turnstile(timeout=30.0, poll=1.0, max_attempts=3):
                 # Verify actual content appeared (not still a WAF shell)
                 status = page_content_status()
                 if _int_count(status.get("textLength")) >= 500:
-                    if not status.get("block", {}).get("blocked"):
+                    if not _dict_value(status.get("block")).get("blocked"):
                         return {"solved": True, "reason": "content_appeared", "attempts": attempt}
             time.sleep(poll)
 
