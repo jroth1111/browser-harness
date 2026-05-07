@@ -321,6 +321,33 @@ def test_close_tab_closes_current_and_switches_to_remaining_real_tab():
     assert send.call_args.args[0] == {"meta": "set_session", "session_id": "session-2", "target_id": "target-2"}
 
 
+def test_list_tabs_skips_malformed_and_partial_target_rows():
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
+        ["not", "an", "object"],
+        {"type": "page", "url": "https://missing-target.example"},
+        {"type": "iframe", "targetId": "iframe-1", "url": "https://frame.example"},
+        {"type": "page", "targetId": "target-1", "url": "https://example.com", "title": "Example"},
+    ]}):
+        assert helpers.list_tabs() == [
+            {"targetId": "target-1", "title": "Example", "url": "https://example.com"}
+        ]
+
+
+def test_list_tabs_rejects_malformed_target_infos_envelope():
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": "not-a-list"}):
+        with pytest.raises(RuntimeError, match="targetInfos.*must be a list"):
+            helpers.list_tabs()
+
+
+def test_iframe_target_skips_malformed_and_partial_target_rows():
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
+        "not-an-object",
+        {"type": "iframe", "url": "https://frame.example/no-id"},
+        {"type": "iframe", "targetId": "iframe-1", "url": "https://frame.example/challenge"},
+    ]}):
+        assert helpers.iframe_target("challenge") == "iframe-1"
+
+
 def test_close_tab_closes_non_current_without_switching():
     calls = []
 

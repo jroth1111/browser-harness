@@ -153,6 +153,13 @@ def _require_key(mapping, key, context):
     return mapping[key]
 
 
+def _target_infos(response, context="Target.getTargets response"):
+    targets = _require_key(response, "targetInfos", context)
+    if not isinstance(targets, list):
+        raise RuntimeError(f"{context} field 'targetInfos' must be a list: {response!r}")
+    return [target for target in targets if isinstance(target, dict)]
+
+
 _RECOVERABLE_PATTERNS = (
     "Session with given id not found",
     "Not attached to target",
@@ -1098,11 +1105,13 @@ def capture_screenshot(path="/tmp/shot.png", full=False, max_dim=None):
 # --- tabs ---
 def list_tabs(include_chrome=True):
     out = []
-    for t in cdp("Target.getTargets")["targetInfos"]:
-        if t["type"] != "page": continue
+    for t in _target_infos(cdp("Target.getTargets")):
+        if t.get("type") != "page": continue
+        target_id = t.get("targetId")
+        if not target_id: continue
         url = t.get("url", "")
         if not include_chrome and url.startswith(INTERNAL): continue
-        out.append({"targetId": t["targetId"], "title": t.get("title", ""), "url": url})
+        out.append({"targetId": target_id, "title": t.get("title", ""), "url": url})
     return out
 
 def current_tab():
@@ -1202,8 +1211,8 @@ def ensure_real_tab():
 
 def iframe_target(url_substr):
     """First iframe target whose URL contains `url_substr`. Use with js(..., target_id=...)."""
-    for t in cdp("Target.getTargets")["targetInfos"]:
-        if t["type"] == "iframe" and url_substr in t.get("url", ""):
+    for t in _target_infos(cdp("Target.getTargets")):
+        if t.get("type") == "iframe" and t.get("targetId") and url_substr in t.get("url", ""):
             return t["targetId"]
     return None
 
