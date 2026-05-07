@@ -1,6 +1,6 @@
 """Render structured capture data to deterministic Markdown."""
 
-from lib.render_safety import dict_items, sorted_messages, text_value
+from lib.render_safety import dict_items, safe_count, sorted_messages, text_value
 
 
 def render_thread_markdown(capture: dict) -> str:
@@ -37,19 +37,22 @@ def render_thread_markdown(capture: dict) -> str:
             storage = art.get("storage_kind", "")
             byte_length = art.get("byte_length")
             if storage == "text":
-                text_len = art.get("text_length", 0)
+                text_len = safe_count(art.get("text_length"))
                 if text_len > 0:
                     words = text_len // 5
                     detail = f" - {words:,} words, captured"
                 else:
                     detail = " - captured"
-            elif storage == "binary" and byte_length:
+            elif storage == "binary" and safe_count(byte_length):
+                byte_length = safe_count(byte_length)
                 if byte_length >= 1_000_000:
                     detail = f" - {byte_length / 1_000_000:.0f}MB, captured"
                 elif byte_length >= 1_000:
                     detail = f" - {byte_length // 1_000}KB, captured"
                 else:
                     detail = f" - {byte_length}B, captured"
+            elif storage == "binary":
+                detail = " - captured"
             elif storage == "metadata":
                 detail = " - metadata only"
             parts.append(f"- **{label}** ({art_type}){detail}")

@@ -16,5 +16,9 @@ def safe_ordinal(value: Any) -> int | float:
     return value if isinstance(value, int | float) else 0
 
 
+def safe_count(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def text_value(value: Any) -> str:
     return value if isinstance(value, str) else ""
