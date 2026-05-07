@@ -10,6 +10,25 @@ from pathlib import Path
 from datetime import datetime
 
 
+CSV_FIELDNAMES = [
+    "platform",
+    "store_id",
+    "store_name",
+    "store_url",
+    "store_rating",
+    "store_delivery_fee",
+    "store_delivery_time_min",
+    "store_delivery_time_max",
+    "store_promo",
+    "category",
+    "item_name",
+    "item_price",
+    "description",
+    "popular_badge",
+    "extracted_at",
+]
+
+
 def load_json(path):
     if not path or not Path(path).exists():
         return None
@@ -60,11 +79,10 @@ def export_csv(restaurants, menus, output_path):
         })
 
     csv_path = f"{output_path}.csv"
-    if rows:
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-            writer.writeheader()
-            writer.writerows(rows)
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
     print(f"CSV: {csv_path} ({len(rows)} rows)")
     return rows
 
