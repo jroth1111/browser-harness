@@ -371,6 +371,26 @@ def test_set_session_does_not_run_runtime_evaluate():
     assert runtime_evals == []
 
 
+def test_set_session_rejects_malformed_request_without_mutating_state():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP()
+    d.session = "session-1"
+    d.target_id = "target-1"
+
+    missing = asyncio.run(d.handle({"meta": "set_session"}))
+    bad_target = asyncio.run(d.handle({
+        "meta": "set_session",
+        "session_id": "session-2",
+        "target_id": ["not", "a", "target"],
+    }))
+
+    assert missing == {"error": "invalid set_session request: missing string session_id"}
+    assert bad_target == {"error": "invalid set_session request: target_id must be a string"}
+    assert d.session == "session-1"
+    assert d.target_id == "target-1"
+    assert d.cdp.calls == []
+
+
 def test_daemon_ping_uses_ipc_protocol():
     d = daemon.Daemon()
     result = asyncio.run(d.handle({"meta": "ping"}))

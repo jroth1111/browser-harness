@@ -417,9 +417,15 @@ class Daemon:
         if meta == "session":     return {"session_id": self.session}
         if meta == "endpoint_info": return {"endpoint_info": self.endpoint_info}
         if meta == "set_session":
+            new_session = req.get("session_id")
+            if not isinstance(new_session, str) or not new_session:
+                return {"error": "invalid set_session request: missing string session_id"}
+            new_target = req.get("target_id")
+            if new_target is not None and not isinstance(new_target, str):
+                return {"error": "invalid set_session request: target_id must be a string"}
             old_session = self.session
-            self.session = req.get("session_id")
-            self.target_id = req.get("target_id") or self.target_id
+            self.session = new_session
+            self.target_id = new_target or self.target_id
             tasks = []
             if old_session and old_session != self.session:
                 # Background tabs (polling, SSE) keep emitting Network events
