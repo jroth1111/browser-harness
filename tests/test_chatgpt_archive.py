@@ -510,6 +510,27 @@ def test_archive_renderers_sanitize_boolean_ordinals():
         assert "#True" not in provider_md
 
 
+def test_provider_renderers_ignore_malformed_artifact_byte_sizes():
+    normalized = {
+        "title": "Malformed artifacts",
+        "messages": [],
+        "artifacts": [
+            {"label": "bool.bin", "artifact_type": "file", "byte_length": True},
+            {"label": "string.bin", "artifact_type": "file", "byte_length": "large"},
+            {"label": "ok.bin", "artifact_type": "file", "byte_length": 2048},
+        ],
+    }
+
+    for renderer in [render_chatgpt_markdown, render_claude_markdown]:
+        provider_md = renderer(normalized)
+        assert "bool.bin" in provider_md
+        assert "string.bin" in provider_md
+        assert "ok.bin" in provider_md
+        assert "2KB" in provider_md
+        assert "TrueB" not in provider_md
+        assert "large" not in provider_md
+
+
 def test_render_artifact_status():
     capture = {
         "title": "Test",

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.render_safety import dict_items, safe_ordinal, sorted_messages, text_value
+from lib.render_safety import dict_items, safe_count, safe_ordinal, sorted_messages, text_value
 
 
 def render_claude_markdown(normalized: dict[str, Any]) -> str:
@@ -67,7 +67,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
         for art in dict_items(artifacts):
             label = art.get("label") or "unnamed"
             atype = art.get("artifact_type") or "unknown"
-            byte_length = art.get("byte_length")
+            byte_length = safe_count(art.get("byte_length"))
             mime = art.get("mime_type")
             extras = []
             if mime:

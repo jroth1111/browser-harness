@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.render_safety import dict_items, safe_ordinal, sorted_messages, text_value
+from lib.render_safety import dict_items, safe_count, safe_ordinal, sorted_messages, text_value
 
 
 def render_chatgpt_markdown(normalized: dict[str, Any]) -> str:
@@ -59,7 +59,7 @@ def render_chatgpt_markdown(normalized: dict[str, Any]) -> str:
             label = art.get("label") or "unnamed"
             atype = art.get("artifact_type") or "unknown"
             detail = ""
-            byte_length = art.get("byte_length")
+            byte_length = safe_count(art.get("byte_length"))
             if byte_length:
                 detail = f" — {_human_bytes(byte_length)}"
             url = art.get("source_url")
