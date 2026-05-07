@@ -75,3 +75,39 @@ def test_discover_query_hash_honors_env_override(monkeypatch):
         "source": "AIRBNB_LISTINGS_QUERY_HASH",
         "discovery": None,
     }
+
+
+def test_discover_query_hash_falls_back_on_malformed_browser_context(monkeypatch):
+    module = load_module()
+    monkeypatch.delenv("AIRBNB_LISTINGS_QUERY_HASH", raising=False)
+    monkeypatch.setattr(module, "js", lambda script: "not-a-context", raising=False)
+
+    result = module.discover_query_hash()
+
+    assert result["hash"] == module.OBSERVED_QUERY_HASH
+    assert result["source"] == "observed_2026_04_27_fallback"
+
+
+def test_discover_query_hash_falls_back_on_malformed_discovery(monkeypatch):
+    module = load_module()
+    monkeypatch.delenv("AIRBNB_LISTINGS_QUERY_HASH", raising=False)
+    monkeypatch.setattr(
+        module,
+        "js",
+        lambda script: {
+            "html": "",
+            "scripts": [],
+            "resources": [],
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        module._operation_hashes,
+        "discover_operation_hashes",
+        lambda *args, **kwargs: {"hashes": "not-a-map", "sources": "not-a-map"},
+    )
+
+    result = module.discover_query_hash()
+
+    assert result["hash"] == module.OBSERVED_QUERY_HASH
+    assert result["source"] == "observed_2026_04_27_fallback"

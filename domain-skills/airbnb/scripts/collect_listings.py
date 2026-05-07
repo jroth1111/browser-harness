@@ -302,6 +302,8 @@ def discover_query_hash(base_headers=None):
   scripts: Array.from(document.scripts || []).map(script => script.src).filter(Boolean),
   resources: Array.from(performance.getEntriesByType("resource") || []).map(entry => entry.name || "").filter(Boolean)
 }))()""") or {}
+    if not isinstance(context, dict):
+        context = {}
     seed_texts = [context.get("html") or ""]
     seed_urls = [
         url for url in [*(context.get("scripts") or []), *(context.get("resources") or [])]
@@ -327,11 +329,19 @@ def discover_query_hash(base_headers=None):
         seed_urls=seed_urls,
         max_fetches=int(os.environ.get("AIRBNB_LISTINGS_HASH_DISCOVERY_MAX_FETCHES", "80")),
     )
-    hash_value = discovery.get("hashes", {}).get(OPERATION_NAME)
+    if not isinstance(discovery, dict):
+        discovery = {}
+    hashes = discovery.get("hashes")
+    if not isinstance(hashes, dict):
+        hashes = {}
+    sources = discovery.get("sources")
+    if not isinstance(sources, dict):
+        sources = {}
+    hash_value = hashes.get(OPERATION_NAME)
     if hash_value:
         return {
             "hash": hash_value,
-            "source": discovery.get("sources", {}).get(OPERATION_NAME) or "bundle_discovery",
+            "source": sources.get(OPERATION_NAME) or "bundle_discovery",
             "discovery": discovery,
         }
     return {
