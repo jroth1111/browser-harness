@@ -81,6 +81,20 @@ class BlobProvider(Provider):
         )
 
 
+class MalformedBlobSizeProvider(BlobProvider):
+    provider_id = "malformedblobsize"
+
+    def capture_artifacts(self, ctx: ProviderContext, thread: CapturedThread):
+        yield CapturedArtifact(
+            artifact_type="document",
+            label="report.txt",
+            provider_artifact_id="artifact-1",
+            storage_kind="inline_blob",
+            byte_length=True,
+            bytes=b"report bytes",
+        )
+
+
 def test_artifact_blob_has_parent_artifact_row(tmp_path):
     db_path = tmp_path / "archive.sqlite3"
     schema.init_db(db_path).close()
@@ -104,6 +118,28 @@ def test_artifact_blob_has_parent_artifact_row(tmp_path):
         WHERE a.storage_kind = 'inline_blob'
         """
     ).fetchone()[0] == 1
+
+
+def test_artifact_blob_uses_downloaded_size_when_metadata_size_is_malformed(tmp_path):
+    db_path = tmp_path / "archive.sqlite3"
+    schema.init_db(db_path).close()
+    db = archive_db.connect(db_path)
+
+    result = sync_runner.run_sync(
+        MalformedBlobSizeProvider(),
+        db=db,
+        cookies_by_domain={"blob.test": {"session": "redacted"}},
+    )
+
+    assert result.errors == []
+    row = db.execute(
+        """
+        SELECT byte_length
+        FROM artifacts
+        WHERE storage_kind = 'inline_blob'
+        """
+    ).fetchone()
+    assert row["byte_length"] == len(b"report bytes")
 
 
 def test_run_sync_honors_zero_limit_before_inventory_capture(tmp_path):

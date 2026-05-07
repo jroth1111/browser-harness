@@ -308,7 +308,7 @@ def _capture_one(
                     "artifact_type": art.artifact_type,
                     "source_url": art.source_url,
                     "mime_type": art.mime_type,
-                    "byte_length": art.byte_length or len(art.bytes),
+                    "byte_length": _artifact_byte_length(art.byte_length, art.bytes),
                     "content_hash": ah,
                     "storage_kind": "inline_blob",
                     "capture_id": capture_id,
@@ -326,6 +326,14 @@ def _capture_one(
         })
 
     result.captured += 1
+
+
+def _artifact_byte_length(provider_value: Any, data: bytes) -> int:
+    if isinstance(provider_value, bool):
+        return len(data)
+    if isinstance(provider_value, int) and provider_value >= 0:
+        return provider_value
+    return len(data)
 
 
 def _stub_unchanged(stub: ThreadStub, last_capture: dict[str, Any]) -> bool:
