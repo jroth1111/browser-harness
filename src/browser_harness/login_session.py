@@ -354,10 +354,18 @@ def set_cookie_param(cookie):
     return out
 
 
+def _dict_items(value):
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _state_dict(state):
+    return state if isinstance(state, dict) else {}
+
+
 def _restore_cookies_individually(client, cookies, session_id=None):
     restored = 0
     failures = []
-    for cookie in cookies:
+    for cookie in _dict_items(cookies):
         params = set_cookie_param(cookie)
         if not params.get("name") or params.get("value") is None:
             continue
@@ -377,7 +385,8 @@ def _restore_cookies_individually(client, cookies, session_id=None):
 
 
 def restore_cookies(client, cookies, session_id=None):
-    params = [cookie_param(cookie) for cookie in cookies if cookie.get("name") and cookie.get("value") is not None]
+    cookie_items = _dict_items(cookies)
+    params = [cookie_param(cookie) for cookie in cookie_items if cookie.get("name") and cookie.get("value") is not None]
     if not params:
         return {"restored": 0}
     try:
@@ -392,10 +401,11 @@ def restore_cookies(client, cookies, session_id=None):
     except Exception as error:
         if not _cdp_method_missing_error(error):
             raise
-    return _restore_cookies_individually(client, cookies, session_id=session_id)
+    return _restore_cookies_individually(client, cookie_items, session_id=session_id)
 
 
 def restore_origin_storage(client, origin_state, include_session_storage=False, session_id=None):
+    origin_state = origin_state if isinstance(origin_state, dict) else {}
     payload = {
         "localStorage": origin_state.get("localStorage") or {},
         "sessionStorage": origin_state.get("sessionStorage") or {},
@@ -420,10 +430,11 @@ def restore_origin_storage(client, origin_state, include_session_storage=False, 
 
 
 def restore_session_state(client, state, include_session_storage=False, session_id=None):
+    state = _state_dict(state)
     cookie_result = restore_cookies(client, state.get("cookies") or [], session_id=session_id)
     storage_results = []
     current_origin = runtime_value(client, "location.origin", session_id=session_id)
-    for origin_state in state.get("origins") or []:
+    for origin_state in _dict_items(state.get("origins") or []):
         if origin_state.get("origin") == current_origin:
             storage_results.append(restore_origin_storage(
                 client,
@@ -757,11 +768,12 @@ def save_auth_profile(client, domain, urls=None, session_id=None):
 
 
 def _restore_profile_state_on_saved_origins(client, state, include_session_storage=False, session_id=None):
+    state = _state_dict(state)
     send_cdp(client, "Page.enable", session_id=session_id)
     send_cdp(client, "Network.enable", session_id=session_id)
     cookie_result = restore_cookies(client, state.get("cookies") or [], session_id=session_id)
     storage_results = []
-    for origin_state in state.get("origins") or []:
+    for origin_state in _dict_items(state.get("origins") or []):
         origin = origin_state.get("origin")
         if not origin or origin == "about:blank":
             continue
@@ -781,16 +793,18 @@ def _restore_profile_state_on_saved_origins(client, state, include_session_stora
 
 
 def auth_restore_ok(restore, state=None):
+    state = _state_dict(state)
+    restore = _state_dict(restore)
     cookies = restore.get("cookies") or {}
     cookie_count = int(cookies.get("restored") or 0)
-    expected_cookies = len([c for c in (state or {}).get("cookies", []) if c.get("name") and c.get("value") is not None])
+    expected_cookies = len([c for c in _dict_items(state.get("cookies") or []) if c.get("name") and c.get("value") is not None])
     expected_storage = 0
-    for origin_state in (state or {}).get("origins") or []:
+    for origin_state in _dict_items(state.get("origins") or []):
         expected_storage += len(origin_state.get("localStorage") or {})
         expected_storage += len(origin_state.get("sessionStorage") or {})
     storage_count = 0
     storage_failures = 0
-    for item in restore.get("storage") or []:
+    for item in _dict_items(restore.get("storage") or []):
         if item.get("ok") is False:
             storage_failures += 1
         storage_count += int(item.get("localStorageRestored") or 0)

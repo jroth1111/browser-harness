@@ -166,6 +166,24 @@ def test_restore_cookies_falls_back_to_individual_network_set_cookie():
     ]
 
 
+def test_restore_cookies_ignores_malformed_cookie_entries():
+    calls = []
+
+    def client(method, session_id=None, **params):
+        calls.append((method, params, session_id))
+        return {}
+
+    result = login_session.restore_cookies(
+        client,
+        ["bad-cookie", ["also", "bad"], {"name": "sid", "value": "secret", "domain": ".example.com"}],
+    )
+
+    assert result == {"restored": 1}
+    assert calls == [
+        ("Network.setCookies", {"cookies": [{"name": "sid", "value": "secret", "domain": ".example.com"}]}, None),
+    ]
+
+
 def test_set_cookie_param_strips_nonportable_bulk_fields():
     cookie = {
         "name": "sid",
@@ -551,6 +569,36 @@ def test_load_auth_profile_returns_false_when_state_is_corrupt(tmp_path):
         assert login_session.load_auth_profile(lambda **kw: {}, "example.com") is False
 
     mock_restore.assert_not_called()
+
+
+def test_load_auth_profile_returns_false_for_malformed_state_shapes(tmp_path):
+    domain_dir = tmp_path / "example.com"
+    domain_dir.mkdir()
+    (domain_dir / "state.json").write_text(
+        json.dumps({"cookies": ["bad-cookie"], "origins": ["bad-origin"]}),
+        encoding="utf-8",
+    )
+
+    def client(method, **kwargs):
+        if method in {"Page.enable", "Network.enable"}:
+            return {}
+        if method == "Runtime.evaluate":
+            return {"result": {"value": "about:blank"}}
+        raise AssertionError(method)
+
+    with patch.object(login_session, "_PROFILES_DIR", tmp_path):
+        result = login_session.load_auth_profile_result(client, "example.com")
+
+    assert result["ok"] is False
+    assert result["reason"] == "restored"
+    assert result["restore"] == {"cookies": {"restored": 0}, "storage": []}
+
+
+def test_auth_restore_ok_ignores_malformed_restore_and_state_entries():
+    assert login_session.auth_restore_ok(
+        {"cookies": {"restored": 1}, "storage": ["bad-storage"]},
+        {"cookies": ["bad-cookie", {"name": "sid", "value": "secret"}], "origins": ["bad-origin"]},
+    ) is True
 
 
 def test_load_auth_profile_restores_storage_on_saved_origin_from_blank_page(tmp_path):
