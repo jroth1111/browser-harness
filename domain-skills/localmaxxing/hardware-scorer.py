@@ -153,6 +153,14 @@ def row_dicts(rows):
     return [row for row in (rows or []) if isinstance(row, dict)]
 
 
+def numeric_value(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def numeric_values(values):
+    return [v for v in (numeric_value(value) for value in values) if v is not None]
+
+
 def hardware_key(row):
     """Derive a unique key for the hardware in a benchmark row."""
     hw = dict_value(row.get("hardware"))
@@ -197,14 +205,17 @@ def score_hardware(rows, profile="balanced"):
 
     hw_stats = {}
     for key, benchmarks in groups.items():
-        toks = [b["tokSOut"] for b in benchmarks if b.get("tokSOut")]
-        ttfts = [b["ttftMs"] for b in benchmarks if b.get("ttftMs") is not None]
-        params = [dict_value(b.get("model"))["params"] for b in benchmarks if dict_value(b.get("model")).get("params")]
-        peaks = [b["peakVramGb"] for b in benchmarks if b.get("peakVramGb")]
+        toks = numeric_values(b.get("tokSOut") for b in benchmarks)
+        ttfts = numeric_values(b.get("ttftMs") for b in benchmarks)
+        params = numeric_values(dict_value(b.get("model")).get("params") for b in benchmarks)
+        peaks = numeric_values(b.get("peakVramGb") for b in benchmarks)
 
         hw = dict_value(benchmarks[0].get("hardware"))
         mem_gb = (
-            hw.get("vramGb", 0) or hw.get("unifiedMemoryGb", 0) or hw.get("ramGb", 0) or 0
+            numeric_value(hw.get("vramGb"))
+            or numeric_value(hw.get("unifiedMemoryGb"))
+            or numeric_value(hw.get("ramGb"))
+            or 0
         )
         gpu_count = hw.get("gpuCount", 1)
         display_name = key.split(":", 1)[1] if ":" in key else key
@@ -389,10 +400,15 @@ def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budg
         if budget is not None and price is not None and price > budget:
             continue
 
-        toks = [b["tokSOut"] for b in benchmarks if b.get("tokSOut")]
-        ttfts = [b["ttftMs"] for b in benchmarks if b.get("ttftMs") is not None]
+        toks = numeric_values(b.get("tokSOut") for b in benchmarks)
+        ttfts = numeric_values(b.get("ttftMs") for b in benchmarks)
         quants = set(dict_value(b.get("engine")).get("quantization") for b in benchmarks if dict_value(b.get("engine")).get("quantization"))
-        mem_gb = hw.get("vramGb", 0) or hw.get("unifiedMemoryGb", 0) or hw.get("ramGb", 0) or 0
+        mem_gb = (
+            numeric_value(hw.get("vramGb"))
+            or numeric_value(hw.get("unifiedMemoryGb"))
+            or numeric_value(hw.get("ramGb"))
+            or 0
+        )
 
         median_tok = statistics.median(toks) if toks else 0
         median_ttft = statistics.median(ttfts) if ttfts else None

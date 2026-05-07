@@ -78,3 +78,34 @@ def test_hardware_scorer_tolerates_scalar_model_metadata():
 
     assert len(ranked) == 1
     assert matched == rows
+
+
+def test_hardware_scorer_skips_malformed_metric_values():
+    module = load_module()
+    rows = [
+        {
+            "hardware": {"hwClass": "DISCRETE_GPU", "gpuName": "RTX 3060", "gpuCount": 1, "vramGb": 12},
+            "model": {"family": "qwen3", "hfId": "Qwen/Qwen3-8B", "params": "large"},
+            "engine": {"quantization": "Q4"},
+            "tokSOut": "fast",
+            "ttftMs": "soon",
+            "peakVramGb": "high",
+        },
+        {
+            "hardware": {"hwClass": "DISCRETE_GPU", "gpuName": "RTX 3060", "gpuCount": 1, "vramGb": 12},
+            "model": {"family": "qwen3", "hfId": "Qwen/Qwen3-8B", "params": 8},
+            "engine": {"quantization": "Q4"},
+            "tokSOut": 30,
+            "ttftMs": 80,
+            "peakVramGb": 8,
+        },
+    ]
+
+    ranked = module.score_hardware(rows)
+    model_ranked, matched = module.score_model_fit(rows, "qwen3")
+
+    assert ranked[0]["median_tok_s"] == 30
+    assert ranked[0]["median_ttft_ms"] == 80
+    assert ranked[0]["max_model_params_B"] == 8
+    assert model_ranked[0]["median_tok_s"] == 30
+    assert matched == rows
