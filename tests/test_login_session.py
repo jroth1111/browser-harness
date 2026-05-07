@@ -261,6 +261,14 @@ def test_cookie_params_drop_non_numeric_expires_values():
     }
 
 
+def test_runtime_value_tolerates_malformed_result_envelope():
+    def client(method, **params):
+        assert method == "Runtime.evaluate"
+        return {"result": "not-an-object"}
+
+    assert login_session.runtime_value(client, "navigator.userAgent") is None
+
+
 def test_session_manifest_redacts_cookie_and_storage_values():
     def client(method, **params):
         if method == "Network.getCookies":

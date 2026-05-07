@@ -216,7 +216,7 @@ def runtime_value(client, expression, session_id=None):
         {"expression": expression, "returnByValue": True, "awaitPromise": True},
         session_id=session_id,
     )
-    return result.get("result", {}).get("value")
+    return _dict_value(result.get("result")).get("value")
 
 
 def browser_user_agent(client, session_id=None):
@@ -366,6 +366,10 @@ def _normalize_expires(params):
 
 def _dict_items(value):
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _dict_value(value):
+    return value if isinstance(value, dict) else {}
 
 
 def _storage_map(value):
