@@ -468,6 +468,12 @@ def test_verify_authenticated_urls_tolerates_malformed_page_status_shapes():
     }
 
 
+def test_login_redirect_observed_tolerates_scalar_title():
+    assert login_session.login_redirect_observed({"url": "https://www.example.com/private", "title": 12345}) is False
+    assert login_session.login_redirect_observed({"url": 12345, "title": "Private"}) is False
+    assert login_session.login_redirect_observed({"url": "https://www.example.com/private", "title": "Sign in"}) is True
+
+
 def test_restore_session_state_and_verify_handles_malformed_state_shapes():
     calls = []
     statuses = iter([

@@ -524,9 +524,9 @@ def wait_for_origin(client, origin, timeout=30.0, poll=0.5, session_id=None):
 
 
 def login_redirect_observed(status, login_path_markers=("/login",), login_title_markers=("login", "sign in", "sign up")):
-    parsed = urlparse(status.get("url") or "")
+    parsed = urlparse(str(status.get("url") or ""))
     path = parsed.path.lower()
-    title = (status.get("title") or "").lower()
+    title = str(status.get("title") or "").lower()
     return any(marker in path for marker in login_path_markers) or any(marker in title for marker in login_title_markers)
 
 
