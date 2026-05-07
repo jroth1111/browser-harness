@@ -30,6 +30,22 @@ def test_preflight_accepts_authenticated_cookie(monkeypatch):
     assert payload["auth_cookie_names_present"] == ["_aat"]
 
 
+def test_preflight_cookie_snippet_skips_malformed_cookie_rows(monkeypatch):
+    module = load_sync_module()
+    captured = {}
+
+    def fake_run_shell(command):
+        captured["command"] = command
+        return json.dumps({"cookie_names": ["bev"]})
+
+    monkeypatch.setattr(module, "run_shell", fake_run_shell)
+
+    with pytest.raises(RuntimeError, match="host session not detected"):
+        module.preflight_cookies()
+
+    assert "isinstance(cookie, dict)" in captured["command"]
+
+
 def test_validate_collect_output_rejects_failed_collection_without_partial_flag(tmp_path, monkeypatch):
     module = load_sync_module()
     output_path = tmp_path / "insights"

@@ -104,7 +104,7 @@ def run_shell(command, env=None):
 def preflight_cookies():
     snippet = """python3 run.py <<'PY'
 cookies = browser_cookies(["https://www.airbnb.com.au/"]) or []
-names = sorted({cookie.get("name") for cookie in cookies if cookie.get("name")})
+names = sorted({cookie.get("name") for cookie in cookies if isinstance(cookie, dict) and cookie.get("name")})
 print(json.dumps({"cookie_names": names}))
 PY"""
     out = run_shell(snippet)
