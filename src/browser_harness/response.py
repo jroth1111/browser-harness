@@ -93,7 +93,10 @@ class Response:
         """Extract __NEXT_DATA__ JSON from Next.js pages."""
         for match in _SCRIPT_RE.finditer(self.html):
             if _script_attr(match.group("attrs"), "id") == "__NEXT_DATA__":
-                return json.loads(match.group("body"))
+                try:
+                    return json.loads(match.group("body"))
+                except json.JSONDecodeError:
+                    return None
         return None
 
     def json_ld(self, schema_type=None):
@@ -127,4 +130,9 @@ class Response:
         """Extract window.VAR_NAME = {...} assignment as parsed JSON."""
         from .helpers import _extract_json_assignment
         raw = _extract_json_assignment(self.html, var_name)
-        return json.loads(raw) if raw else None
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None

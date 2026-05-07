@@ -86,6 +86,12 @@ def test_next_data_returns_none_when_absent():
     assert r.next_data() is None
 
 
+def test_next_data_returns_none_for_malformed_json():
+    html = '<script id="__NEXT_DATA__">{"props":</script>'
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert r.next_data() is None
+
+
 def test_json_ld_extracts_blocks():
     html = '<script type="application/ld+json">{"@type":"Product","name":"Widget"}</script>'
     r = Response(html=html, text="", url="https://x.com", status=200, source="http")
@@ -162,4 +168,10 @@ def test_embedded_json_handles_bare_assignment():
 def test_embedded_json_returns_none_when_absent():
     r = Response(html="<p>no js</p>", text="x", url="https://x.com",
                  status=200, source="http")
+    assert r.embedded_json("MY_DATA") is None
+
+
+def test_embedded_json_returns_none_for_malformed_assignment():
+    html = "<script>window.MY_DATA={\"key\": };</script>"
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
     assert r.embedded_json("MY_DATA") is None
