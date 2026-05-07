@@ -39,7 +39,11 @@ def _filter_for_provider_domains(
 ) -> dict[str, dict[str, dict]]:
     """Keep only host_keys that match one of the provider's cookie_domains."""
     out: dict[str, dict[str, dict]] = {}
+    if not isinstance(rich_jar, dict):
+        return out
     for host, jar in rich_jar.items():
+        if not isinstance(jar, dict):
+            continue
         for d in provider_domains:
             if host == d or host.endswith(d) or d.endswith(host.lstrip(".")):
                 out[host] = jar

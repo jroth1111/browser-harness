@@ -59,7 +59,11 @@ def _cookies_to_playwright(rich: dict[str, dict[str, dict]]) -> list[dict]:
     """Convert the rich cookie shape stored in the vault to Playwright's
     ``Cookie`` dicts. Drops cookies missing required fields."""
     out: list[dict] = []
-    for host, jar in (rich or {}).items():
+    if not isinstance(rich, dict):
+        return out
+    for host, jar in rich.items():
+        if not isinstance(jar, dict):
+            continue
         domain = host  # cookie_extract uses ".perplexity.ai"-style host_keys
         for name, entry in jar.items():
             if not isinstance(entry, dict):
