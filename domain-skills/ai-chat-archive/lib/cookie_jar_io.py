@@ -23,7 +23,11 @@ def flatten_cookies(rich: dict[str, dict[str, Any]]) -> dict[str, dict[str, str]
     Tolerates jars stored in either shape: existing string values pass through.
     """
     flat: dict[str, dict[str, str]] = {}
-    for host, jar in (rich or {}).items():
+    if not isinstance(rich, dict):
+        return flat
+    for host, jar in rich.items():
+        if not isinstance(jar, dict):
+            continue
         flat[host] = {}
         for name, entry in jar.items():
             if isinstance(entry, dict):
@@ -42,7 +46,11 @@ def jar_min_expiry(rich: dict[str, dict[str, Any]]) -> str | None:
     soon-to-expire jars before sync calls fail. Cookies with expires=0
     (session cookies) are ignored — they expire when the browser closes."""
     earliest: float | None = None
-    for jar in (rich or {}).values():
+    if not isinstance(rich, dict):
+        return None
+    for jar in rich.values():
+        if not isinstance(jar, dict):
+            continue
         for entry in jar.values():
             if not isinstance(entry, dict):
                 continue
