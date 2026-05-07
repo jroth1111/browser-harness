@@ -144,7 +144,7 @@ def cookie_matches_url(cookie, url):
     host = (parsed.hostname or "").lower()
     if not host:
         return False
-    domain = (cookie.get("domain") or host).lower()
+    domain = str(cookie.get("domain") or host).lower()
     domain_base = domain.lstrip(".")
     if domain.startswith("."):
         if host != domain_base and not host.endswith(f".{domain_base}"):

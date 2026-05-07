@@ -77,6 +77,15 @@ def test_cookie_header_filters_cookie_scope():
     assert login_session.cookie_header(None, "https://www.example.com/page", cookies=cookies) == "sid=abc"
 
 
+def test_cookie_header_tolerates_scalar_cookie_domain():
+    cookies = [
+        {"name": "bad", "value": "nope", "domain": 12345, "path": "/", "secure": True},
+        {"name": "sid", "value": "abc", "domain": ".example.com", "path": "/", "secure": True},
+    ]
+
+    assert login_session.cookie_header(None, "https://www.example.com/page", cookies=cookies) == "sid=abc"
+
+
 def test_browser_cookies_uses_page_session_when_provided():
     calls = []
 
