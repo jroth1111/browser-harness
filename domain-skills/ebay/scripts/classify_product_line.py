@@ -138,6 +138,16 @@ def normalize_items(items):
     return normalized
 
 
+def normalized_title(item: dict, field: str) -> str:
+    title = item.get(field, item.get("title", ""))
+    if title is None or title == "":
+        return ""
+    if not isinstance(title, str):
+        title = str(title)
+        item[field] = title
+    return title
+
+
 def main():
     parser = argparse.ArgumentParser(description="Classify product lines from titles")
     parser.add_argument("--input", "-i", default="-", help="Input: stdin, JSON file, or CSV file")
@@ -168,7 +178,7 @@ def main():
 
     results = []
     for item in items:
-        title = item.get(args.field, item.get("title", ""))
+        title = normalized_title(item, args.field)
         if not title:
             continue
         cls = classify(title)

@@ -112,6 +112,27 @@ def test_aliexpress_classifier_accepts_json_title_strings():
     assert payload[0]["product_line"] == "GMKtec EVO-X2"
 
 
+def test_aliexpress_classifier_tolerates_non_string_json_titles():
+    script = ROOT / "domain-skills/aliexpress/scripts/classify_product_line.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        input=json.dumps([{"title": 12345}]),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload == [
+        {
+            "title": "12345",
+            "product_line": "Unknown",
+            "form_factor": "unknown",
+        }
+    ]
+
+
 def test_ebay_classifier_accepts_json_title_strings():
     script = ROOT / "domain-skills/ebay/scripts/classify_product_line.py"
 
@@ -126,3 +147,27 @@ def test_ebay_classifier_accepts_json_title_strings():
     payload = json.loads(result.stdout)
     assert payload[0]["title"].startswith("ASUS ROG Flow Z13")
     assert payload[0]["product_line"] == "ASUS ROG Flow Z13"
+
+
+def test_ebay_classifier_tolerates_non_string_json_titles():
+    script = ROOT / "domain-skills/ebay/scripts/classify_product_line.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        input=json.dumps([{"title": 12345}]),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload == [
+        {
+            "title": "12345",
+            "product_line": "Unknown",
+            "form_factor": "unknown",
+            "ram_gb": None,
+            "storage_tb": None,
+            "condition": None,
+        }
+    ]
