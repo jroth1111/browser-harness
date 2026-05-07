@@ -81,6 +81,20 @@ def test_read_ledger_index_skips_trailing_partial_line(tmp_path):
     assert next(iter(index.values()))["ds"] == "2026-04-20"
 
 
+def test_read_ledger_index_skips_non_object_rows(tmp_path):
+    module = load_ledger_module()
+    ledger = tmp_path / ".ledger.jsonl"
+    ledger.write_text(
+        '"not-a-row"\n' + module.json.dumps(sample_row(ds="2026-04-20"), separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    index = module.read_ledger_index(ledger)
+
+    assert len(index) == 1
+    assert next(iter(index.values()))["ds"] == "2026-04-20"
+
+
 def test_append_ledger_rows_truncates_trailing_partial_before_appending(tmp_path):
     module = load_ledger_module()
     ledger = tmp_path / ".ledger.jsonl"
@@ -126,6 +140,22 @@ def test_latest_ds_per_ignores_other_series_and_routes(tmp_path):
 
     latest = module.latest_ds_per(index, listing_id="123", route_subroute="p3_impressions", series_index=0)
     assert latest.isoformat() == "2026-04-21"
+
+
+def test_latest_ds_helpers_tolerate_malformed_series_and_span_values():
+    from datetime import date as _d
+
+    module = load_ledger_module()
+    rows = [
+        {**sample_row(ds="2026-04-20"), "series_index": "not-an-index"},
+        {**sample_row(ds="2026-04-21"), "series_granularity": module.SENTINEL_GRANULARITY, "_attempt_span_days": "not-a-span"},
+    ]
+    index = {("bad-series",): rows[0], ("bad-span",): rows[1]}
+
+    assert module.latest_ds_per(index, listing_id="123", route_subroute="p3_impressions", series_index=0).isoformat() == "2026-04-21"
+    buckets = module.build_latest_ds_index(index, today=_d(2026, 4, 28))
+
+    assert buckets[("123", "p3_impressions", 0)] == [_d(2026, 4, 21)]
 
 
 def test_append_ledger_rows_noop_for_empty_rows(tmp_path):

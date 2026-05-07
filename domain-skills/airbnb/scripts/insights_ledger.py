@@ -22,6 +22,22 @@ def ledger_key(row):
     return tuple(row.get(field) for field in LEDGER_KEY_FIELDS)
 
 
+def safe_int(value, default=0):
+    try:
+        return int(value if value not in (None, "") else default)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def optional_int(value):
+    if value in (None, ""):
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def read_ledger_index(path):
     path = Path(path)
     if not path.exists():
@@ -40,6 +56,8 @@ def read_ledger_index(path):
                     # this tail before writing new rows.
                     continue
                 raise ValueError(f"Invalid JSON in ledger {path} at line {line_number}") from error
+            if not isinstance(row, dict):
+                continue
             key = ledger_key(row)
             existing = index.get(key)
             if existing is None or str(row.get("observed_at") or "") >= str(existing.get("observed_at") or ""):
@@ -112,14 +130,19 @@ def latest_ds_per(ledger_index, listing_id, route_subroute, series_index=0, max_
     if max_ds is not None and not isinstance(max_ds, date):
         max_ds = date.fromisoformat(str(max_ds))
     target_listing = str(listing_id)
-    target_series = int(series_index)
+    target_series = optional_int(series_index)
+    if target_series is None:
+        return None
     best = None
     for row in ledger_index.values():
+        if not isinstance(row, dict):
+            continue
         if str(row.get("listing_id")) != target_listing:
             continue
         if row.get("route_subroute") != route_subroute:
             continue
-        if int(row.get("series_index") or 0) != target_series:
+        row_series = optional_int(row.get("series_index"))
+        if row_series is None or row_series != target_series:
             continue
         ds = row.get("ds")
         if not ds:
@@ -198,13 +221,18 @@ def build_latest_ds_index(ledger_index, today=None, include_granularities=None, 
 
     buckets = {}
     for row in ledger_index.values():
+        if not isinstance(row, dict):
+            continue
         ds = row.get("ds")
         if not ds:
+            continue
+        row_series = optional_int(row.get("series_index"))
+        if row_series is None:
             continue
         key = (
             str(row.get("listing_id")),
             row.get("route_subroute"),
-            int(row.get("series_index") or 0),
+            row_series,
         )
         try:
             ds_date = date.fromisoformat(ds)
@@ -214,7 +242,7 @@ def build_latest_ds_index(ledger_index, today=None, include_granularities=None, 
         if gran == SENTINEL_GRANULARITY:
             if not include_sentinels:
                 continue
-            span = int(row.get("_attempt_span_days") or 1)
+            span = safe_int(row.get("_attempt_span_days"), 1)
             if not _sentinel_is_active(ds_date, row.get("observed_at"), today, span_days=span):
                 continue
         else:
