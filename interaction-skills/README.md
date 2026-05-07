@@ -66,8 +66,11 @@ case, or you want to understand the full file inventory.
 - `extraction-coverage.md`
 - `marketplace-search.md`
 - `product-search.md`
+- `profile-sync.md`
+- `screenshots.md`
 - `session-continuity.md`
 - `source-selection-receipts.md`
+- `stealth-browser.md`
 - `tabs.md`
 - `ui-mechanics.md`
 - `waf-bypass.md`

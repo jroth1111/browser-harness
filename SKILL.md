@@ -157,24 +157,28 @@ Profiles (cookies-only login state) live in interaction-skills/profile-sync.md â
 
 ## Interaction skills
 
-If you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. They cover reusable UI mechanics like dialogs, tabs, dropdowns, iframes, and uploads. The available interaction skills are:
+If you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. They cover reusable UI mechanics, browser-state controls, and data-handling patterns. The available interaction skills are:
+- api-schema-audit.md
+- backend-capability.md
 - connection.md
 - cookies.md
-- cross-origin-iframes.md
+- coverage-accounting.md
+- cross-domain-control-flow.md
+- data-display.md
+- data-source-exploration.md
 - dialogs.md
-- downloads.md
-- drag-and-drop.md
-- dropdowns.md
-- iframes.md
-- network-requests.md
-- print-as-pdf.md
+- empirical-learning-gate.md
+- extraction-coverage.md
+- marketplace-search.md
+- product-search.md
 - profile-sync.md
 - screenshots.md
-- scrolling.md
-- shadow-dom.md
+- session-continuity.md
+- source-selection-receipts.md
+- stealth-browser.md
 - tabs.md
-- uploads.md
-- viewport.md
+- ui-mechanics.md
+- waf-bypass.md
 
 ## What actually works
 

@@ -1,5 +1,5 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
-import atexit, base64, functools, json, os, re, socket, sys, time, urllib.error, urllib.request
+import atexit, base64, functools, json, math, os, re, socket, sys, time, urllib.error, urllib.request
 from collections import deque
 from importlib.resources import files
 from pathlib import Path
@@ -580,10 +580,11 @@ def wait_for_content(min_text=200, timeout=15.0, poll=0.5):
     deadline = time.time() + timeout
     last = {}
     while time.time() < deadline:
-        last = page_content_status()
-        # Tab detached or JS error — stop polling immediately
-        if last.get("_js_undefined") or last.get("_js_error"):
-            return {**last, "ok": False, "reason": "js_error"}
+        try:
+            last = page_content_status()
+        except RuntimeError as e:
+            # Tab detached or JS exception — stop polling immediately
+            return {"ok": False, "reason": "js_error", "error": str(e)}
         if last.get("block", {}).get("blocked"):
             return {**last, "ok": False, "reason": "blocked"}
         if int(last.get("textLength") or 0) >= min_text:
@@ -1204,40 +1205,120 @@ def wait_for_load_js(timeout=15.0):
         time.sleep(0.3)
     return False
 
+def _js_snippet(expression, limit=160):
+    snippet = expression.strip().replace("\n", "\\n")
+    return snippet[:limit - 3] + "..." if len(snippet) > limit else snippet
+
+
+def _js_exception_description(result, details):
+    desc = result.get("description")
+    exc = details.get("exception") if details else None
+    if not desc and isinstance(exc, dict):
+        desc = exc.get("description")
+        if desc is None and "value" in exc:
+            desc = str(exc["value"])
+        if desc is None:
+            desc = exc.get("className")
+    if not desc and details:
+        desc = details.get("text")
+    return desc or "JavaScript evaluation failed"
+
+
+def _decode_unserializable_js_value(value):
+    if value == "NaN":
+        return math.nan
+    if value == "Infinity":
+        return math.inf
+    if value == "-Infinity":
+        return -math.inf
+    if value == "-0":
+        return -0.0
+    if value.endswith("n"):
+        return int(value[:-1])
+    return value
+
+
+def _runtime_value(response, expression):
+    result = response.get("result", {})
+    details = response.get("exceptionDetails")
+    if details or result.get("subtype") == "error":
+        desc = _js_exception_description(result, details)
+        if details:
+            line = details.get("lineNumber")
+            col = details.get("columnNumber")
+            loc = f" at line {line}, column {col}" if line is not None and col is not None else ""
+        else:
+            loc = ""
+        raise RuntimeError(f"JavaScript evaluation failed{loc}: {desc}; expression: {_js_snippet(expression)}")
+    if "value" in result:
+        return result["value"]
+    if "unserializableValue" in result:
+        return _decode_unserializable_js_value(result["unserializableValue"])
+    return None
+
+
+def _runtime_evaluate(expression, session_id=None, await_promise=False):
+    try:
+        r = cdp("Runtime.evaluate", session_id=session_id, expression=expression, returnByValue=True, awaitPromise=await_promise)
+    except TimeoutError as e:
+        raise RuntimeError(f"Runtime.evaluate timed out; expression: {_js_snippet(expression)}") from e
+    return _runtime_value(r, expression)
+
+
+def _has_return_statement(expression):
+    i = 0
+    n = len(expression)
+    state = "code"
+    quote = ""
+    while i < n:
+        ch = expression[i]
+        nxt = expression[i + 1] if i + 1 < n else ""
+        if state == "code":
+            if ch in ("'", '"', "`"):
+                state = "string"; quote = ch; i += 1; continue
+            if ch == "/" and nxt == "/":
+                state = "line_comment"; i += 2; continue
+            if ch == "/" and nxt == "*":
+                state = "block_comment"; i += 2; continue
+            if expression.startswith("return", i):
+                before = expression[i - 1] if i > 0 else ""
+                after = expression[i + 6] if i + 6 < n else ""
+                if not (before == "_" or before.isalnum()) and not (after == "_" or after.isalnum()):
+                    return True
+            i += 1; continue
+        if state == "line_comment":
+            if ch == "\n":
+                state = "code"
+            i += 1; continue
+        if state == "block_comment":
+            if ch == "*" and nxt == "/":
+                state = "code"; i += 2; continue
+            i += 1; continue
+        if state == "string":
+            if ch == "\\":
+                i += 2; continue
+            if ch == quote:
+                state = "code"; quote = ""
+            i += 1; continue
+    return False
+
+
 def js(expression, target_id=None):
     """Explicitly run JavaScript in the attached tab or an iframe target.
 
     Expressions with top-level `return` are automatically wrapped in an IIFE, so both
     `document.title` and `const x = 1; return x` are valid inputs.
 
-    Returns the JS value on success. Returns structured dicts on failure:
-    - {"_js_error": message} — expression threw an exception
-    - {"_js_undefined": True} — expression returned undefined (tab may be detached)
+    Returns the JS value on success (None for `undefined`). Decodes
+    Runtime.evaluate `unserializableValue` payloads (NaN, ±Infinity, -0, BigInt).
+    Raises RuntimeError when the expression throws or evaluation fails, and when
+    the underlying CDP call times out (the message includes a snippet of the
+    offending expression for debugging).
     """
     sid = _require_key(cdp("Target.attachToTarget", targetId=target_id, flatten=True), "sessionId", "Target.attachToTarget response") if target_id else None
-    # Wrap in IIFE when expression contains a return keyword at statement level.
-    # Strip quoted strings first to avoid matching "return" inside selectors like '.return-to-top'.
-    stripped = re.sub(r'''('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)''', '', expression)
-    if re.search(r'\breturn\b', stripped) and not expression.strip().startswith("("):
+    if _has_return_statement(expression) and not expression.strip().startswith("("):
         expression = f"(function(){{{expression}}})()"
-    r = cdp("Runtime.evaluate", session_id=sid, expression=expression, returnByValue=True, awaitPromise=True)
-    result = r.get("result") or {}
-    if not r.get("result"):
-        return {"_js_error": f"Runtime.evaluate returned no result: {r!r}"}
-    # Check for JS exception — return structured error instead of undefined
-    if result.get("type") == "undefined" and "exceptionDetails" in r:
-        exc = r["exceptionDetails"]
-        msg = ""
-        exc_text = exc.get("exception", {})
-        if isinstance(exc_text, dict):
-            msg = exc_text.get("description", "")
-        if not msg:
-            msg = exc.get("text", "unknown JS error")
-        return {"_js_error": msg}
-    # Distinguish "JS returned undefined" from error states
-    if result.get("type") == "undefined":
-        return {"_js_undefined": True}
-    return result.get("value")
+    return _runtime_evaluate(expression, session_id=sid, await_promise=True)
 
 
 def install_blocker_probe():

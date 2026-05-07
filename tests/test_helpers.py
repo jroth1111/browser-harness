@@ -1106,18 +1106,18 @@ def test_detect_block_page_passes_normal_content():
     assert result["blocked"] is False
 
 
-def test_js_returns_undefined_dict_for_undefined():
+def test_js_returns_none_for_undefined():
     with patch("browser_harness.helpers.cdp", return_value={"result": {"type": "undefined"}}):
-        assert helpers.js("void 0") == {"_js_undefined": True}
+        assert helpers.js("void 0") is None
 
 
-def test_js_returns_error_dict_for_exception():
+def test_js_raises_on_exception_details():
     with patch("browser_harness.helpers.cdp", return_value={
         "result": {"type": "undefined"},
         "exceptionDetails": {"text": "SyntaxError", "exception": {"description": "SyntaxError: bad"}},
     }):
-        result = helpers.js("bad syntax }}}")
-        assert result.get("_js_error")
+        with pytest.raises(RuntimeError, match="SyntaxError"):
+            helpers.js("bad syntax }}}")
 
 
 def test_detect_turnstile_returns_not_found_when_no_targets():

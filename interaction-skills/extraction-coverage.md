@@ -373,7 +373,7 @@ absence.
 2. wait for content: wait_for_content(min_text=200)
 3. check block: if result.block or result.ok is False → emit __UNOBSERVABLE__
 4. extract: js(extraction_snippet)
-5. check js result: if {"_js_undefined": True} → check tab state, may be detached; if {"_js_error": ...} → extraction crashed; if {"_quota_error": true} → dump now
+5. check js result: wrap js() in try/except RuntimeError — extraction crashed if it raises; if result is None → snippet has no return; if result has {"_quota_error": true} → dump now
 6. check suspect: if result.suspect → wait 2s, retry once; if still suspect → try embedded JSON fallback
 7. validate first page: check primary key field has non-null values
 8. check containers each page: if containers_found drops to 0 unexpectedly → investigate
@@ -416,21 +416,21 @@ Use `wait_for_content()` as the default after navigation for any page where
 extraction will run. Reserve `wait_for_load()` for pages where you only need
 the load event (clicking buttons, checking URL redirects).
 
-### Handling js() return values
+### Handling js() outcomes
 
-`js()` can return four problematic outcomes after extraction:
+`js()` has four outcomes you must distinguish after extraction:
 
-| Return | Meaning | Action |
-|--------|---------|--------|
-| `{"_js_undefined": True}` | JS returned `undefined` | Extraction function has no return statement, tab may be detached — check `current_tab()` then fix snippet |
-| `{"_js_error": msg}` | JS threw an exception | Syntax error, null dereference, etc. — read `msg` and fix |
-| `{"added": 0, "suspect": true}` | Containers exist but extraction found nothing | Wait 2s and retry once; if still 0, try embedded JSON fallback |
-| `{"_quota_error": true}` | localStorage quota exceeded | Dump accumulated results immediately before continuing |
+| Outcome | Meaning | Action |
+|---------|---------|--------|
+| Raises `RuntimeError` | JS threw an exception, or `Runtime.evaluate` timed out | Catch the exception — the message includes a snippet of the offending expression; fix the snippet (syntax error, null deref) or check tab state if the timeout looks like detachment |
+| Returns `None` | JS returned `undefined` | Extraction function has no return statement, or tab may be detached — check `current_tab()` then fix snippet |
+| Returns `{"added": 0, "suspect": true}` | Containers exist but extraction found nothing | Wait 2s and retry once; if still 0, try embedded JSON fallback |
+| Returns `{"_quota_error": true}` | localStorage quota exceeded | Dump accumulated results immediately before continuing |
 
-Always check `"_js_undefined" not in result` and `"_js_error" not in result`
-before treating the extraction output as valid data. A `_js_undefined` return
-means either the extraction snippet returned nothing or the tab was destroyed
-mid-evaluation — check tab state before retrying.
+Always wrap `js(extraction_snippet)` in `try/except RuntimeError` and check that
+the returned value is not `None` before treating the extraction output as valid
+data. A `None` return means either the extraction snippet returned nothing or
+the tab was destroyed mid-evaluation — check tab state before retrying.
 
 ### First-page validation
 
