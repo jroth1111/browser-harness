@@ -267,7 +267,11 @@ def dedupe_records(records):
 def first_total_count(obj):
     if isinstance(obj, dict):
         for key, value in obj.items():
-            if str(key).lower() in {"totalcount", "total_count"} and isinstance(value, int):
+            if (
+                str(key).lower() in {"totalcount", "total_count"}
+                and isinstance(value, int)
+                and not isinstance(value, bool)
+            ):
                 return value
         for value in obj.values():
             found = first_total_count(value)

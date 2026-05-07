@@ -45,6 +45,15 @@ def test_dedupe_records_merges_non_empty_fields():
     ]
 
 
+def test_first_total_count_skips_boolean_totals():
+    module = load_module()
+
+    assert module.first_total_count({
+        "totalCount": True,
+        "data": {"total_count": 42},
+    }) == 42
+
+
 def test_detail_fields_from_text_extracts_required_private_fields():
     module = load_module()
     fields = module.detail_fields_from_text(

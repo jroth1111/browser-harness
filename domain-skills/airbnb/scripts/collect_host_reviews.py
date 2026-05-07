@@ -312,6 +312,8 @@ def parse_total_count(obj):
     if isinstance(obj, dict):
         for key, value in obj.items():
             if str(key).lower() in {"totalcount", "total_count", "reviewcount", "review_count"}:
+                if isinstance(value, bool):
+                    continue
                 number = as_number(value)
                 if number is not None:
                     return int(number)

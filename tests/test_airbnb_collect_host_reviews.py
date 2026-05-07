@@ -65,6 +65,15 @@ def test_parse_host_review_json_normalizes_private_review_rows():
     assert {"cleanliness", "checkin"} <= set(rows[0]["review_theme_tags"])
 
 
+def test_parse_total_count_skips_boolean_totals():
+    module = load_host_reviews_module()
+
+    assert module.parse_total_count({
+        "totalCount": True,
+        "data": {"reviewCount": "37"},
+    }) == 37
+
+
 def test_active_listing_file_rejects_malformed_counts(tmp_path):
     module = load_host_reviews_module()
     path = tmp_path / "airbnb-live-listings-bad-counts.json"
