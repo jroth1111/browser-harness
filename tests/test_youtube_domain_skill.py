@@ -11,6 +11,15 @@ def load_surface_map():
     return json.loads((YOUTUBE / "surface-map.json").read_text(encoding="utf-8"))
 
 
+def load_caption_parsers():
+    path = YOUTUBE / "caption_parsers.py"
+    spec = importlib.util.spec_from_file_location("youtube_caption_parsers", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_youtube_surface_map_has_unique_typed_primitives():
     data = load_surface_map()
     allowed = set(data["path_types"])
@@ -75,6 +84,20 @@ def test_youtube_browser_harness_helper_coverage_is_explicit():
     assert expected <= set(helpers)
     assert helpers["upload_file"]["use"].startswith("out of extraction scope")
     assert "never commit output" in helpers["browser_cookie_header"]["use"]
+
+
+def test_youtube_json3_caption_parser_tolerates_malformed_payloads():
+    parsers = load_caption_parsers()
+
+    assert parsers.json3_to_text("{not valid json") == ""
+    assert parsers.json3_to_text(json.dumps(["not", "an", "object"])) == ""
+    assert parsers.json3_to_text(json.dumps({
+        "events": [
+            "not an event",
+            {"segs": "not segment rows"},
+            {"segs": [{"utf8": "Hello "}, {"utf8": "world"}]},
+        ],
+    })) == "Hello world"
 
 
 def test_youtube_execution_policy_blocks_unsafe_fallbacks():

@@ -58,7 +58,10 @@ def vtt_to_text(text: str, keep_timestamps: bool = False) -> str:
 
 
 def json3_to_text(raw: str) -> str:
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return ""
     if not isinstance(data, dict):
         return ""
     lines: list[str] = []
