@@ -84,8 +84,9 @@ class ClaudeHTTPAPI:
 
         # Always pull orgs separately since current_account often omits them.
         orgs = self._fetch_json("/api/organizations")
-        if isinstance(orgs, list) and orgs:
-            self._org_uuid = orgs[0].get("uuid")
+        org_rows = [org for org in orgs if isinstance(org, dict)] if isinstance(orgs, list) else []
+        if org_rows:
+            self._org_uuid = org_rows[0].get("uuid")
 
         if account is not None:
             self._account = account
@@ -100,7 +101,7 @@ class ClaudeHTTPAPI:
             return {
                 "authenticated": True,
                 "email": "",
-                "name": orgs[0].get("name", ""),
+                "name": org_rows[0].get("name", ""),
                 "user_id": "",
                 "org_uuid": self._org_uuid,
             }
@@ -132,7 +133,7 @@ class ClaudeHTTPAPI:
                     "model": item.get("model"),
                 }
                 for item in data
-                if item.get("uuid")
+                if isinstance(item, dict) and item.get("uuid")
             ]
         return []
 
