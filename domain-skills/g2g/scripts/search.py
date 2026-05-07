@@ -1106,11 +1106,16 @@ def cmd_seller(args: argparse.Namespace) -> None:
     rows: list[dict] = []
     with open(input_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
+        input_fieldnames = list(reader.fieldnames or [])
         for row in reader:
             rows.append(row)
 
     if not rows:
-        print("No rows in input CSV.", file=sys.stderr)
+        with open(output_path, "w", newline="", encoding="utf-8") as f:
+            if input_fieldnames:
+                writer = csv.DictWriter(f, fieldnames=input_fieldnames, quoting=csv.QUOTE_ALL)
+                writer.writeheader()
+        print(f"No rows in input CSV. Wrote empty seller output to {output_path}", file=sys.stderr)
         return
 
     # Collect unique seller identifiers
