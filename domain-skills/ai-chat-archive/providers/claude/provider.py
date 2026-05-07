@@ -54,6 +54,7 @@ class ClaudeProvider(Provider):
     ) -> Iterator[ThreadStub]:
         api = self._api(ctx)
         items = api.all_conversations()
+        items = [item for item in items if isinstance(item, dict)]
         # Sort newest-first by updated_at so the cursor short-circuit works.
         items.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
         emitted = 0
@@ -61,7 +62,9 @@ class ClaudeProvider(Provider):
             updated = item.get("updated_at")
             if since is not None and updated is not None and str(updated) <= str(since):
                 break
-            uuid = item["uuid"]
+            uuid = item.get("uuid")
+            if not isinstance(uuid, str) or not uuid:
+                continue
             yield ThreadStub(
                 thread_key=self.thread_key_for(uuid),
                 provider_thread_id=uuid,

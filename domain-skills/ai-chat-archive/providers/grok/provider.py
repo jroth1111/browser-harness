@@ -56,6 +56,7 @@ class GrokProvider(Provider):
     ) -> Iterator[ThreadStub]:
         api = self._api(ctx)
         items = api.all_conversations()
+        items = [item for item in items if isinstance(item, dict)]
         items.sort(key=lambda x: x.get("modifyTime") or x.get("createTime") or "", reverse=True)
         emitted = 0
         for it in items:
@@ -63,7 +64,7 @@ class GrokProvider(Provider):
             if since is not None and updated is not None and str(updated) <= str(since):
                 break
             cid = it.get("conversationId")
-            if not cid:
+            if not isinstance(cid, str) or not cid:
                 continue
             yield ThreadStub(
                 thread_key=self.thread_key_for(cid),

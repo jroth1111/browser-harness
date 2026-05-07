@@ -78,16 +78,21 @@ class GeminiProvider(Provider):
     ) -> Iterator[ThreadStub]:
         api = self._api(ctx)
         chats = api.all_chats(page_size=50)
+        chats = [chat for chat in chats if isinstance(chat, dict)]
         # Newest-first order: MaZiqc returns chats sorted by recency, but
         # paginate sweeps may interleave across pages, so re-sort by updated_unix.
-        chats.sort(key=lambda c: c.get("updated_unix") or 0, reverse=True)
+        chats.sort(key=lambda c: _coerce_float(c.get("updated_unix")) or 0, reverse=True)
         emitted = 0
+        since_f = _coerce_float(since)
         for c in chats:
             updated = c.get("updated_unix")
-            if since is not None and updated is not None and float(updated) <= float(since):
+            updated_f = _coerce_float(updated)
+            if updated is not None and updated_f is None:
+                continue
+            if since_f is not None and updated_f is not None and updated_f <= since_f:
                 break
             chat_id = c.get("chat_id")
-            if not chat_id:
+            if not isinstance(chat_id, str) or not chat_id:
                 continue
             response_id = c.get("response_id")
             url_path = chat_id
@@ -173,3 +178,12 @@ class GeminiProvider(Provider):
             completion_state="complete",
             capture_notes={"stub_updated_at": stub.updated_at},
         )
+
+
+def _coerce_float(value):
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

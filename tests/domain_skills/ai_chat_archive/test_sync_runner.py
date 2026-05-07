@@ -20,7 +20,11 @@ from lib.provider_base import (  # noqa: E402
     ProviderContext,
     ThreadStub,
 )
+from providers.claude.provider import ClaudeProvider  # noqa: E402
 from providers.chatgpt.provider import ChatGPTProvider  # noqa: E402
+from providers.gemini.provider import GeminiProvider  # noqa: E402
+from providers.grok.provider import GrokProvider  # noqa: E402
+from providers.perplexity.provider import PerplexityProvider  # noqa: E402
 
 
 class BlobProvider(Provider):
@@ -185,6 +189,64 @@ def test_chatgpt_inventory_skips_malformed_conversation_rows():
     assert stubs[0].thread_key == "ok"
     assert stubs[0].canonical_url == "https://chatgpt.com/c/ok"
     assert stubs[0].title == "Valid"
+
+
+def test_provider_inventories_skip_malformed_remote_rows():
+    db = sqlite3.connect(":memory:")
+
+    class ClaudeAPI:
+        def all_conversations(self):
+            return [
+                "not a row",
+                {"name": "Missing uuid", "updated_at": "2026-05-01T00:00:00Z"},
+                {"uuid": "", "name": "Blank uuid", "updated_at": "2026-05-01T00:00:00Z"},
+                {"uuid": "claude-ok", "name": "Claude valid", "updated_at": "2026-05-02T00:00:00Z"},
+            ]
+
+    class PerplexityAPI:
+        def all_threads(self):
+            return [
+                "not a row",
+                {"title": "Missing id", "last_query_datetime": "2026-05-01T00:00:00Z"},
+                {"uuid": "", "title": "Blank id", "last_query_datetime": "2026-05-01T00:00:00Z"},
+                {"uuid": "pplx-ok", "title": "Perplexity valid", "last_query_datetime": "2026-05-02T00:00:00Z"},
+            ]
+
+    class GeminiAPI:
+        def all_chats(self, page_size=50):
+            return [
+                "not a row",
+                {"title": "Missing id", "updated_unix": 2},
+                {"chat_id": "", "title": "Blank id", "updated_unix": 2},
+                {"chat_id": "bad-time", "title": "Bad time", "updated_unix": "not-float"},
+                {"chat_id": "gemini-ok", "title": "Gemini valid", "updated_unix": 3},
+            ]
+
+    class GrokAPI:
+        def all_conversations(self):
+            return [
+                "not a row",
+                {"title": "Missing id", "modifyTime": "2026-05-01T00:00:00Z"},
+                {"conversationId": "", "title": "Blank id", "modifyTime": "2026-05-01T00:00:00Z"},
+                {"conversationId": "grok-ok", "title": "Grok valid", "modifyTime": "2026-05-02T00:00:00Z"},
+            ]
+
+    cases = [
+        (ClaudeProvider(), "_claude_api", ClaudeAPI(), "claude-ok"),
+        (PerplexityProvider(), "_pplx_api", PerplexityAPI(), "pplx-ok"),
+        (GeminiProvider(), "_gemini_api", GeminiAPI(), "gemini-ok"),
+        (GrokProvider(), "_grok_api", GrokAPI(), "grok-ok"),
+    ]
+
+    for provider, option_key, api, expected_id in cases:
+        ctx = ProviderContext(
+            provider_id=provider.provider_id,
+            cookies_by_domain={},
+            db=db,
+            options={option_key: api},
+        )
+        stubs = list(provider.inventory(ctx, since=1))
+        assert [stub.provider_thread_id for stub in stubs] == [expected_id]
 
 
 def test_chatgpt_http_artifact_metadata_is_partial_not_complete():

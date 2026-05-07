@@ -70,6 +70,7 @@ class PerplexityProvider(Provider):
     ) -> Iterator[ThreadStub]:
         api = self._api(ctx)
         threads = api.all_threads()
+        threads = [thread for thread in threads if isinstance(thread, dict)]
         threads.sort(
             key=lambda t: t.get("last_query_datetime") or t.get("updated_datetime") or "",
             reverse=True,
@@ -84,7 +85,7 @@ class PerplexityProvider(Provider):
             if since is not None and updated is not None and str(updated) <= str(since):
                 break
             tid = t.get("uuid") or t.get("backend_uuid") or t.get("id") or t.get("slug")
-            if not tid:
+            if not isinstance(tid, str) or not tid:
                 continue
             slug = t.get("slug") or tid
             url = t.get("url") or f"https://www.perplexity.ai/search/{slug}"
