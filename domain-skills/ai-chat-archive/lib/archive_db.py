@@ -51,12 +51,8 @@ def ensure_account(
 
 
 def compute_thread_key(provider_id: str, provider_thread_id: str) -> str:
-    """Stable thread key. ChatGPT/Claude/Perplexity emit globally-unique UUIDs,
-    so the provider thread id alone is durable; queries always scope by
-    provider_id so cross-provider collisions are guarded at the query layer.
-    For surfaces without durable ids, derive a synthetic key from
-    (provider, account, canonical_url) at the call site and pass it here."""
-    return provider_thread_id
+    """Stable archive-global thread key namespaced by provider."""
+    return f"{provider_id}:{provider_thread_id}"
 
 
 def compute_message_key(

@@ -238,7 +238,7 @@ def test_chatgpt_inventory_skips_malformed_conversation_rows():
 
     assert len(stubs) == 1
     assert stubs[0].provider_thread_id == "ok"
-    assert stubs[0].thread_key == "ok"
+    assert stubs[0].thread_key == "chatgpt:ok"
     assert stubs[0].canonical_url == "https://chatgpt.com/c/ok"
     assert stubs[0].title == "Valid"
 

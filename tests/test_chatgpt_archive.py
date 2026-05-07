@@ -127,7 +127,42 @@ def test_content_hash_differs_for_different_input():
 # --- key computation ---
 
 def test_thread_key_uses_provider_id():
-    assert compute_thread_key("chatgpt", "abc-123") == "abc-123"
+    assert compute_thread_key("chatgpt", "abc-123") == compute_thread_key("chatgpt", "abc-123")
+    assert compute_thread_key("chatgpt", "abc-123") != compute_thread_key("claude", "abc-123")
+    assert compute_thread_key("chatgpt", "abc-123").startswith("chatgpt:")
+
+
+def test_thread_keys_prevent_cross_provider_upsert_collision():
+    conn = _init_mem(sqlite3.connect(":memory:"))
+    ensure_provider(conn, "chatgpt", "ChatGPT")
+    ensure_provider(conn, "claude", "Claude")
+    chatgpt_ak = compute_account_key("chatgpt", "user@example.com")
+    claude_ak = compute_account_key("claude", "user@example.com")
+    ensure_account(conn, "chatgpt", chatgpt_ak, "user@example.com")
+    ensure_account(conn, "claude", claude_ak, "user@example.com")
+
+    for provider_id, account_key, title in (
+        ("chatgpt", chatgpt_ak, "ChatGPT thread"),
+        ("claude", claude_ak, "Claude thread"),
+    ):
+        upsert_thread(conn, {
+            "thread_key": compute_thread_key(provider_id, "shared-thread-id"),
+            "provider_id": provider_id,
+            "account_key": account_key,
+            "provider_thread_id": "shared-thread-id",
+            "canonical_url": f"https://example.test/{provider_id}/shared-thread-id",
+            "title": title,
+            "status": "listed",
+        })
+
+    rows = conn.execute(
+        "SELECT provider_id, provider_thread_id, title FROM threads ORDER BY provider_id"
+    ).fetchall()
+
+    assert [(row["provider_id"], row["provider_thread_id"], row["title"]) for row in rows] == [
+        ("chatgpt", "shared-thread-id", "ChatGPT thread"),
+        ("claude", "shared-thread-id", "Claude thread"),
+    ]
 
 
 def test_message_key_stable():
