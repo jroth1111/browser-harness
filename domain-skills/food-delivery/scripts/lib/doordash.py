@@ -4,9 +4,9 @@ IMPORTANT: The working extraction code lives in the scripts themselves:
 - Restaurant extraction JS: enumerate_restaurants.py (extract_restaurants_generic)
 - Menu extraction: extract_menus.py (extract_menu_from_next_data)
 
-Do NOT use class-based selectors or arrow functions — DoorDash uses
-styled-components with hashed class names that rotate per build.
-SeleniumBase execute_script returns None for arrow functions.
+Do NOT use class-based selectors — DoorDash uses styled-components with hashed
+class names that rotate per build. Wrap multi-statement browser JavaScript in
+IIFEs for the stealth session helper.
 """
 import json, time, random
 from pathlib import Path

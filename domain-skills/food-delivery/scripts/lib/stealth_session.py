@@ -21,6 +21,17 @@ def cookie_path(platform):
     return PRIVATE_DATA / f"{platform}_cookies.json"
 
 
+def load_cookie_cache(platform):
+    cp = cookie_path(platform)
+    if not cp.exists():
+        return []
+    try:
+        cookies = json.loads(cp.read_text())
+    except json.JSONDecodeError:
+        return []
+    return cookies if isinstance(cookies, list) else []
+
+
 def create_stealth_session(platform, headless=False):
     """Create a stealth session, restore cookies, navigate to platform.
 
@@ -29,11 +40,9 @@ def create_stealth_session(platform, headless=False):
     """
     s = stealth_session(headless=headless)
 
-    cp = cookie_path(platform)
-    if cp.exists():
-        cookies = json.loads(cp.read_text())
-        if isinstance(cookies, list):
-            s.add_cookies([cookie for cookie in cookies if isinstance(cookie, dict)])
+    cookies = load_cookie_cache(platform)
+    if cookies:
+        s.add_cookies([cookie for cookie in cookies if isinstance(cookie, dict)])
 
     s.goto(PLATFORM_URLS[platform])
     time.sleep(2)
@@ -47,6 +56,12 @@ def harvest_session_cookies(s, platform):
     cp.parent.mkdir(parents=True, exist_ok=True)
     cp.write_text(json.dumps(cookies))
     return len(cookies)
+
+
+def harvest_http_headers(s):
+    """Extract User-Agent for HTTP replay."""
+    ua = s.js("navigator.userAgent")
+    return {"User-Agent": ua} if ua else {}
 
 
 def check_auth(s, platform):

@@ -4,9 +4,9 @@ Extract all vendors, products, and prices from DoorDash and Uber Eats.
 
 ## Prerequisites
 
-- SeleniumBase installed in `.venv/` (run from repo root)
+- Stealth browser dependencies installed in `.venv/` (run from repo root)
 - Authenticated cookies in `.private-data/` (captured via `overview.md` session flow)
-- Both platforms require SeleniumBase UC Mode — standard CDP/browser-harness cannot access them
+- Both platforms require the Patchright stealth session helper — standard CDP/browser-harness cannot access them
 
 ## Quick Start
 

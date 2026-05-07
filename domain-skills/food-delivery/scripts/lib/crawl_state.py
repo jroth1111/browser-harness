@@ -1,6 +1,6 @@
 """Standalone CrawlState and SafetyGate — no CDP dependency.
 
-Ported from browser-harness helpers.py for use in SeleniumBase scripts."""
+Ported from browser-harness helpers.py for use in food-delivery scripts."""
 import json, time
 from collections import deque
 from pathlib import Path

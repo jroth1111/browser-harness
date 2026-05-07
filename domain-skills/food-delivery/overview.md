@@ -1,19 +1,19 @@
 # Food Delivery — Overview
 
-Automated extraction from Uber Eats and DoorDash via SeleniumBase UC Mode.
+Automated extraction from Uber Eats and DoorDash via the Patchright stealth session helper.
 Enumerate restaurants, extract full menus (name, price, description, image), compare across platforms.
 
 ## Prerequisites
 
-- SeleniumBase in `.venv/` at repo root. Run scripts via `.venv/bin/python3`.
+- Stealth browser dependencies in `.venv/` at repo root. Run scripts via `.venv/bin/python3`.
 - Authenticated cookies in `.private-data/` (see session management below).
-- Both platforms block CDP-connected browsers — only SeleniumBase UC Mode works.
+- Both platforms block standard CDP-connected browsers — use the food-delivery stealth session helper.
 
 ## Cold-start sequence
 
 1. Check cookies exist in `.private-data/`. If not, run cookie capture below.
 2. Identify platform. Read `platforms/<platform>.md` for extraction details.
-3. Identify intent. Bulk extraction uses `scripts/` pipeline. Interactive use goes through SB session.
+3. Identify intent. Bulk extraction uses `scripts/` pipeline. Interactive use goes through the stealth session helper.
 4. Execute.
 
 ## Bulk extraction pipeline
@@ -87,7 +87,7 @@ scripts/
   lib/
     doordash.py               URLs, browse_url(), search_url()
     ubereats.py               URLs, browse_url(), search_url()
-    sb_helpers.py             SB session, cookie inject/harvest, auth check
+    stealth_session.py        Patchright session, cookie inject/harvest, auth check
     crawl_state.py            CrawlState dedup + SafetyGate rate limits
 .private-data/               Session cookies (gitignored)
   doordash_cookies.json
@@ -96,33 +96,34 @@ scripts/
 
 ## Accessing platforms
 
-Both platforms block CDP-connected browsers (browser-harness, MCP DevTools). Only SeleniumBase UC Mode works.
+Both platforms block standard CDP-connected browsers (browser-harness, MCP DevTools). Use the Patchright stealth helper.
 
 ```python
-from seleniumbase import SB
-with SB(uc=True, test=True) as sb:
-    sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
-    # If full-page Cloudflare challenge appears:
-    sb.uc_gui_click_captcha()
+from lib.stealth_session import create_stealth_session
+
+s = create_stealth_session("doordash")
+try:
+    print(s.js("document.title"))
+finally:
+    s.close()
 ```
 
-### Critical: SB execute_script uses bare return, NOT arrow functions
+### Critical: stealth JS uses browser expressions or IIFEs
 
-SeleniumBase's `execute_script` / `sb.execute_script(js)` returns `None` for arrow functions and IIFEs. Only bare `return` statements work:
+Patchright's `page.evaluate()` accepts expressions and functions. Wrap multi-statement JavaScript in an IIFE:
 
 ```python
-# WRONG -- returns None:
-js = '() => { return JSON.stringify(items); }'
-js = '(() => { ... })()'
+# Good:
+js = '(() => { const items = []; return JSON.stringify(items); })()'
 
-# CORRECT -- returns data:
-js = 'var items = []; ... ; return JSON.stringify(items);'
+# Also good:
+js = 'document.title'
 ```
 
 Variables that need dynamic values must be baked into the string via `.replace()`:
 ```python
 js = 'var baseUrl = BASEURL; ...'.replace("BASEURL", json.dumps(base_url))
-raw = sb.execute_script(js)
+raw = s.js(js)
 ```
 
 ## Session management
@@ -130,18 +131,21 @@ raw = sb.execute_script(js)
 ### First-time setup: capture cookies
 
 ```python
-from seleniumbase import SB
 import json, time, os
+from pathlib import Path
+from lib.stealth_session import create_stealth_session
 
-with SB(uc=True, test=True) as sb:
-    sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
+s = create_stealth_session("doordash")
+try:
     time.sleep(2)
     # User logs in manually, then: touch /tmp/dd_done
     while not os.path.exists("/tmp/dd_done"):
         time.sleep(1)
     os.remove("/tmp/dd_done")
-    cookies = sb.driver.get_cookies()
+    cookies = s.cookies()
     Path(".private-data/doordash_cookies.json").write_text(json.dumps(cookies))
+finally:
+    s.close()
 ```
 
 Same pattern for Uber Eats with `/tmp/ue_done` signal file.
@@ -149,7 +153,7 @@ Same pattern for Uber Eats with `/tmp/ue_done` signal file.
 
 ### Restoring a session
 
-Handled by `lib/sb_helpers.py:create_sb_session(sb, platform)` — opens platform, injects cookies, refreshes, checks auth.
+Handled by `lib/stealth_session.py:create_stealth_session(platform)` — opens platform, injects cookies, and supports auth checks.
 
 ### Cookie expiry
 

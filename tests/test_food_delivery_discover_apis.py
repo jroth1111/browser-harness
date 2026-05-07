@@ -31,17 +31,21 @@ def test_dedup_endpoints_skips_malformed_rows():
     ]) == [{"url": "https://example.test/api"}]
 
 
-def test_try_http_replay_skips_malformed_endpoint_and_cookie_rows(tmp_path, monkeypatch):
+def test_discover_apis_uses_stealth_session_not_legacy_sb_helper():
+    source = MODULE_PATH.read_text(encoding="utf-8")
+
+    assert "lib.sb_helpers" not in source
+    assert "seleniumbase" not in source
+    assert "create_stealth_session" in source
+
+
+def test_try_http_replay_skips_malformed_endpoint_and_cookie_rows(monkeypatch):
     module = load_module()
-    cookie_dir = tmp_path / ".private-data"
-    cookie_dir.mkdir()
-    (cookie_dir / "doordash_cookies.json").write_text(json.dumps([
+    monkeypatch.setattr(module, "load_cookie_cache", lambda platform: [
         "not a cookie",
         {"name": "sid", "value": "secret"},
         {"name": "missing-value"},
-    ]), encoding="utf-8")
-
-    monkeypatch.setattr(module, "__file__", str(tmp_path / "scripts" / "discover_apis.py"))
+    ])
 
     class Response:
         status = 200

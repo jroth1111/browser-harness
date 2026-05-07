@@ -1,27 +1,33 @@
 """Phase 1: Discover internal JSON APIs on DoorDash and Uber Eats.
 
-Uses SeleniumBase UC Mode to bypass anti-bot, then captures network traffic
-while browsing search results and a restaurant menu page. Identifies JSON API
-endpoints that can be replayed with plain HTTP + harvested cookies.
+Uses the food-delivery stealth browser helper, then captures browser-observed
+fetch/resource URLs while browsing search results and a restaurant menu page.
+Identifies JSON API endpoints that can be replayed with plain HTTP + harvested
+cookies.
 
 Usage:
     .venv/bin/python3 scripts/discover_apis.py --platform doordash
     .venv/bin/python3 scripts/discover_apis.py --platform ubereats
     .venv/bin/python3 scripts/discover_apis.py --platform both
 """
-import argparse, asyncio, json, sys, time, os
+import argparse, json, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lib.sb_helpers import create_sb_session, harvest_session_cookies, harvest_http_headers
-from lib.network_capture_sb import SBCapture
+from lib.stealth_session import (
+    check_auth,
+    create_stealth_session,
+    harvest_http_headers,
+    harvest_session_cookies,
+    load_cookie_cache,
+)
 
 
 def dict_rows(rows):
     return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
 
-def discover_platform(sb, platform):
+def discover_platform(s, platform):
     """Browse platform pages with network capture, discover JSON APIs."""
     from lib import doordash, ubereats
     mod = doordash if platform == "doordash" else ubereats
@@ -31,7 +37,7 @@ def discover_platform(sb, platform):
     print(f"{'='*60}")
 
     # Step 1: Create authenticated session
-    authed = create_sb_session(sb, platform)
+    authed = check_auth(s, platform)
     print(f"Auth check: {'logged in' if authed else 'NOT logged in'}")
 
     # Step 2: Navigate to search results and capture traffic
@@ -42,25 +48,20 @@ def discover_platform(sb, platform):
         url = mod.search_url(query)
         print(f"\nNavigating to search: {url}")
 
-        try:
-            sb.driver.get(url)
-        except Exception:
-            # Try UC mode navigation
-            sb.uc_open_with_reconnect(url, 4)
+        s.goto(url)
 
         time.sleep(4)
 
         # Check what loaded
-        title = sb.get_title()
-        src = sb.driver.page_source[:500]
+        title = s.js("document.title")
+        src = s.content()[:500]
         print(f"  Title: {title}")
         if "Verify you are human" in src or "access denied" in src.lower():
-            print(f"  BLOCKED — trying uc_gui_click_captcha")
-            sb.uc_gui_click_captcha()
+            print(f"  BLOCKED — waiting before continuing")
             time.sleep(5)
 
         # Capture page source for embedded data
-        embedded = extract_embedded_json(sb, platform)
+        embedded = extract_embedded_json(s, platform)
         if embedded:
             all_json_responses.append({
                 "source": "embedded",
@@ -70,10 +71,12 @@ def discover_platform(sb, platform):
             print(f"  Found embedded JSON data ({len(str(embedded))} chars)")
 
         # Check network requests via performance API
-        perf_urls = sb.driver.execute_script("""
+        perf_urls = s.js("""
+        (() => {
             return performance.getEntriesByType('resource')
                 .filter(e => e.initiatorType === 'xmlhttprequest' || e.initiatorType === 'fetch')
                 .map(e => e.name);
+        })()
         """) or []
         print(f"  XHR/Fetch URLs observed: {len(perf_urls)}")
         for u in perf_urls:
@@ -88,21 +91,18 @@ def discover_platform(sb, platform):
         mod.random_delay(2, 4)
 
     # Step 3: Navigate to a restaurant menu page if we found a store
-    store_urls = find_store_urls(sb, platform)
+    store_urls = find_store_urls(s, platform)
     if store_urls:
         test_url = store_urls[0]
         print(f"\nNavigating to store: {test_url}")
-        try:
-            sb.driver.get(test_url)
-        except Exception:
-            sb.uc_open_with_reconnect(test_url, 4)
+        s.goto(test_url)
         time.sleep(5)
 
-        title = sb.get_title()
+        title = s.js("document.title")
         print(f"  Title: {title}")
 
         # Check for embedded menu data
-        embedded = extract_embedded_json(sb, platform)
+        embedded = extract_embedded_json(s, platform)
         if embedded:
             all_json_responses.append({
                 "source": "embedded_store",
@@ -112,10 +112,12 @@ def discover_platform(sb, platform):
             print(f"  Found embedded menu data ({len(str(embedded))} chars)")
 
         # Capture XHR/Fetch from menu page
-        perf_urls = sb.driver.execute_script("""
+        perf_urls = s.js("""
+        (() => {
             return performance.getEntriesByType('resource')
                 .filter(e => e.initiatorType === 'xmlhttprequest' || e.initiatorType === 'fetch')
                 .map(e => e.name);
+        })()
         """) or []
         for u in perf_urls:
             if "/api/" in u or "graphql" in u or "menu" in u.lower():
@@ -128,7 +130,8 @@ def discover_platform(sb, platform):
 
     # Step 4: Try to intercept fetch/XHR via JS override
     print(f"\nInjecting fetch interceptor...")
-    sb.driver.execute_script("""
+    s.js("""
+    (() => {
         window.__captured_requests = [];
         const origFetch = window.fetch;
         window.fetch = function(...args) {
@@ -140,18 +143,16 @@ def discover_platform(sb, platform):
             window.__captured_requests.push({url: url, method: method, ts: Date.now()});
             return origXHR.call(this, method, url, ...rest);
         };
+    })()
     """)
 
     # Navigate again with interceptor active
     url = mod.search_url("pizza")
     print(f"Re-navigating with interceptor: {url}")
-    try:
-        sb.driver.get(url)
-    except Exception:
-        sb.uc_open_with_reconnect(url, 4)
+    s.goto(url)
     time.sleep(5)
 
-    captured = sb.driver.execute_script("return JSON.stringify(window.__captured_requests || [])")
+    captured = s.js("JSON.stringify(window.__captured_requests || [])")
     if captured:
         reqs = json.loads(captured)
         print(f"  Intercepted {len(reqs)} fetch/XHR requests")
@@ -165,8 +166,8 @@ def discover_platform(sb, platform):
                 print(f"    Intercepted API: {r.get('method')} {u}")
 
     # Step 5: Harvest cookies for HTTP replay
-    cookie_count = harvest_session_cookies(sb, platform)
-    headers = harvest_http_headers(sb)
+    cookie_count = harvest_session_cookies(s, platform)
+    headers = harvest_http_headers(s)
     print(f"\nHarvested {cookie_count} cookies for HTTP replay")
 
     # Step 6: Try HTTP replay on discovered endpoints
@@ -198,9 +199,10 @@ def discover_platform(sb, platform):
     return output
 
 
-def extract_embedded_json(sb, platform):
+def extract_embedded_json(s, platform):
     """Extract __NEXT_DATA__ or similar embedded JSON from page source."""
-    return sb.driver.execute_script("""
+    return s.js("""
+    (() => {
         try {
             if (document.getElementById('__NEXT_DATA__')) {
                 return JSON.parse(document.getElementById('__NEXT_DATA__').textContent);
@@ -217,14 +219,17 @@ def extract_embedded_json(sb, platform):
             }
         } catch(e) {}
         return null;
+    })()
     """)
 
 
-def find_store_urls(sb, platform):
+def find_store_urls(s, platform):
     """Find restaurant URLs from current search results page."""
-    links = sb.driver.execute_script("""
+    links = s.js("""
+    (() => {
         const links = document.querySelectorAll('a[href*="/store/"]');
         return [...new Set([...links].map(a => a.href))];
+    })()
     """) or []
     print(f"  Found {len(links)} store links on page")
     return links[:3]
@@ -235,11 +240,10 @@ def try_http_replay(endpoints, platform, headers):
     import urllib.request
 
     results = []
-    cookie_file = Path(__file__).parent.parent / ".private-data" / f"{platform}_cookies.json"
-    if not cookie_file.exists():
+    cookies = dict_rows(load_cookie_cache(platform))
+    if not cookies:
         return results
 
-    cookies = dict_rows(json.loads(cookie_file.read_text()))
     cookie_str = "; ".join(
         f"{c['name']}={c['value']}"
         for c in cookies
@@ -300,13 +304,17 @@ def main():
     parser.add_argument("--platform", choices=["doordash", "ubereats", "both"], required=True)
     args = parser.parse_args()
 
-    from seleniumbase import SB
-
     platforms = ["doordash", "ubereats"] if args.platform == "both" else [args.platform]
 
-    with SB(uc=True, test=True) as sb:
-        for platform in platforms:
-            discover_platform(sb, platform)
+    for platform in platforms:
+        s = create_stealth_session(platform)
+        try:
+            discover_platform(s, platform)
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

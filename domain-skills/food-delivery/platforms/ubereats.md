@@ -2,22 +2,18 @@
 
 Field-tested against ubereats.com on 2026-05-04 (Melbourne, AU).
 
-**WAF hard block** with CDP browsers — "access denied" immediately, no page content. Only SeleniumBase UC Mode bypasses.
+**WAF hard block** with standard CDP browsers — "access denied" immediately, no page content. Use the food-delivery Patchright stealth helper.
 
 ## Access
 
 ```python
-from seleniumbase import SB
-import json, time
+from lib.stealth_session import create_stealth_session
 
-with SB(uc=True, test=True) as sb:
-    sb.uc_open_with_reconnect("https://www.ubereats.com/", 4)
-    time.sleep(2)
-    for c in json.load(open(".private-data/ubereats_cookies.json")):
-        try: sb.driver.add_cookie(c)
-        except: pass
-    sb.driver.refresh()
-    time.sleep(3)
+s = create_stealth_session("ubereats")
+try:
+    print(s.js("document.title"))
+finally:
+    s.close()
 ```
 
 ## URLs

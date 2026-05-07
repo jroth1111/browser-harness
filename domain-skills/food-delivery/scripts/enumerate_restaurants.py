@@ -1,6 +1,6 @@
 """Phase 2: Enumerate all restaurants on DoorDash or Uber Eats.
 
-Uses SeleniumBase UC Mode with DOM extraction. Two modes:
+Uses the food-delivery stealth session helper with DOM extraction. Two modes:
   --mode browse  (default): Navigate to home/browse page and scroll through all
   --mode search: Search by cuisine queries and scroll through results
 

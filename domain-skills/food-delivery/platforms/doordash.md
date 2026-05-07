@@ -2,24 +2,18 @@
 
 Field-tested against doordash.com on 2026-05-04 (Melbourne, AU).
 
-**Cloudflare Turnstile** on all pages. CDP browsers detected via screenX/screenY bug, Runtime.enable side effects, debugger timing. Only SeleniumBase UC Mode bypasses.
+**Cloudflare Turnstile** on all pages. Standard CDP browsers are detected via screenX/screenY bug, Runtime.enable side effects, and debugger timing. Use the food-delivery Patchright stealth helper.
 
 ## Access
 
 ```python
-from seleniumbase import SB
-import json, time
+from lib.stealth_session import create_stealth_session
 
-with SB(uc=True, test=True) as sb:
-    sb.uc_open_with_reconnect("https://www.doordash.com/", 4)
-    time.sleep(2)
-    # Restore session (see overview.md for first-time setup)
-    for c in json.load(open(".private-data/doordash_cookies.json")):
-        try: sb.driver.add_cookie(c)
-        except: pass
-    sb.driver.refresh()
-    time.sleep(3)
-    # If Cloudflare challenge: sb.uc_gui_click_captcha()
+s = create_stealth_session("doordash")
+try:
+    print(s.js("document.title"))
+finally:
+    s.close()
 ```
 
 ## URLs
