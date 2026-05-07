@@ -614,8 +614,8 @@ def score_comp(target, card, result_position):
         score += 20
     if card.get("visible_rating"):
         score += min(float(card["visible_rating"]), 5) * 3
-    target_location = (target.get("location_label") or "").split(",")[0].lower()
-    if target_location and target_location in (card.get("visible_location_label") or "").lower():
+    target_location = str(target.get("location_label") or "").split(",")[0].lower()
+    if target_location and target_location in str(card.get("visible_location_label") or "").lower():
         score += 30
     return round(score, 2)
 

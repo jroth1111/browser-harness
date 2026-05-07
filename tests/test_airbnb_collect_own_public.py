@@ -537,3 +537,15 @@ def test_competitor_search_url_applies_optional_price_band():
     assert query["price_min"] == ["251"]
     assert query["price_max"] == ["500"]
     assert module.search_run_id("100", "2026-05-29", 3, "251-500").endswith("-price-251-500")
+
+
+def test_competitor_score_tolerates_scalar_location_labels():
+    module = load_competitors_module()
+
+    score = module.score_comp(
+        {"location_label": 12345, "bedrooms": 2, "bathrooms": 1, "beds": 2},
+        {"visible_location_label": 67890, "bedrooms": 2, "bathrooms": 1, "beds": 2},
+        result_position=1,
+    )
+
+    assert score == 992
