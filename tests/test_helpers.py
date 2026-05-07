@@ -1002,6 +1002,17 @@ def test_wait_for_content_tolerates_non_numeric_text_length():
     assert result["reason"] == "timeout"
 
 
+def test_wait_for_content_tolerates_malformed_block_metadata():
+    with patch("browser_harness.helpers.page_content_status", return_value={
+        "url": "https://example.com",
+        "textLength": 250,
+        "block": "not-a-block",
+    }):
+        result = helpers.wait_for_content(min_text=200)
+    assert result["ok"] is True
+    assert result["reason"] == "content"
+
+
 def test_cookie_matches_url_respects_domain_path_and_secure():
     assert helpers._cookie_matches_url(
         {"domain": ".realestate.com.au", "path": "/", "secure": True},

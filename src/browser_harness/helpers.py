@@ -325,12 +325,12 @@ def smart_wait(timeout=20.0, min_text=200, waf_timeout=15.0):
     if remaining() > 0:
         try:
             status = page_content_status()
-            if status.get("block", {}).get("blocked"):
+            if _dict_value(status.get("block")).get("blocked"):
                 waf_deadline = time.time() + min(waf_timeout, remaining())
                 while time.time() < waf_deadline:
                     time.sleep(0.5)
                     status = page_content_status()
-                    if not status.get("block", {}).get("blocked"):
+                    if not _dict_value(status.get("block")).get("blocked"):
                         return {"phase": "waf_cleared", "ok": True, "reason": "waf_cleared",
                                 "elapsed_ms": int((time.time() - start) * 1000)}
                 return {"phase": "waf_blocked", "ok": False, "reason": "blocked",
@@ -648,7 +648,7 @@ def wait_for_content(min_text=200, timeout=15.0, poll=0.5):
         except RuntimeError as e:
             # Tab detached or JS exception — stop polling immediately
             return {"ok": False, "reason": "js_error", "error": str(e)}
-        if last.get("block", {}).get("blocked"):
+        if _dict_value(last.get("block")).get("blocked"):
             return {**last, "ok": False, "reason": "blocked"}
         if _int_count(last.get("textLength")) >= min_text:
             return {**last, "ok": True, "reason": "content"}
