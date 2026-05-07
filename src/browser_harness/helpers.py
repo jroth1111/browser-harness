@@ -1318,6 +1318,8 @@ def _js_exception_description(result, details):
 
 
 def _decode_unserializable_js_value(value):
+    if not isinstance(value, str):
+        return value
     if value == "NaN":
         return math.nan
     if value == "Infinity":

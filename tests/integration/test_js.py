@@ -145,6 +145,14 @@ def test_js_returns_unserializable_values(unserializable, expected):
         assert value == expected
 
 
+def test_js_tolerates_malformed_unserializable_values():
+    def fake_cdp(method, **kwargs):
+        return {"result": {"type": "number", "unserializableValue": True, "description": "malformed"}}
+
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
+        assert helpers.js("malformed") is True
+
+
 def test_js_primitive_exception_message_uses_exception_value():
     def fake_cdp(method, **kwargs):
         return {
