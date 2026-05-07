@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.render_safety import dict_items, sorted_messages
+from lib.render_safety import dict_items, sorted_messages, text_value
 
 
 def render_claude_markdown(normalized: dict[str, Any]) -> str:
@@ -30,7 +30,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
         parts.append(header)
         parts.append("")
 
-        content = (msg.get("content") or "").strip()
+        content = text_value(msg.get("content")).strip()
         if content:
             parts.append(content)
             parts.append("")
@@ -39,7 +39,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
         for block in dict_items(rich):
             btype = block.get("type")
             if btype == "thinking":
-                t = (block.get("thinking") or block.get("text") or "").strip()
+                t = text_value(block.get("thinking") or block.get("text")).strip()
                 if t:
                     parts.append("> _thinking:_")
                     for line in t.splitlines():

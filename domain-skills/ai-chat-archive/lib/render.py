@@ -1,6 +1,6 @@
 """Render structured capture data to deterministic Markdown."""
 
-from lib.render_safety import dict_items, sorted_messages
+from lib.render_safety import dict_items, sorted_messages, text_value
 
 
 def render_thread_markdown(capture: dict) -> str:
@@ -13,7 +13,7 @@ def render_thread_markdown(capture: dict) -> str:
 
     for msg in sorted_messages(capture.get("messages")):
         role = msg.get("role", "unknown")
-        content = msg.get("content", "")
+        content = text_value(msg.get("content"))
         ordinal = msg.get("ordinal", 0)
         model = msg.get("model", "")
         header = f"## [{role}] #{ordinal}"

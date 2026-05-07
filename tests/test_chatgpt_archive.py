@@ -445,6 +445,38 @@ def test_archive_renderers_ignore_malformed_collection_rows():
         assert "bad-message" not in provider_md
 
 
+def test_archive_renderers_ignore_malformed_message_scalars():
+    capture = {
+        "title": "Malformed",
+        "messages": [
+            {"role": "assistant", "ordinal": {"not": "sortable"}, "content": {"not": "text"}},
+            {"role": "user", "ordinal": 1, "content": "Hello"},
+        ],
+    }
+
+    md = render_thread_markdown(capture)
+    assert "Hello" in md
+    assert "{'not': 'text'}" not in md
+
+    normalized = {
+        **capture,
+        "messages": [
+            {"role": "assistant", "ordinal": {"not": "sortable"}, "content": {"not": "text"}},
+            {"role": "user", "ordinal": 1, "content": "Provider hello"},
+        ],
+    }
+    for renderer in [
+        render_chatgpt_markdown,
+        render_claude_markdown,
+        render_gemini_markdown,
+        render_grok_markdown,
+        render_perplexity_markdown,
+    ]:
+        provider_md = renderer(normalized)
+        assert "Provider hello" in provider_md
+        assert "{'not': 'text'}" not in provider_md
+
+
 def test_render_artifact_status():
     capture = {
         "title": "Test",

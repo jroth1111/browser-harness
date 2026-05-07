@@ -9,4 +9,12 @@ def dict_items(value: Any) -> list[dict[str, Any]]:
 
 
 def sorted_messages(value: Any) -> list[dict[str, Any]]:
-    return sorted(dict_items(value), key=lambda msg: msg.get("ordinal", 0))
+    return sorted(dict_items(value), key=lambda msg: safe_ordinal(msg.get("ordinal")))
+
+
+def safe_ordinal(value: Any) -> int | float:
+    return value if isinstance(value, int | float) else 0
+
+
+def text_value(value: Any) -> str:
+    return value if isinstance(value, str) else ""

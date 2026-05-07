@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.render_safety import dict_items, sorted_messages
+from lib.render_safety import dict_items, sorted_messages, text_value
 
 
 def render_perplexity_markdown(normalized: dict[str, Any]) -> str:
@@ -26,7 +26,7 @@ def render_perplexity_markdown(normalized: dict[str, Any]) -> str:
             header += f" ({', '.join(bits)})"
         parts.append(header)
         parts.append("")
-        content = (msg.get("content") or "").strip()
+        content = text_value(msg.get("content")).strip()
         if content:
             parts.append(content)
             parts.append("")
