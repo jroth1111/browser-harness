@@ -116,6 +116,8 @@ DOCTOR_TEXT_LIMIT = 140
 
 
 def _safe_int(value, default=None):
+    if isinstance(value, bool):
+        return default
     try:
         return int(value)
     except (TypeError, ValueError):
