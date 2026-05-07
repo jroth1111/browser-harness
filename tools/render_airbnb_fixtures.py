@@ -7,10 +7,11 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-from data_display import render_dataset
+from browser_harness.data_display import render_dataset
 
 AIRBNB_PRIVATE = ROOT / "domain-skills" / "airbnb" / ".private-data"
 LISTING_DIR = AIRBNB_PRIVATE / "listing-collections"
