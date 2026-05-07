@@ -1637,7 +1637,7 @@ def _resolve_ref_center(ref):
         model = cdp("DOM.getBoxModel", backendNodeId=bid)
     except RuntimeError:
         return _resolve_ref_fallback(entry)
-    content = model.get("model", {}).get("content", [])
+    content = _dict_value(model.get("model")).get("content", [])
     if len(content) >= 8:
         x = (content[0] + content[2] + content[4] + content[6]) / 4
         y = (content[1] + content[3] + content[5] + content[7]) / 4
@@ -1669,7 +1669,7 @@ def _resolve_ref_fallback(entry):
                     break
                 entry["backend_node_id"] = bid
                 model = cdp("DOM.getBoxModel", backendNodeId=bid)
-                content = model.get("model", {}).get("content", [])
+                content = _dict_value(model.get("model")).get("content", [])
                 if len(content) >= 8:
                     x = (content[0] + content[2] + content[4] + content[6]) / 4
                     y = (content[1] + content[3] + content[5] + content[7]) / 4

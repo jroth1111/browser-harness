@@ -789,6 +789,22 @@ def test_ax_snapshot_skips_malformed_nodes_and_properties():
     assert result == ['button "Save" [ref=e0]']
 
 
+def test_click_ref_tolerates_malformed_box_model():
+    def fake_cdp(method, **params):
+        if method == "Accessibility.getFullAXTree":
+            return {"nodes": [
+                {"backendDOMNodeId": 1, "role": {"value": "button"}, "name": {"value": "Save"}},
+            ]}
+        if method == "DOM.getBoxModel":
+            return {"model": "not-an-object"}
+        raise AssertionError(method)
+
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
+        helpers.ax_snapshot(compact=True)
+        with pytest.raises(RuntimeError, match="DOM.getBoxModel returned no content quad"):
+            helpers.click_ref("e0")
+
+
 def test_screenshot_trace_is_opt_in(tmp_path):
     trace_dir = tmp_path / "trace"
     with patch("browser_harness.helpers.capture_screenshot", side_effect=lambda path, full=False: path) as capture, \
