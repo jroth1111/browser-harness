@@ -68,11 +68,13 @@ def build_source_receipt(
     notes="",
 ):
     """Build and validate a source-selection receipt dict."""
+    if not isinstance(source_context, dict) or not source_context:
+        raise ValueError("source_context must be a non-empty object")
     receipt = {
         "schema_version": 1,
         "observed_at": observed_at or _utc_now(),
         "source_type": source_type,
-        "source_context": dict(source_context or {}),
+        "source_context": dict(source_context),
         "backend": backend,
         "fields_found": _normalize_field_names(fields_found, "fields_found"),
         "fields_missing": _normalize_field_names(fields_missing, "fields_missing"),

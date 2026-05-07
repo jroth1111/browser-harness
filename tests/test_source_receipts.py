@@ -125,3 +125,15 @@ def test_source_receipt_rejects_non_string_field_names():
             canonical=True,
             diagnostic_only=False,
         )
+
+
+def test_build_source_receipt_rejects_scalar_source_context_cleanly():
+    with pytest.raises(ValueError, match="source_context must be a non-empty object"):
+        build_source_receipt(
+            source_type="api",
+            source_context="browser-dom",
+            backend={"kind": "chromium"},
+            fields_found=["title"],
+            canonical=True,
+            diagnostic_only=False,
+        )
