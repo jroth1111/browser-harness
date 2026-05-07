@@ -39,6 +39,19 @@ def _utc_now():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _normalize_field_names(value, name):
+    if value is None:
+        return []
+    if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple, set)):
+        raise ValueError(f"{name} must be a list of field-name strings")
+    fields = []
+    for field in value:
+        if not isinstance(field, str) or not field:
+            raise ValueError(f"{name} must contain non-empty field-name strings")
+        fields.append(field)
+    return sorted(set(fields))
+
+
 def build_source_receipt(
     *,
     source_type,
@@ -61,8 +74,8 @@ def build_source_receipt(
         "source_type": source_type,
         "source_context": dict(source_context or {}),
         "backend": backend,
-        "fields_found": sorted(set(fields_found or ())),
-        "fields_missing": sorted(set(fields_missing or ())),
+        "fields_found": _normalize_field_names(fields_found, "fields_found"),
+        "fields_missing": _normalize_field_names(fields_missing, "fields_missing"),
         "block": block or {"blocked": False, "kind": None, "evidence": []},
         "fallback_reason": fallback_reason,
         "canonical": bool(canonical),
@@ -89,8 +102,8 @@ def validate_source_receipt(receipt):
         raise ValueError("source_context must be a non-empty object")
     if not receipt.get("backend"):
         raise ValueError("backend is required")
-    found = set(receipt.get("fields_found") or ())
-    missing_fields = set(receipt.get("fields_missing") or ())
+    found = set(_normalize_field_names(receipt.get("fields_found"), "fields_found"))
+    missing_fields = set(_normalize_field_names(receipt.get("fields_missing"), "fields_missing"))
     overlap = found & missing_fields
     if overlap:
         raise ValueError(f"fields cannot be both found and missing: {sorted(overlap)}")

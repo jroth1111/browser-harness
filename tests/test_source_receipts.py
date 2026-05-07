@@ -97,3 +97,31 @@ def test_source_receipt_rejects_unknown_source_type():
             fields_found=["title"],
             fallback_reason="diagnostic only",
         )
+
+
+def test_source_receipt_rejects_scalar_field_lists():
+    receipt = build_source_receipt(
+        source_type="api",
+        source_context={"domain": "example.com"},
+        backend={"kind": "chromium"},
+        fields_found=["title"],
+        canonical=True,
+        diagnostic_only=False,
+    )
+
+    receipt["fields_found"] = "title"
+
+    with pytest.raises(ValueError, match="fields_found must be a list"):
+        validate_source_receipt(receipt)
+
+
+def test_source_receipt_rejects_non_string_field_names():
+    with pytest.raises(ValueError, match="non-empty field-name strings"):
+        build_source_receipt(
+            source_type="api",
+            source_context={"domain": "example.com"},
+            backend={"kind": "chromium"},
+            fields_found=["title", None],
+            canonical=True,
+            diagnostic_only=False,
+        )
