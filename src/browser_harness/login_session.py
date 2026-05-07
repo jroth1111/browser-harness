@@ -691,6 +691,7 @@ _PROFILE_TTL = 24 * 60 * 60  # 24 hours
 
 def _registrable_domain(hostname):
     """Extract eTLD+1 from hostname. Simple heuristic without tldextract."""
+    hostname = _normalize_hostname(hostname)
     if not hostname:
         return hostname
     stripped = hostname.removeprefix("www.")
@@ -702,6 +703,24 @@ def _registrable_domain(hostname):
     if ".".join(parts[-2:]) in multi_tlds and len(parts) >= 3:
         return ".".join(parts[-3:])
     return ".".join(parts[-2:])
+
+
+def _normalize_hostname(value):
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return raw
+    parsed = urlparse(raw if "://" in raw else f"//{raw}")
+    host = parsed.hostname or raw
+    if host in {".", ".."}:
+        raise ValueError(f"unsafe auth profile domain: {value!r}")
+    host = host.strip(".")
+    if not host:
+        return host
+    if "/" in host or "\\" in host:
+        raise ValueError(f"unsafe auth profile domain: {value!r}")
+    if not re.fullmatch(r"[a-z0-9.-]+", host):
+        raise ValueError(f"unsafe auth profile domain: {value!r}")
+    return host
 
 
 def auth_profile_path(domain):

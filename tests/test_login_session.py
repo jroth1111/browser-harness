@@ -8,6 +8,8 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from browser_harness import login_session
 
 
@@ -450,10 +452,21 @@ def test_same_domain_redirect_keeps_cookies():
 
 def test_registrable_domain_extracts_etld1():
     assert login_session._registrable_domain("www.airbnb.com") == "airbnb.com"
+    assert login_session._registrable_domain("https://www.airbnb.com/hosting/inbox") == "airbnb.com"
+    assert login_session._registrable_domain("example.com:8443") == "example.com"
     assert login_session._registrable_domain("sub.example.co.uk") == "example.co.uk"
     assert login_session._registrable_domain("example.com") == "example.com"
     assert login_session._registrable_domain("") == ""
     assert login_session._registrable_domain("localhost") == "localhost"
+
+
+def test_auth_profile_domain_rejects_unsafe_path_segments(tmp_path):
+    with patch.object(login_session, "_PROFILES_DIR", tmp_path):
+        with pytest.raises(ValueError, match="unsafe auth profile domain"):
+            login_session.auth_profile_path("../evil.com")
+
+        path = login_session.auth_profile_path("https://www.example.com/path")
+        assert path == tmp_path / "example.com"
 
 
 def test_save_and_load_auth_profile_roundtrip(tmp_path):
