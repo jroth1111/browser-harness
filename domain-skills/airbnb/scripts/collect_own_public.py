@@ -539,6 +539,8 @@ def destination_from_listing(listing):
 
 
 def safe_float(value, default=None):
+    if isinstance(value, bool):
+        return default
     try:
         return float(value)
     except (TypeError, ValueError):

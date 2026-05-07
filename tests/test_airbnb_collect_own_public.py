@@ -593,6 +593,42 @@ def test_public_search_url_tolerates_malformed_listing_counts(loader):
     assert "min_bedrooms" not in query
 
 
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_public_search_url_rejects_boolean_listing_counts(loader):
+    module = loader()
+    listing = {
+        "address": "500 Elizabeth St, Melbourne VIC 3000, Australia",
+        "location_label": "Melbourne, Victoria, Australia",
+        "max_guests": True,
+        "bedrooms": True,
+    }
+
+    query = parse_qs(urlsplit(module.search_url(listing, "2026-05-29", 3)).query)
+
+    assert query["adults"] == ["2"]
+    assert "min_bedrooms" not in query
+
+
+def test_competitor_search_url_rejects_boolean_price_band():
+    module = load_competitors_module()
+    listing = {
+        "address": "500 Elizabeth St, Melbourne VIC 3000, Australia",
+        "location_label": "Melbourne, Victoria, Australia",
+        "max_guests": 4,
+        "bedrooms": 2,
+    }
+
+    query = parse_qs(urlsplit(module.search_url(
+        listing,
+        "2026-05-29",
+        3,
+        price_band={"price_min": True, "price_max": False},
+    )).query)
+
+    assert "price_min" not in query
+    assert "price_max" not in query
+
+
 def test_competitor_score_tolerates_scalar_location_labels():
     module = load_competitors_module()
 
