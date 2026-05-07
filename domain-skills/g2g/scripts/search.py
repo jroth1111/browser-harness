@@ -70,6 +70,14 @@ CSV_COLUMNS = [
 ]
 
 
+def derive_output_path(path: str, expected_suffix: str, replacement_suffix: str) -> str:
+    source = Path(path)
+    name = source.name
+    if name.lower().endswith(expected_suffix.lower()):
+        name = name[: -len(expected_suffix)]
+    return str(source.with_name(f"{name}{replacement_suffix}"))
+
+
 # --- G2G API Client ---
 
 class G2GClient:
@@ -1064,7 +1072,7 @@ def cmd_search(args: argparse.Namespace) -> None:
         crawl_log=frontier.crawl_log,
     )
 
-    report_path = output_path.replace(".csv", "-coverage.json")
+    report_path = derive_output_path(output_path, ".csv", "-coverage.json")
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
@@ -1101,7 +1109,7 @@ def cmd_seller(args: argparse.Namespace) -> None:
     """Enrich existing CSV with detailed seller data."""
     client = G2GClient(verbose=args.verbose)
     input_path = args.input
-    output_path = args.output or input_path.replace(".csv", "-seller.csv")
+    output_path = args.output or derive_output_path(input_path, ".csv", "-seller.csv")
 
     rows: list[dict] = []
     with open(input_path, newline="", encoding="utf-8") as f:
@@ -1274,7 +1282,7 @@ def cmd_coverage(args: argparse.Namespace) -> None:
 
     report = build_csv_coverage_report(rows)
 
-    report_path = input_path.replace(".csv", "-coverage.json")
+    report_path = derive_output_path(input_path, ".csv", "-coverage.json")
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 

@@ -34,6 +34,15 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 
+
+def derive_output_path(path: str, expected_suffix: str, replacement_suffix: str) -> str:
+    source = Path(path)
+    name = source.name
+    if name.lower().endswith(expected_suffix.lower()):
+        name = name[: -len(expected_suffix)]
+    return str(source.with_name(f"{name}{replacement_suffix}"))
+
+
 # --- Field semantics ---
 # In extraction JS:
 #   value                = found and extracted
@@ -595,7 +604,7 @@ def cmd_merge(args):
     _report_field_triage(items, label=" (pre-filter)" if args.filter else "")
 
     # Export CSV with tri-state normalisation
-    output_path = args.output or args.input.replace('.json', '.csv')
+    output_path = args.output or derive_output_path(args.input, '.json', '.csv')
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES, extrasaction='ignore')
         writer.writeheader()

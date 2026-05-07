@@ -38,6 +38,14 @@ from urllib.parse import quote
 SCRIPT_DIR = Path(__file__).parent
 
 
+def derive_output_path(path: str, expected_suffix: str, replacement_suffix: str) -> str:
+    source = Path(path)
+    name = source.name
+    if name.lower().endswith(expected_suffix.lower()):
+        name = name[: -len(expected_suffix)]
+    return str(source.with_name(f"{name}{replacement_suffix}"))
+
+
 def _run_child(cmd, **kwargs):
     proc = subprocess.run(cmd, **kwargs)
     if proc.returncode != 0:
@@ -598,7 +606,7 @@ def cmd_search(args):
         print(f"\nExported to {args.output}", file=sys.stderr)
 
         # Write coverage report alongside CSV
-        report_path = args.output.replace('.csv', '-coverage.json')
+        report_path = derive_output_path(args.output, '.csv', '-coverage.json')
         report['final_count'] = len(all_listings)
         report['product_counts'] = product_counts
         with open(report_path, 'w') as f:
@@ -641,7 +649,7 @@ def cmd_verify(args):
             results.append(row)
         time.sleep(2)
 
-    output = args.output or args.input.replace('.csv', '-verified.csv')
+    output = args.output or derive_output_path(args.input, '.csv', '-verified.csv')
     fieldnames = list(results[0].keys()) if results else []
     with open(output, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
