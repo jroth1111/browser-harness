@@ -164,6 +164,17 @@ def _dict_rows(value):
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
 
+def _dict_value(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _int_count(value):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 _RECOVERABLE_PATTERNS = (
     "Session with given id not found",
     "Not attached to target",
@@ -608,7 +619,7 @@ def page_content_status(html_limit=12000, text_limit=12000):
   }};
 }})()
 """
-    state = js(expr) or {}
+    state = _dict_value(js(expr))
     block = detect_block_page(
         html=state.get("html", ""),
         text=state.get("text", ""),
@@ -631,7 +642,7 @@ def wait_for_content(min_text=200, timeout=15.0, poll=0.5):
             return {"ok": False, "reason": "js_error", "error": str(e)}
         if last.get("block", {}).get("blocked"):
             return {**last, "ok": False, "reason": "blocked"}
-        if int(last.get("textLength") or 0) >= min_text:
+        if _int_count(last.get("textLength")) >= min_text:
             return {**last, "ok": True, "reason": "content"}
         time.sleep(poll)
     return {**last, "ok": False, "reason": "timeout"}
@@ -2137,7 +2148,7 @@ def solve_turnstile(timeout=30.0, poll=1.0, max_attempts=3):
             if "just a moment" not in title.lower():
                 # Verify actual content appeared (not still a WAF shell)
                 status = page_content_status()
-                if int(status.get("textLength") or 0) >= 500:
+                if _int_count(status.get("textLength")) >= 500:
                     if not status.get("block", {}).get("blocked"):
                         return {"solved": True, "reason": "content_appeared", "attempts": attempt}
             time.sleep(poll)

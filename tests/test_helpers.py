@@ -901,6 +901,14 @@ def test_page_content_status_reports_block_state():
     assert result["block"]["kind"] == "kasada_kpsdk"
 
 
+def test_page_content_status_treats_scalar_js_result_as_empty_state():
+    with patch("browser_harness.helpers.js", return_value="bad-state"):
+        result = helpers.page_content_status()
+    assert result == {
+        "block": {"blocked": False, "kind": None, "evidence": []}
+    }
+
+
 def test_wait_for_content_stops_on_block_without_waiting_for_timeout():
     state = {
         "url": "https://www.realestate.com.au/property-house-vic-test-1",
@@ -932,6 +940,17 @@ def test_wait_for_content_accepts_useful_text():
         result = helpers.wait_for_content(min_text=200)
     assert result["ok"] is True
     assert result["reason"] == "content"
+
+
+def test_wait_for_content_tolerates_non_numeric_text_length():
+    with patch("browser_harness.helpers.page_content_status", return_value={
+        "url": "https://example.com",
+        "textLength": "not-a-count",
+        "block": {"blocked": False, "kind": None, "evidence": []},
+    }), patch("time.sleep"):
+        result = helpers.wait_for_content(min_text=200, timeout=0.01, poll=0)
+    assert result["ok"] is False
+    assert result["reason"] == "timeout"
 
 
 def test_cookie_matches_url_respects_domain_path_and_secure():
