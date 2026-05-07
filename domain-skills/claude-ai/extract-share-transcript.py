@@ -14,16 +14,7 @@ Writes two files into OUTPUT_DIR, named from the conversation title slug:
 """
 import json, os, pathlib, re, sys, time
 
-share_url = os.environ.get("CLAUDE_SHARE_URL")
-out_dir = os.environ.get("OUTPUT_DIR")
-if not share_url or not out_dir:
-    sys.exit("set CLAUDE_SHARE_URL and OUTPUT_DIR env vars")
-
-new_tab(share_url)            # noqa: F821 — provided by browser-harness
-wait_for_load()               # noqa: F821
-time.sleep(2)                 # let the conversation tree render
-
-js_code = """
+JS_CODE = """
 (() => {
   const userMsgs = [...document.querySelectorAll("[data-testid=user-message]")];
   if (!userMsgs.length) return JSON.stringify({error: "no user messages found — is the user logged in to claude.ai?"});
@@ -42,27 +33,44 @@ js_code = """
   return JSON.stringify({title, turns});
 })()
 """
-data = json.loads(js(js_code))    # noqa: F821
-if data.get("error"):
-    sys.exit(data["error"])
 
-title = data["title"] or "claude-share"
-turns = data["turns"]
-slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "claude-share"
 
-out = pathlib.Path(out_dir)
-out.mkdir(parents=True, exist_ok=True)
+def main() -> int:
+    share_url = os.environ.get("CLAUDE_SHARE_URL")
+    out_dir = os.environ.get("OUTPUT_DIR")
+    if not share_url or not out_dir:
+        sys.exit("set CLAUDE_SHARE_URL and OUTPUT_DIR env vars")
 
-payload = {"title": title, "source_url": share_url, "turns": turns}
-(out / f"{slug}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    new_tab(share_url)            # noqa: F821 — provided by browser-harness
+    wait_for_load()               # noqa: F821
+    time.sleep(2)                 # let the conversation tree render
 
-parts = [f"# {title}", "", f"Source: {share_url}", f"Turns: {len(turns)}", ""]
-for t in turns:
-    label = "Human" if t["role"] == "user" else "Assistant"
-    parts += [f"## {label}", "", t["text"], ""]
-(out / f"{slug}.md").write_text("\n".join(parts), encoding="utf-8")
+    data = json.loads(js(JS_CODE))    # noqa: F821
+    if data.get("error"):
+        sys.exit(data["error"])
 
-print(f"title: {title}")
-print(f"turns: {len(turns)}")
-print(f"json:  {out / (slug + '.json')}")
-print(f"md:    {out / (slug + '.md')}")
+    title = data["title"] or "claude-share"
+    turns = data["turns"]
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "claude-share"
+
+    out = pathlib.Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    payload = {"title": title, "source_url": share_url, "turns": turns}
+    (out / f"{slug}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    parts = [f"# {title}", "", f"Source: {share_url}", f"Turns: {len(turns)}", ""]
+    for t in turns:
+        label = "Human" if t["role"] == "user" else "Assistant"
+        parts += [f"## {label}", "", t["text"], ""]
+    (out / f"{slug}.md").write_text("\n".join(parts), encoding="utf-8")
+
+    print(f"title: {title}")
+    print(f"turns: {len(turns)}")
+    print(f"json:  {out / (slug + '.json')}")
+    print(f"md:    {out / (slug + '.md')}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

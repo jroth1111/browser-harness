@@ -368,4 +368,5 @@ def main() -> None:
     print(str(out))
 
 
-main()
+if __name__ == "__main__":
+    main()
