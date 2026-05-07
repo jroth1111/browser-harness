@@ -83,7 +83,8 @@ class GrokHTTPAPI:
     def all_conversations(self) -> list[dict]:
         data = self._fetch_json("/rest/app-chat/conversations")
         if isinstance(data, dict):
-            return data.get("conversations") or []
+            rows = data.get("conversations") or []
+            return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
         return []
 
     def conversation_detail(self, conversation_id: str) -> dict | None:
@@ -95,7 +96,9 @@ class GrokHTTPAPI:
         )
         if not isinstance(responses, dict) or responses.get("__error"):
             responses = {"responses": []}
-        return {"meta": meta, "responses": responses.get("responses") or []}
+        rows = responses.get("responses") or []
+        rows = [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+        return {"meta": meta, "responses": rows}
 
     @staticmethod
     def extract_messages(detail: dict) -> list[dict]:
