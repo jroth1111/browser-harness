@@ -386,26 +386,3 @@ def harvest_for_domain(
         if cookies:
             results.append((profile, cookies))
     return results
-
-
-# --- Backwards compatibility -----------------------------------------------
-
-# Old single-browser helper used by chatgpt_http_sync.py. Prefer harvest_for_domain
-# in new code.
-def extract_cookies(
-    browser: str,
-    domain_filter: str | None = None,
-) -> dict[str, dict[str, str]]:
-    """Legacy: extract cookies as flat {host: {name: value}} for one browser."""
-    profiles = [p for p in list_browser_profiles() if p.browser == browser]
-    if not profiles:
-        raise ValueError(f"No profile found for browser: {browser}")
-    cookies = extract_cookies_from_profile(profiles[0], domain_filter)
-    return {host: {name: c["value"] for name, c in jar.items()} for host, jar in cookies.items()}
-
-
-# Backwards-compat constant for callers that imported BROWSER_PROFILES.
-BROWSER_PROFILES = {
-    name: {"keychain": kc, "cookie_db": str(APPLICATION_SUPPORT / f"{sub}/Default/Cookies")}
-    for name, (kc, sub) in CHROMIUM_BROWSERS.items()
-}

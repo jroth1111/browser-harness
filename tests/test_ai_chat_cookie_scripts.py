@@ -57,3 +57,10 @@ def test_harvest_filter_for_provider_domains_skips_malformed_rich_jars():
         },
         [".ok.example"],
     ) == {".ok.example": {"sid": {"value": "abc"}}}
+
+
+def test_cookie_extract_does_not_reexport_legacy_single_browser_helpers():
+    source = (ROOT / "domain-skills" / "ai-chat-archive" / "lib" / "cookie_extract.py").read_text()
+
+    assert "\ndef extract_cookies(" not in source
+    assert "\nBROWSER_PROFILES =" not in source
