@@ -112,7 +112,8 @@ def safe_int(value, default=0) -> int:
 
 def content_is_usable(status: dict, min_text: int = 200) -> bool:
     status = status if isinstance(status, dict) else {}
-    if (status.get("block") or {}).get("blocked"):
+    block = status.get("block") if isinstance(status.get("block"), dict) else {}
+    if block.get("blocked"):
         return False
     return safe_int(status.get("textLength")) >= safe_int(min_text)
 
