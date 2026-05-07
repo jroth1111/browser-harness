@@ -192,18 +192,25 @@ def fixed_width_price_bands(price_min, price_max, width):
 
 
 def split_price_band(band):
+    def parse_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     band = band if isinstance(band, dict) else {}
-    price_min = band.get("price_min")
-    price_max = band.get("price_max")
-    if price_min is None or price_max is None or int(price_min) >= int(price_max):
+    price_min = parse_int(band.get("price_min"))
+    price_max = parse_int(band.get("price_max"))
+    if price_min is None or price_max is None or price_min >= price_max:
         return []
-    price_min = int(price_min)
-    price_max = int(price_max)
     midpoint = (price_min + price_max) // 2
     if midpoint < price_min or midpoint >= price_max:
         return []
     parent_label = band.get("label") or f"{price_min}-{price_max}"
-    depth = int(band.get("partition_depth") or 0) + 1
+    parsed_depth = parse_int(band.get("partition_depth") or 0)
+    if parsed_depth is None:
+        return []
+    depth = parsed_depth + 1
     return [
         {
             "price_min": price_min,
