@@ -338,15 +338,13 @@ def session_state(client, urls, site=None, profile_label=None, account_label=Non
 
 def cookie_param(cookie):
     out = {key: cookie[key] for key in _COOKIE_PARAM_FIELDS if key in cookie and cookie[key] is not None}
-    if out.get("expires", 0) < 0:
-        out.pop("expires", None)
+    _normalize_expires(out)
     return out
 
 
 def set_cookie_param(cookie):
     out = {key: cookie[key] for key in _COOKIE_SET_COOKIE_FIELDS if key in cookie and cookie[key] is not None}
-    if out.get("expires", 0) < 0:
-        out.pop("expires", None)
+    _normalize_expires(out)
     domain = out.get("domain")
     if "url" not in out and domain:
         host = str(domain).lstrip(".")
@@ -354,6 +352,14 @@ def set_cookie_param(cookie):
         scheme = "https" if out.get("secure", False) else "http"
         out["url"] = f"{scheme}://{host}{path}"
     return out
+
+
+def _normalize_expires(params):
+    expires = params.get("expires")
+    if expires is None:
+        return
+    if isinstance(expires, bool) or not isinstance(expires, int | float) or expires < 0:
+        params.pop("expires", None)
 
 
 def _dict_items(value):

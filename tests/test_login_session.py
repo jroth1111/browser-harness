@@ -210,6 +210,27 @@ def test_set_cookie_param_strips_nonportable_bulk_fields():
     }
 
 
+def test_cookie_params_drop_non_numeric_expires_values():
+    cookie = {
+        "name": "sid",
+        "value": "secret",
+        "domain": ".example.com",
+        "expires": "not-a-number",
+    }
+
+    assert login_session.cookie_param(cookie) == {
+        "name": "sid",
+        "value": "secret",
+        "domain": ".example.com",
+    }
+    assert login_session.set_cookie_param(cookie) == {
+        "name": "sid",
+        "value": "secret",
+        "domain": ".example.com",
+        "url": "http://example.com/",
+    }
+
+
 def test_session_manifest_redacts_cookie_and_storage_values():
     def client(method, **params):
         if method == "Network.getCookies":
