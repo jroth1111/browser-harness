@@ -2304,6 +2304,25 @@ def test_replay_endpoints_skips_malformed_endpoint_rows():
     assert result["summary"] == {"total": 2, "matched": 0, "mismatched": 0, "errors": 0}
 
 
+def test_replay_endpoints_skips_malformed_method_values():
+    class Capture:
+        @staticmethod
+        def endpoints():
+            return [
+                {"url": "https://api.example.com/a", "method": 123, "status": 200},
+                {"url": "https://api.example.com/b", "method": None, "status": 200},
+            ]
+
+    with patch("time.sleep"):
+        result = helpers.replay_endpoints(Capture())
+
+    assert result["results"] == [
+        {"url": "https://api.example.com/a", "skipped": True, "reason": "non-GET"},
+        {"url": "https://api.example.com/b", "skipped": True, "reason": "non-GET"},
+    ]
+    assert result["summary"] == {"total": 2, "matched": 0, "mismatched": 0, "errors": 0}
+
+
 def test_install_blocker_probe_enables_page_and_injects_script():
     calls = []
     with patch("browser_harness.helpers.cdp", side_effect=lambda m, **kw: calls.append(m) or {"identifier": "1"}):
