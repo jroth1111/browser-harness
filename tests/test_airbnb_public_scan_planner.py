@@ -93,6 +93,14 @@ def test_recursive_price_partition_splits_bounded_buckets_only():
     assert module.should_partition_price_band(12, 12, {"price_min": 500, "price_max": None, "label": "500-"}, max_depth=2) is False
 
 
+def test_price_partition_helpers_tolerate_malformed_bands():
+    module = load_module()
+
+    assert module.split_price_band("not-a-band") == []
+    assert module.should_partition_price_band(12, 12, "not-a-band", max_depth=2) is False
+    assert module.partition_key("100", "2026-05-10", 3, "not-a-band") == "100|2026-05-10|3|all_prices|d0"
+
+
 def test_public_market_validation_rejects_bad_dates_and_options():
     module = load_module()
 

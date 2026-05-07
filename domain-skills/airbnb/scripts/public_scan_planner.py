@@ -192,6 +192,7 @@ def fixed_width_price_bands(price_min, price_max, width):
 
 
 def split_price_band(band):
+    band = band if isinstance(band, dict) else {}
     price_min = band.get("price_min")
     price_max = band.get("price_max")
     if price_min is None or price_max is None or int(price_min) >= int(price_max):
@@ -224,7 +225,8 @@ def split_price_band(band):
 def should_partition_price_band(visible_result_count, threshold, band, max_depth):
     threshold = int(threshold)
     max_depth = int(max_depth)
-    depth = int((band or {}).get("partition_depth") or 0)
+    band = band if isinstance(band, dict) else {}
+    depth = safe_int(band.get("partition_depth"), 0)
     if threshold <= 0 or max_depth <= 0:
         return False
     if int(visible_result_count or 0) < threshold:
@@ -491,9 +493,9 @@ def validate_public_search_context(
 
 
 def partition_key(target_listing_id, checkin, nights, price_band):
-    band = price_band or {}
+    band = price_band if isinstance(price_band, dict) else {}
     label = band.get("label") or "all_prices"
-    depth = int(band.get("partition_depth") or 0)
+    depth = safe_int(band.get("partition_depth"), 0)
     return f"{target_listing_id}|{checkin}|{int(nights)}|{label}|d{depth}"
 
 
