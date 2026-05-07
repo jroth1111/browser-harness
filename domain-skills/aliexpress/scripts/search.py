@@ -143,9 +143,18 @@ def cmd_extract_js(args):
         print(EXTRACT_JS)
 
 
+def normalize_merge_payload(data):
+    if not isinstance(data, list):
+        raise ValueError("AliExpress merge input must be a JSON array of product objects")
+    bad_index = next((index for index, item in enumerate(data) if not isinstance(item, dict)), None)
+    if bad_index is not None:
+        raise ValueError(f"AliExpress merge input item {bad_index} must be an object")
+    return data
+
+
 def cmd_merge(args):
     with open(args.input) as f:
-        new_items = json.load(f)
+        new_items = normalize_merge_payload(json.load(f))
 
     existing_ids = set()
     if args.existing:

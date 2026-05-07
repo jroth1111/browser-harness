@@ -60,6 +60,18 @@ def test_plan_exits_when_child_generator_fails(monkeypatch):
     assert "bad plan input" in str(exc.value)
 
 
+def test_aliexpress_merge_payload_requires_product_object_array():
+    search = load_script_module("aliexpress_search_payloads", "domain-skills/aliexpress/scripts/search.py")
+
+    rows = [{"product_id": "1", "title": "Mini PC"}]
+    assert search.normalize_merge_payload(rows) == rows
+
+    with pytest.raises(ValueError, match="must be a JSON array"):
+        search.normalize_merge_payload({"products": rows})
+    with pytest.raises(ValueError, match="item 1 must be an object"):
+        search.normalize_merge_payload([{"product_id": "1"}, "bad-row"])
+
+
 def test_ebay_urls_exits_when_child_generator_fails(monkeypatch):
     search = load_script_module("ebay_search", "domain-skills/ebay/scripts/search.py")
 
