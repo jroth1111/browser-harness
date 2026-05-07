@@ -16,6 +16,7 @@ from pathlib import Path
 from browser_harness.runtime.agent_runtime import AgentRuntime
 from browser_harness.runtime.sandbox import AgentSandbox, FORBIDDEN_MODULES, FORBIDDEN_NAMES
 from browser_harness.authority.policy import PolicyEngine
+from browser_harness.capabilities.resolver import AccessPlane
 from browser_harness.authority.challenge import (
     ChallengeStateMachine,
     ChallengeDetection,
@@ -701,4 +702,46 @@ class TestExtractionEnforcement:
         assert result.block_state == ChallengeStatus.BLOCKED
         # Blocked sources cannot be canonical per source_receipts contract
         # but they still produce a valid extraction result with the block state
+
+
+# --- 15. Cross-origin cookie redirect test ---
+
+class TestCrossOriginSecurity:
+    def test_session_broker_rejects_cross_origin_materialization(self):
+        """Authenticated HTTP cannot leak cookies across origins."""
+        broker = SessionBroker()
+        ref = broker.store_secret_bundle(
+            origin="https://app.example.com",
+            cookies=[{"name": "session", "value": "secret123", "domain": ".app.example.com"}],
+        )
+        # Attempt to materialize for a different origin
+        bundle = broker.materialize_for_transport(ref, target_origin="https://evil.example")
+        assert bundle is None, "cross-origin materialization must be rejected"
+
+    def test_lease_rejects_cross_origin_request(self):
+        """Lease does not allow requests to different origins."""
+        lease = LeaseSpec(
+            origin="https://app.example.com",
+            allowed_methods=["GET"],
+            risk_max=RiskLevel.AUTHENTICATED_READ,
+            secret_bundle_ref="ref_test",
+        )
+        cross_origin_req = WebRequest(
+            url="https://evil.example/api/data",
+            risk=RiskLevel.AUTHENTICATED_READ,
+        )
+        assert not lease.allows(cross_origin_req)
+
+    def test_public_fetch_does_not_attach_session(self):
+        """Public requests must not use any session state."""
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            broker=SessionBroker(),  # empty broker — no sessions
+            http_fn=lambda url, **kw: "public content",
+        )
+        req = WebRequest(url="https://example.com/public", risk=RiskLevel.PUBLIC_READ, auth_required=False)
+        result = plane.execute(req)
+        assert result.status == 200
+        assert result.source == "http"  # plain HTTP, no session
+
 
