@@ -167,6 +167,42 @@ def test_upsert_payload_skips_malformed_payload_rows(tmp_path):
     conn.close()
 
 
+def test_upsert_payload_tolerates_scalar_transaction_fields(tmp_path):
+    db_path = tmp_path / "coles.sqlite3"
+    conn = coles_card_sync.init_db(db_path)
+    coles_card_sync.insert_run(conn, "run-scalar")
+    payload = {
+        "url": "https://secure.coles.com.au/transactions",
+        "account_label": "Coles Mastercard ending 1234",
+        "balances": [],
+        "transactions_csv": [
+            {
+                "Date": "05 May 26",
+                "Amount": -927,
+                "Account Number": 8954,
+                "Transaction Type": 100,
+                "Transaction Details": 200,
+                "Category": 300,
+                "Merchant Name": 400,
+                "Processed On": 20260506,
+            }
+        ],
+    }
+
+    counts = coles_card_sync.upsert_payload(conn, "run-scalar", payload)
+
+    row = conn.execute(
+        "select merchant_name, transaction_type, category, account_number, processed_on from transactions"
+    ).fetchone()
+    assert counts["transactions"] == 1
+    assert row["merchant_name"] == "400"
+    assert row["transaction_type"] == "100"
+    assert row["category"] == "300"
+    assert row["account_number"] == "8954"
+    assert row["processed_on"] == "20260506"
+    conn.close()
+
+
 def test_defaults_avoid_forced_login_route():
     assert coles_card_sync.DEFAULT_START_URL == "https://secure.coles.com.au/home/account_dashboard"
     assert coles_card_sync.DEFAULT_AUTH_MAX_AGE == 20

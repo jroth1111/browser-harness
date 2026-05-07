@@ -662,7 +662,7 @@ def ensure_transaction_columns(conn: sqlite3.Connection) -> None:
 def parse_money_to_cents(value: str | None) -> int | None:
     if not value:
         return None
-    text = value.strip()
+    text = text_value(value).strip()
     negative = text.startswith(("-", "−", "(")) or "$ -" in text or "$-" in text or "$ −" in text or "$−" in text
     cleaned = re.sub(r"[^0-9.]", "", text)
     if not cleaned:
@@ -676,7 +676,7 @@ def parse_money_to_cents(value: str | None) -> int | None:
 def normalize_date(value: str | None) -> str | None:
     if not value:
         return None
-    text = re.sub(r"\s+", " ", value.strip())
+    text = re.sub(r"\s+", " ", text_value(value).strip())
     month_map = {
         "jan": "01", "january": "01",
         "feb": "02", "february": "02",
@@ -714,6 +714,12 @@ def stable_hash(*parts: Any, length: int = 24) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
+def text_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
+
+
 def account_key(account_label: str) -> str:
     return "coles_card:" + stable_hash(account_label, length=16)
 
@@ -721,8 +727,8 @@ def account_key(account_label: str) -> str:
 def transaction_key(account: str, tx: dict[str, Any]) -> str:
     amount = parse_money_to_cents(tx.get("amount_text")) or 0
     posted = normalize_date(tx.get("posted_date_text"))
-    description = re.sub(r"\s+", " ", tx.get("description") or "").strip().lower()
-    account_number = re.sub(r"\s+", "", tx.get("account_number") or "")
+    description = re.sub(r"\s+", " ", text_value(tx.get("description"))).strip().lower()
+    account_number = re.sub(r"\s+", "", text_value(tx.get("account_number")))
     processed = normalize_date(tx.get("processed_on"))
     return stable_hash(account, account_number, posted, processed, amount, description, length=32)
 
@@ -732,9 +738,9 @@ def dict_rows(value: Any) -> list[dict[str, Any]]:
 
 
 def normalize_csv_transaction(row: dict[str, Any]) -> dict[str, Any]:
-    details = re.sub(r"\s+", " ", row.get("Transaction Details") or "").strip()
-    transaction_type = re.sub(r"\s+", " ", row.get("Transaction Type") or "").strip()
-    account_number = re.sub(r"\s+", " ", row.get("Account Number") or "").strip()
+    details = re.sub(r"\s+", " ", text_value(row.get("Transaction Details"))).strip()
+    transaction_type = re.sub(r"\s+", " ", text_value(row.get("Transaction Type"))).strip()
+    account_number = re.sub(r"\s+", " ", text_value(row.get("Account Number"))).strip()
     card_match = re.search(r"(\d{4})\s*$", account_number) or re.search(r"Card ending\s+(\d{4})", details, re.I)
     status = "pending" if re.search(r"\bpending\b", transaction_type + " " + details, re.I) else "posted"
     description = re.sub(r"\bPending:\s*", "", details, flags=re.I)
@@ -742,10 +748,10 @@ def normalize_csv_transaction(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "posted_date_text": row.get("Date"),
         "processed_on": normalize_date(row.get("Processed On")),
-        "description": description or details or row.get("Merchant Name") or transaction_type or "Transaction",
-        "merchant_name": re.sub(r"\s+", " ", row.get("Merchant Name") or "").strip() or None,
+        "description": description or details or text_value(row.get("Merchant Name")) or transaction_type or "Transaction",
+        "merchant_name": re.sub(r"\s+", " ", text_value(row.get("Merchant Name"))).strip() or None,
         "transaction_type": transaction_type or None,
-        "category": re.sub(r"\s+", " ", row.get("Category") or "").strip() or None,
+        "category": re.sub(r"\s+", " ", text_value(row.get("Category"))).strip() or None,
         "account_number": account_number or None,
         "card_ending": card_match.group(1) if card_match else None,
         "status": status,
@@ -881,7 +887,7 @@ def upsert_payload(
                 acct,
                 normalize_date(tx.get("posted_date_text")),
                 tx.get("processed_on"),
-                re.sub(r"\s+", " ", tx.get("description") or "").strip(),
+                re.sub(r"\s+", " ", text_value(tx.get("description"))).strip(),
                 tx.get("merchant_name"),
                 tx.get("transaction_type"),
                 tx.get("category"),
