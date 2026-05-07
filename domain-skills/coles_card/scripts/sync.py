@@ -800,7 +800,7 @@ def upsert_payload(
     account_label_override: str | None = None,
 ) -> dict[str, int | str]:
     now = utc_now()
-    label = (account_label_override or payload.get("account_label") or "Coles Credit Card").strip()
+    label = text_value(account_label_override or payload.get("account_label") or "Coles Credit Card").strip()
     acct = account_key(label)
     source_url = payload.get("url")
     conn.execute(

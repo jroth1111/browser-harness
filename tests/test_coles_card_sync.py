@@ -138,6 +138,31 @@ def test_upsert_payload_uses_account_label_override(tmp_path):
     conn.close()
 
 
+def test_upsert_payload_tolerates_scalar_account_labels(tmp_path):
+    db_path = tmp_path / "coles.sqlite3"
+    conn = coles_card_sync.init_db(db_path)
+    coles_card_sync.insert_run(conn, "run-scalar-label")
+    payload = {
+        "url": "https://secure.coles.com.au/transactions",
+        "account_label": 12345,
+        "balances": [],
+        "transactions": [
+            {
+                "posted_date_text": "5 May 2026",
+                "description": "Coffee",
+                "amount_text": "-$5.00",
+            }
+        ],
+    }
+
+    counts = coles_card_sync.upsert_payload(conn, "run-scalar-label", payload)
+
+    assert counts["account_key"] == coles_card_sync.account_key("12345")
+    label_in_db = conn.execute("select account_label from accounts").fetchone()[0]
+    assert label_in_db == "12345"
+    conn.close()
+
+
 def test_upsert_payload_skips_malformed_payload_rows(tmp_path):
     db_path = tmp_path / "coles.sqlite3"
     conn = coles_card_sync.init_db(db_path)
