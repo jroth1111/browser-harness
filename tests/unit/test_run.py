@@ -184,3 +184,32 @@ def test_c_flag_does_not_read_stdin():
         run.main()
 
     assert not stdin_read, "stdin should not be read when -c is passed"
+
+
+def test_update_rejects_unknown_flags():
+    stderr = StringIO()
+    with patch.object(sys, "argv", ["browser-harness", "--update", "--bogus"]), \
+         patch("browser_harness.run.run_update") as mock_update, \
+         patch("sys.stderr", stderr):
+        try:
+            run.main()
+        except SystemExit as e:
+            assert e.code == 2
+        else:
+            raise AssertionError("expected SystemExit")
+
+    mock_update.assert_not_called()
+    assert "unsupported --update flag: --bogus" in stderr.getvalue()
+
+
+def test_update_accepts_yes_flags():
+    with patch.object(sys, "argv", ["browser-harness", "--update", "--yes"]), \
+         patch("browser_harness.run.run_update", return_value=0) as mock_update:
+        try:
+            run.main()
+        except SystemExit as e:
+            assert e.code == 0
+        else:
+            raise AssertionError("expected SystemExit")
+
+    mock_update.assert_called_once_with(yes=True)

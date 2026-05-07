@@ -175,6 +175,11 @@ def main():
         _skill_learning_gate_main()(args[1:])
         return
     if args and args[0] == "--update":
+        allowed = {"-y", "--yes"}
+        unknown = [a for a in args[1:] if a not in allowed]
+        if unknown:
+            print(f"unsupported --update flag: {unknown[0]}", file=sys.stderr)
+            sys.exit(2)
         yes = any(a in {"-y", "--yes"} for a in args[1:])
         sys.exit(run_update(yes=yes))
     if args and args[0] == "--reload":
