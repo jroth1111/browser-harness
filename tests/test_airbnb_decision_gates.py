@@ -483,6 +483,49 @@ def test_case_study_replay_creates_experiment_template():
     assert result["experiment_template"]["variant_description"] == "replace hero photo with parking proof"
 
 
+def test_case_study_replay_tolerates_malformed_nested_rows():
+    module = load_module()
+
+    malformed_counterexamples = module.evaluate_case_study_replay({
+        "case_type": "photo_conversion_rescue",
+        "listing_id": "100",
+        "starting_symptom": "high impressions with low search-to-listing conversion",
+        "before_state_evidence": ["own-public", "insights", "a-comps"],
+        "hypothesis": "hero photo fails to show scarce parking proof",
+        "counterexample_matrix": "supported",
+        "recommended_intervention": "replace hero photo with parking proof",
+        "expected_metric": "search_to_listing_conversion",
+        "pre_window": "not-a-window",
+        "post_window": "not-a-window",
+        "rollback_criteria": "revert if search-to-listing conversion worsens",
+        "review_window_days": 14,
+        "evidence_refs": ["case-pack"],
+    })
+
+    assert malformed_counterexamples["decision"] == "needs_more_data"
+    assert "counterexample_matrix" in malformed_counterexamples["missing_required_evidence"]
+
+    result = module.evaluate_case_study_replay({
+        "case_type": "photo_conversion_rescue",
+        "listing_id": "100",
+        "starting_symptom": "high impressions with low search-to-listing conversion",
+        "before_state_evidence": ["own-public", "insights", "a-comps"],
+        "hypothesis": "hero photo fails to show scarce parking proof",
+        "counterexample_matrix": {"thesis_result": "supported"},
+        "recommended_intervention": "replace hero photo with parking proof",
+        "expected_metric": "search_to_listing_conversion",
+        "pre_window": "not-a-window",
+        "post_window": "not-a-window",
+        "rollback_criteria": "revert if search-to-listing conversion worsens",
+        "review_window_days": 14,
+        "evidence_refs": ["case-pack"],
+    })
+
+    assert result["decision"] == "fix"
+    assert result["experiment_template"]["pre_period_start"] is None
+    assert result["experiment_template"]["post_period_end"] is None
+
+
 def test_operations_risk_emits_severity_and_evidence_for_recurring_issues():
     module = load_module()
 

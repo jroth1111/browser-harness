@@ -46,6 +46,10 @@ def as_list(value):
     return [value]
 
 
+def as_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
 def as_number(value, default=None):
     try:
         if value in (None, ""):
@@ -1734,7 +1738,7 @@ def evaluate_case_study_replay(row):
         "review_window_days",
     ])
     before_evidence = as_list(row.get("before_state_evidence") or row.get("available_evidence"))
-    counterexamples = row.get("counterexample_matrix") or {}
+    counterexamples = as_dict(row.get("counterexample_matrix"))
     if not before_evidence:
         missing.append("before_state_evidence")
     if not counterexamples:
@@ -1773,6 +1777,8 @@ def evaluate_case_study_replay(row):
         )
 
     intervention = interventions[0] if interventions else row.get("recommended_intervention")
+    pre_window = as_dict(row.get("pre_window"))
+    post_window = as_dict(row.get("post_window"))
     experiment = {
         "case_type": row.get("case_type"),
         "listing_id": row.get("listing_id"),
@@ -1781,10 +1787,10 @@ def evaluate_case_study_replay(row):
         "control_description": row.get("control_description") or "pre-intervention listing state and matched A-comp context",
         "target_metric": row.get("expected_metric"),
         "guardrail_metrics": as_list(row.get("guardrail_metrics")) or ["margin", "booking_quality", "review_quality"],
-        "pre_period_start": (row.get("pre_window") or {}).get("start"),
-        "pre_period_end": (row.get("pre_window") or {}).get("end"),
-        "post_period_start": (row.get("post_window") or {}).get("start"),
-        "post_period_end": (row.get("post_window") or {}).get("end"),
+        "pre_period_start": pre_window.get("start"),
+        "pre_period_end": pre_window.get("end"),
+        "post_period_start": post_window.get("start"),
+        "post_period_end": post_window.get("end"),
         "eligible_dates": as_list(row.get("eligible_dates")),
         "excluded_dates": as_list(row.get("excluded_dates")),
         "demand_context_controls": as_list(row.get("demand_context_controls")),
