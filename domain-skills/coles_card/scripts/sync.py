@@ -727,6 +727,10 @@ def transaction_key(account: str, tx: dict[str, Any]) -> str:
     return stable_hash(account, account_number, posted, processed, amount, description, length=32)
 
 
+def dict_rows(value: Any) -> list[dict[str, Any]]:
+    return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
+
+
 def normalize_csv_transaction(row: dict[str, Any]) -> dict[str, Any]:
     details = re.sub(r"\s+", " ", row.get("Transaction Details") or "").strip()
     transaction_type = re.sub(r"\s+", " ", row.get("Transaction Type") or "").strip()
@@ -799,7 +803,7 @@ def upsert_payload(
     )
 
     balance_count = 0
-    for balance in payload.get("balances") or []:
+    for balance in dict_rows(payload.get("balances")):
         amount = parse_money_to_cents(balance.get("amount_text"))
         if amount is None:
             continue
@@ -826,8 +830,8 @@ def upsert_payload(
 
     tx_count = 0
     inserted_count = 0
-    csv_rows = [normalize_csv_transaction(row) for row in (payload.get("transactions_csv") or [])]
-    dom_rows = [] if csv_rows else (payload.get("transactions") or [])
+    csv_rows = [normalize_csv_transaction(row) for row in dict_rows(payload.get("transactions_csv"))]
+    dom_rows = [] if csv_rows else dict_rows(payload.get("transactions"))
     for tx in csv_rows + dom_rows:
         amount = parse_money_to_cents(tx.get("amount_text"))
         if amount is None:
