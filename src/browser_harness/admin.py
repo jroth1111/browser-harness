@@ -931,7 +931,7 @@ def close_browser(launch_info):
                 try:
                     proc.wait(timeout=10)
                 except Exception:
-                    proc.kill()
+                    _kill_and_wait(proc)
     if launch_info.get("temp_profile"):
         shutil.rmtree(launch_info["profile_path"], ignore_errors=True)
 

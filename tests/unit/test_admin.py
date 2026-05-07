@@ -318,6 +318,37 @@ def test_launch_browser_waits_after_killing_malformed_devtools_port(monkeypatch,
     assert not profile.exists()
 
 
+def test_close_browser_waits_after_kill_escalation(monkeypatch, tmp_path):
+    profile = tmp_path / "profile"
+    profile.mkdir()
+
+    class Proc:
+        def __init__(self):
+            self.killed = False
+            self.wait_calls = []
+
+        def wait(self, timeout=None):
+            self.wait_calls.append(timeout)
+            if timeout == 10:
+                raise TimeoutError("still running")
+            return 0
+
+        def kill(self):
+            self.killed = True
+
+    proc = Proc()
+    kill_calls = []
+    monkeypatch.setattr(admin, "restart_daemon", lambda: None)
+    monkeypatch.setattr(admin.os, "kill", lambda pid, sig: kill_calls.append((pid, sig)))
+
+    admin.close_browser({"pid": 1234, "_proc": proc, "temp_profile": True, "profile_path": str(profile)})
+
+    assert kill_calls
+    assert proc.killed is True
+    assert proc.wait_calls == [10, 3]
+    assert not profile.exists()
+
+
 def test_start_remote_daemon_does_not_stop_created_browser_on_success(monkeypatch):
     calls = []
     browser = {"id": "browser-123", "cdpUrl": "http://127.0.0.1:9333", "liveUrl": "https://live.example"}
