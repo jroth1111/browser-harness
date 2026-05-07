@@ -2167,6 +2167,33 @@ def test_network_capture_body_capture_is_bounded():
     assert entry["body_truncated"] is True
 
 
+def test_network_capture_decodes_base64_response_bodies():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1",
+            "request": {"url": "https://api.example.com/private", "method": "GET", "headers": {}},
+            "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1",
+            "response": {"status": 200, "headers": {}, "mimeType": "application/json"},
+        }},
+    ]
+
+    def fake_cdp(method, **params):
+        assert method == "Network.getResponseBody"
+        return {"body": "eyJvayI6IHRydWV9", "base64Encoded": True}
+
+    with patch("browser_harness.helpers.drain_events", return_value=events), \
+         patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
+        cap = helpers.NetworkCapture(capture_bodies=True)
+        cap.poll()
+
+    entry = cap.responses_for("private")[0]
+    assert entry["body"] == '{"ok": true}'
+    assert entry["body_truncated"] is False
+
+
 # --- url_cluster ---
 
 def test_url_cluster_replaces_numeric_ids():

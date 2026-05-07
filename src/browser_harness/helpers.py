@@ -2314,6 +2314,8 @@ class NetworkCapture:
                     try:
                         body = cdp("Network.getResponseBody", requestId=rid)
                         raw_body = body.get("body", "")
+                        if body.get("base64Encoded"):
+                            raw_body = base64.b64decode(raw_body).decode("utf-8", "replace")
                         self._responses[rid]["body"] = raw_body[:self._max_body_chars]
                         self._responses[rid]["body_truncated"] = len(raw_body) > self._max_body_chars
                     except Exception:
