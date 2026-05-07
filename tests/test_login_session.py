@@ -384,6 +384,43 @@ def test_restore_session_state_and_verify_passes_authenticated_urls():
     assert result["resources_checked"][0]["title"] == "Private"
 
 
+def test_verify_authenticated_urls_tolerates_malformed_page_status_shapes():
+    statuses = [
+        "bad-status",
+        {"url": "https://www.example.com/private", "title": "Private", "readyState": "complete", "textLength": "not-a-count"},
+    ]
+
+    def client(method, session_id=None, **params):
+        if method == "Runtime.evaluate":
+            expression = params["expression"]
+            if expression == "location.href":
+                return {"result": {"value": "about:blank"}}
+            status = statuses.pop(0) if len(statuses) > 1 else statuses[0]
+            return {"result": {"value": status}}
+        return {}
+
+    with patch("time.sleep"):
+        result = login_session.verify_authenticated_urls(
+            client,
+            ["https://www.example.com/private"],
+            min_text=250,
+            timeout=0.01,
+            poll=0,
+        )
+
+    assert result == {
+        "ok": False,
+        "resources_checked": [{
+            "requested_url": "https://www.example.com/private",
+            "final_url": "https://www.example.com/private",
+            "title": "Private",
+            "ok": False,
+            "reason": "timeout",
+            "text_length": "not-a-count",
+        }],
+    }
+
+
 def test_restore_session_state_and_verify_handles_malformed_state_shapes():
     calls = []
     statuses = iter([

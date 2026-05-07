@@ -469,7 +469,7 @@ def wait_for_page_status(client, min_text=250, timeout=30.0, poll=0.5, session_i
     last = {}
     while time.time() < deadline:
         last = page_status(client, session_id=session_id)
-        if int(last.get("textLength") or 0) >= min_text:
+        if _int_count(last.get("textLength")) >= min_text:
             return {**last, "ok": True, "reason": "content"}
         time.sleep(poll)
     return {**last, "ok": False, "reason": "timeout"}
@@ -483,7 +483,7 @@ def navigate_and_wait(client, url, min_text=250, timeout=30.0, poll=0.5, session
     while time.time() < deadline:
         last = page_status(client, session_id=session_id)
         url_changed = last.get("url") != pre_url
-        text_ok = int(last.get("textLength") or 0) >= min_text
+        text_ok = _int_count(last.get("textLength")) >= min_text
         if url_changed and text_ok:
             return {**last, "ok": True, "reason": "content"}
         # Same URL but content loaded — page refresh or canonical redirect.
@@ -676,7 +676,7 @@ def http_get_with_login_session(client, url, headers=None, cookie_urls=None, tim
 
 def page_status(client, session_id=None):
     """Return current page status using only generic CDP Runtime evaluation."""
-    return runtime_value(client, """(() => {
+    return _state_dict(runtime_value(client, """(() => {
   const body = document.body;
   return {
     url: location.href,
@@ -684,7 +684,7 @@ def page_status(client, session_id=None):
     readyState: document.readyState,
     textLength: body && body.innerText ? body.innerText.length : 0
   };
-})()""", session_id=session_id) or {}
+})()""", session_id=session_id))
 
 
 def prompt_user_login(
@@ -709,7 +709,7 @@ def prompt_user_login(
     while time.time() < deadline:
         last = page_status(client, session_id=session_id)
         url_ok = not success_url_contains or success_url_contains in (last.get("url") or "")
-        text_ok = int(last.get("textLength") or 0) >= min_text
+        text_ok = _int_count(last.get("textLength")) >= min_text
         if url_ok and text_ok:
             return {**last, "ok": True, "reason": "login_observed"}
         time.sleep(poll)
