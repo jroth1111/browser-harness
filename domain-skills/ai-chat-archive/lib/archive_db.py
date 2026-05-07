@@ -262,6 +262,7 @@ def upsert_artifact(
     account_key: str | None = None,
 ) -> str:
     content_hash = artifact.get("content_hash") or compute_content_hash(artifact.get("label", ""))
+    byte_length = _safe_byte_length(artifact.get("byte_length"))
     artifact_key = compute_artifact_key(
         artifact["thread_key"],
         artifact.get("provider_artifact_id")
@@ -291,7 +292,7 @@ def upsert_artifact(
                 artifact["artifact_type"],
                 artifact.get("source_url"),
                 artifact.get("mime_type"),
-                artifact.get("byte_length"),
+                byte_length,
                 content_hash,
                 artifact.get("storage_kind", "metadata"),
                 artifact["capture_id"],
@@ -319,6 +320,14 @@ def upsert_artifact(
 
     conn.commit()
     return artifact_key
+
+
+def _safe_byte_length(value) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return value
+    return None
 
 
 def store_artifact_blob(

@@ -550,6 +550,48 @@ def test_render_artifact_status():
     assert "metadata only" in md
 
 
+def test_upsert_artifact_sanitizes_malformed_byte_lengths():
+    conn = _fresh_db()
+    ak = _setup_account(conn)
+    upsert_thread(conn, {
+        "thread_key": "thread-1",
+        "provider_id": "chatgpt",
+        "account_key": ak,
+        "provider_thread_id": "thread-1",
+        "status": "listed",
+    }, run_id="run-1")
+
+    bool_key = upsert_artifact(conn, {
+        "thread_key": "thread-1",
+        "label": "bool.bin",
+        "artifact_type": "file",
+        "byte_length": True,
+        "capture_id": "cap-1",
+    })
+    string_key = upsert_artifact(conn, {
+        "thread_key": "thread-1",
+        "label": "string.bin",
+        "artifact_type": "file",
+        "byte_length": "large",
+        "capture_id": "cap-1",
+    })
+    ok_key = upsert_artifact(conn, {
+        "thread_key": "thread-1",
+        "label": "ok.bin",
+        "artifact_type": "file",
+        "byte_length": 2048,
+        "capture_id": "cap-1",
+    })
+
+    rows = {
+        row["artifact_key"]: row["byte_length"]
+        for row in conn.execute("SELECT artifact_key, byte_length FROM artifacts")
+    }
+    assert rows[bool_key] is None
+    assert rows[string_key] is None
+    assert rows[ok_key] == 2048
+
+
 # --- CDC events ---
 
 def test_cdc_events_track_insert_update_touch():
