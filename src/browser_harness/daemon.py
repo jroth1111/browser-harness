@@ -18,6 +18,8 @@ try:
 except ModuleNotFoundError:  # optional dependency; tests import daemon without CDP runtime
     CDPClient = None
 
+from . import _ipc as ipc
+
 
 def _load_env():
     p = Path(__file__).parent / ".env"
@@ -358,7 +360,12 @@ class Daemon:
         await self.cdp.send_raw("Target.setDiscoverTargets", {"discover": True})
 
     async def handle(self, req):
+        token = ipc.expected_token()
+        if token is not None and req.get("token") != token:
+            return {"error": "unauthorized"}
         meta = req.get("meta")
+        if meta == "ping":
+            return {"pong": True, "pid": os.getpid()}
         if meta == "drain_events":
             out = list(self.events); self.events.clear()
             return {"events": out}

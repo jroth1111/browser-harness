@@ -444,6 +444,27 @@ def test_handler_single_request_compat():
     assert "endpoint_info" in responses[0]
 
 
+def test_daemon_ping_returns_pong_and_pid():
+    d = daemon.Daemon()
+
+    result = asyncio.run(d.handle({"meta": "ping"}))
+
+    assert result == {"pong": True, "pid": os.getpid()}
+
+
+def test_daemon_rejects_requests_with_invalid_expected_token(monkeypatch):
+    d = daemon.Daemon()
+    d.session = "session-1"
+    d.cdp = FakeCDP()
+    monkeypatch.setattr(daemon.ipc, "expected_token", lambda: "secret-token")
+
+    bad = asyncio.run(d.handle({"meta": "session", "token": "wrong"}))
+    good = asyncio.run(d.handle({"meta": "session", "token": "secret-token"}))
+
+    assert bad == {"error": "unauthorized"}
+    assert good == {"session_id": "session-1"}
+
+
 def test_malformed_devtools_active_port_skipped_gracefully(tmp_path, monkeypatch):
     """DevToolsActivePort with only a port number (no path) should be skipped, not crash."""
     port_only_dir = tmp_path / "Chrome"
