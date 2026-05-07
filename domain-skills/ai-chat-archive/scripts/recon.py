@@ -83,7 +83,7 @@ def _cookies_to_playwright(rich: dict[str, dict[str, dict]]) -> list[dict]:
             if ss in ("Strict", "Lax", "None"):
                 ck["sameSite"] = ss
             exp = entry.get("expires")
-            if isinstance(exp, (int, float)) and exp > 0:
+            if not isinstance(exp, bool) and isinstance(exp, (int, float)) and exp > 0:
                 ck["expires"] = int(exp)
             out.append(ck)
     return out

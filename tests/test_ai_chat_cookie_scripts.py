@@ -30,6 +30,13 @@ def test_recon_cookies_to_playwright_skips_malformed_host_jars():
                 "same_site": "Lax",
             }
         },
+        ".bad-expiry.example": {
+            "sid": {
+                "value": "abc",
+                "path": "/",
+                "expires": True,
+            }
+        },
     }) == [
         {
             "name": "sid",
@@ -39,6 +46,14 @@ def test_recon_cookies_to_playwright_skips_malformed_host_jars():
             "httpOnly": True,
             "secure": True,
             "sameSite": "Lax",
+        },
+        {
+            "name": "sid",
+            "value": "abc",
+            "domain": ".bad-expiry.example",
+            "path": "/",
+            "httpOnly": False,
+            "secure": False,
         }
     ]
 
