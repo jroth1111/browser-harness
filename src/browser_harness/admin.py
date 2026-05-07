@@ -570,9 +570,10 @@ def _install_mode():
 
 def _cache_read():
     try:
-        return json.loads(VERSION_CACHE.read_text())
+        cache = json.loads(VERSION_CACHE.read_text())
     except (FileNotFoundError, ValueError):
         return {}
+    return cache if isinstance(cache, dict) else {}
 
 
 def _cache_write(data):

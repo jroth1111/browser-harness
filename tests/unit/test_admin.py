@@ -493,6 +493,14 @@ def test_cdp_ws_from_url_rejects_malformed_version_response(monkeypatch, payload
     assert opened == [("http://127.0.0.1:9333/json/version", 15)]
 
 
+def test_cache_read_ignores_non_object_json(monkeypatch, tmp_path):
+    cache_path = tmp_path / "cache.json"
+    cache_path.write_text('["not", "an", "object"]', encoding="utf-8")
+    monkeypatch.setattr(admin, "VERSION_CACHE", cache_path)
+
+    assert admin._cache_read() == {}
+
+
 # --- restart_daemon: PID-reuse safety ---
 
 def test_restart_daemon_does_not_signal_when_daemon_unreachable(monkeypatch, tmp_path):
