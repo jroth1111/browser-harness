@@ -32,6 +32,13 @@ def _string_rows(rows: Any) -> list[str]:
     return [row for row in rows if isinstance(row, str)] if isinstance(rows, list) else []
 
 
+def _cookie_domain(cookies: Any, domain: str) -> dict:
+    if not isinstance(cookies, dict):
+        return {}
+    jar = cookies.get(domain)
+    return jar if isinstance(jar, dict) else {}
+
+
 class GrokHTTPAPI:
     def __init__(self, cookies_by_domain: dict[str, dict[str, str]]):
         self._cookies = cookies_by_domain
@@ -44,7 +51,7 @@ class GrokHTTPAPI:
     def _cookie_header(self) -> str:
         parts: list[str] = []
         for d in (".grok.com", "grok.com"):
-            for k, v in self._cookies.get(d, {}).items():
+            for k, v in _cookie_domain(self._cookies, d).items():
                 parts.append(f"{k}={v}")
         return "; ".join(parts)
 
@@ -74,7 +81,7 @@ class GrokHTTPAPI:
 
         We additionally peek at the ``sso`` JWT to extract a session_id for
         account-key stability across multiple Grok logins."""
-        sso = self._cookies.get(".grok.com", {}).get("sso", "")
+        sso = _cookie_domain(self._cookies, ".grok.com").get("sso", "")
         self._session_id = _decode_sso_session(sso)
 
         data = self._fetch_json("/rest/app-chat/conversations")

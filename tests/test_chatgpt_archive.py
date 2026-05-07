@@ -67,6 +67,15 @@ def test_chatgpt_auth_rejects_malformed_user_shape(monkeypatch):
     assert api._access_token is None
 
 
+def test_chatgpt_cookie_headers_skip_malformed_domain_values():
+    api = ChatGPTHTTPAPI({".chatgpt.com": "not-a-cookie-map", "chatgpt.com": {"session": "ok"}})
+
+    headers = api._request_headers()
+
+    assert headers["Cookie"] == "session=ok"
+    assert headers["oai-sc"] == ""
+
+
 # --- schema ---
 
 def test_init_db_creates_all_tables():

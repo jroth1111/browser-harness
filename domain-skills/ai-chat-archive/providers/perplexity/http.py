@@ -29,6 +29,13 @@ def _dict_rows(rows: Any) -> list[dict]:
     return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
 
+def _cookie_domain(cookies: Any, domain: str) -> dict:
+    if not isinstance(cookies, dict):
+        return {}
+    jar = cookies.get(domain)
+    return jar if isinstance(jar, dict) else {}
+
+
 class PerplexityHTTPAPI:
     def __init__(self, cookies_by_domain: dict[str, dict[str, str]]):
         self._cookies = cookies_by_domain
@@ -41,7 +48,7 @@ class PerplexityHTTPAPI:
     def _cookie_header(self) -> str:
         parts: list[str] = []
         for domain in (".perplexity.ai", "perplexity.ai", "www.perplexity.ai"):
-            for k, v in self._cookies.get(domain, {}).items():
+            for k, v in _cookie_domain(self._cookies, domain).items():
                 parts.append(f"{k}={v}")
         return "; ".join(parts)
 

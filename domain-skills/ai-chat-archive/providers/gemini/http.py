@@ -57,6 +57,13 @@ class GeminiBootstrapError(RuntimeError):
     """Raised when /app HTML can't be parsed for bootstrap params."""
 
 
+def _cookie_domain(cookies: Any, domain: str) -> dict:
+    if not isinstance(cookies, dict):
+        return {}
+    jar = cookies.get(domain)
+    return jar if isinstance(jar, dict) else {}
+
+
 class GeminiHTTPAPI:
     def __init__(self, cookies_by_domain: dict[str, dict[str, str]]):
         self._cookies = cookies_by_domain
@@ -82,7 +89,7 @@ class GeminiHTTPAPI:
             "gemini.google.com", ".gemini.google.com",
             "accounts.google.com", ".accounts.google.com",
         ):
-            for k, v in self._cookies.get(domain, {}).items():
+            for k, v in _cookie_domain(self._cookies, domain).items():
                 parts.append(f"{k}={v}")
         return "; ".join(parts)
 

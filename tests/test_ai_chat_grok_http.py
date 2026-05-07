@@ -9,6 +9,22 @@ sys.path.insert(0, str(SKILL_ROOT))
 from providers.grok.http import GrokHTTPAPI  # noqa: E402
 
 
+def test_grok_cookie_header_skips_malformed_domain_values():
+    api = GrokHTTPAPI({".grok.com": "not-a-cookie-map", "grok.com": {"sid": "ok"}})
+
+    assert api._cookie_header() == "sid=ok"
+
+
+def test_grok_auth_treats_malformed_sso_domain_as_absent(monkeypatch):
+    api = GrokHTTPAPI({".grok.com": "not-a-cookie-map"})
+    monkeypatch.setattr(api, "_fetch_json", lambda path, timeout=30: {"conversations": []})
+
+    result = api.authenticate()
+
+    assert result["authenticated"] is True
+    assert result["session_id"] is None
+
+
 def test_grok_all_conversations_skips_malformed_rows(monkeypatch):
     api = GrokHTTPAPI({})
 

@@ -9,6 +9,12 @@ sys.path.insert(0, str(SKILL_ROOT))
 from providers.claude.http import ClaudeHTTPAPI  # noqa: E402
 
 
+def test_claude_cookie_header_skips_malformed_domain_values():
+    api = ClaudeHTTPAPI({".claude.ai": "not-a-cookie-map", "claude.ai": {"sessionKey": "ok"}})
+
+    assert api._cookie_header() == "sessionKey=ok"
+
+
 def test_claude_auth_skips_malformed_org_rows(monkeypatch):
     api = ClaudeHTTPAPI({})
 

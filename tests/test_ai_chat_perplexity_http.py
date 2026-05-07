@@ -9,6 +9,12 @@ sys.path.insert(0, str(SKILL_ROOT))
 from providers.perplexity.http import PerplexityHTTPAPI  # noqa: E402
 
 
+def test_perplexity_cookie_header_skips_malformed_domain_values():
+    api = PerplexityHTTPAPI({".perplexity.ai": "not-a-cookie-map", "perplexity.ai": {"session": "ok"}})
+
+    assert api._cookie_header() == "session=ok"
+
+
 def test_perplexity_list_threads_skips_malformed_rows(monkeypatch):
     api = PerplexityHTTPAPI({})
 

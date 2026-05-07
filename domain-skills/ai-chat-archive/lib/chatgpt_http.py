@@ -21,6 +21,10 @@ def _dict_value(value):
     return value if isinstance(value, dict) else {}
 
 
+def _cookie_domain(cookies, domain):
+    return _dict_value(_dict_value(cookies).get(domain))
+
+
 class ChatGPTHTTPAPI:
     """ChatGPT backend API client using extracted cookies."""
 
@@ -37,7 +41,7 @@ class ChatGPTHTTPAPI:
             domains = [".chatgpt.com", "chatgpt.com", ".openai.com"]
         parts = []
         for d in domains:
-            for k, v in self._cookies.get(d, {}).items():
+            for k, v in _cookie_domain(self._cookies, d).items():
                 parts.append(f"{k}={v}")
         return "; ".join(parts)
 
@@ -48,7 +52,7 @@ class ChatGPTHTTPAPI:
             "Accept": "application/json",
             "Referer": "https://chatgpt.com/",
             "Origin": "https://chatgpt.com",
-            "oai-sc": self._cookies.get(".chatgpt.com", {}).get("oai-sc", ""),
+            "oai-sc": _cookie_domain(self._cookies, ".chatgpt.com").get("oai-sc", ""),
         }
         if self._access_token:
             headers["Authorization"] = f"Bearer {self._access_token}"
