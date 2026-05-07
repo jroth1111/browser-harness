@@ -72,6 +72,42 @@ def test_aliexpress_merge_payload_requires_product_object_array():
         search.normalize_merge_payload([{"product_id": "1"}, "bad-row"])
 
 
+def test_aliexpress_merge_tolerates_scalar_filter_titles(tmp_path):
+    script = ROOT / "domain-skills/aliexpress/scripts/search.py"
+    input_json = tmp_path / "results.json"
+    input_json.write_text(
+        json.dumps([{"product_id": "1", "title": 12345, "price": "AU$100"}]),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(script), "merge", str(input_json), "--require", "123"],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload[0]["title"] == "12345"
+
+
+def test_aliexpress_dedup_tolerates_scalar_filter_titles(tmp_path):
+    script = ROOT / "domain-skills/aliexpress/scripts/dedup_listings.py"
+    existing_csv = tmp_path / "existing.csv"
+    existing_csv.write_text("product_id\nold\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(script), str(existing_csv), "--require", "123"],
+        input=json.dumps([{"product_id": "1", "title": 12345, "price": "AU$100"}]),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload[0]["title"] == "12345"
+
+
 def test_ebay_urls_exits_when_child_generator_fails(monkeypatch):
     search = load_script_module("ebay_search", "domain-skills/ebay/scripts/search.py")
 

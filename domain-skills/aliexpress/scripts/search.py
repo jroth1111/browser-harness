@@ -152,6 +152,16 @@ def normalize_merge_payload(data):
     return data
 
 
+def title_text(item):
+    title = item.get("title", "")
+    if title is None or title == "":
+        return ""
+    if not isinstance(title, str):
+        title = str(title)
+        item["title"] = title
+    return title
+
+
 def cmd_merge(args):
     with open(args.input) as f:
         new_items = normalize_merge_payload(json.load(f))
@@ -193,7 +203,7 @@ def cmd_merge(args):
         keywords = [k.lower() for k in args.require]
         filtered_items = [
             i for i in filtered_items
-            if any(k in i.get("title", "").lower() for k in keywords)
+            if any(k in title_text(i).lower() for k in keywords)
         ]
 
     # Exclusion filter (word-boundary matching to avoid false positives)
@@ -202,7 +212,7 @@ def cmd_merge(args):
         exclude_patterns = [_re.compile(r'\b' + _re.escape(k) + r'\b', _re.IGNORECASE) for k in args.exclude]
         filtered_items = [
             i for i in filtered_items
-            if not any(p.search(i.get("title", "")) for p in exclude_patterns)
+            if not any(p.search(title_text(i)) for p in exclude_patterns)
         ]
 
     relevance_filtered = before_relevance - len(filtered_items)

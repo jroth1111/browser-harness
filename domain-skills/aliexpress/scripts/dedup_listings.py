@@ -70,6 +70,16 @@ def fieldnames_for(records: list[dict]) -> list[str]:
     return seen
 
 
+def title_text(item):
+    title = item.get("title", "")
+    if title is None or title == "":
+        return ""
+    if not isinstance(title, str):
+        title = str(title)
+        item["title"] = title
+    return title
+
+
 def main():
     parser = argparse.ArgumentParser(description="Deduplicate listings against existing CSV")
     parser.add_argument("existing_csv", help="Path to existing CSV with product_id column")
@@ -160,7 +170,7 @@ def main():
         keywords = [k.lower() for k in args.require]
         filtered_items = [
             item for item in filtered_items
-            if any(k in item.get("title", "").lower() for k in keywords)
+            if any(k in title_text(item).lower() for k in keywords)
         ]
 
     # Exclusion filter (word-boundary matching to avoid false positives)
@@ -169,7 +179,7 @@ def main():
         exclude_patterns = [_re.compile(r'\b' + _re.escape(k) + r'\b', _re.IGNORECASE) for k in args.exclude]
         filtered_items = [
             item for item in filtered_items
-            if not any(p.search(item.get("title", "")) for p in exclude_patterns)
+            if not any(p.search(title_text(item)) for p in exclude_patterns)
         ]
 
     relevance_filtered = before_relevance - len(filtered_items)
