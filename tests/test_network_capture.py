@@ -46,19 +46,23 @@ def test_capture_with_bodies_fetches_response_body():
         }},
     ]
 
-    cdp_calls = {}
     def fake_cdp(method, **kwargs):
         if method == "Network.getResponseBody":
             return {"body": '{"key": "value"}', "base64Encoded": False}
         return {}
 
-    with patch("browser_harness.network_capture.helpers.cdp", side_effect=fake_cdp), \
+    with patch("browser_harness.network_capture.helpers.cdp", side_effect=fake_cdp) as cdp, \
          patch("browser_harness.network_capture.helpers.drain_events", return_value=events), \
          patch("browser_harness.network_capture.helpers.goto_url"), \
          patch("browser_harness.network_capture.time.sleep"):
         result = network_capture.capture_network_requests("https://x.com", capture_bodies=True)
 
     assert result[0]["body"] == '{"key": "value"}'
+    assert cdp.mock_calls == [
+        call("Network.enable"),
+        call("Network.getResponseBody", requestId="r1"),
+        call("Network.disable"),
+    ]
 
 
 def test_capture_without_bodies_omits_body_key():

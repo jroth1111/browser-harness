@@ -25,11 +25,6 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
 
     events = helpers.drain_events()
 
-    try:
-        helpers.cdp("Network.disable")
-    except Exception:
-        pass
-
     # Index request → {requestId, url, method, resourceType}
     requests = {}
     # Index response → {requestId, status, mimeType, headers}
@@ -57,34 +52,40 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
                 "response_headers": resp.get("headers", {}),
             }
 
-    out = []
-    for rid, req in requests.items():
-        entry = {
-            "url": req["url"],
-            "method": req["method"],
-            "status": 0,
-            "resource_type": req["resource_type"],
-            "mime_type": "",
-            "response_headers": {},
-        }
-        if rid in responses:
-            resp = responses[rid]
-            entry["status"] = resp["status"]
-            entry["mime_type"] = resp["mime_type"]
-            entry["response_headers"] = resp["response_headers"]
+    try:
+        out = []
+        for rid, req in requests.items():
+            entry = {
+                "url": req["url"],
+                "method": req["method"],
+                "status": 0,
+                "resource_type": req["resource_type"],
+                "mime_type": "",
+                "response_headers": {},
+            }
+            if rid in responses:
+                resp = responses[rid]
+                entry["status"] = resp["status"]
+                entry["mime_type"] = resp["mime_type"]
+                entry["response_headers"] = resp["response_headers"]
 
-            if capture_bodies and resp["status"] >= 200 and resp["status"] < 400:
-                try:
-                    body_result = helpers.cdp(
-                        "Network.getResponseBody", requestId=rid
-                    )
-                    body = body_result.get("body", "")
-                    if body_result.get("base64Encoded"):
-                        body = base64.b64decode(body).decode("utf-8", errors="replace")
-                    entry["body"] = body[:_MAX_BODY_CHARS]
-                except Exception:
-                    pass
+                if capture_bodies and resp["status"] >= 200 and resp["status"] < 400:
+                    try:
+                        body_result = helpers.cdp(
+                            "Network.getResponseBody", requestId=rid
+                        )
+                        body = body_result.get("body", "")
+                        if body_result.get("base64Encoded"):
+                            body = base64.b64decode(body).decode("utf-8", errors="replace")
+                        entry["body"] = body[:_MAX_BODY_CHARS]
+                    except Exception:
+                        pass
 
-        out.append(entry)
+            out.append(entry)
+    finally:
+        try:
+            helpers.cdp("Network.disable")
+        except Exception:
+            pass
 
     return out
