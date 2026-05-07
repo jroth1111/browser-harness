@@ -566,6 +566,21 @@ def test_daemon_rejects_requests_with_invalid_expected_token(monkeypatch):
     assert good == {"session_id": "session-1"}
 
 
+def test_daemon_handle_rejects_malformed_request_shapes():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP()
+    d.session = "session-1"
+
+    assert asyncio.run(d.handle(["not", "an", "object"])) == {
+        "error": "invalid request shape: expected object, got list"
+    }
+    assert asyncio.run(d.handle({})) == {"error": "invalid request: missing string method"}
+    assert asyncio.run(d.handle({"method": 123})) == {"error": "invalid request: missing string method"}
+    assert asyncio.run(d.handle({"method": "Runtime.evaluate", "params": []})) == {
+        "error": "invalid request: params must be an object"
+    }
+
+
 def test_malformed_devtools_active_port_skipped_gracefully(tmp_path, monkeypatch):
     """DevToolsActivePort with only a port number (no path) should be skipped, not crash."""
     port_only_dir = tmp_path / "Chrome"

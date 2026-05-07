@@ -402,6 +402,8 @@ class Daemon:
         await self.cdp.send_raw("Target.setDiscoverTargets", {"discover": True})
 
     async def handle(self, req):
+        if not isinstance(req, dict):
+            return {"error": f"invalid request shape: expected object, got {type(req).__name__}"}
         token = ipc.expected_token()
         if token is not None and req.get("token") != token:
             return {"error": "unauthorized"}
@@ -440,8 +442,14 @@ class Daemon:
             return {"blockers": out}
         if meta == "shutdown":    self.stop.set(); return {"ok": True}
 
-        method = req["method"]
-        params = req.get("params") or {}
+        method = req.get("method")
+        if not isinstance(method, str) or not method:
+            return {"error": "invalid request: missing string method"}
+        params = req.get("params")
+        if params is None:
+            params = {}
+        if not isinstance(params, dict):
+            return {"error": "invalid request: params must be an object"}
         # Browser-level calls must not use a page session (stale or otherwise).
         # For everything else, explicit session in req wins; else default.
         sid = None if method.startswith(BROWSER_SCOPED_PREFIXES) else (req.get("session_id") or self.session)
