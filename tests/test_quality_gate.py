@@ -15,7 +15,7 @@ def test_quality_gate_covers_pytest_release_hygiene_and_optional_live_probe():
     doc = Path("docs/quality-gates.md").read_text(encoding="utf-8")
 
     assert quality_gate.DEFAULT_PYTEST == ["uv", "run", "--group", "dev", "pytest", "-q"]
-    assert quality_gate.RELEASE_PROOF[-2:] == ["scripts/release_proof.py", "--json"]
+    assert quality_gate.RELEASE_PROOF()[-2:] == ["scripts/release_proof.py", "--json"]
     assert quality_gate.is_generated_status_path("build/lib/data_display.py")
     assert quality_gate.is_generated_status_path("browser_harness.egg-info/PKG-INFO")
     assert quality_gate.is_generated_status_path(".coverage.unit")

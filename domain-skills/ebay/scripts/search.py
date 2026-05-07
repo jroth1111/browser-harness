@@ -37,6 +37,19 @@ from urllib.parse import quote
 
 SCRIPT_DIR = Path(__file__).parent
 
+
+def _run_child(cmd, **kwargs):
+    proc = subprocess.run(cmd, **kwargs)
+    if proc.returncode != 0:
+        stderr = getattr(proc, "stderr", None) or ""
+        stdout = getattr(proc, "stdout", None) or ""
+        detail = (stderr or stdout).strip()
+        message = f"child command failed with exit {proc.returncode}: {' '.join(map(str, cmd))}"
+        if detail:
+            message += f"\n{detail[-2000:]}"
+        raise SystemExit(message)
+    return proc
+
 # --- Component-to-product mapping (pre-populates L1) ---
 
 COMPONENT_PRODUCTS = {
@@ -654,7 +667,7 @@ def cmd_urls(args):
         gen_args.extend(["--spec-terms"] + args.spec_terms)
     if args.location:
         gen_args.extend(["--location", args.location])
-    subprocess.run(gen_args)
+    _run_child(gen_args)
 
 
 def main():

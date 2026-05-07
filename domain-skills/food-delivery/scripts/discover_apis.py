@@ -90,7 +90,7 @@ def discover_platform(sb, platform):
         print(f"\nNavigating to store: {test_url}")
         try:
             sb.driver.get(test_url)
-        except:
+        except Exception:
             sb.uc_open_with_reconnect(test_url, 4)
         time.sleep(5)
 
@@ -143,7 +143,7 @@ def discover_platform(sb, platform):
     print(f"Re-navigating with interceptor: {url}")
     try:
         sb.driver.get(url)
-    except:
+    except Exception:
         sb.uc_open_with_reconnect(url, 4)
     time.sleep(5)
 

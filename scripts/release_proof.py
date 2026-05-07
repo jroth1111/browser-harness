@@ -10,7 +10,6 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-import venv
 import zipfile
 from pathlib import Path
 
@@ -29,11 +28,11 @@ FORBIDDEN_MEMBER_PARTS = (
 )
 
 REQUIRED_MEMBERS = (
-    "data_display.py",
-    "source_receipts.py",
-    "extraction_contracts.py",
-    "redaction_scan.py",
-    "domain_skill_maturity.py",
+    "browser_harness/data_display.py",
+    "browser_harness/source_receipts.py",
+    "browser_harness/extraction_contracts.py",
+    "browser_harness/redaction_scan.py",
+    "browser_harness/domain_skill_maturity.py",
     "browser_harness_assets/echarts-5.5.1.min.js",
     "browser_harness_assets/alpinejs-3.14.9-cdn.min.js",
     "browser_harness_docs/robustness-surface-map.json",
@@ -94,6 +93,8 @@ def venv_bin(venv_dir: Path, name: str) -> Path:
 
 
 def smoke_installed_wheel(venv_dir: Path, wheel: Path, work_dir: Path) -> dict[str, object]:
+    import venv
+
     venv.EnvBuilder(with_pip=True, clear=True).create(venv_dir)
     python = venv_python(venv_dir)
     run([str(python), "-m", "pip", "install", "--quiet", str(wheel)], cwd=work_dir)
@@ -105,7 +106,7 @@ def smoke_installed_wheel(venv_dir: Path, wheel: Path, work_dir: Path) -> dict[s
         import pathlib
         import tempfile
 
-        import data_display
+        from browser_harness import data_display
 
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)

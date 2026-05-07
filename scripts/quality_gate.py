@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -13,7 +14,32 @@ from pathlib import Path
 
 
 DEFAULT_PYTEST = ["uv", "run", "--group", "dev", "pytest", "-q"]
-RELEASE_PROOF = [sys.executable, "scripts/release_proof.py", "--json"]
+
+
+def release_proof_command() -> list[str]:
+    candidates = [
+        sys.executable,
+        getattr(sys, "_base_executable", None),
+        shutil.which("python3"),
+        shutil.which("python"),
+        "/opt/homebrew/bin/python3",
+        "/usr/bin/python3",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        result = subprocess.run(
+            [candidate, "-c", "import venv"],
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode == 0:
+            return [candidate, "scripts/release_proof.py", "--json"]
+    raise SystemExit("no Python interpreter with stdlib venv module found for release proof")
+
+
+RELEASE_PROOF = release_proof_command
 LIVE_BROWSER_SMOKE = [
     "uv",
     "run",
@@ -130,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_pytest:
         run(DEFAULT_PYTEST, cwd=root)
     if not args.skip_release_proof:
-        run(RELEASE_PROOF, cwd=root)
+        run(RELEASE_PROOF(), cwd=root)
     assert_hygiene(root)
     if args.live:
         env = dict(os.environ)

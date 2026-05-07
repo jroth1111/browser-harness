@@ -29,6 +29,19 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 
+
+def _run_child(cmd, **kwargs):
+    proc = subprocess.run(cmd, **kwargs)
+    if proc.returncode != 0:
+        stderr = getattr(proc, "stderr", None) or ""
+        stdout = getattr(proc, "stdout", None) or ""
+        detail = (stderr or stdout).strip()
+        message = f"child command failed with exit {proc.returncode}: {' '.join(map(str, cmd))}"
+        if detail:
+            message += f"\n{detail[-2000:]}"
+        raise SystemExit(message)
+    return proc
+
 # Extraction JS that accumulates across navigations via localStorage.
 # Uses localStorage (key: __ae_results) to persist across page loads on the same origin.
 # On each call, appends new results (deduped by product_id).
@@ -118,7 +131,7 @@ def cmd_generate(args):
     if args.urls_only:
         gen_args.append("--urls-only")
 
-    subprocess.run(gen_args)
+    _run_child(gen_args)
 
 
 def cmd_extract_js(args):
@@ -193,7 +206,7 @@ def cmd_merge(args):
         return
 
     classify_args = [sys.executable, str(SCRIPT_DIR / "classify_product_line.py"), "--input", "-"]
-    proc = subprocess.run(classify_args, input=json.dumps(new_items), capture_output=True, text=True)
+    proc = _run_child(classify_args, input=json.dumps(new_items), capture_output=True, text=True)
     classified = json.loads(proc.stdout)
 
     # Summary
@@ -232,7 +245,7 @@ def cmd_plan(args):
     if args.products:
         gen_args.extend(["--products"] + args.products)
 
-    proc = subprocess.run(gen_args, capture_output=True, text=True)
+    proc = _run_child(gen_args, capture_output=True, text=True)
     all_lines = proc.stdout.strip().split("\n")
     all_queries = []
     for line in all_lines:
