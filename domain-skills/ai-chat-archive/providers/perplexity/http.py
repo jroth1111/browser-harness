@@ -25,6 +25,10 @@ from typing import Any
 PPLX_BASE = "https://www.perplexity.ai"
 
 
+def _dict_rows(rows: Any) -> list[dict]:
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
 class PerplexityHTTPAPI:
     def __init__(self, cookies_by_domain: dict[str, dict[str, str]]):
         self._cookies = cookies_by_domain
@@ -117,9 +121,9 @@ class PerplexityHTTPAPI:
             body=body,
         )
         if isinstance(data, list):
-            return data
+            return _dict_rows(data)
         if isinstance(data, dict) and isinstance(data.get("threads"), list):
-            return data["threads"]
+            return _dict_rows(data["threads"])
         return []
 
     def all_threads(self, page_size: int = 50, max_pages: int = 100) -> list[dict]:
@@ -130,7 +134,7 @@ class PerplexityHTTPAPI:
             if not batch:
                 break
             new = 0
-            for t in batch:
+            for t in _dict_rows(batch):
                 tid = t.get("uuid") or t.get("backend_uuid") or t.get("id") or t.get("slug")
                 if tid and tid not in seen_ids:
                     seen_ids.add(tid)
@@ -215,7 +219,8 @@ class PerplexityHTTPAPI:
         ``answer`` field on the entry are still honored.
         """
         messages: list[dict] = []
-        entries = detail.get("entries") or detail.get("thread", {}).get("entries") or []
+        thread = detail.get("thread") if isinstance(detail.get("thread"), dict) else {}
+        entries = _dict_rows(detail.get("entries") or thread.get("entries") or [])
         for entry in entries:
             uuid = entry.get("uuid") or entry.get("backend_uuid") or ""
             query = entry.get("query_str") or entry.get("query") or ""
@@ -248,7 +253,7 @@ class PerplexityHTTPAPI:
                     "content_type": "text",
                     "rich_parts": [
                         {"type": "step", "value": s} for s in steps
-                        if s.get("step_type") not in ("INITIAL_QUERY", "FINAL")
+                        if isinstance(s, dict) and s.get("step_type") not in ("INITIAL_QUERY", "FINAL")
                     ],
                     "artifact_refs": [],
                     "metadata": {
@@ -265,7 +270,8 @@ class PerplexityHTTPAPI:
         """Walk every SEARCH_RESULTS step in every entry, collect web_results."""
         citations: list[dict] = []
         seen: set[str] = set()
-        entries = detail.get("entries") or detail.get("thread", {}).get("entries") or []
+        thread = detail.get("thread") if isinstance(detail.get("thread"), dict) else {}
+        entries = _dict_rows(detail.get("entries") or thread.get("entries") or [])
         for entry in entries:
             for step in cls._parse_steps(entry):
                 if step.get("step_type") != "SEARCH_RESULTS":
