@@ -20,6 +20,15 @@ def load_caption_parsers():
     return module
 
 
+def load_youtube_primitives():
+    path = YOUTUBE / "youtube_primitives.py"
+    spec = importlib.util.spec_from_file_location("youtube_primitives", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_youtube_surface_map_has_unique_typed_primitives():
     data = load_surface_map()
     allowed = set(data["path_types"])
@@ -549,6 +558,40 @@ def test_youtube_generated_report_summary_tracks_live_and_drift_state():
     assert "blocked_surfaces" in generated
     assert any(note["id"] == "static_channel_rss" for note in generated["drift_notes"])
     assert any(note["id"] == "ytdlp_ytsearch" for note in generated["drift_notes"])
+
+
+def test_youtube_primitives_tolerate_malformed_renderer_metadata():
+    module = load_youtube_primitives()
+
+    player = module.api_player_metadata({
+        "playabilityStatus": {"status": "OK"},
+        "microformat": "not-an-object",
+    })
+    assert player["ok"] is True
+    assert player["data"]["microformat"] == {}
+
+    comments = module.api_comments({
+        "commentThreadRenderer": {
+            "comment": "not-an-object",
+            "replies": {
+                "commentRenderer": {
+                    "commentEntityPayload": "not-an-object",
+                    "contentText": {"simpleText": "reply"},
+                },
+            },
+        },
+    })
+    assert comments["ok"] is True
+    assert comments["data"]["threads"][0]["comment_id"] is None
+
+    chapters = module.api_chapters_key_moments({
+        "macroMarkersListItemRenderer": {
+            "title": {"simpleText": "Intro"},
+            "onTap": "not-an-object",
+        },
+    })
+    assert chapters["ok"] is True
+    assert chapters["data"]["chapters"][0]["url"] is None
 
 
 def test_youtube_live_smoke_content_status_tolerates_malformed_shapes():

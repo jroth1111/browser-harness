@@ -133,6 +133,10 @@ def _text(value: Any) -> str | None:
     return None
 
 
+def _dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _walk(value: Any):
     if isinstance(value, dict):
         yield value
@@ -174,7 +178,7 @@ def _continuations(payload: Any) -> list[str]:
 def _video_id_from_renderer(renderer: dict[str, Any]) -> str | None:
     if isinstance(renderer.get("videoId"), str):
         return renderer["videoId"]
-    endpoint = renderer.get("navigationEndpoint") or renderer.get("onTap", {}).get("innertubeCommand")
+    endpoint = renderer.get("navigationEndpoint") or _dict_value(renderer.get("onTap")).get("innertubeCommand")
     if isinstance(endpoint, dict):
         for node in _walk(endpoint):
             for key in ("videoId", "contentId"):
@@ -402,7 +406,7 @@ def api_player_metadata(payload: dict[str, Any] | None = None) -> dict[str, Any]
     if status.get("status") == "LOGIN_REQUIRED":
         return result(False, {"playabilityStatus": status}, "login_required", path_type="api")
     details = player.get("videoDetails", {})
-    microformat = player.get("microformat", {}).get("playerMicroformatRenderer", {})
+    microformat = _dict_value(player.get("microformat")).get("playerMicroformatRenderer", {})
     data = {
         "playabilityStatus": status,
         "videoDetails": details,
@@ -426,7 +430,9 @@ def api_watch_next_detail(payload: Any = None) -> dict[str, Any]:
 
 
 def _parse_comment_renderer(renderer: dict[str, Any], parent_comment_id: str | None = None) -> dict[str, Any]:
-    comment_id = renderer.get("commentId") or renderer.get("commentEntityPayload", {}).get("properties", {}).get("commentId")
+    entity = _dict_value(renderer.get("commentEntityPayload"))
+    properties = _dict_value(entity.get("properties"))
+    comment_id = renderer.get("commentId") or properties.get("commentId")
     return {
         "comment_id": comment_id,
         "parent_comment_id": parent_comment_id,
@@ -442,7 +448,7 @@ def api_comments(payload: Any = None, max_threads: int | None = None, expand_rep
         return result(False, None, "not_available", path_type="hybrid")
     threads = []
     for _, thread in [(name, renderer) for name, renderer in _renderer_items(payload) if name == "commentThreadRenderer"]:
-        comment = thread.get("comment", {}).get("commentRenderer", {})
+        comment = _dict_value(_dict_value(thread.get("comment")).get("commentRenderer"))
         parsed = _parse_comment_renderer(comment)
         replies = []
         if expand_replies and len(threads) < max_reply_threads:
@@ -495,7 +501,9 @@ def api_chapters_key_moments(payload: Any = None) -> dict[str, Any]:
         chapters.append({
             "title": _text(renderer.get("title")),
             "time_text": _text(renderer.get("timeDescription")),
-            "url": renderer.get("onTap", {}).get("commandMetadata", {}).get("webCommandMetadata", {}).get("url"),
+            "url": _dict_value(
+                _dict_value(_dict_value(renderer.get("onTap")).get("commandMetadata")).get("webCommandMetadata")
+            ).get("url"),
         })
     return result(bool(chapters), {"chapters": chapters}, "success" if chapters else "empty_result", path_type="hybrid")
 
