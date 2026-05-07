@@ -274,7 +274,7 @@ def get_ws_url():
 
 
 def is_real_page(t):
-    return t["type"] == "page" and not t.get("url", "").startswith(INTERNAL)
+    return t.get("type") == "page" and not t.get("url", "").startswith(INTERNAL)
 
 
 def _require_cdp_object(value, context):

@@ -272,6 +272,7 @@ def test_attach_first_page_skips_malformed_targets_before_creating_blank():
             "targetInfos": [
                 ["not", "an", "object"],
                 {"type": "page", "url": "https://example.com"},
+                {"targetId": "partial-1", "url": "https://example.com"},
                 {"targetId": "chrome-1", "type": "page", "url": "chrome://settings"},
             ],
         },
