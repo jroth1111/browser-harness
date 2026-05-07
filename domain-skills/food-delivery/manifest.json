@@ -1,0 +1,61 @@
+{
+  "name": "food-delivery",
+  "version": "0.2.0",
+  "domain": "food-delivery",
+  "description": "Food delivery platform data extraction: menus, restaurants, APIs",
+
+  "surfaces": [
+    {"name": "restaurant_list", "url_pattern": "/v2/merchant/.*", "method": "GET"},
+    {"name": "menu", "url_pattern": "/v2/merchant/[^/]+/menu", "method": "GET"},
+    {"name": "search", "url_pattern": "/v2/search", "method": "GET"}
+  ],
+
+  "route_rules": [
+    {
+      "origin": "https://www.doordash.com",
+      "path_pattern": "/v2/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://www.ubereats.com",
+      "path_pattern": "/api/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    }
+  ],
+
+  "risk_policies": {
+    "discover_apis": "authenticated_read",
+    "extract_menus": "authenticated_read",
+    "enumerate_restaurants": "authenticated_read",
+    "export": "public_read"
+  },
+
+  "extraction_fields": [
+    "restaurant_name",
+    "menu_items",
+    "prices",
+    "categories",
+    "item_id"
+  ],
+
+  "handoff_triggers": [
+    "login_redirect",
+    "captcha",
+    "rate_limit_429",
+    "account_locked"
+  ],
+
+  "forbidden_patterns": [
+    "urllib.request.urlopen",
+    "requests.get",
+    "stealth_session",
+    "cdp(",
+    "browser_cookies"
+  ]
+}
