@@ -1,4 +1,7 @@
+import csv
 import importlib.util
+import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -32,6 +35,34 @@ def test_ebay_verified_and_coverage_paths_handle_missing_or_uppercase_suffix(tmp
     assert Path(ebay.derive_output_path(str(tmp_path / "RESULTS.CSV"), ".csv", "-coverage.json")) == (
         tmp_path / "RESULTS-coverage.json"
     )
+
+
+def test_ebay_verify_empty_fieldnames_keep_input_and_trust_columns():
+    ebay = load_module("ebay_search_fields", "domain-skills/ebay/scripts/search.py")
+
+    assert ebay.append_missing_fields(["listing_id", "title", "seller_name"], ["seller_name", "trust_flag"]) == [
+        "listing_id",
+        "title",
+        "seller_name",
+        "trust_flag",
+    ]
+
+
+def test_ebay_verify_command_writes_header_for_empty_input(tmp_path, monkeypatch):
+    ebay = load_module("ebay_search_verify_empty", "domain-skills/ebay/scripts/search.py")
+    monkeypatch.setitem(sys.modules, "curl_cffi", SimpleNamespace(requests=SimpleNamespace(get=None)))
+    monkeypatch.setattr(ebay, "Session", lambda: SimpleNamespace(cookies={}))
+    input_csv = tmp_path / "results"
+    output_csv = tmp_path / "results-verified.csv"
+    with input_csv.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["listing_id", "title"])
+        writer.writeheader()
+
+    ebay.cmd_verify(SimpleNamespace(input=str(input_csv), output=None))
+
+    with output_csv.open(newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        assert list(reader) == [["listing_id", "title", "seller_name", "feedback_pct", "feedback_count", "trust_flag"]]
 
 
 def test_g2g_sidecar_paths_never_equal_source_without_csv_suffix(tmp_path):

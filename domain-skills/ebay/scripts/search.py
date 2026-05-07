@@ -46,6 +46,14 @@ def derive_output_path(path: str, expected_suffix: str, replacement_suffix: str)
     return str(source.with_name(f"{name}{replacement_suffix}"))
 
 
+def append_missing_fields(fieldnames, extra_fields):
+    fields = list(fieldnames or [])
+    for field in extra_fields:
+        if field not in fields:
+            fields.append(field)
+    return fields
+
+
 def _run_child(cmd, **kwargs):
     proc = subprocess.run(cmd, **kwargs)
     if proc.returncode != 0:
@@ -623,7 +631,9 @@ def cmd_verify(args):
     session = Session()
     listings = []
     with open(args.input, newline='') as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        input_fieldnames = list(reader.fieldnames or [])
+        for row in reader:
             listings.append(row)
 
     print(f"Verifying {len(listings)} listings...", file=sys.stderr)
@@ -650,7 +660,8 @@ def cmd_verify(args):
         time.sleep(2)
 
     output = args.output or derive_output_path(args.input, '.csv', '-verified.csv')
-    fieldnames = list(results[0].keys()) if results else []
+    trust_fields = ['seller_name', 'feedback_pct', 'feedback_count', 'trust_flag']
+    fieldnames = list(results[0].keys()) if results else append_missing_fields(input_fieldnames, trust_fields)
     with open(output, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
