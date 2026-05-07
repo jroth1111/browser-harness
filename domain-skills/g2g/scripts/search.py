@@ -87,6 +87,15 @@ def safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def safe_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def text_value(value: Any) -> str:
     if value is None:
         return ""
@@ -554,11 +563,7 @@ def build_csv_row(
 
     # Price
     seller_price = offer.get("converted_unit_price")
-    if seller_price is not None:
-        try:
-            seller_price = float(seller_price)
-        except (ValueError, TypeError):
-            seller_price = ""
+    seller_price = safe_float(seller_price) if seller_price is not None else None
 
     # Volume discount — API returns list of tier dicts
     wholesale = offer.get("wholesale_details")
@@ -571,8 +576,10 @@ def build_csv_row(
             discount = tier.get("discount")
             min_qty = tier.get("min")
             if discount is not None and min_qty is not None:
-                pct = round(float(discount) * 100, 1)
-                tiers.append(f"{pct}% off at {min_qty}+")
+                discount_value = safe_float(discount)
+                if discount_value is not None:
+                    pct = round(discount_value * 100, 1)
+                    tiers.append(f"{pct}% off at {min_qty}+")
         volume_discount = "; ".join(tiers)
 
     # Badges
@@ -622,10 +629,8 @@ def build_csv_row(
     # Satisfaction rate as percentage
     satisfaction = offer.get("satisfaction_rate")
     if satisfaction is not None:
-        try:
-            satisfaction = f"{float(satisfaction)}%"
-        except (ValueError, TypeError):
-            satisfaction = str(satisfaction)
+        satisfaction_value = safe_float(satisfaction)
+        satisfaction = f"{satisfaction_value}%" if satisfaction_value is not None else ""
     else:
         satisfaction = ""
 
@@ -662,7 +667,7 @@ def build_csv_row(
         "seller_min_quantity": str(offer.get("min_qty", "")),
         "seller_available_quantity": str(offer.get("available_qty", "")),
         "seller_delivery_speed": str(offer.get("delivery_speed", "")),
-        "seller_price": str(seller_price),
+        "seller_price": str(seller_price) if seller_price is not None else "",
         "seller_currency": offer.get("display_currency", display_currency),
         "seller_volume_discount": volume_discount,
         "seller_badges": badges,
@@ -969,12 +974,10 @@ def cmd_search(args: argparse.Namespace) -> None:
                         collected_here += 1
 
                         # Track minimum price
-                        try:
-                            price = float(offer.get("converted_unit_price", float("inf")))
+                        price = safe_float(offer.get("converted_unit_price"))
+                        if price is not None:
                             if min_price is None or price < min_price:
                                 min_price = price
-                        except (ValueError, TypeError):
-                            pass
 
                         # Keyword matching
                         _match_keywords(

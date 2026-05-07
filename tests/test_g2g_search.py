@@ -130,6 +130,25 @@ def test_coverage_report_tolerates_scalar_row_fields():
     assert report["by_category"]["303"]["type"] == "606"
 
 
+def test_build_csv_row_rejects_boolean_numeric_offer_fields():
+    module = load_g2g_module()
+
+    row = module.build_csv_row(
+        {
+            "id": "offer-1",
+            "title": "Gold",
+            "converted_unit_price": True,
+            "satisfaction_rate": True,
+            "wholesale_details": [{"discount": True, "min": 5}],
+        },
+        {"target_keywords": ["gold"]},
+    )
+
+    assert row["seller_price"] == ""
+    assert row["seller_successful_delivery_rate"] == ""
+    assert row["seller_volume_discount"] == ""
+
+
 def load_g2g_module():
     import importlib.util
 
