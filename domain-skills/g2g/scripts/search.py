@@ -1205,19 +1205,7 @@ def cmd_seller(args: argparse.Namespace) -> None:
     print(f"\nExported {len(enriched_rows)} enriched rows to {output_path}", file=sys.stderr)
 
 
-def cmd_coverage(args: argparse.Namespace) -> None:
-    """Generate coverage report from existing CSV."""
-    input_path = args.input
-    rows: list[dict] = []
-    with open(input_path, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            rows.append(row)
-
-    if not rows:
-        print("No rows in input CSV.", file=sys.stderr)
-        return
-
-    # Group by category (seo_term from discovery_path or subcategory)
+def build_csv_coverage_report(rows: list[dict]) -> dict:
     by_category: dict[str, list[dict]] = {}
     query = ""
     target_keywords: list[str] = []
@@ -1272,6 +1260,19 @@ def cmd_coverage(args: argparse.Namespace) -> None:
             "collected_offers": len(cat_rows),
             "keyword_matched_offers": matched_in_cat,
         }
+
+    return report
+
+
+def cmd_coverage(args: argparse.Namespace) -> None:
+    """Generate coverage report from existing CSV."""
+    input_path = args.input
+    rows: list[dict] = []
+    with open(input_path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            rows.append(row)
+
+    report = build_csv_coverage_report(rows)
 
     report_path = input_path.replace(".csv", "-coverage.json")
     with open(report_path, "w", encoding="utf-8") as f:
