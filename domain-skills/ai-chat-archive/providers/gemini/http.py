@@ -64,6 +64,10 @@ def _cookie_domain(cookies: Any, domain: str) -> dict:
     return jar if isinstance(jar, dict) else {}
 
 
+def _is_numeric_timestamp(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, (int, float))
+
+
 class GeminiHTTPAPI:
     def __init__(self, cookies_by_domain: dict[str, dict[str, str]]):
         self._cookies = cookies_by_domain
@@ -216,7 +220,7 @@ class GeminiHTTPAPI:
             chat_id = entry[0] if isinstance(entry[0], str) else None
             title = entry[1] if isinstance(entry[1], str) else ""
             ts = entry[5] if len(entry) > 5 and isinstance(entry[5], list) else None
-            updated_unix = ts[0] if ts and isinstance(ts[0], (int, float)) else None
+            updated_unix = ts[0] if ts and _is_numeric_timestamp(ts[0]) else None
             response_pair = entry[6] if len(entry) > 6 and isinstance(entry[6], list) else None
             response_id = None
             if isinstance(response_pair, list) and response_pair:
@@ -340,7 +344,7 @@ class GeminiHTTPAPI:
     def _ts(turn: list) -> int | None:
         try:
             ts = turn[4]
-            if isinstance(ts, list) and ts and isinstance(ts[0], (int, float)):
+            if isinstance(ts, list) and ts and _is_numeric_timestamp(ts[0]):
                 return int(ts[0])
         except Exception:
             pass
