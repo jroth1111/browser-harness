@@ -680,6 +680,31 @@ def test_extract_messages_keeps_tool_widget_messages():
     assert tool_msg["content"] == "Rendered a widget"
 
 
+def test_extract_messages_skips_malformed_mapping_rows():
+    detail = {
+        "mapping": {
+            "bad-node": "not-an-object",
+            "bad-message": {"message": "not-an-object"},
+            "bad-content": {"message": {"author": "not-an-object", "content": "not-an-object"}},
+            "valid": {
+                "message": {
+                    "id": "msg-valid",
+                    "author": {"role": "assistant"},
+                    "content": {"parts": ["usable"]},
+                    "metadata": "not-an-object",
+                    "create_time": 1,
+                },
+            },
+        }
+    }
+
+    messages = ChatGPTHTTPAPI.extract_messages_from_mapping(detail)
+
+    assert len(messages) == 1
+    assert messages[0]["provider_message_id"] == "msg-valid"
+    assert messages[0]["model"] == ""
+
+
 def test_extract_artifacts_finds_deep_research():
     detail = {
         "mapping": {
@@ -700,6 +725,41 @@ def test_extract_artifacts_finds_deep_research():
     assert len(artifacts) == 1
     assert artifacts[0]["artifact_type"] == "deep_research_report"
     assert artifacts[0]["provider_artifact_id"] == "dr-abc"
+
+
+def test_extract_artifacts_skips_malformed_mapping_rows():
+    detail = {
+        "mapping": {
+            "bad-node": "not-an-object",
+            "bad-message": {"message": "not-an-object"},
+            "bad-content": {"message": {"author": "not-an-object", "content": "not-an-object"}},
+            "valid": {
+                "message": {
+                    "id": "msg-valid",
+                    "author": {"role": "assistant"},
+                    "content": {"parts": [
+                        {
+                            "path": "/Deep Research App/implicit_link::connector_openai_deep_research/start",
+                            "args": "not-an-object",
+                        },
+                        {
+                            "content_type": "image_asset_pointer",
+                            "asset_pointer": "sediment://abc#file_001#p.jpg",
+                            "metadata": "not-an-object",
+                        },
+                    ]},
+                },
+            },
+        }
+    }
+
+    artifacts = ChatGPTHTTPAPI.extract_artifacts_from_mapping(detail)
+
+    assert [artifact["artifact_type"] for artifact in artifacts] == [
+        "deep_research_report",
+        "image",
+    ]
+    assert artifacts[0]["provider_artifact_id"] == "msg-valid"
 
 
 def test_extract_artifacts_finds_file_references():

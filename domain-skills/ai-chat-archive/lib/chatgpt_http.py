@@ -17,6 +17,10 @@ import urllib.parse
 import urllib.request
 
 
+def _dict_value(value):
+    return value if isinstance(value, dict) else {}
+
+
 class ChatGPTHTTPAPI:
     """ChatGPT backend API client using extracted cookies."""
 
@@ -153,21 +157,23 @@ class ChatGPTHTTPAPI:
         Rich content (dict parts with artifact references) is preserved in
         ``rich_parts``.  Tool messages are always kept.
         """
-        mapping = detail.get("mapping", {})
+        mapping = _dict_value(detail.get("mapping"))
         messages = []
 
         for node_id, node in mapping.items():
+            node = _dict_value(node)
             msg = node.get("message")
-            if not msg:
+            if not isinstance(msg, dict):
                 continue
 
-            role = msg.get("author", {}).get("role", "unknown")
+            role = _dict_value(msg.get("author")).get("role", "unknown")
             if role == "system":
                 continue
 
-            msg_content = msg.get("content", {})
+            msg_content = _dict_value(msg.get("content"))
             content_type = msg_content.get("content_type", "")
             content_parts = msg_content.get("parts", [])
+            content_parts = content_parts if isinstance(content_parts, list) else []
             text_parts = [p for p in content_parts if isinstance(p, str)]
             rich_parts = [p for p in content_parts if isinstance(p, dict)]
             content = "\n".join(text_parts)
@@ -199,7 +205,7 @@ class ChatGPTHTTPAPI:
             if not content.strip() and not has_rich and role != "tool":
                 continue
 
-            metadata = msg.get("metadata", {})
+            metadata = _dict_value(msg.get("metadata"))
             artifact_refs = _extract_artifact_refs(rich_parts, metadata, role)
 
             messages.append({
@@ -228,19 +234,21 @@ class ChatGPTHTTPAPI:
         types that represent LLM-generated artifacts: images, code execution,
         Operator screenshots, canvas references, and deep research markers.
         """
-        mapping = detail.get("mapping", {})
+        mapping = _dict_value(detail.get("mapping"))
         artifacts = []
 
         for node_id, node in mapping.items():
+            node = _dict_value(node)
             msg = node.get("message")
-            if not msg:
+            if not isinstance(msg, dict):
                 continue
 
-            role = msg.get("author", {}).get("role", "unknown")
+            role = _dict_value(msg.get("author")).get("role", "unknown")
             msg_id = msg.get("id", node_id)
-            content = msg.get("content", {})
+            content = _dict_value(msg.get("content"))
             content_type = content.get("content_type", "")
             content_parts = content.get("parts", [])
+            content_parts = content_parts if isinstance(content_parts, list) else []
 
             # --- Dict parts (image_asset_pointer, etc.) ---
             for part in content_parts:
@@ -252,7 +260,7 @@ class ChatGPTHTTPAPI:
                 # Image assets (DALL-E generated or uploaded)
                 if ct == "image_asset_pointer":
                     asset_pointer = part.get("asset_pointer", "")
-                    is_dalle = (part.get("metadata") or {}).get("dalle") is not None
+                    is_dalle = _dict_value(part.get("metadata")).get("dalle") is not None
                     size_bytes = part.get("size_bytes", 0)
                     w = part.get("width", 0)
                     h = part.get("height", 0)
@@ -270,7 +278,7 @@ class ChatGPTHTTPAPI:
                 if "Deep Research" in path:
                     artifacts.append({
                         "artifact_type": "deep_research_report",
-                        "provider_artifact_id": part.get("args", {}).get("prompt_id", msg_id),
+                        "provider_artifact_id": _dict_value(part.get("args")).get("prompt_id", msg_id),
                         "label": "Deep Research Report",
                         "parent_message_id": msg_id,
                         "rich_part": part,
