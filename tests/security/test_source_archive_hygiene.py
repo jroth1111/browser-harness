@@ -46,3 +46,28 @@ def test_source_archive_hygiene_allows_redaction_field_names(tmp_path):
         )
 
     assert check_source_archive.archive_violations(archive) == []
+
+
+def test_source_archive_hygiene_allows_redacted_jsonl_auth_fields(tmp_path):
+    archive = tmp_path / "source.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr(
+            "browser-harness/domain-skills/x/receipts/safe.jsonl",
+            '{"Cookie":"<redacted:sid>"}\n{"Authorization":"<redacted:bearer>"}\n',
+        )
+
+    assert check_source_archive.archive_violations(archive) == []
+
+
+def test_source_archive_hygiene_fails_raw_jsonl_auth_fields(tmp_path):
+    archive = tmp_path / "source.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr(
+            "browser-harness/domain-skills/x/receipts/raw.jsonl",
+            '{"Cookie":"sid=secret"}\n',
+        )
+
+    violations = check_source_archive.archive_violations(archive)
+
+    assert violations
+    assert "auth-like content" in violations[0]

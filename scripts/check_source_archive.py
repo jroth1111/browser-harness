@@ -65,6 +65,17 @@ def _has_raw_auth_content(text: str, suffix: str) -> bool:
             return _json_has_raw_auth(json.loads(text)) or bool(FORBIDDEN_CONTENT_RE.search(text))
         except json.JSONDecodeError:
             pass
+    if suffix == ".jsonl":
+        try:
+            parsed_lines = [
+                json.loads(line)
+                for line in text.splitlines()
+                if line.strip()
+            ]
+        except json.JSONDecodeError:
+            pass
+        else:
+            return any(_json_has_raw_auth(line) for line in parsed_lines) or bool(FORBIDDEN_CONTENT_RE.search(text))
     has_raw_cookie = '"Cookie"' in text and '"Cookie": "<redacted:' not in text
     has_raw_authorization = '"Authorization"' in text and '"Authorization": "<redacted:' not in text
     return has_raw_cookie or has_raw_authorization or bool(FORBIDDEN_CONTENT_RE.search(text))
