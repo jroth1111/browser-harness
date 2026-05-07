@@ -90,6 +90,20 @@ def test_browser_cookies_uses_page_session_when_provided():
     assert calls == [("Network.getCookies", {"urls": ["https://www.example.com/"]}, "page-session")]
 
 
+def test_browser_cookies_skips_malformed_network_cookie_rows():
+    def client(method, session_id=None, **params):
+        if method == "Network.getCookies":
+            return {"cookies": [
+                "not-a-cookie",
+                {"name": "sid", "value": "abc"},
+            ]}
+        raise AssertionError(method)
+
+    cookies = login_session.browser_cookies(client, "https://www.example.com/")
+
+    assert [cookie["name"] for cookie in cookies] == ["sid"]
+
+
 def test_browser_cookies_falls_back_to_browser_level_storage_cookies():
     calls = []
 

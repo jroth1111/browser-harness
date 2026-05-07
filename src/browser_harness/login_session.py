@@ -168,7 +168,8 @@ def browser_cookies(client, urls, session_id=None):
     """
     urls = [urls] if isinstance(urls, str) else list(urls)
     try:
-        return send_cdp(client, "Network.getCookies", {"urls": urls}, session_id=session_id).get("cookies", [])
+        cookies = send_cdp(client, "Network.getCookies", {"urls": urls}, session_id=session_id).get("cookies", [])
+        return [cookie for cookie in cookies if isinstance(cookie, dict)] if isinstance(cookies, list) else []
     except Exception as error:
         if not _cdp_method_missing_error(error):
             raise
