@@ -265,6 +265,66 @@ def test_attach_first_page_creates_blank_when_no_real_page():
     assert enabled == {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}
 
 
+def test_attach_first_page_skips_malformed_targets_before_creating_blank():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP({
+        "Target.getTargets": {
+            "targetInfos": [
+                ["not", "an", "object"],
+                {"type": "page", "url": "https://example.com"},
+                {"targetId": "chrome-1", "type": "page", "url": "chrome://settings"},
+            ],
+        },
+    })
+
+    asyncio.run(d.attach_first_page())
+
+    assert d.cdp.calls[:3] == [
+        ("Target.getTargets", {}, None),
+        ("Target.createTarget", {"url": "about:blank"}, None),
+        ("Target.attachToTarget", {"targetId": "page-new", "flatten": True}, None),
+    ]
+
+
+def test_attach_first_page_rejects_malformed_get_targets_response():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP({"Target.getTargets": {"targetInfos": "not-a-list"}})
+
+    try:
+        asyncio.run(d.attach_first_page())
+    except RuntimeError as e:
+        assert "Target.getTargets response missing required field: targetInfos" in str(e)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+
+def test_attach_first_page_rejects_malformed_create_target_response():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP({
+        "Target.getTargets": {"targetInfos": []},
+        "Target.createTarget": {},
+    })
+
+    try:
+        asyncio.run(d.attach_first_page())
+    except RuntimeError as e:
+        assert "Target.createTarget response missing required field: targetId" in str(e)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+
+def test_attach_first_page_rejects_malformed_attach_response():
+    d = daemon.Daemon()
+    d.cdp = FakeCDP({"Target.attachToTarget": []})
+
+    try:
+        asyncio.run(d.attach_first_page())
+    except RuntimeError as e:
+        assert "Target.attachToTarget returned invalid response shape: expected object, got list" in str(e)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+
 def test_set_session_does_not_run_runtime_evaluate():
     """Negative guard preserved from the pre-domain-enables daemon: set_session
     must not fire Runtime.evaluate. Domain enables on the new session are

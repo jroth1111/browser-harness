@@ -277,6 +277,31 @@ def is_real_page(t):
     return t["type"] == "page" and not t.get("url", "").startswith(INTERNAL)
 
 
+def _require_cdp_object(value, context):
+    if not isinstance(value, dict):
+        raise RuntimeError(f"{context} returned invalid response shape: expected object, got {type(value).__name__}")
+    return value
+
+
+def _require_cdp_field(value, key, context):
+    data = _require_cdp_object(value, context)
+    if not data.get(key):
+        raise RuntimeError(f"{context} response missing required field: {key}")
+    return data[key]
+
+
+def _target_infos(value):
+    data = _require_cdp_object(value, "Target.getTargets")
+    targets = data.get("targetInfos")
+    if not isinstance(targets, list):
+        raise RuntimeError("Target.getTargets response missing required field: targetInfos")
+    return [target for target in targets if isinstance(target, dict)]
+
+
+def _is_attachable_page(t):
+    return t.get("targetId") and is_real_page(t)
+
+
 class Daemon:
     def __init__(self):
         self.cdp = None
@@ -290,15 +315,23 @@ class Daemon:
 
     async def attach_first_page(self):
         """Attach to a real page (or any page). Sets self.session. Returns attached target or None."""
-        targets = (await self.cdp.send_raw("Target.getTargets"))["targetInfos"]
-        pages = [t for t in targets if is_real_page(t)]
+        targets = _target_infos(await self.cdp.send_raw("Target.getTargets"))
+        pages = [t for t in targets if _is_attachable_page(t)]
         if not pages:
-            tid = (await self.cdp.send_raw("Target.createTarget", {"url": "about:blank"}))["targetId"]
+            tid = _require_cdp_field(
+                await self.cdp.send_raw("Target.createTarget", {"url": "about:blank"}),
+                "targetId",
+                "Target.createTarget",
+            )
             log(f"no real pages found, created about:blank ({tid})")
             pages = [{"targetId": tid, "url": "about:blank", "type": "page"}]
-        self.session = (await self.cdp.send_raw(
-            "Target.attachToTarget", {"targetId": pages[0]["targetId"], "flatten": True}
-        ))["sessionId"]
+        self.session = _require_cdp_field(
+            await self.cdp.send_raw(
+                "Target.attachToTarget", {"targetId": pages[0]["targetId"], "flatten": True}
+            ),
+            "sessionId",
+            "Target.attachToTarget",
+        )
         self.target_id = pages[0]["targetId"]
         log(f"attached {pages[0]['targetId']} ({pages[0].get('url','')[:80]}) session={self.session}")
         await self._enable_default_domains(self.session)
