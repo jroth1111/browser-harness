@@ -390,6 +390,32 @@ def test_render_dataset_applies_display_overrides(tmp_path):
     assert "formatCell(row, f)" in html
 
 
+def test_render_dataset_ignores_malformed_display_override_sections(tmp_path):
+    p = tmp_path / "rows.json"
+    p.write_text(json.dumps([
+        {"a": 1, "score": 0.5},
+        {"a": 2, "score": 0.75},
+    ]), encoding="utf-8")
+
+    out = pathlib.Path(data_display.render_dataset(
+        str(p),
+        display={
+            "labels": "not-a-dict",
+            "hidden_fields": "score",
+            "field_kinds": "not-a-dict",
+            "formats": "not-a-dict",
+            "renderers": "not-a-dict",
+            "fields": "not-a-dict",
+        },
+    ))
+    ds = _extract_payload(out)["datasets"][0]
+    fields = {field["name"]: field for field in ds["schema"]["fields"]}
+
+    assert set(fields) == {"a", "score"}
+    assert fields["score"]["kind"] == "numeric"
+    assert ds["display"]["hidden_fields"] == "score"
+
+
 def test_render_dataset_redacts_hidden_fields_from_browser_payload_and_aggregates(tmp_path):
     p = tmp_path / "rows.json"
     p.write_text(

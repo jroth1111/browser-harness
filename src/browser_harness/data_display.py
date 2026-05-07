@@ -545,12 +545,12 @@ def _describe_field(name, sample):
 def _apply_display_overrides(schema, display):
     if not display:
         return schema
-    labels = display.get("labels") or {}
-    hidden = set(display.get("hidden_fields") or [])
-    forced_kinds = display.get("field_kinds") or {}
-    formats = display.get("formats") or display.get("value_formats") or {}
-    renderers = display.get("renderers") or {}
-    fields_config = display.get("fields") or {}
+    labels = _as_dict(display.get("labels"))
+    hidden = set(_as_list(display.get("hidden_fields")))
+    forced_kinds = _as_dict(display.get("field_kinds"))
+    formats = _as_dict(display.get("formats")) or _as_dict(display.get("value_formats"))
+    renderers = _as_dict(display.get("renderers"))
+    fields_config = _as_dict(display.get("fields"))
     fields = []
     for field in schema.get("fields", []):
         out = dict(field)
@@ -579,6 +579,14 @@ def _apply_display_overrides(schema, display):
         "eligible_views": _dataset_eligible_views(visible_fields),
         "display": display,
     }
+
+
+def _as_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value):
+    return value if isinstance(value, list) else []
 
 
 def _eligible_roles_for_field(field):
