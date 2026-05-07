@@ -434,6 +434,16 @@ def _resolve_profile_name(profile_name):
     return matches[0]["id"]
 
 
+def _require_cloud_browser_fields(browser):
+    if not isinstance(browser, dict):
+        raise RuntimeError(f"Browser Use create returned invalid response shape: expected object, got {type(browser).__name__}")
+    missing = [key for key in ("id", "cdpUrl") if not browser.get(key)]
+    if missing:
+        detail = ", ".join(missing)
+        raise RuntimeError(f"Browser Use create response missing required field(s): {detail}")
+    return browser
+
+
 def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
     """Provision a Browser Use cloud browser and start a daemon attached to it.
 
@@ -445,7 +455,7 @@ def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
         if "profileId" in create_kwargs:
             raise RuntimeError("pass profileName OR profileId, not both")
         create_kwargs["profileId"] = _resolve_profile_name(profileName)
-    browser = _browser_use("/browsers", "POST", create_kwargs)
+    browser = _require_cloud_browser_fields(_browser_use("/browsers", "POST", create_kwargs))
     ws = _cdp_ws_from_url(browser["cdpUrl"])
     try:
         ensure_daemon(
