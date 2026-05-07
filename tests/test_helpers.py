@@ -2156,6 +2156,21 @@ def test_url_cluster_empty():
     assert helpers.url_cluster([]) == []
 
 
+def test_url_cluster_skips_malformed_url_values():
+    result = helpers.url_cluster([
+        None,
+        123,
+        "",
+        "https://api.example.com/users/123",
+    ])
+
+    assert result == [{
+        "pattern": "https://api.example.com/users/{id}",
+        "urls": ["https://api.example.com/users/123"],
+        "count": 1,
+    }]
+
+
 # --- discover_api_endpoints ---
 
 def test_discover_api_endpoints_extracts_fetch_urls():

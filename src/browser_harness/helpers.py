@@ -2442,6 +2442,8 @@ def url_cluster(urls):
 
     groups = {}
     for u in urls:
+        if not isinstance(u, str) or not u:
+            continue
         key = _norm(u)
         groups.setdefault(key, []).append(u)
     return sorted(
