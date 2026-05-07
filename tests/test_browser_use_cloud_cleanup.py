@@ -111,6 +111,13 @@ def test_main_skips_active_rows_with_malformed_runtime_fields(monkeypatch, capsy
     assert rows[1]["action"] == "would_stop"
 
 
+def test_to_float_rejects_boolean_cost_values():
+    module = load_cleanup_module()
+
+    assert module._to_float(True) == 0.0
+    assert module._to_float(False) == 0.0
+
+
 def test_main_tolerates_malformed_stop_response(monkeypatch, capsys):
     module = load_cleanup_module()
     monkeypatch.setattr(module.sys, "argv", ["cleanup-zombies.py", "--older-than", "0", "--json"])

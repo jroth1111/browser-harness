@@ -92,6 +92,8 @@ def _parse_started(b: dict) -> datetime.datetime:
 
 def _to_float(v: str | None) -> float:
     """Cost / proxy fields come back as strings; tolerate `None` and empty."""
+    if isinstance(v, bool):
+        return 0.0
     try:
         return float(v) if v else 0.0
     except (TypeError, ValueError):
