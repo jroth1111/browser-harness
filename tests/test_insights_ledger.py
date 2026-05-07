@@ -158,6 +158,23 @@ def test_latest_ds_helpers_tolerate_malformed_series_and_span_values():
     assert buckets[("123", "p3_impressions", 0)] == [_d(2026, 4, 21)]
 
 
+def test_latest_ds_helpers_reject_boolean_series_and_span_values():
+    from datetime import date as _d
+
+    module = load_ledger_module()
+    rows = [
+        {**sample_row(ds="2026-04-20"), "series_index": True},
+        {**sample_row(ds="2026-04-21"), "series_granularity": module.SENTINEL_GRANULARITY, "_attempt_span_days": True},
+    ]
+    index = {("bad-series",): rows[0], ("bad-span",): rows[1]}
+
+    assert module.latest_ds_per(index, listing_id="123", route_subroute="p3_impressions", series_index=0).isoformat() == "2026-04-21"
+    buckets = module.build_latest_ds_index(index, today=_d(2026, 4, 28))
+
+    assert buckets[("123", "p3_impressions", 0)] == [_d(2026, 4, 21)]
+    assert ("123", "p3_impressions", 1) not in buckets
+
+
 def test_append_ledger_rows_noop_for_empty_rows(tmp_path):
     module = load_ledger_module()
     ledger = tmp_path / ".ledger.jsonl"

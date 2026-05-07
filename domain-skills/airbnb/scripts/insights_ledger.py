@@ -23,6 +23,8 @@ def ledger_key(row):
 
 
 def safe_int(value, default=0):
+    if isinstance(value, bool):
+        return int(default)
     try:
         return int(value if value not in (None, "") else default)
     except (TypeError, ValueError):
@@ -32,6 +34,8 @@ def safe_int(value, default=0):
 def optional_int(value):
     if value in (None, ""):
         return 0
+    if isinstance(value, bool):
+        return None
     try:
         return int(value)
     except (TypeError, ValueError):
