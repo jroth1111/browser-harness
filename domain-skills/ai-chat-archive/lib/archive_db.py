@@ -112,6 +112,7 @@ def finish_run(
 
 def upsert_thread(conn: sqlite3.Connection, thread: dict, run_id: str | None = None) -> None:
     now = _utc_now()
+    status_present = "status" in thread and thread.get("status") not in (None, "")
     conn.execute(
         """INSERT INTO threads (
              thread_key, provider_id, account_key, provider_thread_id, canonical_url,
@@ -122,7 +123,7 @@ def upsert_thread(conn: sqlite3.Connection, thread: dict, run_id: str | None = N
              provider_thread_id = COALESCE(excluded.provider_thread_id, threads.provider_thread_id),
              canonical_url = COALESCE(excluded.canonical_url, threads.canonical_url),
              title = COALESCE(NULLIF(excluded.title, ''), threads.title),
-             status = excluded.status,
+             status = CASE WHEN ? THEN excluded.status ELSE threads.status END,
              current_content_hash = COALESCE(excluded.current_content_hash, threads.current_content_hash),
              current_artifact_count = CASE WHEN excluded.current_artifact_count > 0 THEN excluded.current_artifact_count ELSE threads.current_artifact_count END,
              last_observed_at = excluded.last_observed_at,
@@ -140,6 +141,7 @@ def upsert_thread(conn: sqlite3.Connection, thread: dict, run_id: str | None = N
             thread.get("first_observed_at", now),
             thread.get("last_observed_at", now),
             thread.get("capture_id"),
+            1 if status_present else 0,
         ),
     )
     conn.commit()
