@@ -24,6 +24,14 @@ from typing import Any
 GROK_BASE = "https://grok.com"
 
 
+def _dict_rows(rows: Any) -> list[dict]:
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def _string_rows(rows: Any) -> list[str]:
+    return [row for row in rows if isinstance(row, str)] if isinstance(rows, list) else []
+
+
 class GrokHTTPAPI:
     def __init__(self, cookies_by_domain: dict[str, dict[str, str]]):
         self._cookies = cookies_by_domain
@@ -108,8 +116,9 @@ class GrokHTTPAPI:
 
         Filters out empty messages (e.g. control rows with ``isControl``)."""
         msgs: list[dict] = []
-        for r in detail.get("responses", []):
-            text = (r.get("message") or "").strip()
+        for r in _dict_rows(detail.get("responses")):
+            message = r.get("message")
+            text = message.strip() if isinstance(message, str) else ""
             if not text:
                 continue
             if r.get("isControl"):
@@ -120,7 +129,7 @@ class GrokHTTPAPI:
             ts = r.get("createTime")
             entry: dict = {
                 "role": role,
-                "content": r.get("message") or "",
+                "content": text,
                 "ordinal": len(msgs) + 1,
                 "provider_message_id": rid,
                 "content_type": "text",
@@ -144,9 +153,9 @@ class GrokHTTPAPI:
     @staticmethod
     def extract_artifacts(detail: dict) -> list[dict]:
         artifacts: list[dict] = []
-        for r in detail.get("responses", []):
+        for r in _dict_rows(detail.get("responses")):
             rid = r.get("responseId")
-            for img in r.get("generatedImageUrls") or []:
+            for img in _string_rows(r.get("generatedImageUrls")):
                 artifacts.append({
                     "artifact_type": "generated_image",
                     "provider_artifact_id": _artifact_id_from_url(img),
@@ -154,28 +163,26 @@ class GrokHTTPAPI:
                     "parent_message_id": rid,
                     "source_url": img,
                 })
-            for img in r.get("imageAttachments") or []:
-                if isinstance(img, dict):
-                    artifacts.append({
-                        "artifact_type": "image",
-                        "provider_artifact_id": img.get("id") or img.get("url"),
-                        "label": img.get("name") or "Image",
-                        "parent_message_id": rid,
-                        "source_url": img.get("url"),
-                        "rich_part": img,
-                    })
-            for f in r.get("fileAttachments") or []:
-                if isinstance(f, dict):
-                    artifacts.append({
-                        "artifact_type": "file",
-                        "provider_artifact_id": f.get("id") or f.get("uri"),
-                        "label": f.get("name") or f.get("filename") or "file",
-                        "parent_message_id": rid,
-                        "source_url": f.get("url") or f.get("uri"),
-                        "byte_length": f.get("size"),
-                        "rich_part": f,
-                    })
-            for url in r.get("imageEditUris") or []:
+            for img in _dict_rows(r.get("imageAttachments")):
+                artifacts.append({
+                    "artifact_type": "image",
+                    "provider_artifact_id": img.get("id") or img.get("url"),
+                    "label": img.get("name") or "Image",
+                    "parent_message_id": rid,
+                    "source_url": img.get("url"),
+                    "rich_part": img,
+                })
+            for f in _dict_rows(r.get("fileAttachments")):
+                artifacts.append({
+                    "artifact_type": "file",
+                    "provider_artifact_id": f.get("id") or f.get("uri"),
+                    "label": f.get("name") or f.get("filename") or "file",
+                    "parent_message_id": rid,
+                    "source_url": f.get("url") or f.get("uri"),
+                    "byte_length": f.get("size"),
+                    "rich_part": f,
+                })
+            for url in _string_rows(r.get("imageEditUris")):
                 artifacts.append({
                     "artifact_type": "image_edit",
                     "provider_artifact_id": _artifact_id_from_url(url),
@@ -189,10 +196,8 @@ class GrokHTTPAPI:
     def extract_citations(detail: dict) -> list[dict]:
         citations: list[dict] = []
         seen: set[str] = set()
-        for r in detail.get("responses", []):
-            for src in r.get("citedWebSearchResults") or r.get("webSearchResults") or []:
-                if not isinstance(src, dict):
-                    continue
+        for r in _dict_rows(detail.get("responses")):
+            for src in _dict_rows(r.get("citedWebSearchResults") or r.get("webSearchResults")):
                 url = src.get("url") or src.get("link")
                 if not url or url in seen:
                     continue
@@ -221,20 +226,22 @@ def _decode_sso_session(sso: str) -> str | None:
 
 def _rich_parts_for_response(r: dict) -> list[dict]:
     rich: list[dict] = []
-    if r.get("steps"):
-        rich.append({"type": "steps", "value": r["steps"]})
-    if r.get("toolResponses"):
-        rich.append({"type": "tool_responses", "value": r["toolResponses"]})
-    if r.get("xposts"):
-        rich.append({"type": "xposts", "value": r["xposts"]})
+    for field, label in (
+        ("steps", "steps"),
+        ("toolResponses", "tool_responses"),
+        ("xposts", "xposts"),
+    ):
+        value = r.get(field)
+        if isinstance(value, list):
+            rich.append({"type": label, "value": value})
     return rich
 
 
 def _artifact_refs_for_response(r: dict) -> list[dict]:
     refs: list[dict] = []
-    for url in r.get("generatedImageUrls") or []:
+    for url in _string_rows(r.get("generatedImageUrls")):
         refs.append({"image_url": url, "kind": "generated_image"})
-    for f in r.get("fileUris") or []:
+    for f in _string_rows(r.get("fileUris")):
         refs.append({"file_uri": f, "kind": "file"})
     return refs
 
