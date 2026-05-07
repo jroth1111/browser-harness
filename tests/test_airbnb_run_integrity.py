@@ -35,6 +35,25 @@ def test_latest_prior_count_picks_newest_positive_count(tmp_path):
     assert result["prior_positive_path"].endswith("new-positive.json")
 
 
+def test_latest_prior_count_skips_malformed_count_artifacts(tmp_path):
+    module = load_module()
+    (tmp_path / "bad-count.json").write_text(json.dumps({
+        "run_id": "bad-count",
+        "observed_at": "2026-04-29T00:00:00Z",
+        "search_result_count": "not-a-count",
+    }))
+    (tmp_path / "valid-positive.json").write_text(json.dumps({
+        "run_id": "valid-positive",
+        "observed_at": "2026-04-28T00:00:00Z",
+        "search_result_count": 7,
+    }))
+
+    result = module.latest_prior_count(tmp_path, count_keys=("search_result_count",))
+
+    assert result["prior_positive_count"] == 7
+    assert result["prior_positive_path"].endswith("valid-positive.json")
+
+
 def test_last_good_guard_quarantines_empty_after_prior_nonempty():
     module = load_module()
 

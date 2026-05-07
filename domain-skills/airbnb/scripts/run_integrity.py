@@ -73,7 +73,10 @@ def latest_prior_count(output_path, *, count_keys, current_run_id=None, glob_pat
         if current_run_id and str(payload.get("run_id") or "") == str(current_run_id):
             continue
         observed_at = str(payload.get("observed_at") or "")
-        count = sum(int(payload.get(key) or 0) for key in keys)
+        try:
+            count = sum(int(payload.get(key) or 0) for key in keys)
+        except (TypeError, ValueError):
+            continue
         if count <= 0:
             continue
         if latest_observed_at is None or observed_at > latest_observed_at:
