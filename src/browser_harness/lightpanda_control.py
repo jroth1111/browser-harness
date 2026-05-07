@@ -84,9 +84,11 @@ def runtime_value(client, expression, session_id=None):
         session_id=session_id,
     )
     if "exceptionDetails" in result:
-        desc = result["exceptionDetails"].get("exception", {}).get("description", "")
+        details = _dict_value(result.get("exceptionDetails"))
+        exception = _dict_value(details.get("exception"))
+        desc = exception.get("description") or details.get("text", "")
         raise RuntimeError(f"JS exception evaluating {expression!r}: {desc}")
-    return result.get("result", {}).get("value")
+    return _dict_value(result.get("result")).get("value")
 
 
 def evaluate_field_contract(client, checks, min_text=0, session_id=None):

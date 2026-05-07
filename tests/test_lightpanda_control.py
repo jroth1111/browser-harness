@@ -5,6 +5,23 @@ import pytest
 from browser_harness import lightpanda_control
 
 
+def test_runtime_value_tolerates_malformed_exception_details():
+    class Client:
+        def send_raw(self, method, params, session_id=None):
+            return {"exceptionDetails": "not-an-object"}
+
+    with pytest.raises(RuntimeError, match="JS exception evaluating 'bad\\(\\)'"):
+        lightpanda_control.runtime_value(Client(), "bad()")
+
+
+def test_runtime_value_tolerates_malformed_result_envelope():
+    class Client:
+        def send_raw(self, method, params, session_id=None):
+            return {"result": "not-an-object"}
+
+    assert lightpanda_control.runtime_value(Client(), "1") is None
+
+
 def test_evaluate_field_contract_requires_page_text_and_named_fields():
     class Client:
         def __init__(self):
