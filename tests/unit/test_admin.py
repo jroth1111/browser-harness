@@ -215,6 +215,64 @@ def test_start_remote_daemon_stops_created_browser_when_daemon_start_fails(monke
     ]
 
 
+def test_list_cloud_profiles_skips_malformed_rows(monkeypatch):
+    calls = []
+
+    def fake_browser_use(path, method, body=None):
+        calls.append((path, method, body))
+        if path == "/profiles?pageSize=100&pageNumber=1":
+            return {
+                "items": [
+                    ["not", "an", "object"],
+                    {"name": "missing-id"},
+                    {"id": "profile-1"},
+                ],
+                "totalItems": 3,
+            }
+        if path == "/profiles/profile-1":
+            return {"id": "profile-1", "name": "Main", "cookieDomains": ["example.com"]}
+        raise AssertionError((path, method, body))
+
+    monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
+
+    assert admin.list_cloud_profiles() == [{
+        "id": "profile-1",
+        "name": "Main",
+        "userId": None,
+        "cookieDomains": ["example.com"],
+        "lastUsedAt": None,
+    }]
+
+
+@pytest.mark.parametrize("listing, message", [
+    ("not-a-listing", "expected object or array, got str"),
+    ({"items": "not-a-list"}, "items.*must be an array"),
+])
+def test_list_cloud_profiles_rejects_malformed_list_envelope(monkeypatch, listing, message):
+    monkeypatch.setattr(admin, "_browser_use", lambda path, method, body=None: listing)
+
+    with pytest.raises(RuntimeError, match=message):
+        admin.list_cloud_profiles()
+
+
+@pytest.mark.parametrize("detail, message", [
+    (["not", "an", "object"], "expected object, got list"),
+    ({"name": "missing-id"}, "missing required field: id"),
+])
+def test_list_cloud_profiles_rejects_malformed_detail_response(monkeypatch, detail, message):
+    def fake_browser_use(path, method, body=None):
+        if path == "/profiles?pageSize=100&pageNumber=1":
+            return {"items": [{"id": "profile-1"}], "totalItems": 1}
+        if path == "/profiles/profile-1":
+            return detail
+        raise AssertionError((path, method, body))
+
+    monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
+
+    with pytest.raises(RuntimeError, match=message):
+        admin.list_cloud_profiles()
+
+
 @pytest.mark.parametrize("exc_type", [KeyboardInterrupt, SystemExit])
 def test_start_remote_daemon_stops_created_browser_when_daemon_start_is_interrupted(monkeypatch, exc_type):
     calls = []

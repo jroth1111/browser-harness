@@ -412,14 +412,31 @@ def list_cloud_profiles():
     """List cloud profiles under the current API key.
 
     Paginates through all pages — the API caps `pageSize` at 100."""
-    out, page = [], 1
+    out, page, seen = [], 1, 0
     while True:
         listing = _browser_use(f"/profiles?pageSize=100&pageNumber={page}", "GET")
-        items = listing.get("items") if isinstance(listing, dict) else listing
+        if isinstance(listing, dict):
+            items = listing.get("items") or []
+        elif isinstance(listing, list):
+            items = listing
+        else:
+            raise RuntimeError(f"Browser Use profile list returned invalid response shape: expected object or array, got {type(listing).__name__}")
+        if not isinstance(items, list):
+            raise RuntimeError("Browser Use profile list response field 'items' must be an array")
         if not items:
             break
+        seen += len(items)
         for p in items:
+            if not isinstance(p, dict) or not p.get("id"):
+                continue
             detail = _browser_use(f"/profiles/{p['id']}", "GET")
+            if not isinstance(detail, dict):
+                raise RuntimeError(
+                    "Browser Use profile detail returned invalid response shape: "
+                    f"expected object, got {type(detail).__name__}"
+                )
+            if not detail.get("id"):
+                raise RuntimeError("Browser Use profile detail response missing required field: id")
             out.append({
                 "id": detail["id"],
                 "name": detail.get("name"),
@@ -427,7 +444,7 @@ def list_cloud_profiles():
                 "cookieDomains": detail.get("cookieDomains") or [],
                 "lastUsedAt": detail.get("lastUsedAt"),
             })
-        if isinstance(listing, dict) and len(out) >= listing.get("totalItems", len(out)):
+        if isinstance(listing, dict) and seen >= listing.get("totalItems", seen):
             break
         page += 1
     return out
