@@ -766,6 +766,9 @@ def load_auth_profile(client, domain, ttl=_PROFILE_TTL, session_id=None):
     except OSError:
         return False
 
-    state = json.loads(state_path.read_text())
+    try:
+        state = json.loads(state_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
     restore_session_state(client, state, session_id=session_id)
     return True

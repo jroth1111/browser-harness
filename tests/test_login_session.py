@@ -519,3 +519,15 @@ def test_load_auth_profile_returns_false_when_expired(tmp_path):
 
     with patch.object(login_session, "_PROFILES_DIR", tmp_path):
         assert login_session.load_auth_profile(lambda **kw: {}, "expired.com", ttl=86400) is False
+
+
+def test_load_auth_profile_returns_false_when_state_is_corrupt(tmp_path):
+    domain_dir = tmp_path / "example.com"
+    domain_dir.mkdir()
+    (domain_dir / "state.json").write_text("{not-json", encoding="utf-8")
+
+    with patch.object(login_session, "_PROFILES_DIR", tmp_path), \
+         patch("browser_harness.login_session.restore_session_state") as mock_restore:
+        assert login_session.load_auth_profile(lambda **kw: {}, "example.com") is False
+
+    mock_restore.assert_not_called()
