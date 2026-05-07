@@ -2331,6 +2331,19 @@ def test_page_info_raises_clear_error_on_js_exception():
             helpers.page_info()
 
 
+def test_page_info_tolerates_malformed_exception_details():
+    def fake_cdp(method, **kwargs):
+        return {
+            "result": "not-an-object",
+            "exceptionDetails": "not-an-object",
+        }
+
+    with patch("browser_harness.helpers._send", return_value={}), \
+         patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
+        with pytest.raises(RuntimeError, match="page_info: JS exception"):
+            helpers.page_info()
+
+
 # --- fill_input ---
 
 def test_fill_input_focuses_types_and_fires_events():

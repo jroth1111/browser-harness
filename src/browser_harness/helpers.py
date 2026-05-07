@@ -484,7 +484,9 @@ def page_info():
 def _raise_if_cdp_exception(resp, ctx):
     if not isinstance(resp, dict) or "exceptionDetails" not in resp:
         return
-    desc = (resp.get("result") or {}).get("description") or resp["exceptionDetails"].get("text") or "JS exception"
+    result = _dict_value(resp.get("result"))
+    details = _dict_value(resp.get("exceptionDetails"))
+    desc = result.get("description") or details.get("text") or "JS exception"
     raise RuntimeError(f"{ctx}: {desc}")
 
 def page_info_js():
