@@ -1482,6 +1482,14 @@ def test_crawl_state_save_load_preserves_marginal_window(tmp_path):
     assert list(loaded._marginal) == [5, 0]
 
 
+def test_crawl_state_load_rejects_malformed_checkpoint_shapes(tmp_path):
+    path = tmp_path / "checkpoint.json"
+    path.write_text(json.dumps({"key_field": "id", "records": {"id": 1}}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="records.*list"):
+        helpers.CrawlState.load(path)
+
+
 def test_crawl_state_save_handles_non_serializable(tmp_path):
     state = helpers.CrawlState("id")
     state.add({"id": "a", "ts": object()})

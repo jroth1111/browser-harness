@@ -1739,6 +1739,7 @@ class CrawlState:
     def load(path):
         """Deserialize crawl state from JSON. Returns a new CrawlState."""
         data = json.loads(Path(path).read_text())
+        CrawlState._validate_checkpoint(data, path)
         cs = CrawlState(data["key_field"], marginal_window=data.get("marginal_window", 5))
         cs._occurrences = data.get("occurrences", {})
         cs._records = data.get("records", [])
@@ -1748,6 +1749,26 @@ class CrawlState:
         cs._scope_totals = data.get("scope_totals", {})
         cs._marginal = deque(data.get("marginal", []), maxlen=cs._marginal.maxlen)
         return cs
+
+    @staticmethod
+    def _validate_checkpoint(data, path):
+        if not isinstance(data, dict):
+            raise ValueError(f"{path}: crawl checkpoint must be a JSON object")
+        if not isinstance(data.get("key_field"), str) or not data["key_field"]:
+            raise ValueError(f"{path}: crawl checkpoint field 'key_field' must be a non-empty string")
+        expected_shapes = {
+            "occurrences": dict,
+            "records": list,
+            "blocked": list,
+            "scope_totals": dict,
+            "marginal": list,
+        }
+        for field, expected_type in expected_shapes.items():
+            if field in data and not isinstance(data[field], expected_type):
+                raise ValueError(f"{path}: crawl checkpoint field '{field}' must be {expected_type.__name__}")
+        for field in ("dup_attempts", "missing_key", "marginal_window"):
+            if field in data and not isinstance(data[field], int):
+                raise ValueError(f"{path}: crawl checkpoint field '{field}' must be int")
 
 
 class SafetyGate:
