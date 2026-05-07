@@ -133,6 +133,11 @@ def main():
         headless = False
         window_size = None
         i = 2
+        def require_value(flag):
+            if i + 1 >= len(args) or args[i + 1].startswith("-"):
+                print(f"{flag} requires a value", file=sys.stderr)
+                sys.exit(2)
+            return args[i + 1]
         while i < len(args):
             flag = args[i]
             if flag == "--json":
@@ -144,12 +149,10 @@ def main():
                 i += 1
                 continue
             if flag == "--window-size":
-                if i + 1 >= len(args):
-                    print("--window-size requires WxH value", file=sys.stderr)
-                    sys.exit(2)
-                parts = args[i + 1].split("x")
+                value = require_value(flag)
+                parts = value.split("x")
                 if len(parts) != 2 or not all(p.isdigit() for p in parts):
-                    print(f"invalid --window-size value: {args[i + 1]} (expected WxH)", file=sys.stderr)
+                    print(f"invalid --window-size value: {value} (expected WxH)", file=sys.stderr)
                     sys.exit(2)
                 window_size = (int(parts[0]), int(parts[1]))
                 i += 2
@@ -157,7 +160,7 @@ def main():
             if flag not in {"--port", "--url", "--chrome"} or i + 1 >= len(args):
                 print(f"unsupported --launch-profile flag: {flag}", file=sys.stderr)
                 sys.exit(2)
-            value = args[i + 1]
+            value = require_value(flag)
             if flag == "--port":
                 try:
                     port = int(value)

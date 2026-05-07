@@ -213,3 +213,35 @@ def test_update_accepts_yes_flags():
             raise AssertionError("expected SystemExit")
 
     mock_update.assert_called_once_with(yes=True)
+
+
+def test_launch_profile_rejects_missing_value_before_next_flag():
+    stderr = StringIO()
+    with patch.object(sys, "argv", ["browser-harness", "--launch-profile", "profile", "--url", "--json"]), \
+         patch("browser_harness.run.run_launch_profile") as mock_launch, \
+         patch("sys.stderr", stderr):
+        try:
+            run.main()
+        except SystemExit as e:
+            assert e.code == 2
+        else:
+            raise AssertionError("expected SystemExit")
+
+    mock_launch.assert_not_called()
+    assert "--url requires a value" in stderr.getvalue()
+
+
+def test_launch_profile_rejects_missing_window_size_before_next_flag():
+    stderr = StringIO()
+    with patch.object(sys, "argv", ["browser-harness", "--launch-profile", "profile", "--window-size", "--json"]), \
+         patch("browser_harness.run.run_launch_profile") as mock_launch, \
+         patch("sys.stderr", stderr):
+        try:
+            run.main()
+        except SystemExit as e:
+            assert e.code == 2
+        else:
+            raise AssertionError("expected SystemExit")
+
+    mock_launch.assert_not_called()
+    assert "--window-size requires a value" in stderr.getvalue()
