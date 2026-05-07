@@ -365,6 +365,9 @@ def load_restaurant_input(path):
         restaurants = []
     if not isinstance(restaurants, list):
         raise ValueError("restaurant input field 'restaurants' must be an array")
+    for row in restaurants:
+        if not isinstance(row, dict):
+            raise ValueError("restaurant input records must be objects")
     return restaurants, data.get("platform", "doordash")
 
 

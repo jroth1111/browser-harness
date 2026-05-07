@@ -67,3 +67,12 @@ def test_load_restaurant_input_rejects_non_array_restaurants(tmp_path):
 
     with pytest.raises(ValueError, match="restaurants.*array"):
         module.load_restaurant_input(source)
+
+
+def test_load_restaurant_input_rejects_non_object_restaurant_rows(tmp_path):
+    module = load_module()
+    source = tmp_path / "restaurants.json"
+    source.write_text(json.dumps({"restaurants": ["not a row"]}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="records must be objects"):
+        module.load_restaurant_input(source)
