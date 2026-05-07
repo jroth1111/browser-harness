@@ -41,6 +41,15 @@ def _setup_account(conn):
     return ak
 
 
+def test_chatgpt_http_methods_guard_non_dict_responses(monkeypatch):
+    api = ChatGPTHTTPAPI({})
+
+    monkeypatch.setattr(api, "_fetch_json", lambda url, timeout=30: [])
+    assert api.authenticate()["authenticated"] is False
+    assert api.all_conversations(max_pages=1) == []
+    assert api.conversation_detail("conv") is None
+
+
 # --- schema ---
 
 def test_init_db_creates_all_tables():

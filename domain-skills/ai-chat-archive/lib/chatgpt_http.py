@@ -67,7 +67,7 @@ class ChatGPTHTTPAPI:
         Returns user info dict with email, name, id.
         """
         data = self._fetch_json("https://chatgpt.com/api/auth/session")
-        if not data or data.get("__error"):
+        if not isinstance(data, dict) or data.get("__error"):
             return {"authenticated": False, "error": data}
 
         user = data.get("user", {})
@@ -99,7 +99,7 @@ class ChatGPTHTTPAPI:
             )
             data = self._fetch_json(url)
 
-            if not data or data.get("__error") or not isinstance(data, dict):
+            if not isinstance(data, dict) or data.get("__error"):
                 break
 
             items = data.get("items", [])
@@ -133,7 +133,7 @@ class ChatGPTHTTPAPI:
         url = f"https://chatgpt.com/backend-api/conversation/{conversation_id}"
         data = self._fetch_json(url)
 
-        if not data or data.get("__error"):
+        if not isinstance(data, dict) or data.get("__error"):
             return None
 
         return data
