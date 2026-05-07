@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.render_safety import dict_items, sorted_messages, text_value
+from lib.render_safety import dict_items, safe_ordinal, sorted_messages, text_value
 
 
 def render_claude_markdown(normalized: dict[str, Any]) -> str:
@@ -18,7 +18,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
 
     for msg in sorted_messages(normalized.get("messages")):
         role = msg.get("role", "unknown")
-        ordinal = msg.get("ordinal", 0)
+        ordinal = safe_ordinal(msg.get("ordinal"))
         meta = msg.get("metadata") or {}
         model = meta.get("model") or ""
         ctype = msg.get("content_type") or ""

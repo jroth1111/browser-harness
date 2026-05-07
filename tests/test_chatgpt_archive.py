@@ -486,6 +486,30 @@ def test_archive_renderers_ignore_malformed_message_scalars():
         assert "{'not': 'text'}" not in provider_md
 
 
+def test_archive_renderers_sanitize_boolean_ordinals():
+    capture = {
+        "title": "Malformed ordinal",
+        "messages": [
+            {"role": "assistant", "ordinal": True, "content": "Boolean ordinal"},
+        ],
+    }
+
+    md = render_thread_markdown(capture)
+    assert "## [assistant] #0" in md
+    assert "#True" not in md
+
+    for renderer in [
+        render_chatgpt_markdown,
+        render_claude_markdown,
+        render_gemini_markdown,
+        render_grok_markdown,
+        render_perplexity_markdown,
+    ]:
+        provider_md = renderer(capture)
+        assert "## [assistant] #0" in provider_md
+        assert "#True" not in provider_md
+
+
 def test_render_artifact_status():
     capture = {
         "title": "Test",

@@ -13,7 +13,7 @@ def sorted_messages(value: Any) -> list[dict[str, Any]]:
 
 
 def safe_ordinal(value: Any) -> int | float:
-    return value if isinstance(value, int | float) else 0
+    return value if isinstance(value, int | float) and not isinstance(value, bool) else 0
 
 
 def safe_count(value: Any) -> int:
