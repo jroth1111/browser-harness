@@ -767,8 +767,15 @@ def _normalize_hostname(value):
     return host
 
 
+def _auth_profile_domain(domain):
+    domain = _registrable_domain(domain)
+    if not domain:
+        raise ValueError("unsafe auth profile domain: empty")
+    return domain
+
+
 def auth_profile_path(domain):
-    return _PROFILES_DIR / _registrable_domain(domain)
+    return _PROFILES_DIR / _auth_profile_domain(domain)
 
 
 def save_auth_profile(client, domain, urls=None, session_id=None):
@@ -777,7 +784,7 @@ def save_auth_profile(client, domain, urls=None, session_id=None):
     Returns the profile directory path. Creates manifest.json (redacted) and
     state.json (full values, 0600 permissions).
     """
-    domain = _registrable_domain(domain)
+    domain = _auth_profile_domain(domain)
     profile_dir = _PROFILES_DIR / domain
     profile_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -853,7 +860,7 @@ def load_auth_profile_result(client, domain, ttl=_PROFILE_TTL, session_id=None):
     Returns a structured restore result with ok=False for missing, expired,
     unreadable, or partially unrestored profiles.
     """
-    domain = _registrable_domain(domain)
+    domain = _auth_profile_domain(domain)
     state_path = _PROFILES_DIR / domain / "state.json"
     if not state_path.exists():
         return {"ok": False, "reason": "missing_profile"}

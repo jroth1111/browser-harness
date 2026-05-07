@@ -649,6 +649,14 @@ def test_auth_profile_domain_rejects_unsafe_path_segments(tmp_path):
         with pytest.raises(ValueError, match="unsafe auth profile domain"):
             login_session.auth_profile_path("../evil.com")
 
+        for empty in ("", "   "):
+            with pytest.raises(ValueError, match="unsafe auth profile domain"):
+                login_session.auth_profile_path(empty)
+            with pytest.raises(ValueError, match="unsafe auth profile domain"):
+                login_session.save_auth_profile(lambda **kw: {}, empty)
+            with pytest.raises(ValueError, match="unsafe auth profile domain"):
+                login_session.load_auth_profile_result(lambda **kw: {}, empty)
+
         path = login_session.auth_profile_path("https://www.example.com/path")
         assert path == tmp_path / "example.com"
 
