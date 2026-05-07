@@ -149,6 +149,10 @@ def dict_value(value):
     return value if isinstance(value, dict) else {}
 
 
+def row_dicts(rows):
+    return [row for row in (rows or []) if isinstance(row, dict)]
+
+
 def hardware_key(row):
     """Derive a unique key for the hardware in a benchmark row."""
     hw = dict_value(row.get("hardware"))
@@ -186,6 +190,7 @@ def normalize(values, higher_is_better=True):
 
 def score_hardware(rows, profile="balanced"):
     """Group benchmarks by hardware and compute composite scores."""
+    rows = row_dicts(rows)
     groups = defaultdict(list)
     for r in rows:
         groups[hardware_key(r)].append(r)
@@ -316,7 +321,7 @@ def format_details(hw):
         f"  Composite: {hw['composite_score']}",
         "  Dimensions:",
     ]
-    for dim, val in hw.get("dimension_scores", {}).items():
+    for dim, val in dict_value(hw.get("dimension_scores")).items():
         bar = "#" * int(val / 5)
         lines.append(f"    {dim:<20} {val:>6.1f}  {bar}")
     return "\n".join(lines)
@@ -325,7 +330,7 @@ def format_details(hw):
 def list_models(rows):
     """List all model families and parameter sizes in the data."""
     families = defaultdict(set)
-    for r in rows:
+    for r in row_dicts(rows):
         m = dict_value(r.get("model"))
         fam = m.get("family", "")
         params = m.get("params")
@@ -353,7 +358,7 @@ def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budg
     model_query_lower = model_query.lower()
 
     matched = []
-    for r in rows:
+    for r in row_dicts(rows):
         m = dict_value(r.get("model"))
         family = (m.get("family") or "").lower()
         hf_id = (m.get("hfId") or "").lower()

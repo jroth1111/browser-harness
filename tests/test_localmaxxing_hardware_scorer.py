@@ -37,3 +37,25 @@ def test_hardware_scorer_tolerates_malformed_nested_rows():
     model_ranked, matched = module.score_model_fit(rows, "qwen3")
     assert len(model_ranked) == 1
     assert matched == [rows[1]]
+
+
+def test_hardware_scorer_tolerates_scalar_rows_and_dimension_scores():
+    module = load_module()
+    rows = [
+        "not-a-row",
+        {
+            "hardware": {"hwClass": "DISCRETE_GPU", "gpuName": "RTX 3060", "gpuCount": 1, "vramGb": 12},
+            "model": {"family": "qwen3", "hfId": "Qwen/Qwen3-8B", "params": 8},
+            "tokSOut": 30,
+            "ttftMs": 80,
+            "peakVramGb": 8,
+        },
+    ]
+
+    ranked = module.score_hardware(rows)
+
+    assert len(ranked) == 1
+    assert "qwen3" in module.list_models(rows)
+    assert module.score_model_fit(rows, "qwen3")[1] == [rows[1]]
+    details = module.format_details({**ranked[0], "dimension_scores": "not-a-score-map"})
+    assert "Dimensions:" in details
