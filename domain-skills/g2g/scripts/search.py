@@ -78,6 +78,13 @@ def derive_output_path(path: str, expected_suffix: str, replacement_suffix: str)
     return str(source.with_name(f"{name}{replacement_suffix}"))
 
 
+def safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 # --- G2G API Client ---
 
 class G2GClient:
@@ -315,7 +322,7 @@ class G2GClient:
                 if isinstance(meta, dict)
                 else 0
             )
-            return offers, int(total) if total else len(offers)
+            return offers, safe_int(total, len(offers)) if total else len(offers)
         return [], 0
 
     def search_result_count(

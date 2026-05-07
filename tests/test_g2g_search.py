@@ -79,6 +79,19 @@ def test_search_categories_returns_empty_for_malformed_index_shape(monkeypatch):
     assert module.G2GClient().search_categories("gold") == []
 
 
+def test_search_offers_falls_back_when_total_metadata_is_malformed(monkeypatch):
+    module = load_g2g_module()
+    monkeypatch.setattr(module.G2GClient, "_api_get", lambda self, path, params=None: {
+        "offers": [{"id": "offer-1"}, {"id": "offer-2"}],
+        "meta": {"total": "not-a-count"},
+    })
+
+    offers, total = module.G2GClient().search_offers("gold")
+
+    assert [offer["id"] for offer in offers] == ["offer-1", "offer-2"]
+    assert total == 2
+
+
 def load_g2g_module():
     import importlib.util
 
