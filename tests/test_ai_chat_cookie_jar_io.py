@@ -43,3 +43,11 @@ def test_jar_min_expiry_skips_malformed_host_jars():
         ".bad.example": ["not", "a", "jar"],
         ".example.com": {"sid": {"expires": 1_700_000_000}},
     }) == "2023-11-14T22:13:20Z"
+
+
+def test_jar_min_expiry_rejects_boolean_expiry_values():
+    module = load_cookie_jar_io()
+
+    assert module.jar_min_expiry({
+        ".example.com": {"sid": {"expires": True}},
+    }) is None

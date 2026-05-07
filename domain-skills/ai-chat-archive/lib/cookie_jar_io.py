@@ -55,6 +55,8 @@ def jar_min_expiry(rich: dict[str, dict[str, Any]]) -> str | None:
             if not isinstance(entry, dict):
                 continue
             exp = entry.get("expires")
+            if isinstance(exp, bool):
+                continue
             if not exp or not isinstance(exp, (int, float)):
                 continue
             if exp <= 0:
