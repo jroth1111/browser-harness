@@ -48,6 +48,24 @@ def test_probe_live_listing_file_rejects_malformed_counts(tmp_path):
     assert load_single_day_probe_module().is_complete_live_listing_file(path) is False
 
 
+def test_probe_live_listing_file_rejects_boolean_counts(tmp_path):
+    path = tmp_path / "airbnb-live-listings-boolean-counts.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [{"status": "ACTIVE"}],
+                "active_count": True,
+                "status_counts": {"ACTIVE": True},
+                "field_validation": {"all_active_detail_pages_ok": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_probe_module().is_complete_live_listing_file(path) is False
+    assert load_single_day_probe_module().is_complete_live_listing_file(path) is False
+
+
 def test_chart_bounds_end_yesterday():
     module = load_probe_module()
 

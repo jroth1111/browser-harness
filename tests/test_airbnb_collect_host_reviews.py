@@ -90,6 +90,22 @@ def test_active_listing_file_rejects_malformed_counts(tmp_path):
     assert module.is_complete_active_listing_file(path) is False
 
 
+def test_active_listing_file_rejects_boolean_counts(tmp_path):
+    module = load_host_reviews_module()
+    path = tmp_path / "airbnb-live-listings-boolean-counts.json"
+    path.write_text(
+        """{
+          "records": [{"status": "ACTIVE"}],
+          "active_count": true,
+          "status_counts": {"ACTIVE": true},
+          "field_validation": {"all_active_detail_pages_ok": true}
+        }""",
+        encoding="utf-8",
+    )
+
+    assert module.is_complete_active_listing_file(path) is False
+
+
 def test_review_export_confidence_never_overclaims_without_total():
     module = load_host_reviews_module()
 
