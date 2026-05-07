@@ -22,7 +22,9 @@ from lib.provider_base import (  # noqa: E402
 )
 from providers.claude.provider import ClaudeProvider  # noqa: E402
 from providers.chatgpt.provider import ChatGPTProvider  # noqa: E402
+from providers.chatgpt.provider import _coerce_epoch as chatgpt_coerce_epoch  # noqa: E402
 from providers.gemini.provider import GeminiProvider  # noqa: E402
+from providers.gemini.provider import _coerce_float as gemini_coerce_float  # noqa: E402
 from providers.gemini.http import GeminiHTTPAPI  # noqa: E402
 from providers.grok.provider import GrokProvider  # noqa: E402
 from providers.perplexity.provider import PerplexityProvider  # noqa: E402
@@ -195,6 +197,13 @@ def test_max_cursor_compares_numeric_values_numerically():
     assert sync_runner._max_cursor(9, 10) == 10
     assert sync_runner._max_cursor("9", "10") == "10"
     assert sync_runner._max_cursor("2026-05-02", "2026-05-10") == "2026-05-10"
+
+
+def test_archive_timestamp_coercers_reject_booleans():
+    assert chatgpt_coerce_epoch(True) is None
+    assert chatgpt_coerce_epoch(False) is None
+    assert gemini_coerce_float(True) is None
+    assert gemini_coerce_float(False) is None
 
 
 class FakeChatGPTAPI:

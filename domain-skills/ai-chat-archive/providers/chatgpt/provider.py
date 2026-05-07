@@ -222,6 +222,8 @@ class ChatGPTProvider(Provider):
 def _coerce_epoch(v: Any) -> float | None:
     if v is None:
         return None
+    if isinstance(v, bool):
+        return None
     try:
         return float(v)
     except (TypeError, ValueError):

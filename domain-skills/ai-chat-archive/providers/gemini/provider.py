@@ -183,6 +183,8 @@ class GeminiProvider(Provider):
 def _coerce_float(value):
     if value is None:
         return None
+    if isinstance(value, bool):
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
