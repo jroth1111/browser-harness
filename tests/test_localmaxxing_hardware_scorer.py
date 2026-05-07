@@ -59,3 +59,22 @@ def test_hardware_scorer_tolerates_scalar_rows_and_dimension_scores():
     assert module.score_model_fit(rows, "qwen3")[1] == [rows[1]]
     details = module.format_details({**ranked[0], "dimension_scores": "not-a-score-map"})
     assert "Dimensions:" in details
+
+
+def test_hardware_scorer_tolerates_scalar_model_metadata():
+    module = load_module()
+    rows = [
+        {
+            "hardware": {"hwClass": "DISCRETE_GPU", "gpuName": "RTX 3060", "gpuCount": 1, "vramGb": 12},
+            "model": {"family": 12345, "hfId": 67890, "params": 8},
+            "engine": {"quantization": 4},
+            "tokSOut": 30,
+            "ttftMs": 80,
+            "peakVramGb": 8,
+        },
+    ]
+
+    ranked, matched = module.score_model_fit(rows, "123", quant_filter="4")
+
+    assert len(ranked) == 1
+    assert matched == rows

@@ -360,8 +360,8 @@ def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budg
     matched = []
     for r in row_dicts(rows):
         m = dict_value(r.get("model"))
-        family = (m.get("family") or "").lower()
-        hf_id = (m.get("hfId") or "").lower()
+        family = str(m.get("family") or "").lower()
+        hf_id = str(m.get("hfId") or "").lower()
         if model_query_lower not in family and model_query_lower not in hf_id:
             continue
         if size_filter is not None:
@@ -369,7 +369,7 @@ def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budg
             if params != size_filter:
                 continue
         if quant_filter is not None:
-            q = (dict_value(r.get("engine")).get("quantization") or "").lower()
+            q = str(dict_value(r.get("engine")).get("quantization") or "").lower()
             if quant_filter.lower() not in q:
                 continue
         matched.append(r)
