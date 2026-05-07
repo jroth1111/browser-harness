@@ -551,6 +551,21 @@ def test_youtube_generated_report_summary_tracks_live_and_drift_state():
     assert any(note["id"] == "ytdlp_ytsearch" for note in generated["drift_notes"])
 
 
+def test_youtube_live_smoke_content_status_tolerates_malformed_shapes():
+    spec = importlib.util.spec_from_file_location(
+        "youtube_live_smoke",
+        YOUTUBE / "scripts" / "live_smoke.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.content_is_usable("bad-status") is False
+    assert module.content_is_usable({"textLength": "not-a-count", "block": {}}) is False
+    assert module.content_is_usable({"textLength": 250, "block": {"blocked": True}}) is False
+    assert module.content_is_usable({"textLength": 250, "block": {}}) is True
+
+
 def test_youtube_forbidden_path_guard_passes_and_catches_synthetic_violations(tmp_path):
     spec = importlib.util.spec_from_file_location(
         "assert_no_forbidden_paths",

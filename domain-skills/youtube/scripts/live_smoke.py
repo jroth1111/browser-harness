@@ -103,10 +103,18 @@ def contract_summary(surface_map: dict) -> dict:
     }
 
 
+def safe_int(value, default=0) -> int:
+    try:
+        return int(value or default)
+    except (TypeError, ValueError):
+        return default
+
+
 def content_is_usable(status: dict, min_text: int = 200) -> bool:
+    status = status if isinstance(status, dict) else {}
     if (status.get("block") or {}).get("blocked"):
         return False
-    return int(status.get("textLength") or 0) >= min_text
+    return safe_int(status.get("textLength")) >= safe_int(min_text)
 
 
 def route_changed(expected_url: str, landed_url: str) -> bool:
