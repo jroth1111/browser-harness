@@ -111,7 +111,7 @@ def navigate(url):
 
 def assert_logged_out_public_session():
     cookies = browser_cookies([BASE + "/"])
-    names = sorted({cookie.get("name") for cookie in cookies if cookie.get("name")})
+    names = sorted({cookie.get("name") for cookie in cookies if isinstance(cookie, dict) and cookie.get("name")})
     auth_names = sorted(set(names) & AUTH_COOKIE_NAMES)
     if auth_names:
         raise SystemExit(

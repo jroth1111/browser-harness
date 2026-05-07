@@ -451,6 +451,17 @@ def test_public_ranking_collectors_refuse_logged_in_airbnb_cookie_names(loader):
 
 
 @pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
+def test_public_ranking_collectors_skip_malformed_cookie_rows(loader):
+    module = loader()
+    module.browser_cookies = lambda urls: ["not-a-cookie", {"name": "bev"}]
+
+    result = module.assert_logged_out_public_session()
+
+    assert result["checked"] is True
+    assert result["auth_cookie_names_present"] == []
+
+
+@pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
 def test_public_search_url_defaults_to_entire_home(loader):
     module = loader()
     listing = {
