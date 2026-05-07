@@ -133,6 +133,14 @@ def run_sync(
         if existing:
             since = existing.get("cursor_value")
 
+    if limit is not None and limit <= 0:
+        archive_db.finish_run(
+            db, run_id,
+            status="complete",
+            summary=result.as_dict(),
+        )
+        return result
+
     # Step 3: walk the inventory.
     new_cursor: float | str | None = None
     try:

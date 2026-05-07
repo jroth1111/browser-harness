@@ -101,6 +101,40 @@ def test_artifact_blob_has_parent_artifact_row(tmp_path):
     ).fetchone()[0] == 1
 
 
+def test_run_sync_honors_zero_limit_before_inventory_capture(tmp_path):
+    class LimitIgnoringProvider(BlobProvider):
+        provider_id = "limitignore"
+
+        def inventory(self, ctx: ProviderContext, *, since=None, limit=None):
+            yield ThreadStub(
+                thread_key="thread-1",
+                provider_thread_id="thread-1",
+                canonical_url="https://blob.test/c/thread-1",
+                title="Should Not Capture",
+                updated_at=1,
+            )
+
+        def capture_thread(self, ctx: ProviderContext, stub: ThreadStub):
+            raise AssertionError("limit=0 must prevent capture")
+
+    db_path = tmp_path / "archive.sqlite3"
+    schema.init_db(db_path).close()
+    db = archive_db.connect(db_path)
+
+    result = sync_runner.run_sync(
+        LimitIgnoringProvider(),
+        db=db,
+        cookies_by_domain={"blob.test": {"session": "redacted"}},
+        limit=0,
+    )
+
+    assert result.errors == []
+    assert result.listed == 0
+    assert result.captured == 0
+    assert db.execute("SELECT COUNT(*) FROM threads").fetchone()[0] == 0
+    assert db.execute("SELECT status FROM runs").fetchone()[0] == "complete"
+
+
 def test_stub_unchanged_rejects_malformed_delta_summary_shape():
     stub = ThreadStub(
         thread_key="thread-1",
