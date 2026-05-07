@@ -79,6 +79,8 @@ def derive_output_path(path: str, expected_suffix: str, replacement_suffix: str)
 
 
 def safe_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
     try:
         return int(value)
     except (TypeError, ValueError):
