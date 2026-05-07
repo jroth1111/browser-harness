@@ -536,18 +536,31 @@ def destination_from_listing(listing):
     return location if location else "Melbourne, Victoria, Australia"
 
 
+def safe_float(value, default=None):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def adult_count(listing):
+    guests = safe_float(listing.get("max_guests"), 2)
+    return min(max(int(guests or 2), 1), 8)
+
+
 def search_url(listing, checkin, nights):
     checkout = checkout_date(checkin, nights)
     params = {
         "query": target_query(listing),
         "checkin": checkin,
         "checkout": checkout,
-        "adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
+        "adults": adult_count(listing),
         "room_types[]": "Entire home/apt",
     }
     bedrooms = listing.get("bedrooms")
-    if bedrooms:
-        params["min_bedrooms"] = int(float(bedrooms))
+    bedroom_count = safe_float(bedrooms)
+    if bedroom_count:
+        params["min_bedrooms"] = int(bedroom_count)
     return f"{BASE}/s/{destination_from_listing(listing).replace(' ', '--').replace(',', '')}/homes?{urlencode(params)}"
 
 
@@ -928,7 +941,7 @@ def main():
                     checkin=checkin,
                     checkout=checkout_date(checkin, nights),
                     nights=nights,
-                    adults=min(max(int(listing.get("max_guests") or 2), 1), 8),
+                    adults=adult_count(listing),
                     currency="AUD",
                     filters=filters_applied,
                     url=url,
@@ -948,7 +961,7 @@ def main():
                     "check_in_date": checkin,
                     "check_out_date": checkout_date(checkin, nights),
                     "nights": nights,
-                    "guest_count_adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
+                    "guest_count_adults": adult_count(listing),
                     "guest_count_children": 0,
                     "guest_count_pets": 0,
                     "filters_applied": filters_applied,

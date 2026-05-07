@@ -426,6 +426,18 @@ def destination_from_listing(listing):
     return location if location else "Melbourne, Victoria, Australia"
 
 
+def safe_float(value, default=None):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def adult_count(listing):
+    guests = safe_float(listing.get("max_guests"), 2)
+    return min(max(int(guests or 2), 1), 8)
+
+
 def search_url(listing, checkin, nights, price_band=None):
     checkout = checkout_date(checkin, nights)
     query = target_query(listing)
@@ -433,12 +445,13 @@ def search_url(listing, checkin, nights, price_band=None):
         "query": query,
         "checkin": checkin,
         "checkout": checkout,
-        "adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
+        "adults": adult_count(listing),
         "room_types[]": "Entire home/apt",
     }
     bedrooms = listing.get("bedrooms")
-    if bedrooms:
-        params["min_bedrooms"] = int(float(bedrooms))
+    bedroom_count = safe_float(bedrooms)
+    if bedroom_count:
+        params["min_bedrooms"] = int(bedroom_count)
     price_band = price_band or {}
     if price_band.get("price_min") is not None:
         params["price_min"] = int(price_band["price_min"])
@@ -735,7 +748,7 @@ def main():
                         checkin=checkin,
                         checkout=checkout_date(checkin, nights),
                         nights=nights,
-                        adults=min(max(int(listing.get("max_guests") or 2), 1), 8),
+                        adults=adult_count(listing),
                         currency="AUD",
                         filters=filters_applied,
                         price_band=price_band,
@@ -763,7 +776,7 @@ def main():
                         "partition_key": _public_scan_planner.partition_key(target_listing_id, checkin, nights, price_band),
                         "partition_depth": int(price_band.get("partition_depth") or 0),
                         "parent_price_band_label": price_band.get("parent_price_band_label"),
-                        "guest_count_adults": min(max(int(listing.get("max_guests") or 2), 1), 8),
+                        "guest_count_adults": adult_count(listing),
                         "guest_count_children": 0,
                         "guest_count_pets": 0,
                         "filters_applied": filters_applied,
