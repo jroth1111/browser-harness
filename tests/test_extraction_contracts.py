@@ -77,3 +77,13 @@ def test_summarize_extraction_coverage_counts_failed_key_outside_expected_fields
     assert summary["primary_key_failures"] == 1
     assert summary["fields"]["title"]["value"] == 1
     assert summary["fields"]["id"]["absent"] == 1
+
+
+def test_validate_extraction_record_rejects_scalar_expected_fields():
+    with pytest.raises(TypeError, match="expected_fields must be a list"):
+        validate_extraction_record({"title": "A"}, expected_fields="title")
+
+
+def test_summarize_extraction_coverage_rejects_non_string_expected_field():
+    with pytest.raises(TypeError, match="non-empty field-name strings"):
+        summarize_extraction_coverage([{"title": "A"}], expected_fields=["title", None])

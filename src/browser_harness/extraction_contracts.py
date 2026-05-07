@@ -4,6 +4,18 @@ UNOBSERVABLE = "__UNOBSERVABLE__"
 FIELD_STATES = {"value", "absent", "unobservable", "not_checked"}
 
 
+def normalize_expected_fields(expected_fields):
+    """Return a deduplicated field list, rejecting scalar strings."""
+    if isinstance(expected_fields, (str, bytes)) or not isinstance(expected_fields, (list, tuple, set)):
+        raise TypeError("expected_fields must be a list of field-name strings")
+    fields = []
+    for field in expected_fields:
+        if not isinstance(field, str) or not field:
+            raise TypeError("expected_fields must contain non-empty field-name strings")
+        fields.append(field)
+    return list(dict.fromkeys(fields))
+
+
 def classify_field(record, field, *, allow_empty_string=False):
     """Classify one extracted field using the four-state contract."""
     if field not in record:
@@ -29,6 +41,7 @@ def validate_extraction_record(
     """Validate one extraction record and return `{field: state}`."""
     if not isinstance(record, dict):
         raise TypeError("extraction record must be a dict")
+    expected_fields = normalize_expected_fields(expected_fields)
     states = {
         field: classify_field(record, field, allow_empty_string=allow_empty_string)
         for field in expected_fields
@@ -52,6 +65,7 @@ def summarize_extraction_coverage(
     allow_unobservable_key=False,
 ):
     """Return field-state counts and primary-key failure count for records."""
+    expected_fields = normalize_expected_fields(expected_fields)
     summary = {
         field: {state: 0 for state in FIELD_STATES}
         for field in expected_fields
