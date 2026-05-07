@@ -102,6 +102,17 @@ def test_warehouse_manifest_records_table_grain_and_auth_context():
     assert module.validate_warehouse_manifest(manifest) is True
 
 
+def test_warehouse_manifest_rejects_malformed_rows_with_value_error():
+    module = load_module()
+
+    try:
+        module.warehouse_manifest(["not-a-row"])
+    except ValueError as error:
+        assert "warehouse manifest rows require table and path" in str(error)
+    else:
+        raise AssertionError("malformed warehouse manifest row should fail validation")
+
+
 def test_contract_stamp_and_schema_validation_require_common_receipt_fields():
     module = load_module()
 

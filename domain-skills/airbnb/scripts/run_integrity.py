@@ -119,6 +119,8 @@ def warehouse_manifest(rows):
     """Build a stable BI/export manifest for generated JSON/CSV artifacts."""
     manifest = []
     for row in rows or []:
+        if not isinstance(row, dict):
+            raise ValueError("warehouse manifest rows require table and path")
         table = row.get("table")
         path = row.get("path")
         if not table or not path:
