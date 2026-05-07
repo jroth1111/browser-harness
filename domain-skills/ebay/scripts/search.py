@@ -321,10 +321,15 @@ def make_relevance_filter(target_chip: str, min_price: float = 500.0, mode: str 
             return chip_id_str in title_lower
 
     def is_relevant(item: dict) -> bool:
-        t = item['title'].lower()
+        title = item.get("title") if isinstance(item, dict) else None
+        if not isinstance(title, str) or not title:
+            return False
+        t = title.lower()
         if not match_fn(t):
             return False
         price = item.get('price') or 0
+        if not isinstance(price, (int, float)) or isinstance(price, bool):
+            return False
         if price < min_price:
             return False
         if mode == "system":

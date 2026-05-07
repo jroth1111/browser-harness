@@ -132,6 +132,16 @@ def test_ebay_urls_exits_when_child_generator_fails(monkeypatch):
     assert "ebay generator exploded" in str(exc.value)
 
 
+def test_ebay_relevance_filter_rejects_malformed_rows():
+    search = load_script_module("ebay_search_relevance", "domain-skills/ebay/scripts/search.py")
+    relevant = search.make_relevance_filter("RTX 4090", min_price=500, mode="gpu")
+
+    assert relevant({"title": "RTX 4090 graphics card", "price": 1200}) is True
+    assert relevant({"price": 1200}) is False
+    assert relevant({"title": 12345, "price": 1200}) is False
+    assert relevant({"title": "RTX 4090 graphics card", "price": "not-a-price"}) is False
+
+
 def test_aliexpress_classifier_accepts_json_title_strings():
     script = ROOT / "domain-skills/aliexpress/scripts/classify_product_line.py"
 
