@@ -385,10 +385,19 @@ def browser_channel_local_search(payload: Any = None) -> dict[str, Any]:
     return parsed
 
 
+def _player_response(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    player = payload.get("ytInitialPlayerResponse", payload)
+    return player if isinstance(player, dict) else None
+
+
 def api_player_metadata(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     if not payload:
         return result(False, None, "not_available", path_type="api")
-    player = payload.get("ytInitialPlayerResponse", payload)
+    player = _player_response(payload)
+    if player is None:
+        return result(False, None, "unsupported_shape", path_type="api")
     status = player.get("playabilityStatus", {})
     if status.get("status") == "LOGIN_REQUIRED":
         return result(False, {"playabilityStatus": status}, "login_required", path_type="api")
@@ -563,7 +572,9 @@ def api_channel_resolution(handle_or_url: str, payload: Any = None) -> dict[str,
 def api_storyboard_spec(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     if not payload:
         return result(False, None, "not_available", path_type="api")
-    player = payload.get("ytInitialPlayerResponse", payload)
+    player = _player_response(payload)
+    if player is None:
+        return result(False, None, "unsupported_shape", path_type="api")
     renderer = player.get("storyboards", {}).get("playerStoryboardSpecRenderer", {})
     spec = renderer.get("spec")
     if not spec:

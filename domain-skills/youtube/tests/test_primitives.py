@@ -86,6 +86,20 @@ def test_watch_transcript_storyboard_live_and_comments_fixtures_parse():
     assert comments["data"]["threads"][0]["reply_continuations"] == ["REDACTED_REPLY_CONTINUATION"]
 
 
+def test_player_primitives_reject_malformed_payload_shapes():
+    module = load_module()
+    for payload in (["not", "a", "mapping"], "not-json-object", {"ytInitialPlayerResponse": []}):
+        metadata = module.api_player_metadata(payload)
+        assert metadata["ok"] is False
+        assert metadata["reason"] == "unsupported_shape"
+        storyboard = module.api_storyboard_spec(payload)
+        assert storyboard["ok"] is False
+        assert storyboard["reason"] == "unsupported_shape"
+        live_status = module.api_video_live_status(payload)
+        assert live_status["ok"] is False
+        assert live_status["reason"] == "unsupported_shape"
+
+
 def test_channel_playlist_and_discovery_fixtures_parse():
     module = load_module()
     about = fixture("channel-about-sanitized.json")
