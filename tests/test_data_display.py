@@ -47,6 +47,15 @@ def test_load_records_csv_preserves_identifier_and_zero_padded_strings(tmp_path)
     assert rows[0]["count"] == 7
 
 
+def test_load_records_csv_preserves_overflow_float_as_string(tmp_path):
+    p = tmp_path / "rows.csv"
+    p.write_text("label,value\na,1e309\n", encoding="utf-8")
+
+    rows, _meta = data_display._load_records(p)
+
+    assert rows[0]["value"] == "1e309"
+
+
 def test_load_records_csv_preserves_extra_cells_without_crashing(tmp_path):
     p = tmp_path / "rows.csv"
     p.write_text("a,b\n1,2,3,4\n", encoding="utf-8")
@@ -284,6 +293,24 @@ def test_render_dataset_smoke_and_payload_keys(tmp_path):
     assert ds["meta"]["embedded_rows"] == 2
     assert ds["meta"]["aggregate_scope"] == "full"
     assert "profile" in ds["aggregates"]
+
+
+def test_render_dataset_payload_uses_strict_json_for_non_finite_values(tmp_path):
+    p = tmp_path / "rows.json"
+    p.write_text('{"records":[{"value": NaN}, {"value": Infinity}, {"value": 1}]}', encoding="utf-8")
+
+    out = pathlib.Path(data_display.render_dataset(str(p)))
+    html = out.read_text(encoding="utf-8")
+    payload = _extract_payload(out)
+
+    payload_script = re.search(
+        r'<script type="application/json" id="payload-json">(.*?)</script>',
+        html,
+        flags=re.S,
+    ).group(1)
+    assert "NaN" not in payload_script
+    assert "Infinity" not in payload_script
+    assert [row["value"] for row in payload["datasets"][0]["data"]] == [None, None, 1]
 
 
 def test_render_dataset_profile_view_payload_and_markup(tmp_path):

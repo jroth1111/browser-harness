@@ -11,6 +11,7 @@ Multiple paths render into one explorer with a sources switcher.
 """
 import csv
 import json
+import math
 import pathlib
 import re
 import statistics
@@ -297,7 +298,7 @@ def _coerce_csv(v, field_name=None):
     try:
         f = float(s)
         if "." in s or "e" in s.lower():
-            return f
+            return f if math.isfinite(f) else v
     except ValueError:
         pass
     if s.lower() in ("true", "false"):
@@ -470,7 +471,7 @@ def _describe_field(name, sample):
             type_counts["bool"] += 1
         elif isinstance(v, int):
             type_counts["int"] += 1
-        elif isinstance(v, float):
+        elif isinstance(v, float) and math.isfinite(v):
             type_counts["float"] += 1
         elif isinstance(v, str):
             type_counts["str"] += 1
@@ -715,7 +716,7 @@ def _numeric_profile(values):
     vals = sorted(
         float(value)
         for value in values
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
+        if _is_finite_number(value)
     )
     if not vals:
         return None
@@ -758,7 +759,7 @@ def _aggregate_kpis(records, schema):
         vals = []
         for row in records:
             v = row.get(field) if isinstance(row, dict) else None
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
+            if _is_finite_number(v):
                 vals.append(float(v))
         if not vals:
             continue
@@ -811,7 +812,7 @@ def _aggregate_line(records, schema):
                         continue
                     x_value = row.get(x_field)
                     y_value = row.get(y_field)
-                    if x_value is None or not isinstance(y_value, (int, float)) or isinstance(y_value, bool):
+                    if x_value is None or not _is_finite_number(y_value):
                         continue
                     x_key = str(x_value)
                     s_key = str(row.get(series_field) if series_field else "__total__")
@@ -875,6 +876,10 @@ def _line_key(x_field, y_field, series_field):
     return f"{x_field}||{y_field}||{series_field or ''}"
 
 
+def _is_finite_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _line_x_sort_key(value):
     text = str(value)
     if _ISO_DATE_RE.match(text):
@@ -911,7 +916,7 @@ def _emit_html(datasets, title, default_view, multi):
         .replace("__TAILWIND_CSS__", _TAILWIND_CSS)
         .replace("__ECHARTS_JS__", _escape_for_script_tag(_asset_text(_ECHARTS_ASSET)))
         .replace("__ALPINE_JS__", _escape_for_script_tag(_asset_text(_ALPINE_ASSET)))
-        .replace("__PAYLOAD__", _escape_for_script_tag(json.dumps(payload, default=str, ensure_ascii=False)))
+        .replace("__PAYLOAD__", _escape_for_script_tag(_dumps_payload(payload)))
     )
 
 
@@ -925,6 +930,20 @@ def _asset_text(name):
 def _escape_for_script_tag(s):
     # Inside <script type="application/json"> only </ needs neutralizing.
     return s.replace("</", "<\\/")
+
+
+def _dumps_payload(payload):
+    return json.dumps(_json_payload_safe(payload), default=str, ensure_ascii=False, allow_nan=False)
+
+
+def _json_payload_safe(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, list):
+        return [_json_payload_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_payload_safe(item) for key, item in value.items()}
+    return value
 
 
 def _escape_html(s):
