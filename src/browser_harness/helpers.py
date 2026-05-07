@@ -925,7 +925,7 @@ def _debug_click_dpr(image_width):
         info = page_info()
     except Exception:
         return 1
-    viewport_width = int(info.get("w") or 0)
+    viewport_width = _int_count(info.get("w"))
     if viewport_width <= 0:
         return 1
     return image_width / viewport_width

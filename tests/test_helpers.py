@@ -711,6 +711,11 @@ def test_debug_click_dpr_falls_back_without_viewport_width():
         assert helpers._debug_click_dpr(1000) == 1
 
 
+def test_debug_click_dpr_falls_back_with_malformed_viewport_width():
+    with patch("browser_harness.helpers.page_info", return_value={"w": "not-a-width"}):
+        assert helpers._debug_click_dpr(1000) == 1
+
+
 def test_debug_click_dpr_falls_back_when_metrics_fail():
     with patch("browser_harness.helpers.page_info", side_effect=RuntimeError("metrics unavailable")):
         assert helpers._debug_click_dpr(1000) == 1
