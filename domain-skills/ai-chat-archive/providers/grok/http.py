@@ -130,7 +130,7 @@ class GrokHTTPAPI:
                 continue
             if r.get("isControl"):
                 continue
-            sender = (r.get("sender") or "").lower()
+            sender = str(r.get("sender") or "").lower()
             role = "user" if sender == "human" else "assistant"
             rid = r.get("responseId") or ""
             ts = r.get("createTime")

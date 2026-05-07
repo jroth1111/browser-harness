@@ -100,6 +100,17 @@ def test_grok_extract_messages_skips_malformed_rows_and_messages():
     }]
 
 
+def test_grok_extract_messages_tolerates_scalar_sender():
+    messages = GrokHTTPAPI.extract_messages({
+        "responses": [
+            {"responseId": "r1", "sender": 123, "message": "Hello"},
+        ],
+    })
+
+    assert messages[0]["role"] == "assistant"
+    assert messages[0]["content"] == "Hello"
+
+
 def test_grok_extract_artifacts_ignores_scalar_collections():
     artifacts = GrokHTTPAPI.extract_artifacts({
         "responses": [
