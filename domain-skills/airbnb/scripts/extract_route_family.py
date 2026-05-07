@@ -102,6 +102,9 @@ def extract_family(snapshot_json_path, family, *, allow_partial=False, allow_qua
 if __name__ == "__main__":
     import sys
 
+    if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
+        print("Usage: python extract_route_family.py <snapshot_json_path> <family> [--allow-partial] [--allow-quarantined]")
+        raise SystemExit(0)
     allow_partial = "--allow-partial" in sys.argv
     allow_quarantined = "--allow-quarantined" in sys.argv
     positional = [arg for arg in sys.argv[1:] if arg not in {"--allow-partial", "--allow-quarantined"}]

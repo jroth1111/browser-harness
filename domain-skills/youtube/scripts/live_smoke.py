@@ -369,4 +369,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+    if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
+        print((__doc__ or "").strip())
+        raise SystemExit(0)
     main()
