@@ -71,6 +71,8 @@ class ChatGPTHTTPAPI:
             return {"authenticated": False, "error": data}
 
         user = data.get("user", {})
+        if not isinstance(user, dict):
+            return {"authenticated": False, "error": data}
         self._access_token = data.get("accessToken")
 
         return {

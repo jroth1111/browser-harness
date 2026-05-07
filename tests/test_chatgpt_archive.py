@@ -55,6 +55,18 @@ def test_chatgpt_http_methods_guard_non_dict_responses(monkeypatch):
     assert api.conversation_detail("conv") is None
 
 
+def test_chatgpt_auth_rejects_malformed_user_shape(monkeypatch):
+    api = ChatGPTHTTPAPI({})
+
+    monkeypatch.setattr(api, "_fetch_json", lambda url, timeout=30: {"user": ["not", "an", "object"]})
+
+    assert api.authenticate() == {
+        "authenticated": False,
+        "error": {"user": ["not", "an", "object"]},
+    }
+    assert api._access_token is None
+
+
 # --- schema ---
 
 def test_init_db_creates_all_tables():
