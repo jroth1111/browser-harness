@@ -782,13 +782,21 @@ def diagnose_url_capability(url, min_text=500, timeout=20.0, close=True):
             except Exception: pass
 
 def _extract_json_assignment(html, name):
-    marker = f"window.{name}="
-    start = html.find(marker)
-    if start < 0:
+    pattern = re.compile(
+        rf"(?:\b(?:window|globalThis|self)\s*\.\s*)?{re.escape(name)}\s*=\s*",
+        re.MULTILINE,
+    )
+    match = pattern.search(html)
+    if not match:
         return None
-    i = html.find("{", start + len(marker))
-    if i < 0:
+    obj_start = html.find("{", match.end())
+    arr_start = html.find("[", match.end())
+    starts = [pos for pos in (obj_start, arr_start) if pos >= 0]
+    if not starts:
         return None
+    i = min(starts)
+    opener = html[i]
+    closer = "}" if opener == "{" else "]"
     depth = 0
     quote = None
     escape = False
@@ -804,9 +812,9 @@ def _extract_json_assignment(html, name):
             continue
         if ch in {"'", '"', '`'}:
             quote = ch
-        elif ch == "{":
+        elif ch == opener:
             depth += 1
-        elif ch == "}":
+        elif ch == closer:
             depth -= 1
             if depth == 0:
                 return html[i:pos + 1]

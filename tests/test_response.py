@@ -147,6 +147,18 @@ def test_embedded_json_extracts_window_assignment():
     assert r.embedded_json("MY_DATA") == {"key": "value"}
 
 
+def test_embedded_json_handles_whitespace_aliases_and_arrays():
+    html = "<script>globalThis.MY_DATA = [{\"key\": \"value\"}, {\"nested\": [1, 2]}];</script>"
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert r.embedded_json("MY_DATA") == [{"key": "value"}, {"nested": [1, 2]}]
+
+
+def test_embedded_json_handles_bare_assignment():
+    html = "<script>MY_DATA = {\"text\": \"brace } in string\"};</script>"
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert r.embedded_json("MY_DATA") == {"text": "brace } in string"}
+
+
 def test_embedded_json_returns_none_when_absent():
     r = Response(html="<p>no js</p>", text="x", url="https://x.com",
                  status=200, source="http")
