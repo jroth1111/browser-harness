@@ -539,6 +539,26 @@ def test_competitor_search_url_applies_optional_price_band():
     assert module.search_run_id("100", "2026-05-29", 3, "251-500").endswith("-price-251-500")
 
 
+def test_competitor_search_url_tolerates_malformed_price_band():
+    module = load_competitors_module()
+    listing = {
+        "address": "500 Elizabeth St, Melbourne VIC 3000, Australia",
+        "location_label": "Melbourne, Victoria, Australia",
+        "max_guests": 4,
+        "bedrooms": 2,
+    }
+
+    query = parse_qs(urlsplit(module.search_url(
+        listing,
+        "2026-05-29",
+        3,
+        price_band={"price_min": "cheap", "price_max": "expensive"},
+    )).query)
+
+    assert "price_min" not in query
+    assert "price_max" not in query
+
+
 @pytest.mark.parametrize("loader", [load_own_public_module, load_competitors_module])
 def test_public_search_url_tolerates_malformed_listing_counts(loader):
     module = loader()

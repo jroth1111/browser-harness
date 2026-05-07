@@ -453,10 +453,12 @@ def search_url(listing, checkin, nights, price_band=None):
     if bedroom_count:
         params["min_bedrooms"] = int(bedroom_count)
     price_band = price_band or {}
-    if price_band.get("price_min") is not None:
-        params["price_min"] = int(price_band["price_min"])
-    if price_band.get("price_max") is not None:
-        params["price_max"] = int(price_band["price_max"])
+    price_min = safe_float(price_band.get("price_min"))
+    price_max = safe_float(price_band.get("price_max"))
+    if price_min is not None:
+        params["price_min"] = int(price_min)
+    if price_max is not None:
+        params["price_max"] = int(price_max)
     return f"{BASE}/s/{destination_from_listing(listing).replace(' ', '--').replace(',', '')}/homes?{urlencode(params)}"
 
 
