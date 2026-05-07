@@ -306,8 +306,8 @@ def upsert_artifact(
         old_hash = existing["content_hash"]
         conn.execute(
             """UPDATE artifacts SET
-                 label = COALESCE(?, label),
-                 source_url = COALESCE(?, source_url),
+                 label = COALESCE(NULLIF(?, ''), label),
+                 source_url = COALESCE(NULLIF(?, ''), source_url),
                  byte_length = COALESCE(?, byte_length),
                  content_hash = ?,
                  last_seen_capture_id = ?

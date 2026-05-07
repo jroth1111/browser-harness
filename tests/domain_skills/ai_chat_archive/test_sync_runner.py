@@ -144,6 +144,52 @@ def test_artifact_blob_uses_downloaded_size_when_metadata_size_is_malformed(tmp_
     assert row["byte_length"] == len(b"report bytes")
 
 
+def test_artifact_upsert_preserves_metadata_when_incoming_strings_are_empty(tmp_path):
+    db_path = tmp_path / "archive.sqlite3"
+    schema.init_db(db_path).close()
+    db = archive_db.connect(db_path)
+    archive_db.ensure_provider(db, "blobtest", "Blob Test")
+    archive_db.ensure_account(db, "blobtest", "acct", "acct@example.test")
+    archive_db.upsert_thread(db, {
+        "thread_key": "thread-1",
+        "provider_id": "blobtest",
+        "account_key": "acct",
+        "provider_thread_id": "thread-1",
+        "canonical_url": "https://blob.test/c/thread-1",
+        "title": "Thread With Artifact",
+        "status": "complete",
+        "content_hash": "thread-hash",
+    })
+
+    artifact = {
+        "thread_key": "thread-1",
+        "provider_artifact_id": "artifact-1",
+        "label": "report.txt",
+        "artifact_type": "document",
+        "source_url": "https://example.test/report.txt",
+        "capture_id": "capture-1",
+        "content_hash": "hash-1",
+    }
+    artifact_key = archive_db.upsert_artifact(db, artifact)
+
+    archive_db.upsert_artifact(db, {
+        **artifact,
+        "label": "",
+        "source_url": "",
+        "capture_id": "capture-2",
+    })
+
+    row = db.execute(
+        "SELECT label, source_url, last_seen_capture_id FROM artifacts WHERE artifact_key = ?",
+        (artifact_key,),
+    ).fetchone()
+    assert dict(row) == {
+        "label": "report.txt",
+        "source_url": "https://example.test/report.txt",
+        "last_seen_capture_id": "capture-2",
+    }
+
+
 def test_run_sync_honors_zero_limit_before_inventory_capture(tmp_path):
     class LimitIgnoringProvider(BlobProvider):
         provider_id = "limitignore"
