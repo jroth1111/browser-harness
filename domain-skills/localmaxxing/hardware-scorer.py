@@ -145,9 +145,13 @@ def load_data():
         return json.load(f)
 
 
+def dict_value(value):
+    return value if isinstance(value, dict) else {}
+
+
 def hardware_key(row):
     """Derive a unique key for the hardware in a benchmark row."""
-    hw = row.get("hardware", {})
+    hw = dict_value(row.get("hardware"))
     cls = hw.get("hwClass", "UNKNOWN")
     if cls == "DISCRETE_GPU":
         name = hw.get("gpuName", "unknown")
@@ -190,10 +194,10 @@ def score_hardware(rows, profile="balanced"):
     for key, benchmarks in groups.items():
         toks = [b["tokSOut"] for b in benchmarks if b.get("tokSOut")]
         ttfts = [b["ttftMs"] for b in benchmarks if b.get("ttftMs") is not None]
-        params = [b["model"]["params"] for b in benchmarks if b.get("model", {}).get("params")]
+        params = [dict_value(b.get("model"))["params"] for b in benchmarks if dict_value(b.get("model")).get("params")]
         peaks = [b["peakVramGb"] for b in benchmarks if b.get("peakVramGb")]
 
-        hw = benchmarks[0].get("hardware", {})
+        hw = dict_value(benchmarks[0].get("hardware"))
         mem_gb = (
             hw.get("vramGb", 0) or hw.get("unifiedMemoryGb", 0) or hw.get("ramGb", 0) or 0
         )
@@ -322,7 +326,7 @@ def list_models(rows):
     """List all model families and parameter sizes in the data."""
     families = defaultdict(set)
     for r in rows:
-        m = r.get("model", {})
+        m = dict_value(r.get("model"))
         fam = m.get("family", "")
         params = m.get("params")
         hf_id = m.get("hfId", "")
@@ -350,7 +354,7 @@ def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budg
 
     matched = []
     for r in rows:
-        m = r.get("model", {})
+        m = dict_value(r.get("model"))
         family = (m.get("family") or "").lower()
         hf_id = (m.get("hfId") or "").lower()
         if model_query_lower not in family and model_query_lower not in hf_id:
@@ -360,7 +364,7 @@ def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budg
             if params != size_filter:
                 continue
         if quant_filter is not None:
-            q = (r.get("engine", {}).get("quantization") or "").lower()
+            q = (dict_value(r.get("engine")).get("quantization") or "").lower()
             if quant_filter.lower() not in q:
                 continue
         matched.append(r)
@@ -375,14 +379,14 @@ def score_model_fit(rows, model_query, size_filter=None, quant_filter=None, budg
 
     hw_results = []
     for key, benchmarks in groups.items():
-        hw = benchmarks[0].get("hardware", {})
+        hw = dict_value(benchmarks[0].get("hardware"))
         price = STREET_PRICES.get(hw.get("gpuName"), STREET_PRICES.get(hw.get("chipVariant")))
         if budget is not None and price is not None and price > budget:
             continue
 
         toks = [b["tokSOut"] for b in benchmarks if b.get("tokSOut")]
         ttfts = [b["ttftMs"] for b in benchmarks if b.get("ttftMs") is not None]
-        quants = set(b.get("engine", {}).get("quantization") for b in benchmarks if b.get("engine", {}).get("quantization"))
+        quants = set(dict_value(b.get("engine")).get("quantization") for b in benchmarks if dict_value(b.get("engine")).get("quantization"))
         mem_gb = hw.get("vramGb", 0) or hw.get("unifiedMemoryGb", 0) or hw.get("ramGb", 0) or 0
 
         median_tok = statistics.median(toks) if toks else 0
@@ -449,7 +453,7 @@ def main():
     rows = fetch_leaderboard() if args.refresh else load_data()
 
     if args.hw_class:
-        rows = [r for r in rows if r.get("hardware", {}).get("hwClass") == args.hw_class]
+        rows = [r for r in rows if dict_value(r.get("hardware")).get("hwClass") == args.hw_class]
 
     if args.models:
         print(list_models(rows))
