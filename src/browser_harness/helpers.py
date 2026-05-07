@@ -1145,7 +1145,7 @@ def list_tabs(include_chrome=True):
     return out
 
 def current_tab():
-    t = cdp("Target.getTargetInfo").get("targetInfo", {})
+    t = _dict_value(cdp("Target.getTargetInfo").get("targetInfo"))
     return {"targetId": t.get("targetId"), "url": t.get("url", ""), "title": t.get("title", "")}
 
 def switch_tab(target):

@@ -366,6 +366,11 @@ def test_list_tabs_rejects_malformed_target_infos_envelope():
             helpers.list_tabs()
 
 
+def test_current_tab_tolerates_malformed_target_info():
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfo": "not-an-object"}):
+        assert helpers.current_tab() == {"targetId": None, "url": "", "title": ""}
+
+
 def test_iframe_target_skips_malformed_and_partial_target_rows():
     with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
         "not-an-object",
