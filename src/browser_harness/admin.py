@@ -858,7 +858,7 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
             break
         time.sleep(0.3)
     else:
-        proc.kill()
+        _kill_and_wait(proc)
         if is_temp:
             shutil.rmtree(user_data_dir, ignore_errors=True)
         raise RuntimeError("Chrome did not write DevToolsActivePort within 15s")
@@ -866,7 +866,7 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
     try:
         actual_port = int(dap_lines[0].strip())
     except (ValueError, IndexError) as e:
-        proc.kill()
+        _kill_and_wait(proc)
         if is_temp:
             shutil.rmtree(user_data_dir, ignore_errors=True)
         raise RuntimeError(f"unexpected DevToolsActivePort format: {dap_lines!r}") from e
@@ -905,6 +905,14 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
         "temp_profile": is_temp,
         "_proc": proc,
     }
+
+
+def _kill_and_wait(proc, timeout=3):
+    proc.kill()
+    try:
+        proc.wait(timeout=timeout)
+    except Exception:
+        pass
 
 
 def close_browser(launch_info):

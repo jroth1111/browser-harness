@@ -282,6 +282,42 @@ def test_launch_browser_cleans_process_and_temp_profile_when_daemon_attach_fails
     assert admin.os.environ["BH_CDP_WS"] == "ws://previous"
 
 
+def test_launch_browser_waits_after_killing_malformed_devtools_port(monkeypatch, tmp_path):
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / "DevToolsActivePort").write_text("not-a-port\n/devtools/browser/abc\n")
+
+    class Proc:
+        pid = 1234
+        stderr = None
+
+        def __init__(self):
+            self.killed = False
+            self.wait_calls = []
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout=None):
+            self.wait_calls.append(timeout)
+            return 0
+
+    proc = Proc()
+    monkeypatch.setattr(admin, "_default_chrome_executable", lambda: "/bin/chrome")
+    monkeypatch.setattr(admin.tempfile, "mkdtemp", lambda prefix: str(profile))
+    monkeypatch.setattr(admin.subprocess, "Popen", lambda *args, **kwargs: proc)
+
+    with pytest.raises(RuntimeError, match="unexpected DevToolsActivePort format"):
+        admin.launch_browser()
+
+    assert proc.killed is True
+    assert proc.wait_calls == [3]
+    assert not profile.exists()
+
+
 def test_start_remote_daemon_does_not_stop_created_browser_on_success(monkeypatch):
     calls = []
     browser = {"id": "browser-123", "cdpUrl": "http://127.0.0.1:9333", "liveUrl": "https://live.example"}
