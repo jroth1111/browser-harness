@@ -260,9 +260,21 @@ def _load_csv(path):
     with path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            rows.append({k: _coerce_csv(v, k) for k, v in row.items()})
+            rows.append(_normalize_csv_row(row))
     meta = {"source_file": str(path), "row_count": len(rows), "format": "csv"}
     return rows, meta
+
+
+def _normalize_csv_row(row):
+    out = {}
+    for key, value in row.items():
+        if key is None:
+            extras = value if isinstance(value, list) else [value]
+            for index, extra in enumerate(extras, start=1):
+                out[f"_extra_{index}"] = _coerce_csv(extra, f"_extra_{index}")
+            continue
+        out[key] = _coerce_csv(value, key)
+    return out
 
 
 def _coerce_csv(v, field_name=None):

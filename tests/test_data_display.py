@@ -47,6 +47,16 @@ def test_load_records_csv_preserves_identifier_and_zero_padded_strings(tmp_path)
     assert rows[0]["count"] == 7
 
 
+def test_load_records_csv_preserves_extra_cells_without_crashing(tmp_path):
+    p = tmp_path / "rows.csv"
+    p.write_text("a,b\n1,2,3,4\n", encoding="utf-8")
+
+    rows, meta = data_display._load_records(p)
+
+    assert rows == [{"a": 1, "b": 2, "_extra_1": 3, "_extra_2": 4}]
+    assert meta["row_count"] == 1
+
+
 def test_load_records_jsonl_skips_bad_lines(tmp_path):
     p = tmp_path / "rows.jsonl"
     p.write_text('{"a":1}\n\nnot-json\n2\n{"b":"x"}\n', encoding="utf-8")
