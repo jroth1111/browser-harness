@@ -353,6 +353,7 @@ def upsert_citation(conn: sqlite3.Connection, citation: dict) -> None:
         """INSERT INTO citations (citation_key, thread_key, capture_id, label, url, source_json)
            VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(citation_key) DO UPDATE SET
+             capture_id = excluded.capture_id,
              label = excluded.label,
              url = excluded.url,
              source_json = excluded.source_json""",

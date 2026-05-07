@@ -382,6 +382,45 @@ def test_known_thread_keys():
     assert keys == {"conv-1", "conv-2"}
 
 
+def test_upsert_citation_refreshes_capture_id_on_existing_row():
+    conn = _init_mem(sqlite3.connect(":memory:"))
+    ak = _setup_account(conn)
+    tk = compute_thread_key("chatgpt", "conv-1")
+    run_id = generate_run_id()
+    new_run(conn, run_id, {})
+    upsert_thread(conn, {
+        "thread_key": tk, "provider_id": "chatgpt", "account_key": ak,
+        "provider_thread_id": "conv-1", "status": "listed",
+    })
+    for capture_id, content in (("cap-1", "first"), ("cap-2", "second")):
+        insert_capture(conn, {
+            "capture_id": capture_id,
+            "run_id": run_id,
+            "thread_key": tk,
+            "captured_at": f"2026-05-04T12:00:0{1 if capture_id == 'cap-1' else 2}Z",
+            "source_context": "test",
+            "completion_state": "complete",
+            "normalized_json": f'{{"content":"{content}"}}',
+            "rendered_markdown": content,
+            "content_hash": compute_content_hash(content),
+        })
+        upsert_citation(conn, {
+            "thread_key": tk,
+            "capture_id": capture_id,
+            "label": "Source",
+            "url": "https://example.test/source",
+            "source_json": {"content": content},
+        })
+
+    row = conn.execute(
+        "SELECT capture_id, source_json FROM citations WHERE thread_key = ?",
+        (tk,),
+    ).fetchone()
+
+    assert row["capture_id"] == "cap-2"
+    assert "second" in row["source_json"]
+
+
 # --- capture ---
 
 def test_insert_and_query_capture():
