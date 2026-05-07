@@ -164,6 +164,26 @@ def test_capture_skips_malformed_cdp_event_shapes():
     }]
 
 
+def test_capture_sanitizes_malformed_response_status_for_body_capture():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1", "request": {"url": "https://x.com/api", "method": "GET"}, "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1", "response": {"status": "ok", "mimeType": "application/json", "headers": {}},
+        }},
+    ]
+
+    with patch("browser_harness.network_capture.helpers.cdp"), \
+         patch("browser_harness.network_capture.helpers.drain_events", return_value=events), \
+         patch("browser_harness.network_capture.helpers.goto_url"), \
+         patch("browser_harness.network_capture.time.sleep"):
+        result = network_capture.capture_network_requests("https://x.com", capture_bodies=True)
+
+    assert result[0]["status"] == 0
+    assert "body" not in result[0]
+
+
 def test_redacted_capture_entries_ignores_scalar_header_maps():
     redacted = network_capture.redacted_capture_entries([{
         "url": "https://x.com/api",

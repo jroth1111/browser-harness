@@ -13,6 +13,10 @@ def _dict(value):
     return value if isinstance(value, dict) else {}
 
 
+def _status_code(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
 def redact_capture_entry(entry):
     """Return a receipt-safe copy of a captured network entry."""
     safe = dict(entry)
@@ -78,7 +82,7 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
                 resp = _dict(params.get("response"))
                 responses[rid] = {
                     "requestId": rid,
-                    "status": resp.get("status", 0),
+                    "status": _status_code(resp.get("status")),
                     "mime_type": resp.get("mimeType", ""),
                     "response_headers": _dict(resp.get("headers")),
                 }
