@@ -76,3 +76,20 @@ def test_load_restaurant_input_rejects_non_object_restaurant_rows(tmp_path):
 
     with pytest.raises(ValueError, match="records must be objects"):
         module.load_restaurant_input(source)
+
+
+def test_assign_categories_from_dom_ignores_malformed_browser_json():
+    module = load_module()
+    menu_items = [{"item_name": "Toast"}]
+
+    class FakeSession:
+        def __init__(self):
+            self.calls = 0
+
+        def js(self, script):
+            self.calls += 1
+            return '"not-a-valid-shape"'
+
+    module._assign_categories_from_dom(FakeSession(), menu_items)
+
+    assert menu_items == [{"item_name": "Toast"}]

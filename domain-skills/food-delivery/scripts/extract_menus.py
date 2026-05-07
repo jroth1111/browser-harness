@@ -116,6 +116,9 @@ def _assign_categories_from_dom(s, menu_items):
     if not raw:
         return
     categories = json.loads(raw)
+    if not isinstance(categories, list):
+        return
+    categories = [cat for cat in categories if isinstance(cat, dict)]
 
     # Get Y positions of H3 elements (menu item names)
     names_str = json.dumps([m["item_name"] for m in menu_items[:100]])
@@ -141,6 +144,8 @@ def _assign_categories_from_dom(s, menu_items):
     if not raw2:
         return
     positions = json.loads(raw2)
+    if not isinstance(positions, dict):
+        return
 
     # Assign categories based on Y position
     for item in menu_items:
