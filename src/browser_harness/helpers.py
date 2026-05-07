@@ -236,6 +236,8 @@ def _wait_until_load(strategy, timeout=15.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
         for ev in drain_events():
+            if not isinstance(ev, dict):
+                continue
             if ev.get("method") == target_event:
                 return {"ok": True, "reason": strategy}
         time.sleep(0.3)
@@ -253,8 +255,11 @@ def _wait_until_network_idle(timeout=15.0):
         drain_events()
         while time.time() < deadline:
             for ev in drain_events():
+                if not isinstance(ev, dict):
+                    continue
                 m = ev.get("method", "")
-                rid = (ev.get("params") or {}).get("requestId")
+                params = ev.get("params") if isinstance(ev.get("params"), dict) else {}
+                rid = params.get("requestId")
                 if m == "Network.requestWillBeSent" and rid:
                     pending.add(rid)
                     idle_since = None
@@ -1063,10 +1068,12 @@ def wait_for_network_idle(timeout=10.0, idle_ms=500):
     active_session = _send({"meta": "session"}).get("session_id")
     while time.time() < deadline:
         for e in drain_events():
+            if not isinstance(e, dict):
+                continue
             if e.get("session_id") != active_session:
                 continue
             method = e.get("method", "")
-            params = e.get("params") or {}
+            params = e.get("params") if isinstance(e.get("params"), dict) else {}
             if method == "Network.requestWillBeSent":
                 inflight.add(params.get("requestId"))
                 last_activity = time.time()

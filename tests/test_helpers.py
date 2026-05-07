@@ -609,6 +609,31 @@ def test_wait_for_load_sees_already_queued_load_event():
     assert calls == [("Page.enable", {})]
 
 
+def test_wait_for_load_skips_malformed_event_rows():
+    with patch("browser_harness.helpers.cdp", return_value={}), \
+         patch("browser_harness.helpers.drain_events", side_effect=[
+             [],
+             ["not an event", {"method": "Page.loadEventFired"}],
+         ]), \
+         patch("time.sleep"):
+        assert helpers.wait_for_load(timeout=1)
+
+
+def test_wait_for_network_idle_skips_malformed_event_rows():
+    with patch("browser_harness.helpers.cdp", return_value={}), \
+         patch("browser_harness.helpers.drain_events", side_effect=[
+             [],
+             [
+                 "not an event",
+                 {"method": "Network.requestWillBeSent", "params": "bad params"},
+             ],
+             [],
+         ]), \
+         patch("time.sleep"), \
+         patch("time.time", side_effect=[0, 0, 0, 0.2, 0.7, 0.7]):
+        assert helpers._wait_until_network_idle(timeout=1) == {"ok": True, "reason": "networkidle"}
+
+
 def test_click_humanize_is_opt_in():
     calls = []
 
