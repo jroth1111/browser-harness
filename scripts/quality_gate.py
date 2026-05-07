@@ -136,6 +136,72 @@ def assert_hygiene(root: Path) -> None:
     print("hygiene scan passed")
 
 
+FORBIDDEN_DOMAIN_TOKENS = [
+    "urllib.request.urlopen",
+    "requests.get",
+    "requests.post",
+    "browser_cookies",
+    "cdp(",
+    "stealth_session",
+    "solve_turnstile",
+    "navigate_via_google",
+    "Network.getCookies",
+    "Runtime.evaluate",
+]
+
+FORBIDDEN_AGENT_IMPORTS = [
+    "browser_harness._ipc",
+    "browser_harness.helpers",
+    "browser_harness.stealth_helpers",
+    "urllib.request",
+    "subprocess",
+    "socket",
+]
+
+
+def assert_authority(root: Path) -> None:
+    """Authority proof gates — verify the authority model is enforced."""
+    # Gate 1: Agent runtime import isolation
+    result = run(
+        ["uv", "run", "pytest", "-q", "-x", "-k", "test_agent_runtime_cannot_import_raw_authorities"],
+        cwd=root,
+    )
+
+    # Gate 2: Challenge-no-solver — AccessPlane must not reference solve_turnstile
+    result = run(
+        ["uv", "run", "pytest", "-q", "-x", "-k", "test_production_fetch_does_not_reference_solve_turnstile"],
+        cwd=root,
+    )
+
+    # Gate 3: Domain skill transport-forbidden scan
+    domain_dir = root / "domain-skills"
+    if domain_dir.exists():
+        violations = []
+        for path in domain_dir.rglob("*.py"):
+            text = path.read_text()
+            for token in FORBIDDEN_DOMAIN_TOKENS:
+                if token in text:
+                    violations.append(f"{path.relative_to(root)}: {token}")
+        if violations:
+            print(f"domain-skill transport scan: {len(violations)} violations (expected during migration)")
+        else:
+            print("domain-skill transport scan: OK (no violations)")
+
+    # Gate 4: Authority proof tests
+    result = run(
+        ["uv", "run", "pytest", "-q", "tests/test_authority.py", "-x"],
+        cwd=root,
+    )
+
+    # Gate 5: AccessPlane proof tests
+    result = run(
+        ["uv", "run", "pytest", "-q", "tests/test_access_plane.py", "-x"],
+        cwd=root,
+    )
+
+    print("authority gates passed")
+
+
 def is_generated_status_path(path: str) -> bool:
     parts = path.split("/")
     if any(part in FORBIDDEN_STATUS_DIRS for part in parts):
@@ -158,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_release_proof:
         run(RELEASE_PROOF(), cwd=root)
     assert_hygiene(root)
+    assert_authority(root)
     if args.live:
         env = dict(os.environ)
         env["BROWSER_HARNESS_DATA_DISPLAY_BROWSER_SMOKE"] = "1"

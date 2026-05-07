@@ -32,6 +32,7 @@ from .admin import (
 from .helpers import *
 from .agent_helpers import *  # noqa: F401,F403  agent-editable namespace
 from .response import Response
+from .runtime.dev_runtime import run_dev  # noqa: F401
 
 HELP = """Browser Harness
 
@@ -217,7 +218,7 @@ def main():
     ):
         start_remote_daemon(NAME)
     ensure_daemon()
-    exec(code, globals())
+    run_dev(code)
 
 
 if __name__ == "__main__":

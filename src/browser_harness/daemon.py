@@ -303,7 +303,7 @@ def _is_attachable_page(t):
 
 
 class Daemon:
-    def __init__(self):
+    def __init__(self, lazy_domains=False):
         self.cdp = None
         self.session = None
         self.target_id = None
@@ -312,6 +312,8 @@ class Daemon:
         self.dialog = None
         self.blockers = deque(maxlen=200)
         self.stop = None  # asyncio.Event, set inside start()
+        self.lazy_domains = lazy_domains
+        self._enabled_domains: dict[str, set[str]] = {}  # session_id -> set of enabled domains
 
     async def attach_first_page(self):
         """Attach to a real page (or any page). Sets self.session. Returns attached target or None."""
@@ -338,19 +340,39 @@ class Daemon:
         return pages[0]
 
     async def _enable_default_domains(self, session_id):
-        # Each fresh CDP session starts with all domains disabled. Without
-        # this, wait_for_network_idle() silently stops receiving Network
-        # events after switch_tab() / new_tab() routes through set_session
-        # and lands on a session that was never enabled.
+        # Each fresh CDP session starts with all domains disabled.
+        # In legacy (eager) mode: enable Page, DOM, Runtime, Network — preserves
+        # backward compatibility for dev_runtime and existing helpers.
+        # In lazy mode: only enable Page (needed for navigation events).
+        # Other domains are enabled on-demand via ensure_domains().
+        if self.lazy_domains:
+            domains = ("Page",)
+        else:
+            domains = ("Page", "DOM", "Runtime", "Network")
+        await self._enable_domains(session_id, *domains)
+
+    async def _enable_domains(self, session_id, *domains):
+        """Enable specific CDP domains on a session. Tracks what's enabled."""
+        enabled = self._enabled_domains.setdefault(session_id, set())
+        to_enable = [d for d in domains if d not in enabled]
+
         async def enable_one(d):
             try:
                 await asyncio.wait_for(
                     self.cdp.send_raw(f"{d}.enable", session_id=session_id),
                     timeout=4,
                 )
+                enabled.add(d)
             except Exception as e:
                 log(f"enable {d} on {session_id}: {e}")
-        await asyncio.gather(*(enable_one(d) for d in ("Page", "DOM", "Runtime", "Network")))
+
+        if to_enable:
+            await asyncio.gather(*(enable_one(d) for d in to_enable))
+
+    async def ensure_domains(self, session_id, *domains):
+        """Public API for lazy domain enabling — controllers call this before
+        using domain-specific features."""
+        await self._enable_domains(session_id, *domains)
 
     async def start(self):
         self.stop = asyncio.Event()

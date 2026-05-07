@@ -27,6 +27,7 @@ stealth = [
 
 [project.scripts]
 browser-harness = "browser_harness.run:main"
+browser-harness-agent = "browser_harness.runtime.agent_runtime:main"
 browser-harness-skill-learning-gate = "browser_harness.skill_learning_gate:main"
 
 [tool.setuptools]
