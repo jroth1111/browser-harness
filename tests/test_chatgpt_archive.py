@@ -291,6 +291,24 @@ def test_sync_state_round_trip():
     assert state["state_json"]["total"] == 56
 
 
+def test_sync_state_treats_malformed_stored_json_shape_as_empty():
+    conn = _init_mem(sqlite3.connect(":memory:"))
+    ak = _setup_account(conn)
+
+    conn.execute(
+        """
+        INSERT INTO sync_state (provider_id, account_key, cursor_name, cursor_value, state_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        ("chatgpt", ak, "last_offset", "28", '["not", "an", "object"]', "2026-05-07T00:00:00Z"),
+    )
+
+    state = get_sync_state(conn, "chatgpt", ak, "last_offset")
+
+    assert state is not None
+    assert state["state_json"] == {}
+
+
 def test_known_thread_keys():
     conn = _init_mem(sqlite3.connect(":memory:"))
     ak = _setup_account(conn)

@@ -101,6 +101,21 @@ def test_artifact_blob_has_parent_artifact_row(tmp_path):
     ).fetchone()[0] == 1
 
 
+def test_stub_unchanged_rejects_malformed_delta_summary_shape():
+    stub = ThreadStub(
+        thread_key="thread-1",
+        provider_thread_id="thread-1",
+        canonical_url="https://example.test/thread-1",
+        title="Thread",
+        updated_at=123,
+    )
+
+    assert sync_runner._stub_unchanged(
+        stub,
+        {"delta_summary_json": '["not", "an", "object"]'},
+    ) is False
+
+
 class FakeChatGPTAPI:
     def __init__(self, detail):
         self.detail = detail

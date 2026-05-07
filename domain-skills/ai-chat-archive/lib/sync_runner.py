@@ -334,6 +334,8 @@ def _stub_unchanged(stub: ThreadStub, last_capture: dict[str, Any]) -> bool:
         data = json.loads(prev)
     except Exception:
         return False
+    if not isinstance(data, dict):
+        return False
     prev_updated = data.get("stub_updated_at")
     return prev_updated is not None and str(prev_updated) == str(stub.updated_at)
 

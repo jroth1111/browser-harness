@@ -369,7 +369,11 @@ def get_sync_state(
         return None
     result = dict(row)
     if result.get("state_json"):
-        result["state_json"] = json.loads(result["state_json"])
+        try:
+            state_json = json.loads(result["state_json"])
+        except Exception:
+            state_json = {}
+        result["state_json"] = state_json if isinstance(state_json, dict) else {}
     return result
 
 
