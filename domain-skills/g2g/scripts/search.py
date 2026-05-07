@@ -138,6 +138,9 @@ class G2GClient:
         except (URLError, OSError, json.JSONDecodeError) as exc:
             self._log(f"Failed to fetch categories index: {exc}")
             return []
+        if not isinstance(index, dict):
+            self._log(f"Failed to fetch categories index: expected object, got {type(index).__name__}")
+            return []
 
         query_lower = query.lower()
         categories = []

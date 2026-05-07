@@ -72,6 +72,13 @@ def test_api_get_preserves_empty_payload_values(monkeypatch):
     assert client._api_get("/envelope") == {"code": 2000, "message": "ok"}
 
 
+def test_search_categories_returns_empty_for_malformed_index_shape(monkeypatch):
+    module = load_g2g_module()
+    monkeypatch.setattr(module, "http_get", lambda url, timeout=30.0: json.dumps(["not", "an", "object"]))
+
+    assert module.G2GClient().search_categories("gold") == []
+
+
 def load_g2g_module():
     import importlib.util
 
