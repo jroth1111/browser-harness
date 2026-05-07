@@ -19,8 +19,8 @@ MAX_FILE_BYTES = 1_000_000
 _PATTERNS = [
     ("bearer_token", re.compile(r"(?i)\bauthorization\s*[:=]\s*bearer\s+[a-z0-9._~+/=-]{20,}")),
     ("set_cookie_header", re.compile(r"(?i)\bset-cookie\s*:")),
-    ("cookie_header", re.compile(r"(?i)\bcookie\s*:\s*[^\\n]{8,}")),
-    ("session_cookie", re.compile(r"(?i)\b(?:sessionid|session_id|_airbed_session_id|sid)\s*=\s*[^\\s;,]{8,}")),
+    ("cookie_header", re.compile(r"(?i)\bcookie\s*:\s*[^\n]{8,}")),
+    ("session_cookie", re.compile(r"(?i)\b(?:sessionid|session_id|_airbed_session_id|sid)\s*=\s*[^\s;,]{8,}")),
     ("storage_token_value", re.compile(r"(?i)\"(?:token|access_token|refresh_token|id_token)\"\s*:\s*\"[^\"]{12,}\"")),
     ("aws_access_key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
 ]
@@ -32,7 +32,7 @@ def _should_skip(path):
 
 def _redact_excerpt(text):
     text = re.sub(r"(?i)(bearer\s+)[a-z0-9._~+/=-]+", r"\1REDACTED", text)
-    text = re.sub(r"(?i)(=\s*)[^\\s;,]{8,}", r"\1REDACTED", text)
+    text = re.sub(r"(?i)(=\s*)[^\s;,]{8,}", r"\1REDACTED", text)
     text = re.sub(r'(:\s*")[^"]{8,}(")', r"\1REDACTED\2", text)
     return text[:180]
 

@@ -29,6 +29,15 @@ Cookie: sid=secret-session-value; other=x
     assert all("abcdefghijklmnopqrstuvwxyz" not in finding["excerpt"] for finding in scan_text(text))
 
 
+def test_redaction_scan_cookie_values_may_contain_n_or_s():
+    text = "Cookie: sid=session-secret-nonce-value; other=x\n"
+
+    findings = scan_text(text)
+
+    assert {finding["kind"] for finding in findings} >= {"cookie_header", "session_cookie"}
+    assert all("session-secret-nonce-value" not in finding["excerpt"] for finding in findings)
+
+
 def test_redaction_scan_paths_skip_private_dirs_and_flag_public_files(tmp_path):
     private = tmp_path / ".private-data"
     private.mkdir()
