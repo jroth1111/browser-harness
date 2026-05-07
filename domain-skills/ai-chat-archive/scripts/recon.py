@@ -66,10 +66,12 @@ def _cookies_to_playwright(rich: dict[str, dict[str, dict]]) -> list[dict]:
             continue
         domain = host  # cookie_extract uses ".perplexity.ai"-style host_keys
         for name, entry in jar.items():
+            if not isinstance(name, str):
+                continue
             if not isinstance(entry, dict):
                 continue
             value = entry.get("value")
-            if value is None:
+            if not isinstance(value, str):
                 continue
             ck: dict[str, Any] = {
                 "name": name,

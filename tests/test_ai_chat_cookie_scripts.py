@@ -58,6 +58,27 @@ def test_recon_cookies_to_playwright_skips_malformed_host_jars():
     ]
 
 
+def test_recon_cookies_to_playwright_skips_non_string_name_values():
+    module = load_script("recon")
+
+    assert module._cookies_to_playwright({
+        ".example.com": {
+            "sid": {"value": "abc"},
+            "bool": {"value": True},
+            "num": {"value": 123},
+            123: {"value": "numeric-name"},
+            "missing": {"path": "/"},
+        },
+    }) == [{
+        "name": "sid",
+        "value": "abc",
+        "domain": ".example.com",
+        "path": "/",
+        "httpOnly": False,
+        "secure": False,
+    }]
+
+
 def test_harvest_filter_for_provider_domains_skips_malformed_rich_jars():
     module = load_script("harvest")
 
