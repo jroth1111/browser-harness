@@ -365,6 +365,32 @@ def test_youtube_generated_surfaces_are_rendered_from_surface_map():
     assert "ytdlp_ytsearch" in generated
 
 
+def test_youtube_generated_surfaces_tolerate_malformed_map_sections():
+    spec = importlib.util.spec_from_file_location("youtube_render_docs", YOUTUBE / "scripts" / "render_docs.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    data = dict(load_surface_map())
+    data["availability"] = "not-an-object"
+    data["channel"] = "not-an-object"
+    data["fallback_dags"] = "not-an-object"
+    data["primitives"] = [
+        data["primitives"][0],
+        "not-an-object",
+        {"id": "partial", "fallback_chain": "not-a-list"},
+    ]
+    data["search"] = {"surface_modes": ["not-an-object", {"id": "web", "required": "not-a-list"}]}
+    data["execution_policy"] = {"receipt_required": "not-a-list"}
+
+    generated = module.render(data)
+
+    assert "Primitive count: 3" in generated
+    assert data["primitives"][0]["id"] in generated
+    assert "partial" in generated
+    assert "not-an-object" not in generated
+
+
 def test_youtube_workflow_docs_reference_valid_primitives_and_crosswalk_is_explicit():
     data = load_surface_map()
     primitive_ids = {primitive["id"] for primitive in data["primitives"]}
@@ -558,6 +584,47 @@ def test_youtube_generated_report_summary_tracks_live_and_drift_state():
     assert "blocked_surfaces" in generated
     assert any(note["id"] == "static_channel_rss" for note in generated["drift_notes"])
     assert any(note["id"] == "ytdlp_ytsearch" for note in generated["drift_notes"])
+
+
+def test_youtube_generated_report_summary_tolerates_malformed_inputs(tmp_path):
+    spec = importlib.util.spec_from_file_location(
+        "youtube_summarize_reports",
+        YOUTUBE / "scripts" / "summarize_reports.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    surface_map = dict(load_surface_map())
+    surface_map["availability"] = "not-an-object"
+    surface_map["field_tested"] = "not-an-object"
+    surface_map["primitives"] = [surface_map["primitives"][0], "not-an-object"]
+    (tmp_path / "surface-map.json").write_text(json.dumps(surface_map), encoding="utf-8")
+    receipts = tmp_path / "receipts"
+    receipts.mkdir()
+    (receipts / "live-smoke-20260507T000000Z.json").write_text(
+        json.dumps({
+            "created_at": "2026-05-07T00:00:00Z",
+            "primitive_checks": [
+                {"primitive_id": "api_global_search", "status": "fail", "terminal_reason": "blocked"},
+                "not-an-object",
+                {"primitive_id": "api_comments", "status": "conditional"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+
+    summary = module.build_summary(tmp_path)
+
+    assert summary["generated_at"] == "2026-05-07T00:00:00Z"
+    assert summary["surface_map"]["primitive_count"] == 1
+    assert summary["live_status_counts"] == {"conditional": 1, "fail": 1}
+    assert summary["blocked_surfaces"] == [
+        {"primitive_id": "api_global_search", "status": "fail", "terminal_reason": "blocked"}
+    ]
+    assert summary["conditional_surfaces"] == [
+        {"primitive_id": "api_comments", "status": "conditional", "terminal_reason": None}
+    ]
 
 
 def test_youtube_primitives_tolerate_malformed_renderer_metadata():
