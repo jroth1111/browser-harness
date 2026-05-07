@@ -58,3 +58,27 @@ def test_youtube_live_smoke_script_is_import_safe():
     spec.loader.exec_module(module)
 
     assert callable(module.main)
+
+
+def test_ai_chat_recon_help_does_not_require_camoufox():
+    result = subprocess.run(
+        [sys.executable, "domain-skills/ai-chat-archive/scripts/recon.py", "--help"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "--provider" in result.stdout
+
+
+def test_localmaxxing_chart_is_import_safe():
+    spec = importlib.util.spec_from_file_location(
+        "localmaxxing_chart",
+        Path("domain-skills/localmaxxing/chart.py"),
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+
+    spec.loader.exec_module(module)
+
+    assert callable(module.main)

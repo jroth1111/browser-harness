@@ -34,9 +34,6 @@ _SKILL_ROOT = Path(__file__).resolve().parent.parent
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-from camoufox.sync_api import Camoufox  # type: ignore  # noqa: E402
-
-
 _API_HINT_RE = re.compile(r"/(rest|api|pplx-api|graphql|batchexecute|_next/data|trpc)/")
 
 
@@ -123,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", default=None, help="optional path to write full capture JSON")
     p.add_argument("--no-headless", action="store_true", help="show the browser window")
     args = p.parse_args(argv)
+
+    from camoufox.sync_api import Camoufox  # type: ignore
 
     jar_row = _load_jar(args.db, args.provider, args.account)
     rich_cookies = json.loads(jar_row["cookies_json"])
