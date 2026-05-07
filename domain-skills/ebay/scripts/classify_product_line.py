@@ -120,6 +120,24 @@ def classify(title: str) -> dict:
     return result
 
 
+def normalize_items(items):
+    if isinstance(items, dict):
+        items = [items]
+    if isinstance(items, str):
+        items = [{"title": items}]
+    if not isinstance(items, list):
+        raise ValueError("input must be a JSON object, array, string, CSV, or plain title lines")
+    normalized = []
+    for item in items:
+        if isinstance(item, str):
+            normalized.append({"title": item})
+        elif isinstance(item, dict):
+            normalized.append(item)
+        else:
+            raise ValueError("JSON array items must be objects or title strings")
+    return normalized
+
+
 def main():
     parser = argparse.ArgumentParser(description="Classify product lines from titles")
     parser.add_argument("--input", "-i", default="-", help="Input: stdin, JSON file, or CSV file")
@@ -133,18 +151,14 @@ def main():
             return
         raw = "\n".join(lines)
         try:
-            items = json.loads(raw)
-            if isinstance(items, dict):
-                items = [items]
+            items = normalize_items(json.loads(raw))
         except json.JSONDecodeError:
             items = [{"title": line} for line in lines]
     else:
         with open(args.input) as f:
             raw = f.read().strip()
         if raw.startswith("[") or raw.startswith("{"):
-            items = json.loads(raw)
-            if isinstance(items, dict):
-                items = [items]
+            items = normalize_items(json.loads(raw))
         else:
             items = []
             with open(args.input, newline="") as f:

@@ -1,5 +1,7 @@
 import importlib.util
+import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -80,3 +82,35 @@ def test_ebay_urls_exits_when_child_generator_fails(monkeypatch):
 
     assert "exit 11" in str(exc.value)
     assert "ebay generator exploded" in str(exc.value)
+
+
+def test_aliexpress_classifier_accepts_json_title_strings():
+    script = ROOT / "domain-skills/aliexpress/scripts/classify_product_line.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        input=json.dumps(["GMKtec EVO-X2 AI Mini PC AMD Ryzen AI Max+ 395 128GB"]),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload[0]["title"].startswith("GMKtec EVO-X2")
+    assert payload[0]["product_line"] == "GMKtec EVO-X2"
+
+
+def test_ebay_classifier_accepts_json_title_strings():
+    script = ROOT / "domain-skills/ebay/scripts/classify_product_line.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        input=json.dumps(["ASUS ROG Flow Z13 GZ302EA 64GB"]),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload[0]["title"].startswith("ASUS ROG Flow Z13")
+    assert payload[0]["product_line"] == "ASUS ROG Flow Z13"
