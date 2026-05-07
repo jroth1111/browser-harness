@@ -83,6 +83,25 @@ def test_evaluate_field_contract_tolerates_malformed_page_text_length():
     }
 
 
+def test_evaluate_field_contract_tolerates_malformed_checks_mapping():
+    class Client:
+        def send_raw(self, method, params, session_id=None):
+            return {"result": {"value": {"textLength": 25}}}
+
+    result = lightpanda_control.evaluate_field_contract(
+        Client(),
+        "not-a-check-map",
+        min_text=10,
+    )
+
+    assert result == {
+        "ok": True,
+        "page": {"textLength": 25},
+        "passed": {},
+        "missing": [],
+    }
+
+
 def test_wait_for_field_contract_polls_until_fields_present():
     results = [
         {"ok": False, "missing": ["room_links"]},

@@ -101,7 +101,8 @@ def evaluate_field_contract(client, checks, min_text=0, session_id=None):
     """
     page = _dict_value(runtime_value(client, _PAGE_EVIDENCE_JS, session_id=session_id))
     passed = {}
-    for name, expression in (checks or {}).items():
+    checks = checks if isinstance(checks, dict) else {}
+    for name, expression in checks.items():
         passed[name] = bool(runtime_value(
             client,
             f"(() => Boolean({expression}))()",
