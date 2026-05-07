@@ -26,6 +26,21 @@ class FakeCDP:
         return {}
 
 
+class FakeEventRegistry:
+    async def handle_event(self, method, params, session_id=None):
+        return {"handled": method}
+
+
+class FakeStartCDP(FakeCDP):
+    def __init__(self, url):
+        super().__init__()
+        self.url = url
+        self._event_registry = FakeEventRegistry()
+
+    async def start(self):
+        return None
+
+
 class FakeResponse:
     def __init__(self, data):
         self.data = data
@@ -655,6 +670,27 @@ def test_daemon_dialog_event_appended_to_blockers():
     assert d.dialog == params
     assert len(d.blockers) == 1
     assert d.blockers[0]["kind"] == "dialog"
+
+
+def test_daemon_target_created_event_tolerates_scalar_url():
+    created = {}
+
+    def fake_client(url):
+        client = FakeStartCDP(url)
+        created["client"] = client
+        return client
+
+    d = daemon.Daemon()
+    with patch("browser_harness.daemon.resolve_cdp_endpoint", return_value=("ws://127.0.0.1/devtools/browser/x", {})), \
+         patch("browser_harness.daemon.CDPClient", side_effect=fake_client):
+        asyncio.run(d.start())
+
+    result = asyncio.run(created["client"]._event_registry.handle_event(
+        "Target.targetCreated",
+        {"targetInfo": {"targetId": "target-1", "type": "page", "url": 12345}},
+    ))
+
+    assert result == {"handled": "Target.targetCreated"}
 
 
 def test_daemon_file_chooser_appended_to_blockers():

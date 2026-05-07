@@ -390,8 +390,9 @@ class Daemon:
                         self.target_id = None
             elif method == "Target.targetCreated":
                 t = (params or {}).get("targetInfo") or {}
-                if t.get("type") == "page" and not t.get("url", "").startswith(INTERNAL):
-                    log(f"new page target: {t.get('targetId')} {t.get('url', '')[:80]}")
+                url = str(t.get("url") or "")
+                if t.get("type") == "page" and not url.startswith(INTERNAL):
+                    log(f"new page target: {t.get('targetId')} {url[:80]}")
             try:
                 return await orig(method, params, session_id)
             except Exception as e:
