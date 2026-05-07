@@ -121,7 +121,7 @@ def upsert_thread(conn: sqlite3.Connection, thread: dict, run_id: str | None = N
            ON CONFLICT(thread_key) DO UPDATE SET
              provider_thread_id = COALESCE(excluded.provider_thread_id, threads.provider_thread_id),
              canonical_url = COALESCE(excluded.canonical_url, threads.canonical_url),
-             title = excluded.title,
+             title = COALESCE(NULLIF(excluded.title, ''), threads.title),
              status = excluded.status,
              current_content_hash = COALESCE(excluded.current_content_hash, threads.current_content_hash),
              current_artifact_count = CASE WHEN excluded.current_artifact_count > 0 THEN excluded.current_artifact_count ELSE threads.current_artifact_count END,
