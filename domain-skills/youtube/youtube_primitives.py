@@ -583,7 +583,7 @@ def api_storyboard_spec(payload: dict[str, Any] | None = None) -> dict[str, Any]
     player = _player_response(payload)
     if player is None:
         return result(False, None, "unsupported_shape", path_type="api")
-    renderer = player.get("storyboards", {}).get("playerStoryboardSpecRenderer", {})
+    renderer = _dict_value(_dict_value(player.get("storyboards")).get("playerStoryboardSpecRenderer"))
     spec = renderer.get("spec")
     if not spec:
         return result(False, None, "empty_result", path_type="api")
@@ -607,7 +607,7 @@ def api_video_live_status(payload: dict[str, Any] | None = None) -> dict[str, An
         return meta
     details = meta["data"].get("videoDetails", {})
     microformat = meta["data"].get("microformat", {})
-    live = microformat.get("liveBroadcastDetails", {})
+    live = _dict_value(microformat.get("liveBroadcastDetails"))
     data = {
         "is_live_content": bool(details.get("isLiveContent")),
         "is_live_now": bool(live.get("isLiveNow")),

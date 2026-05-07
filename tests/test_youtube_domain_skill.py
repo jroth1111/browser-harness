@@ -594,6 +594,26 @@ def test_youtube_primitives_tolerate_malformed_renderer_metadata():
     assert chapters["data"]["chapters"][0]["url"] is None
 
 
+def test_youtube_primitives_tolerate_malformed_storyboard_metadata():
+    module = load_youtube_primitives()
+
+    storyboard = module.api_storyboard_spec({
+        "playabilityStatus": {"status": "OK"},
+        "storyboards": "not-an-object",
+    })
+    assert storyboard["ok"] is False
+    assert storyboard["reason"] == "empty_result"
+
+    live = module.api_video_live_status({
+        "playabilityStatus": {"status": "OK"},
+        "videoDetails": {"isLiveContent": True},
+        "microformat": {"playerMicroformatRenderer": {"liveBroadcastDetails": "not-an-object"}},
+    })
+    assert live["ok"] is True
+    assert live["data"]["is_live_content"] is True
+    assert live["data"]["is_live_now"] is False
+
+
 def test_youtube_live_smoke_content_status_tolerates_malformed_shapes():
     spec = importlib.util.spec_from_file_location(
         "youtube_live_smoke",
