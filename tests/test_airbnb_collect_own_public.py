@@ -31,6 +31,18 @@ def test_public_page_failure_tolerates_malformed_block_metadata():
     assert competitors.page_failure(status) is None
 
 
+def test_public_page_failure_tolerates_scalar_status_text():
+    own = load_own_public_module()
+    competitors = load_competitors_module()
+
+    status = {"title": 12345, "text": 67890, "block": "not-an-object"}
+
+    assert own.page_failure(status) is None
+    assert competitors.page_failure(status) is None
+    assert own.page_failure({"title": 429, "text": "Normal page"}) == "http_429_or_too_many_requests"
+    assert competitors.page_failure({"title": 429, "text": "Normal page"}) == "http_429_or_too_many_requests"
+
+
 def test_public_live_listing_file_rejects_malformed_counts(tmp_path):
     own = load_own_public_module()
     competitors = load_competitors_module()

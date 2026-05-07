@@ -805,3 +805,10 @@ def test_page_failure_detects_chrome_http_429_error_text():
     assert module.page_failure({"title": "www.realestate.com.au", "text": "This page isn't working\nHTTP ERROR 429"}) == "http_429_or_too_many_requests"
     assert module.page_failure({"title": "Page not found", "text": "Sorry, this property could not be found"}) == "page_not_found_or_removed"
     assert module.page_failure({"title": "Listing", "text": "Normal listing", "block": "not-an-object"}) is None
+
+
+def test_page_failure_tolerates_scalar_status_text():
+    module = load_module()
+
+    assert module.page_failure({"title": 12345, "text": 67890, "block": "not-an-object"}) is None
+    assert module.page_failure({"title": 429, "text": "Normal listing"}) == "http_429_or_too_many_requests"

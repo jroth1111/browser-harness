@@ -564,8 +564,8 @@ def listing_url_with_context(room_url, checkin=None, nights=None, adults=None):
 
 
 def page_failure(status):
-    title = (status.get("title") or "").lower()
-    text = (status.get("text") or "").lower()
+    title = str(status.get("title") or "").lower()
+    text = str(status.get("text") or "").lower()
     block = status.get("block") if isinstance(status.get("block"), dict) else {}
     if block.get("blocked"):
         return block.get("kind") or "blocked"

@@ -1148,8 +1148,8 @@ def page_failure(status):
     block = status.get("block") if isinstance(status.get("block"), dict) else {}
     if block.get("blocked"):
         return block.get("kind") or "blocked"
-    text = (status.get("text") or "").lower()
-    title = (status.get("title") or "").lower()
+    text = str(status.get("text") or "").lower()
+    title = str(status.get("title") or "").lower()
     if "too many requests" in text or "http error 429" in text or "429" in title:
         return "http_429_or_too_many_requests"
     if re.search(r"\b(page not found|sorry,.*not found|property could not be found|http error 404|404 not found|not found 404)\b", text, re.I):
