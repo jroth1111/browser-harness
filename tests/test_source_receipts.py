@@ -62,6 +62,35 @@ def test_source_receipt_rejects_scalar_block_evidence():
         validate_source_receipt(receipt)
 
 
+def test_source_receipt_rejects_non_object_receipts_cleanly():
+    with pytest.raises(ValueError, match="source receipt must be an object"):
+        validate_source_receipt(None)
+
+    with pytest.raises(ValueError, match="source receipt must be an object"):
+        validate_source_receipt(["schema_version"])
+
+
+def test_source_receipt_rejects_non_boolean_flags():
+    receipt = build_source_receipt(
+        source_type="api",
+        source_context={"domain": "example.com"},
+        backend={"kind": "chromium"},
+        fields_found=["title"],
+        canonical=True,
+        diagnostic_only=False,
+    )
+    receipt["canonical"] = "false"
+
+    with pytest.raises(ValueError, match="canonical must be a boolean"):
+        validate_source_receipt(receipt)
+
+    receipt["canonical"] = False
+    receipt["diagnostic_only"] = "false"
+
+    with pytest.raises(ValueError, match="diagnostic_only must be a boolean"):
+        validate_source_receipt(receipt)
+
+
 def test_blocked_source_receipt_requires_block_kind():
     with pytest.raises(ValueError, match="blocked sources require block.kind"):
         build_source_receipt(

@@ -93,6 +93,8 @@ def build_source_receipt(
 
 def validate_source_receipt(receipt):
     """Return True for valid receipts, otherwise raise ValueError."""
+    if not isinstance(receipt, dict):
+        raise ValueError("source receipt must be an object")
     missing = REQUIRED_RECEIPT_FIELDS - set(receipt)
     if missing:
         raise ValueError(f"source receipt missing required fields: {sorted(missing)}")
@@ -120,6 +122,10 @@ def validate_source_receipt(receipt):
         raise ValueError("block.evidence must be a list")
     if block.get("blocked") and not block.get("kind"):
         raise ValueError("blocked sources require block.kind")
+    if not isinstance(receipt.get("canonical"), bool):
+        raise ValueError("canonical must be a boolean")
+    if not isinstance(receipt.get("diagnostic_only"), bool):
+        raise ValueError("diagnostic_only must be a boolean")
     if block.get("blocked") and receipt.get("canonical"):
         raise ValueError("blocked source cannot be canonical")
     if receipt.get("diagnostic_only") and receipt.get("canonical"):
