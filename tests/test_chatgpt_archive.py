@@ -592,6 +592,37 @@ def test_upsert_artifact_sanitizes_malformed_byte_lengths():
     assert rows[ok_key] == 2048
 
 
+def test_upsert_artifact_refreshes_byte_length_on_existing_row():
+    conn = _fresh_db()
+    ak = _setup_account(conn)
+    upsert_thread(conn, {
+        "thread_key": "thread-1",
+        "provider_id": "chatgpt",
+        "account_key": ak,
+        "provider_thread_id": "thread-1",
+        "status": "listed",
+    }, run_id="run-1")
+
+    artifact = {
+        "thread_key": "thread-1",
+        "label": "report.bin",
+        "artifact_type": "file",
+        "byte_length": None,
+        "content_hash": "same-hash",
+        "capture_id": "cap-1",
+    }
+    artifact_key = upsert_artifact(conn, artifact)
+    artifact["byte_length"] = 2048
+    artifact["capture_id"] = "cap-2"
+    upsert_artifact(conn, artifact)
+
+    row = conn.execute(
+        "SELECT byte_length FROM artifacts WHERE artifact_key = ?",
+        (artifact_key,),
+    ).fetchone()
+    assert row["byte_length"] == 2048
+
+
 # --- CDC events ---
 
 def test_cdc_events_track_insert_update_touch():

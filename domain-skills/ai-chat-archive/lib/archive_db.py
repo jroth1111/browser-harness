@@ -308,10 +308,18 @@ def upsert_artifact(
             """UPDATE artifacts SET
                  label = COALESCE(?, label),
                  source_url = COALESCE(?, source_url),
+                 byte_length = COALESCE(?, byte_length),
                  content_hash = ?,
                  last_seen_capture_id = ?
                WHERE artifact_key = ?""",
-            (artifact.get("label"), artifact.get("source_url"), content_hash, artifact["capture_id"], artifact_key),
+            (
+                artifact.get("label"),
+                artifact.get("source_url"),
+                byte_length,
+                content_hash,
+                artifact["capture_id"],
+                artifact_key,
+            ),
         )
         if run_id and provider_id and account_key:
             op = "update" if old_hash != content_hash else "touch"
