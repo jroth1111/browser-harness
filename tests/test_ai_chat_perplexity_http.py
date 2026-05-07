@@ -72,3 +72,48 @@ def test_perplexity_extract_citations_skips_malformed_entries():
         "url": "https://example.test",
         "source_json": {"url": "https://example.test", "name": "Example"},
     }]
+
+
+def test_perplexity_extract_messages_skips_malformed_steps():
+    messages = PerplexityHTTPAPI.extract_messages({
+        "entries": [
+            {
+                "uuid": "entry-1",
+                "query_str": "What is this?",
+                "text": [
+                    "not a step",
+                    {
+                        "step_type": "FINAL",
+                        "content": {"answer": "{\"answer\": \"A reply.\"}"},
+                    },
+                ],
+            },
+        ],
+    })
+
+    assert [message["role"] for message in messages] == ["user", "assistant"]
+    assert messages[-1]["content"] == "A reply."
+
+
+def test_perplexity_extract_citations_skips_malformed_steps():
+    citations = PerplexityHTTPAPI.extract_citations({
+        "entries": [
+            {
+                "text": [
+                    "not a step",
+                    {
+                        "step_type": "SEARCH_RESULTS",
+                        "content": {
+                            "web_results": [{"url": "https://example.test"}],
+                        },
+                    },
+                ],
+            },
+        ],
+    })
+
+    assert citations == [{
+        "label": "",
+        "url": "https://example.test",
+        "source_json": {"url": "https://example.test"},
+    }]

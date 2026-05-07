@@ -172,12 +172,12 @@ class PerplexityHTTPAPI:
         Decode it once; tolerate non-JSON / dict shapes for forward compat."""
         text = entry.get("text")
         if isinstance(text, list):
-            return text
+            return _dict_rows(text)
         if isinstance(text, str):
             try:
                 parsed = json.loads(text)
                 if isinstance(parsed, list):
-                    return parsed
+                    return _dict_rows(parsed)
             except Exception:
                 return []
         return []
