@@ -2529,13 +2529,16 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
         try:
             if use_session:
                 resp = http_get_browser_session_response(url, timeout=timeout)
-                replay_status, replay_ct = resp.get("status", 0), resp.get("headers", {}).get("content-type", "")
+                replay_status = resp.get("status", 0)
+                replay_ct = _dict_value(resp.get("headers")).get("content-type", "")
             else:
                 req = urllib.request.Request(url, headers={"User-Agent": _real_user_agent()})
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     replay_status, replay_ct = r.status, r.headers.get("Content-Type", "")
             orig_status = ep.get("status", 0)
             orig_ct = ep.get("content_type", "")
+            replay_ct = replay_ct if isinstance(replay_ct, str) else ""
+            orig_ct = orig_ct if isinstance(orig_ct, str) else ""
             ct_match = (replay_ct.split(";")[0].strip().lower()
                         == orig_ct.split(";")[0].strip().lower())
             results.append({

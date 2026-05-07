@@ -2143,6 +2143,28 @@ def test_replay_endpoints_captures_errors():
     assert result["summary"]["errors"] == 0
 
 
+def test_replay_endpoints_tolerates_malformed_session_headers():
+    cap = helpers.NetworkCapture()
+    cap._entries = [
+        {"url": "https://api.example.com/a", "method": "GET", "status": 200,
+         "content_type": "application/json", "response_headers": {}, "resource_type": "XHR"},
+    ]
+    with patch("browser_harness.helpers.http_get_browser_session_response", return_value={
+        "status": 200,
+        "headers": "not-a-dict",
+    }), patch("time.sleep"):
+        result = helpers.replay_endpoints(cap, use_session=True)
+
+    assert result["results"][0] == {
+        "url": "https://api.example.com/a",
+        "original_status": 200,
+        "replay_status": 200,
+        "status_match": True,
+        "content_type_match": False,
+    }
+    assert result["summary"] == {"total": 1, "matched": 1, "mismatched": 0, "errors": 0}
+
+
 def test_replay_endpoints_skips_malformed_endpoint_rows():
     class Capture:
         @staticmethod
