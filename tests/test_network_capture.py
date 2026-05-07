@@ -2,6 +2,58 @@ from unittest.mock import patch, call
 from browser_harness import network_capture
 
 
+def test_capture_network_requests_uses_network_capture_helper():
+    class FakeCapture:
+        def __init__(self, capture_bodies=False, max_body_chars=0):
+            self.capture_bodies = capture_bodies
+            self.max_body_chars = max_body_chars
+            self._entries = [{
+                "url": "https://x.com/api",
+                "method": "POST",
+                "status": 201,
+                "resource_type": "XHR",
+                "content_type": "application/json",
+                "response_headers": {"x-source": "new-helper"},
+            }]
+            self._requests = {}
+            self.calls = []
+
+        def start(self):
+            self.calls.append("start")
+
+        def poll(self):
+            self.calls.append("poll")
+
+        def stop(self):
+            self.calls.append("stop")
+
+    instances = []
+
+    def fake_capture(*args, **kwargs):
+        capture = FakeCapture(*args, **kwargs)
+        instances.append(capture)
+        return capture
+
+    with patch("browser_harness.network_capture.helpers.NetworkCapture", side_effect=fake_capture), \
+         patch("browser_harness.network_capture.helpers.goto_url") as goto_url, \
+         patch("browser_harness.network_capture.time.sleep") as sleep:
+        result = network_capture.capture_network_requests("https://x.com", timeout=2, capture_bodies=True)
+
+    assert instances[0].capture_bodies is True
+    assert instances[0].max_body_chars == network_capture._MAX_BODY_CHARS
+    assert instances[0].calls == ["start", "poll", "stop"]
+    goto_url.assert_called_once_with("https://x.com")
+    sleep.assert_called_once_with(2)
+    assert result == [{
+        "url": "https://x.com/api",
+        "method": "POST",
+        "status": 201,
+        "resource_type": "XHR",
+        "mime_type": "application/json",
+        "response_headers": {"x-source": "new-helper"},
+    }]
+
+
 def test_capture_network_requests_parses_events():
     events = [
         {"method": "Network.requestWillBeSent", "params": {
