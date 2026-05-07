@@ -2183,7 +2183,8 @@ def block_resources(ad_domains=True, extra_domains=None, resource_types=None):
             if not paused:
                 break
             for ev in paused:
-                rid = ev.get("params", {}).get("requestId")
+                params = ev.get("params") if isinstance(ev.get("params"), dict) else {}
+                rid = params.get("requestId")
                 if rid:
                     try:
                         cdp("Fetch.failRequest", requestId=rid,

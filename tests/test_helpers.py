@@ -1958,6 +1958,27 @@ def test_discover_api_endpoints_handles_fetch_failure():
     assert len(result["errors"]) == 1
 
 
+def test_block_resources_skips_paused_fetch_events_with_malformed_params():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        return {}
+
+    events = [
+        {"method": "Fetch.requestPaused", "params": "bad-params"},
+        {"method": "Fetch.requestPaused", "params": {"requestId": "r1"}},
+    ]
+
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers.drain_events", side_effect=[events, []]), \
+         patch("time.sleep"):
+        assert helpers.block_resources(ad_domains=False, resource_types=["Image"]) == 1
+
+    assert ("Fetch.failRequest", {"requestId": "r1", "errorReason": "BlockedByClient"}) in calls
+    assert calls[-1] == ("Fetch.disable", {})
+
+
 def test_discover_api_endpoints_skips_template_literals():
     html = '<script>fetch(`/api/${id}`);</script>'
     with patch("browser_harness.helpers.http_get", return_value=html):
