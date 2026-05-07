@@ -98,6 +98,24 @@ def test_run_request_batches_preserves_successes_from_mixed_retry_attempts(tmp_p
     assert [row["listing_id"] for row in checkpointed] == ["a", "b", "c"]
 
 
+def test_live_listing_file_rejects_malformed_counts(tmp_path):
+    module = load_collect_module()
+    path = tmp_path / "airbnb-live-listings-bad-counts.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [{"status": "ACTIVE"}],
+                "active_count": "not-a-count",
+                "status_counts": {"ACTIVE": "not-a-count"},
+                "field_validation": {"all_active_detail_pages_ok": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert module.is_complete_live_listing_file(path) is False
+
+
 def test_run_request_batches_does_not_checkpoint_graphql_error_payload(tmp_path, monkeypatch):
     module = load_batch_functions()
 

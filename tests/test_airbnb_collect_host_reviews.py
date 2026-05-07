@@ -65,6 +65,22 @@ def test_parse_host_review_json_normalizes_private_review_rows():
     assert {"cleanliness", "checkin"} <= set(rows[0]["review_theme_tags"])
 
 
+def test_active_listing_file_rejects_malformed_counts(tmp_path):
+    module = load_host_reviews_module()
+    path = tmp_path / "airbnb-live-listings-bad-counts.json"
+    path.write_text(
+        """{
+          "records": [{"status": "ACTIVE"}],
+          "active_count": "not-a-count",
+          "status_counts": {"ACTIVE": "not-a-count"},
+          "field_validation": {"all_active_detail_pages_ok": true}
+        }""",
+        encoding="utf-8",
+    )
+
+    assert module.is_complete_active_listing_file(path) is False
+
+
 def test_review_export_confidence_never_overclaims_without_total():
     module = load_host_reviews_module()
 

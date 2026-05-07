@@ -22,6 +22,32 @@ def test_single_day_probe_import_does_not_execute_main():
     assert hasattr(module, "main")
 
 
+def load_single_day_probe_module():
+    path = Path("domain-skills/airbnb/scripts/probe_single_day_windows.py")
+    spec = importlib.util.spec_from_file_location("airbnb_probe_single_day_windows", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_probe_live_listing_file_rejects_malformed_counts(tmp_path):
+    path = tmp_path / "airbnb-live-listings-bad-counts.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [{"status": "ACTIVE"}],
+                "active_count": "not-a-count",
+                "status_counts": {"ACTIVE": "not-a-count"},
+                "field_validation": {"all_active_detail_pages_ok": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_probe_module().is_complete_live_listing_file(path) is False
+    assert load_single_day_probe_module().is_complete_live_listing_file(path) is False
+
+
 def test_chart_bounds_end_yesterday():
     module = load_probe_module()
 
