@@ -347,6 +347,29 @@ def test_provider_inventories_skip_malformed_remote_rows():
         assert [stub.provider_thread_id for stub in stubs] == [expected_id]
 
 
+def test_perplexity_inventory_sorts_stream_created_at_fallback_before_since_break():
+    db = sqlite3.connect(":memory:")
+
+    class PerplexityAPI:
+        def all_threads(self):
+            return [
+                {"uuid": "old", "title": "Old", "stream_created_at": "2026-05-01T00:00:00Z"},
+                {"uuid": "new", "title": "New", "stream_created_at": "2026-05-03T00:00:00Z"},
+            ]
+
+    ctx = ProviderContext(
+        provider_id="perplexity",
+        cookies_by_domain={},
+        db=db,
+        options={"_pplx_api": PerplexityAPI()},
+    )
+
+    stubs = list(PerplexityProvider().inventory(ctx, since="2026-05-02T00:00:00Z"))
+
+    assert [stub.provider_thread_id for stub in stubs] == ["new"]
+    assert stubs[0].updated_at == "2026-05-03T00:00:00Z"
+
+
 def test_gemini_inventory_drops_malformed_response_ids():
     db = sqlite3.connect(":memory:")
     api = GeminiHTTPAPI({})

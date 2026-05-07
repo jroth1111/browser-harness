@@ -72,7 +72,12 @@ class PerplexityProvider(Provider):
         threads = api.all_threads()
         threads = [thread for thread in threads if isinstance(thread, dict)]
         threads.sort(
-            key=lambda t: t.get("last_query_datetime") or t.get("updated_datetime") or "",
+            key=lambda t: (
+                t.get("last_query_datetime")
+                or t.get("updated_datetime")
+                or t.get("stream_created_at")
+                or ""
+            ),
             reverse=True,
         )
         emitted = 0
