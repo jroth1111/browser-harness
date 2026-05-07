@@ -119,3 +119,30 @@ def test_capture_handles_request_without_response():
     assert len(result) == 1
     assert result[0]["status"] == 0
     assert result[0]["method"] == "POST"
+
+
+def test_capture_skips_malformed_cdp_event_shapes():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": "bad-params"},
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1", "request": "bad-request", "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1", "response": "bad-response",
+        }},
+    ]
+
+    with patch("browser_harness.network_capture.helpers.cdp"), \
+         patch("browser_harness.network_capture.helpers.drain_events", return_value=events), \
+         patch("browser_harness.network_capture.helpers.goto_url"), \
+         patch("browser_harness.network_capture.time.sleep"):
+        result = network_capture.capture_network_requests("https://x.com")
+
+    assert result == [{
+        "url": "",
+        "method": "",
+        "status": 0,
+        "resource_type": "XHR",
+        "mime_type": "",
+        "response_headers": {},
+    }]

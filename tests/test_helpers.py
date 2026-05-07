@@ -1608,6 +1608,35 @@ def test_network_capture_poll_processes_request_events():
     assert eps[0]["count"] == 1
 
 
+def test_network_capture_poll_skips_malformed_cdp_event_shapes():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": "bad-params"},
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1",
+            "request": "bad-request",
+            "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1",
+            "response": "bad-response",
+        }},
+    ]
+    with patch("browser_harness.helpers.drain_events", return_value=events):
+        cap = helpers.NetworkCapture()
+        assert cap.poll() == 2
+
+    entries = cap.responses_for("")
+    assert entries == [{
+        "url": "",
+        "method": "GET",
+        "headers": {},
+        "resource_type": "XHR",
+        "status": 0,
+        "response_headers": {},
+        "content_type": "",
+    }]
+
+
 def test_network_capture_endpoints_deduplicates():
     events_a = [
         {"method": "Network.requestWillBeSent", "params": {

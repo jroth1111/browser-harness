@@ -2225,25 +2225,26 @@ class NetworkCapture:
         n = 0
         for ev in drain_events():
             m = ev.get("method", "")
-            p = ev.get("params", {})
+            p = ev.get("params") if isinstance(ev.get("params"), dict) else {}
             rid = p.get("requestId")
             if not rid:
                 continue
             if m == "Network.requestWillBeSent":
-                redir = p.get("redirectResponse")
+                redir = p.get("redirectResponse") if isinstance(p.get("redirectResponse"), dict) else None
                 if redir and rid in self._requests:
                     self._finalize(rid, redir.get("status"),
                                    redir.get("headers", {}),
                                    redir.get("mimeType", ""))
+                request = p.get("request") if isinstance(p.get("request"), dict) else {}
                 self._requests[rid] = {
-                    "url": p.get("request", {}).get("url", ""),
-                    "method": p.get("request", {}).get("method", "GET"),
-                    "headers": p.get("request", {}).get("headers", {}),
+                    "url": request.get("url", ""),
+                    "method": request.get("method", "GET"),
+                    "headers": request.get("headers", {}),
                     "resource_type": p.get("type", ""),
                 }
                 n += 1
             elif m == "Network.responseReceived":
-                resp = p.get("response", {})
+                resp = p.get("response") if isinstance(p.get("response"), dict) else {}
                 self._responses[rid] = {
                     "status": resp.get("status", 0),
                     "headers": resp.get("headers", {}),

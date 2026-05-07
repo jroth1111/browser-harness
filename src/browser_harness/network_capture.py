@@ -9,6 +9,10 @@ _MAX_BODY_CHARS = 2 * 1024 * 1024  # 2MB
 _SENSITIVE_HEADERS = {"authorization", "cookie", "set-cookie", "x-api-key", "x-csrf-token", "x-xsrf-token"}
 
 
+def _dict(value):
+    return value if isinstance(value, dict) else {}
+
+
 def redact_capture_entry(entry):
     """Return a receipt-safe copy of a captured network entry."""
     safe = dict(entry)
@@ -56,11 +60,11 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
 
     for ev in events:
         method = ev.get("method", "")
-        params = ev.get("params") or {}
+        params = _dict(ev.get("params"))
         rid = params.get("requestId")
 
         if method == "Network.requestWillBeSent" and rid:
-            req = params.get("request", {})
+            req = _dict(params.get("request"))
             requests[rid] = {
                 "requestId": rid,
                 "url": req.get("url", ""),
@@ -68,7 +72,7 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
                 "resource_type": params.get("type", ""),
             }
         elif method == "Network.responseReceived" and rid:
-            resp = params.get("response", {})
+            resp = _dict(params.get("response"))
             responses[rid] = {
                 "requestId": rid,
                 "status": resp.get("status", 0),
