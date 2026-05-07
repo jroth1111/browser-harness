@@ -353,10 +353,27 @@ def _max_cursor(a: Any, b: Any) -> Any:
         return b
     if b is None:
         return a
+    a_num = _cursor_number(a)
+    b_num = _cursor_number(b)
+    if a_num is not None and b_num is not None:
+        return a if a_num >= b_num else b
     try:
         return a if str(a) >= str(b) else b
     except Exception:
         return a
+
+
+def _cursor_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _err(e: Exception) -> dict[str, str]:

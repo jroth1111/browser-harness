@@ -154,6 +154,12 @@ def test_stub_unchanged_rejects_malformed_delta_summary_shape():
     ) is False
 
 
+def test_max_cursor_compares_numeric_values_numerically():
+    assert sync_runner._max_cursor(9, 10) == 10
+    assert sync_runner._max_cursor("9", "10") == "10"
+    assert sync_runner._max_cursor("2026-05-02", "2026-05-10") == "2026-05-10"
+
+
 class FakeChatGPTAPI:
     def __init__(self, detail=None, conversations=None):
         self.detail = detail
