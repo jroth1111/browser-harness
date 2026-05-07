@@ -117,6 +117,27 @@ def test_building_watchlist_records_from_json_object_file(tmp_path):
     assert records == [{"id": "b1", "address": "9 Power Street, Southbank VIC 3006"}]
 
 
+def test_read_jsonl_skips_malformed_and_non_object_rows(tmp_path):
+    module = load_module()
+    path = tmp_path / "ledger.jsonl"
+    path.write_text(
+        "\n".join([
+            '{"building_key":"bank","rea_listing_url":"https://www.realestate.com.au/property-apartment-vic-southbank-439776600"}',
+            '"bad-row"',
+            '["bad-row"]',
+            "{not-json",
+            '{"building_key":"power","rea_listing_url":"https://www.realestate.com.au/property-apartment-vic-southbank-439776601"}',
+        ]),
+        encoding="utf-8",
+    )
+
+    rows = module.read_jsonl(path)
+
+    assert [row["building_key"] for row in rows] == ["bank", "power"]
+    known = module.known_listing_urls_by_building(path)
+    assert sorted(known) == ["bank", "power"]
+
+
 def test_parse_rea_rental_listing_text_extracts_active_price_and_unit():
     module = load_module()
 

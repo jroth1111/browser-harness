@@ -843,9 +843,11 @@ def read_jsonl(path):
             if not line.strip():
                 continue
             try:
-                rows.append(json.loads(line))
+                row = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if isinstance(row, dict):
+                rows.append(row)
     return rows
 
 
