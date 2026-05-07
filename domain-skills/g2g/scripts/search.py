@@ -110,7 +110,12 @@ class G2GClient:
         if code != 2000:
             msg = data.get("message", data.get("msg", "unknown error"))
             raise RuntimeError(f"API error {code} from {url}: {msg}")
-        payload = data.get("payload") or data.get("data") or data
+        if "payload" in data:
+            payload = data["payload"]
+        elif "data" in data:
+            payload = data["data"]
+        else:
+            payload = data
         return payload
 
     # --- Wave 1: category discovery from categories.json ---

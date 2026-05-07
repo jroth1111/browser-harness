@@ -53,3 +53,30 @@ def test_coverage_command_writes_zero_count_report_for_empty_input(tmp_path):
         "target_keyword_matches": 0,
     }
     assert report["by_category"] == {}
+
+
+def test_api_get_preserves_empty_payload_values(monkeypatch):
+    module = load_g2g_module()
+    responses = iter([
+        json.dumps({"code": 2000, "payload": []}),
+        json.dumps({"code": 2000, "payload": {}}),
+        json.dumps({"code": 2000, "data": []}),
+        json.dumps({"code": 2000, "message": "ok"}),
+    ])
+    monkeypatch.setattr(module, "http_get", lambda url, timeout=20.0: next(responses))
+    client = module.G2GClient()
+
+    assert client._api_get("/empty-list") == []
+    assert client._api_get("/empty-dict") == {}
+    assert client._api_get("/empty-data") == []
+    assert client._api_get("/envelope") == {"code": 2000, "message": "ok"}
+
+
+def load_g2g_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("g2g_search_api", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
