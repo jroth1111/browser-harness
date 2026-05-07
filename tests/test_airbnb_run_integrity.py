@@ -79,6 +79,26 @@ def test_collection_status_tolerates_malformed_failure_count():
     assert module.collection_status(complete=True, failures_count="not-a-count") == "complete"
 
 
+def test_collection_status_rejects_boolean_failure_count():
+    module = load_module()
+
+    assert module.collection_status(complete=True, failures_count=True) == "complete"
+
+
+def test_last_good_guard_rejects_boolean_counts():
+    module = load_module()
+
+    guard = module.last_good_guard(
+        subject="public_comp_search_results",
+        current_count=False,
+        prior_positive_count=True,
+    )
+
+    assert guard["current_count"] == 0
+    assert guard["prior_positive_count"] == 0
+    assert guard["status"] == "accepted"
+
+
 def test_warehouse_manifest_records_table_grain_and_auth_context():
     module = load_module()
 

@@ -92,8 +92,8 @@ def latest_prior_count(output_path, *, count_keys, current_run_id=None, glob_pat
 
 def last_good_guard(*, subject, current_count, prior_positive_count=0, allow_empty=False):
     """Classify an empty run against the newest prior non-empty run."""
-    current = int(current_count or 0)
-    prior = int(prior_positive_count or 0)
+    current = safe_int(current_count, 0)
+    prior = safe_int(prior_positive_count, 0)
     quarantined = current == 0 and prior > 0 and not bool(allow_empty)
     return {
         "checked": True,
@@ -116,6 +116,8 @@ def collection_status(*, last_good_guard_record=None, failures_count=0, complete
 
 
 def safe_int(value, default=0):
+    if isinstance(value, bool):
+        return int(default)
     try:
         return int(value if value not in (None, "") else default)
     except (TypeError, ValueError):
