@@ -33,6 +33,28 @@ def test_normalize_overview_record_prefers_listing_specific_ids():
     assert record["public_listing_url"].endswith("/rooms/123456789012345678")
 
 
+def test_normalize_overview_record_rejects_boolean_numeric_fields():
+    module = load_module()
+    row = {
+        "id": "123456789012345678",
+        "status": "ACTIVE",
+        "name": "Harbour view apartment",
+        "personCapacity": True,
+        "bedrooms": True,
+        "bathrooms": False,
+        "beds": True,
+        "photoCount": True,
+    }
+
+    record = module.normalize_overview_record(row)
+
+    assert record["max_guests"] is None
+    assert record["bedrooms"] is None
+    assert record["bathrooms"] is None
+    assert record["beds"] is None
+    assert record["photo_count"] is None
+
+
 def test_dedupe_records_merges_non_empty_fields():
     module = load_module()
     records = [

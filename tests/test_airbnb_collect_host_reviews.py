@@ -65,6 +65,34 @@ def test_parse_host_review_json_normalizes_private_review_rows():
     assert {"cleanliness", "checkin"} <= set(rows[0]["review_theme_tags"])
 
 
+def test_parse_host_review_json_rejects_boolean_ratings():
+    module = load_host_reviews_module()
+    payload = {
+        "data": {
+            "reviews": {
+                "items": [{
+                    "reviewId": "r-1",
+                    "reviewDate": "2026-04-01",
+                    "overallRating": True,
+                    "categoryRatings": {"cleanliness": True},
+                    "reviewText": "Spotless apartment.",
+                }]
+            }
+        }
+    }
+
+    rows, total = module.parse_host_review_json(
+        payload,
+        listing_id="100",
+        observed_at="2026-04-28T00:00:00Z",
+        source_url="https://www.airbnb.com.au/hosting/reviews?listingId=100",
+    )
+
+    assert total is None
+    assert rows[0].get("overall_rating") is None
+    assert rows[0].get("category_ratings") is None
+
+
 def test_parse_total_count_skips_boolean_totals():
     module = load_host_reviews_module()
 

@@ -124,6 +124,8 @@ def stringify(value):
 
 
 def as_number(value):
+    if isinstance(value, bool):
+        return None
     if isinstance(value, (int, float)):
         return value
     if isinstance(value, str):

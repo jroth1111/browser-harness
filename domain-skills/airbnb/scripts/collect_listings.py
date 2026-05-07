@@ -140,6 +140,8 @@ def wrapper_bool(value):
 
 
 def as_number(value):
+    if isinstance(value, bool):
+        return None
     if isinstance(value, (int, float)):
         return value
     if isinstance(value, str):
