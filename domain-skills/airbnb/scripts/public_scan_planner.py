@@ -35,6 +35,22 @@ def parse_bool(value, default=False):
     raise ValueError(f"Invalid boolean value: {value!r}")
 
 
+def safe_int(value, default=0):
+    try:
+        return int(value if value not in (None, "") else default)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def optional_int(value):
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_csv_ints(value, default):
     raw = value if value not in (None, "") else default
     return [int(part.strip()) for part in str(raw).split(",") if part.strip()]
@@ -485,6 +501,8 @@ def dedupe_listing_ids(rows, key="listing_id_if_extractable"):
     ids = []
     seen = set()
     for row in rows or []:
+        if not isinstance(row, dict):
+            continue
         value = str(row.get(key) or "").strip()
         if not value or value in seen:
             continue
@@ -497,6 +515,9 @@ def build_partition_manifest(search_runs, result_rows=None, *, trigger_threshold
     """Summarize deterministic search partitions and listing-ID dedupe."""
     partitions = []
     for row in search_runs or []:
+        if not isinstance(row, dict):
+            continue
+        child_labels = row.get("partition_child_labels") or []
         partitions.append({
             "partition_key": row.get("partition_key"),
             "search_run_id": row.get("search_run_id"),
@@ -506,18 +527,18 @@ def build_partition_manifest(search_runs, result_rows=None, *, trigger_threshold
             "price_band_label": row.get("price_band_label"),
             "price_min": row.get("price_min"),
             "price_max": row.get("price_max"),
-            "partition_depth": int(row.get("partition_depth") or 0),
+            "partition_depth": safe_int(row.get("partition_depth"), 0),
             "parent_price_band_label": row.get("parent_price_band_label"),
-            "visible_result_count": int(row.get("results_count_visible") or 0),
+            "visible_result_count": safe_int(row.get("results_count_visible"), 0),
             "status": row.get("status"),
             "partition_triggered": bool(row.get("partition_triggered")),
-            "partition_child_labels": list(row.get("partition_child_labels") or []),
+            "partition_child_labels": list(child_labels) if isinstance(child_labels, list) else [],
         })
     deduped_ids = dedupe_listing_ids(result_rows or [])
     return {
         "strategy": "deterministic_price_date_stay_partition",
-        "trigger_threshold": int(trigger_threshold) if trigger_threshold not in (None, "") else None,
-        "max_depth": int(max_depth) if max_depth not in (None, "") else None,
+        "trigger_threshold": optional_int(trigger_threshold),
+        "max_depth": optional_int(max_depth),
         "partition_count": len(partitions),
         "triggered_partition_count": len([row for row in partitions if row["partition_triggered"]]),
         "partitions": partitions,

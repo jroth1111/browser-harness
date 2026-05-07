@@ -246,6 +246,36 @@ def test_partition_manifest_records_tree_and_dedupes_listing_ids():
     assert manifest["deduped_listing_ids"] == ["200", "300"]
 
 
+def test_partition_manifest_tolerates_malformed_rows_and_counts():
+    module = load_module()
+
+    manifest = module.build_partition_manifest(
+        [
+            "not-a-row",
+            {
+                "search_run_id": "search-1",
+                "partition_key": "100|2026-05-10|3|0-999|d0",
+                "target_listing_id": "100",
+                "partition_depth": "not-a-depth",
+                "results_count_visible": "not-a-count",
+                "partition_triggered": True,
+                "partition_child_labels": "not-a-list",
+            },
+        ],
+        ["not-a-row", {"listing_id_if_extractable": "200"}],
+        trigger_threshold="not-a-threshold",
+        max_depth="not-a-depth",
+    )
+
+    assert manifest["partition_count"] == 1
+    assert manifest["trigger_threshold"] is None
+    assert manifest["max_depth"] is None
+    assert manifest["partitions"][0]["partition_depth"] == 0
+    assert manifest["partitions"][0]["visible_result_count"] == 0
+    assert manifest["partitions"][0]["partition_child_labels"] == []
+    assert manifest["deduped_listing_ids"] == ["200"]
+
+
 def test_validate_airbnb_room_url_rejects_non_airbnb_urls():
     module = load_module()
 
