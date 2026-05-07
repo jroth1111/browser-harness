@@ -100,3 +100,15 @@ def test_latest_prior_event_count_tolerates_malformed_count(tmp_path, monkeypatc
     }))
 
     assert module.latest_prior_event_count("100") == 0
+
+
+def test_latest_prior_event_count_rejects_boolean_count(tmp_path, monkeypatch):
+    module = load_module()
+    monkeypatch.setattr(module, "OUTPUT_PATH", tmp_path)
+    (tmp_path / "airbnb-calendar-export-bool.json").write_text(json.dumps({
+        "observed_at": "2026-04-29T00:00:00Z",
+        "listing_id": "100",
+        "event_count": True,
+    }))
+
+    assert module.latest_prior_event_count("100") == 0

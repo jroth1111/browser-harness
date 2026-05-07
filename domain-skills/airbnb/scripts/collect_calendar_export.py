@@ -244,6 +244,8 @@ def build_collection(text, *, listing_id, observed_at, source, include_raw_text=
 
 
 def safe_int(value, default=0):
+    if isinstance(value, bool):
+        return int(default)
     try:
         return int(value if value not in (None, "") else default)
     except (TypeError, ValueError):

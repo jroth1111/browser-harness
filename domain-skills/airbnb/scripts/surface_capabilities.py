@@ -290,6 +290,8 @@ def capability_record(
 def upsert_best_capability(records, record):
     """Keep the strongest receipt for a surface without duplicating it."""
     def safe_int(value) -> int:
+        if isinstance(value, bool):
+            return 0
         try:
             return int(value or 0)
         except (TypeError, ValueError):
