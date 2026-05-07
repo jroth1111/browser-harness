@@ -116,6 +116,24 @@ def test_live_listing_file_rejects_malformed_counts(tmp_path):
     assert module.is_complete_live_listing_file(path) is False
 
 
+def test_live_listing_file_rejects_boolean_counts(tmp_path):
+    module = load_collect_module()
+    path = tmp_path / "airbnb-live-listings-boolean-counts.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [{"status": "ACTIVE"}],
+                "active_count": True,
+                "status_counts": {"ACTIVE": True},
+                "field_validation": {"all_active_detail_pages_ok": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert module.is_complete_live_listing_file(path) is False
+
+
 def test_discover_operation_hashes_from_page_tolerates_malformed_browser_context(monkeypatch):
     module = load_collect_module()
     monkeypatch.setattr(module, "js", lambda script: "not-a-context", raising=False)

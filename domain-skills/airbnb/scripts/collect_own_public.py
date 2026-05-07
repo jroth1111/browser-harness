@@ -128,6 +128,8 @@ def is_complete_live_listing_file(path: Path) -> bool:
     except (OSError, json.JSONDecodeError):
         return False
     def safe_int(value):
+        if isinstance(value, bool):
+            return 0
         try:
             return int(value or 0)
         except (TypeError, ValueError):
