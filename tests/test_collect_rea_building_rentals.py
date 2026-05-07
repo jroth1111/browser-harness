@@ -159,6 +159,17 @@ def test_building_watchlist_targets_skip_malformed_rows_and_default_bad_priority
     assert by_key["legacy"]["target_priority"] == "not-a-priority"
 
 
+def test_sort_building_targets_treats_boolean_priority_as_default():
+    module = load_module()
+
+    targets = module.sort_building_targets([
+        {"building_key": "bool", "building_address": "Boolean Priority", "target_priority": True},
+        {"building_key": "real", "building_address": "Real Priority", "target_priority": 25},
+    ])
+
+    assert [target["building_key"] for target in targets] == ["real", "bool"]
+
+
 def test_building_watchlist_records_from_json_object_file(tmp_path):
     module = load_module()
     path = tmp_path / "watchlist.json"

@@ -577,6 +577,8 @@ def parse_int_list(value):
 
 
 def safe_int(value, default=0):
+    if isinstance(value, bool):
+        return int(default)
     try:
         return int(value if value is not None and value != "" else default)
     except (TypeError, ValueError):
