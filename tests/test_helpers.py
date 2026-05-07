@@ -46,6 +46,32 @@ def test_page_info_uses_target_and_layout_metrics_not_runtime():
     assert "Runtime.evaluate" not in [method for method, _ in calls]
 
 
+def test_page_info_tolerates_malformed_layout_metric_shapes():
+    def fake_cdp(method, **params):
+        if method == "Target.getTargetInfo":
+            return {"targetInfo": {"url": "https://example.com", "title": "Example"}}
+        if method == "Page.getLayoutMetrics":
+            return {
+                "cssLayoutViewport": "bad-viewport",
+                "layoutViewport": {"clientWidth": "wide", "clientHeight": 720},
+                "cssContentSize": {"width": "wide", "height": "tall"},
+            }
+        raise AssertionError(method)
+
+    with patch("browser_harness.helpers._send", return_value={"dialog": None}), \
+         patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
+        assert helpers.page_info() == {
+            "url": "https://example.com",
+            "title": "Example",
+            "w": 0,
+            "h": 720,
+            "sx": 0,
+            "sy": 0,
+            "pw": 0,
+            "ph": 0,
+        }
+
+
 def test_goto_url_prepares_page_load_events_before_navigation():
     calls = []
 

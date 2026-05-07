@@ -456,20 +456,20 @@ def page_info():
         return {"dialog": dialog}
     target_resp = cdp("Target.getTargetInfo")
     _raise_if_cdp_exception(target_resp, "page_info")
-    target = target_resp.get("targetInfo", {})
+    target = _dict_value(target_resp.get("targetInfo"))
     metrics = cdp("Page.getLayoutMetrics")
     _raise_if_cdp_exception(metrics, "page_info")
-    viewport = metrics.get("cssLayoutViewport") or metrics.get("layoutViewport") or {}
-    content = metrics.get("cssContentSize") or metrics.get("contentSize") or {}
+    viewport = _dict_value(metrics.get("cssLayoutViewport")) or _dict_value(metrics.get("layoutViewport"))
+    content = _dict_value(metrics.get("cssContentSize")) or _dict_value(metrics.get("contentSize"))
     return {
         "url": target.get("url", ""),
         "title": target.get("title", ""),
-        "w": int(viewport.get("clientWidth") or 0),
-        "h": int(viewport.get("clientHeight") or 0),
-        "sx": int(viewport.get("pageX") or 0),
-        "sy": int(viewport.get("pageY") or 0),
-        "pw": int(content.get("width") or 0),
-        "ph": int(content.get("height") or 0),
+        "w": _int_count(viewport.get("clientWidth")),
+        "h": _int_count(viewport.get("clientHeight")),
+        "sx": _int_count(viewport.get("pageX")),
+        "sy": _int_count(viewport.get("pageY")),
+        "pw": _int_count(content.get("width")),
+        "ph": _int_count(content.get("height")),
     }
 
 
