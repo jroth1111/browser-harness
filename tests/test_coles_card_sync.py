@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).parent.parent / "domain-skills" / "coles_card" / "scripts" / "sync.py"
@@ -47,6 +48,24 @@ def test_normalize_date_rejects_invalid_month():
     assert coles_card_sync.normalize_date("12/31/2025") == "12/31/2025"
     assert coles_card_sync.normalize_date("05/05/2026") == "2026-05-05"
     assert coles_card_sync.normalize_date("5 May 2026") == "2026-05-05"
+
+
+def test_main_tolerates_malformed_blocked_page_metadata(tmp_path, capsys):
+    db_path = tmp_path / "coles.sqlite3"
+
+    with patch.object(coles_card_sync, "run_browser_probe", return_value={
+        "status": "blocked",
+        "reason": "not_logged_in",
+        "page": "not-an-object",
+    }):
+        assert coles_card_sync.main(["--db", str(db_path)]) == 2
+
+    row = coles_card_sync.init_db(db_path).execute(
+        "SELECT status, source_url FROM sync_runs"
+    ).fetchone()
+    assert row["status"] == "blocked"
+    assert row["source_url"] is None
+    assert '"status": "blocked"' in capsys.readouterr().out
 
 
 def test_upsert_payload_skips_dom_rows_when_csv_present(tmp_path):

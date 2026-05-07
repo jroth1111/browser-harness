@@ -782,6 +782,11 @@ def finish_run(
     conn.commit()
 
 
+def payload_source_url(payload: dict[str, Any]) -> str | None:
+    page = payload.get("page") if isinstance(payload.get("page"), dict) else {}
+    return payload.get("url") or page.get("url")
+
+
 def upsert_payload(
     conn: sqlite3.Connection,
     run_id: str,
@@ -990,7 +995,7 @@ def main(argv: list[str] | None = None) -> int:
     insert_run(conn, run_id)
     try:
         if payload.get("status") != "ok":
-            finish_run(conn, run_id, "blocked", payload, payload.get("url") or payload.get("page", {}).get("url"))
+            finish_run(conn, run_id, "blocked", payload, payload_source_url(payload))
             print(json.dumps({
                 "run_id": run_id,
                 "status": "blocked",
