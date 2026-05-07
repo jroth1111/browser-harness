@@ -23,6 +23,7 @@ from lib.provider_base import (  # noqa: E402
 from providers.claude.provider import ClaudeProvider  # noqa: E402
 from providers.chatgpt.provider import ChatGPTProvider  # noqa: E402
 from providers.gemini.provider import GeminiProvider  # noqa: E402
+from providers.gemini.http import GeminiHTTPAPI  # noqa: E402
 from providers.grok.provider import GrokProvider  # noqa: E402
 from providers.perplexity.provider import PerplexityProvider  # noqa: E402
 
@@ -253,6 +254,38 @@ def test_provider_inventories_skip_malformed_remote_rows():
         )
         stubs = list(provider.inventory(ctx, since=1))
         assert [stub.provider_thread_id for stub in stubs] == [expected_id]
+
+
+def test_gemini_inventory_drops_malformed_response_ids():
+    db = sqlite3.connect(":memory:")
+    api = GeminiHTTPAPI({})
+    api._rpc = lambda *_args, **_kwargs: [
+        None,
+        None,
+        [
+            [
+                "chat-ok",
+                "Title",
+                None,
+                None,
+                None,
+                [10],
+                [["chat-ok", ["bad-response-id"]]],
+            ]
+        ],
+    ]
+    ctx = ProviderContext(
+        provider_id="gemini",
+        cookies_by_domain={},
+        db=db,
+        options={"_gemini_api": api},
+    )
+
+    stubs = list(GeminiProvider().inventory(ctx))
+
+    assert len(stubs) == 1
+    assert stubs[0].canonical_url == "https://gemini.google.com/app/chat-ok"
+    assert stubs[0].extra["response_id"] is None
 
 
 def test_chatgpt_http_artifact_metadata_is_partial_not_complete():

@@ -226,7 +226,7 @@ class GeminiHTTPAPI:
             if isinstance(response_pair, list) and response_pair:
                 inner = response_pair[0]
                 if isinstance(inner, list) and len(inner) >= 2:
-                    response_id = inner[1]
+                    response_id = inner[1] if isinstance(inner[1], str) else None
             if not chat_id:
                 continue
             chats.append({
