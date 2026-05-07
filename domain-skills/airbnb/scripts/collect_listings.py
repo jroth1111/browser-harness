@@ -471,8 +471,6 @@ def collect_detail(record, pause):
 
 
 def write_csv(path, rows):
-    if not rows:
-        return
     fields = [
         "listing_id",
         "listing_name",
@@ -495,6 +493,12 @@ def write_csv(path, rows):
         "detail_field_ok",
         "observed_at",
     ]
+    if not rows:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
+            writer.writeheader()
+        return
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()

@@ -614,6 +614,8 @@ def score_comp(target, card, result_position):
 
 def write_csv(path, rows):
     if not rows:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
         return
     fields = []
     for row in rows:

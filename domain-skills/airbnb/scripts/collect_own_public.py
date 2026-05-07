@@ -698,6 +698,8 @@ def scroll_public_listing():
 
 def write_csv(path, rows):
     if not rows:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
         return
     fields = []
     for row in rows:
