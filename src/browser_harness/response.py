@@ -27,12 +27,12 @@ class Response:
     def __init__(self, html, text, url, status, source, headers=None,
                  encoding="utf-8", turnstile_solved=False, reason=None,
                  block=None):
-        raw_html = html or ""
-        raw_text = text or ""
+        raw_html = str(html or "")
+        raw_text = str(text or "")
         self.html = raw_html[:_MAX_RESPONSE_CHARS]
         self.text = raw_text[:_MAX_RESPONSE_CHARS]
         self.truncated = len(raw_html) > _MAX_RESPONSE_CHARS or len(raw_text) > _MAX_RESPONSE_CHARS
-        self.url = url or ""
+        self.url = str(url or "")
         self.status = status
         self.source = source  # "http" | "session" | "browser" | "auto"
         self.headers = headers or {}

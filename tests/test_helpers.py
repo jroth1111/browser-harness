@@ -1508,6 +1508,17 @@ def test_response_repr():
     assert "status=200" in repr(r)
 
 
+def test_response_tolerates_scalar_bodies():
+    from browser_harness.response import Response
+
+    r = Response(html=12345, text=67890, url=98765, status=200, source="session")
+
+    assert r.html == "12345"
+    assert r.text == "67890"
+    assert r.url == "98765"
+    assert "text=5" in r.summary()
+
+
 def test_send_passes_timeout_to_recv():
     import browser_harness.helpers as helpers
     calls = []
