@@ -101,3 +101,35 @@ def test_operation_hashes_from_registry_uses_active_non_expired_rows():
 
     assert hashes == {"ChartQuery": "2" * 64}
     assert sources == {"ChartQuery": "capability_registry"}
+
+
+def test_operation_hashes_from_registry_skips_malformed_rows_and_expiry():
+    module = load_module()
+
+    hashes, sources = module.operation_hashes_from_registry(
+        [
+            "not-a-row",
+            {
+                "surface_id": "host_reviews",
+                "operation_name": "ChartQuery",
+                "operation_hash": "2" * 64,
+                "last_seen_at": "2026-04-28T00:00:00Z",
+                "expires_at": "not-a-date",
+                "status": "active",
+            },
+            {
+                "surface_id": "host_reviews",
+                "operation_name": "ListOfMetricsQuery",
+                "operation_hash": "3" * 64,
+                "last_seen_at": "2026-04-28T00:00:00Z",
+                "expires_at": "2026-05-05T00:00:00Z",
+                "status": "active",
+            },
+        ],
+        ["ChartQuery", "ListOfMetricsQuery"],
+        surface_id="host_reviews",
+        today=date(2026, 4, 29),
+    )
+
+    assert hashes == {"ListOfMetricsQuery": "3" * 64}
+    assert sources == {"ListOfMetricsQuery": "capability_registry"}

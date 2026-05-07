@@ -168,6 +168,8 @@ def operation_hashes_from_registry(entries, operation_names, *, surface_id=None,
     selected = {}
     sources = {}
     for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
         if surface_id and entry.get("surface_id") != surface_id:
             continue
         operation = entry.get("operation_name")
@@ -178,8 +180,13 @@ def operation_hashes_from_registry(entries, operation_names, *, surface_id=None,
         expires_at = entry.get("expires_at")
         if status in {"disabled", "invalid"}:
             continue
-        if expires_at and date.fromisoformat(str(expires_at)[:10]) < today:
-            continue
+        if expires_at:
+            try:
+                expires_on = date.fromisoformat(str(expires_at)[:10])
+            except ValueError:
+                continue
+            if expires_on < today:
+                continue
         observed = str(entry.get("last_seen_at") or entry.get("first_seen_at") or "")
         if operation not in selected or observed >= selected[operation][0]:
             selected[operation] = (observed, str(hash_value))
