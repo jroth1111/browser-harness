@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     for pid in provider_ids:
         jars = archive_db.list_cookie_jars(db, provider_id=pid, only_active=True)
         if args.account:
-            jars = [j for j in jars if args.account.lower() in (j.get("account_label") or "").lower()]
+            jars = [j for j in jars if args.account.lower() in str(j.get("account_label") or "").lower()]
         if not jars:
             if not args.json:
                 print(f"[{pid}] no active jars; harvest first?")
