@@ -116,6 +116,27 @@ def test_live_listing_file_rejects_malformed_counts(tmp_path):
     assert module.is_complete_live_listing_file(path) is False
 
 
+def test_discover_operation_hashes_from_page_tolerates_malformed_browser_context(monkeypatch):
+    module = load_collect_module()
+    monkeypatch.setattr(module, "js", lambda script: "not-a-context", raising=False)
+    captured = {}
+
+    def fake_discover(fetcher, operation_names, seed_texts, seed_urls, max_fetches):
+        captured["operation_names"] = operation_names
+        captured["seed_texts"] = seed_texts
+        captured["seed_urls"] = seed_urls
+        return {"hashes": {}, "sources": {}, "visited_count": 0, "remaining_queue_count": 0}
+
+    monkeypatch.setattr(module._operation_hashes, "discover_operation_hashes", fake_discover)
+
+    result = module.discover_operation_hashes_from_page({})
+
+    assert result["hashes"] == {}
+    assert captured["operation_names"] == tuple(module.OPERATION_HASHES)
+    assert captured["seed_texts"] == [""]
+    assert captured["seed_urls"] == []
+
+
 def test_run_request_batches_does_not_checkpoint_graphql_error_payload(tmp_path, monkeypatch):
     module = load_batch_functions()
 

@@ -253,6 +253,8 @@ def discover_operation_hashes_from_page(base_headers):
             resources: performance.getEntriesByType('resource').map(entry => entry.name)
         }))()"""
     ) or {}
+    if not isinstance(context, dict):
+        context = {}
     seed_texts = [context.get("html") or ""]
     seed_urls = []
     for value in [*(context.get("scripts") or []), *(context.get("resources") or [])]:

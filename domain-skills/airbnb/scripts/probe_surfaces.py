@@ -85,6 +85,8 @@ def discover_hashes_for_page(surface_id):
           resources: performance.getEntriesByType('resource').map(entry => entry.name)
         }))()"""
     ) or {}
+    if not isinstance(context, dict):
+        context = {}
     seed_texts = [context.get("html") or ""]
     seed_urls = [
         url for url in [*(context.get("scripts") or []), *(context.get("resources") or [])]
