@@ -477,17 +477,35 @@ def test_save_and_load_auth_profile_roundtrip(tmp_path):
         "origins": [{"origin": "https://example.com", "localStorage": {"key": "val"}, "sessionStorage": {}}],
     }
 
+    calls = []
+
     def fake_client(method, **kwargs):
+        calls.append((method, kwargs))
         if "getCookies" in method or "Cookies" in method:
             return {"cookies": fake_state["cookies"]}
         if "Storage" in method or "storage" in method:
             return {"localStorage": [{"name": "key", "value": "val"}], "sessionStorage": []}
+        if method == "Runtime.evaluate":
+            expression = kwargs.get("expression", "")
+            if "location.origin" in expression and "localStorageRestored" not in expression:
+                return {"result": {"value": "https://example.com"}}
+            if "localStorageRestored" in expression:
+                return {"result": {"value": {
+                    "origin": "https://example.com",
+                    "localStorageRestored": 1,
+                    "sessionStorageRestored": 1,
+                }}}
+            return {"result": {"value": {
+                "url": "https://example.com/",
+                "title": "Example",
+                "readyState": "complete",
+                "textLength": 100,
+            }}}
         return {}
 
     with patch.object(login_session, "_PROFILES_DIR", profiles_dir), \
          patch("browser_harness.login_session.session_manifest", return_value={"site": "example.com"}), \
-         patch("browser_harness.login_session.session_state", return_value=fake_state), \
-         patch("browser_harness.login_session.restore_session_state") as mock_restore:
+         patch("browser_harness.login_session.session_state", return_value=fake_state):
         path = login_session.save_auth_profile(fake_client, "www.example.com")
         assert (profiles_dir / "example.com" / "manifest.json").exists()
         assert (profiles_dir / "example.com" / "state.json").exists()
@@ -495,10 +513,12 @@ def test_save_and_load_auth_profile_roundtrip(tmp_path):
         state_file = profiles_dir / "example.com" / "state.json"
         perms = stat.S_IMODE(os.stat(state_file).st_mode)
         assert perms & 0o077 == 0  # no group/other read
+        assert stat.S_IMODE(os.stat(profiles_dir).st_mode) & 0o077 == 0
+        assert stat.S_IMODE(os.stat(profiles_dir / "example.com").st_mode) & 0o077 == 0
 
         result = login_session.load_auth_profile(fake_client, "example.com")
         assert result is True
-        mock_restore.assert_called_once()
+        assert ("Page.navigate", {"url": "https://example.com/"}) in calls
 
 
 def test_load_auth_profile_returns_false_when_missing(tmp_path):
@@ -531,3 +551,47 @@ def test_load_auth_profile_returns_false_when_state_is_corrupt(tmp_path):
         assert login_session.load_auth_profile(lambda **kw: {}, "example.com") is False
 
     mock_restore.assert_not_called()
+
+
+def test_load_auth_profile_restores_storage_on_saved_origin_from_blank_page(tmp_path):
+    domain_dir = tmp_path / "example.com"
+    domain_dir.mkdir()
+    state = {
+        "cookies": [],
+        "origins": [{"origin": "https://example.com", "localStorage": {"token": "secret"}, "sessionStorage": {}}],
+    }
+    (domain_dir / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    calls = []
+
+    def client(method, **kwargs):
+        calls.append((method, kwargs))
+        if method in {"Page.enable", "Network.enable"}:
+            return {}
+        if method == "Page.navigate":
+            return {}
+        if method == "Runtime.evaluate":
+            expression = kwargs.get("expression", "")
+            if "localStorageRestored" in expression:
+                return {"result": {"value": {
+                    "origin": "https://example.com",
+                    "localStorageRestored": 1,
+                    "sessionStorageRestored": 0,
+                }}}
+            if "location.origin" in expression:
+                return {"result": {"value": "https://example.com"}}
+            return {"result": {"value": {
+                "url": "https://example.com/",
+                "title": "Example",
+                "readyState": "complete",
+                "textLength": 0,
+            }}}
+        if method == "Network.setCookies":
+            return {}
+        raise AssertionError(method)
+
+    with patch.object(login_session, "_PROFILES_DIR", tmp_path):
+        result = login_session.load_auth_profile_result(client, "example.com")
+
+    assert result["ok"] is True
+    assert ("Page.navigate", {"url": "https://example.com/"}) in calls
+    assert result["restore"]["storage"][0]["localStorageRestored"] == 1

@@ -1,9 +1,11 @@
 """Browser control via CDP. Read, edit, extend -- this file is yours."""
 import atexit, base64, functools, json, math, os, re, socket, sys, time, urllib.error, urllib.request
+import hashlib
 from collections import deque
 from importlib.resources import files
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
+from . import _ipc as ipc
 from . import login_session
 
 
@@ -21,8 +23,8 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BH_NAME", "default")
-SOCK = f"/tmp/bh-{NAME}.sock"
+NAME = os.environ.get("BU_NAME") or os.environ.get("BH_NAME", "default")
+ipc._check(NAME)
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
 
 BLOCKER_JS = """(()=>{
@@ -50,6 +52,7 @@ addEventListener('click',e=>{const t=e.target;if(t&&t.tagName==='INPUT'&&t.type=
 })();"""
 
 _sock = None
+_sock_token = None
 
 
 def _asset_dir(local_name, package_name):
@@ -63,18 +66,19 @@ def _asset_dir(local_name, package_name):
 
 
 def _reconnect():
-    global _sock, _BROWSER_UA
+    global _sock, _sock_token, _BROWSER_UA
     if _sock is not None:
         try:
             _sock.close()
         except OSError:
             pass
-    _sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    _sock.settimeout(30)
     try:
-        _sock.connect(SOCK)
+        _sock, _sock_token = ipc.connect(NAME, timeout=30)
     except Exception:
-        _sock.close()
+        try:
+            _sock.close()
+        except Exception:
+            pass
         _sock = None
         raise
     _BROWSER_UA = None  # invalidate cached UA on reconnect
@@ -95,12 +99,10 @@ def _recv(timeout=30):
     return data
 
 
-# CDP methods that mutate browser state — don't auto-retry on socket errors.
-_MUTATING_CDP = frozenset((
-    "Page.navigate", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
-    "Input.insertText", "DOM.setFileInputFiles", "Page.captureScreenshot",
-    "Network.setBlockedURLs", "Target.closeTarget", "Target.createTarget",
-    "Page.handleJavaScriptDialog",
+# CDP methods whose replay after a lost response is safe enough to auto-retry.
+_IDEMPOTENT_CDP = frozenset((
+    "Browser.getVersion", "DOM.getDocument", "DOM.getOuterHTML",
+    "Network.getCookies", "Page.getLayoutMetrics", "Target.getTargets",
 ))
 
 
@@ -108,15 +110,20 @@ def _send(req, timeout=30):
     global _sock
     if _sock is None:
         _reconnect()
-    payload = (json.dumps(req) + "\n").encode()
+    token = _sock_token
+    payload_req = {**req, "token": token} if token else req
+    payload = (json.dumps(payload_req) + "\n").encode()
     method = req.get("method", "")
     try:
         _sock.sendall(payload)
         data = _recv(timeout)
     except (OSError, ConnectionResetError) as e:
-        if method in _MUTATING_CDP:
+        if method not in _IDEMPOTENT_CDP:
             raise RuntimeError(f"socket error during {method}: {e}") from e
         _reconnect()
+        token = _sock_token
+        payload_req = {**req, "token": token} if token else req
+        payload = (json.dumps(payload_req) + "\n").encode()
         _sock.sendall(payload)
         data = _recv(timeout)
     except (RuntimeError, ValueError):
@@ -332,7 +339,7 @@ def goto_url(url, wait_until=None):
     cdp("Page.enable")
     drain_events()
     r = cdp("Page.navigate", url=url)
-    d = (_asset_dir("domain-skills", "browser_harness_domain_skills") / (urlparse(url).hostname or "").removeprefix("www.").split(".")[0])
+    d = _domain_skill_dir(url)
     ds = sorted(p.name for p in d.rglob("*.md"))[:10] if d.is_dir() else []
 
     if wait_until is None:
@@ -369,6 +376,27 @@ def goto_with_auth(url, wait_until=None):
     """
     login_session.load_auth_profile(cdp, urlparse(url).hostname or "")
     return goto_url(url, wait_until=wait_until)
+
+
+def _domain_skill_dir(url):
+    root = _asset_dir("domain-skills", "browser_harness_domain_skills")
+    hostname = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    if not hostname:
+        return root / ""
+    aliases = {
+        "realestate.com.au": "realestate-com-au",
+        "www.realestate.com.au": "realestate-com-au",
+    }
+    candidates = []
+    if hostname in aliases:
+        candidates.append(aliases[hostname])
+    candidates.append(hostname.replace(".", "-"))
+    candidates.append(hostname.split(".")[0])
+    for name in candidates:
+        d = root / name
+        if d.is_dir():
+            return d
+    return root / candidates[0]
 
 
 def navigate_via_google(url, google_base="https://www.google.com"):
@@ -1324,9 +1352,13 @@ def js(expression, target_id=None):
     offending expression for debugging).
     """
     sid = _require_key(cdp("Target.attachToTarget", targetId=target_id, flatten=True), "sessionId", "Target.attachToTarget response") if target_id else None
-    if _has_return_statement(expression) and not expression.strip().startswith("("):
-        expression = f"(function(){{{expression}}})()"
-    return _runtime_evaluate(expression, session_id=sid, await_promise=True)
+    try:
+        if _has_return_statement(expression) and not expression.strip().startswith("("):
+            expression = f"(function(){{{expression}}})()"
+        return _runtime_evaluate(expression, session_id=sid, await_promise=True)
+    finally:
+        if sid:
+            cdp("Target.detachFromTarget", sessionId=sid)
 
 
 def install_blocker_probe():
@@ -2288,6 +2320,13 @@ class NetworkCapture:
         safe = dict(entry)
         safe["headers"] = cls._redact_headers(safe.get("headers"))
         safe["response_headers"] = cls._redact_headers(safe.get("response_headers"))
+        if "body" in safe:
+            body = safe.pop("body") or ""
+            if not isinstance(body, str):
+                body = str(body)
+            safe["body_omitted"] = True
+            safe["body_length"] = len(body)
+            safe["body_sha256"] = hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()
         return safe
 
 

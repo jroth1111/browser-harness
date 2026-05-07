@@ -84,6 +84,20 @@ def test_goto_url_discovers_packaged_domain_skill_assets(tmp_path):
     assert result == {"frameId": "frame-1", "domain_skills": ["overview.md"]}
 
 
+def test_goto_url_resolves_compound_domain_skill_assets(tmp_path):
+    domain_root = tmp_path / "domain-skills"
+    skill_dir = domain_root / "realestate-com-au"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "overview.md").write_text("# REA\n", encoding="utf-8")
+
+    with patch("browser_harness.helpers.cdp", side_effect=lambda method, **params: {"frameId": "frame-1"} if method == "Page.navigate" else {}), \
+         patch("browser_harness.helpers.drain_events", return_value=[]), \
+         patch("browser_harness.helpers._asset_dir", return_value=domain_root):
+        result = helpers.goto_url("https://www.realestate.com.au/buy")
+
+    assert result == {"frameId": "frame-1", "domain_skills": ["overview.md"]}
+
+
 def test_goto_with_auth_loads_profile_before_navigation():
     with patch("browser_harness.helpers.login_session.load_auth_profile", return_value=True) as mock_load, \
          patch("browser_harness.helpers.cdp", return_value={"frameId": "f1"}), \
@@ -155,8 +169,8 @@ def test_send_reconnects_on_transport_error():
     old_sock = helpers._sock
     helpers._sock = broken
     try:
-        with patch("socket.socket", return_value=working):
-            helpers._send({"meta": "session"})
+        with patch("browser_harness.helpers.ipc.connect", return_value=(working, None)):
+            helpers._send({"method": "Target.getTargets", "params": {}})
         assert broken.closed
         assert helpers._sock is working
     finally:
@@ -183,10 +197,10 @@ def test_send_reuses_persistent_socket():
     sock = TrackingSocket()
     helpers._sock = None
     try:
-        with patch("socket.socket", return_value=sock):
+        with patch("browser_harness.helpers.ipc.connect", return_value=(sock, None)):
             helpers._send({"method": "Target.getTargets", "params": {}})
             helpers._send({"method": "Target.getTargets", "params": {}})
-        assert TrackingSocket.connect_count == 1
+        assert TrackingSocket.connect_count == 0
         assert helpers._sock is sock
     finally:
         helpers._sock = None
@@ -208,15 +222,57 @@ def test_send_propagates_error_after_reconnect_fails():
     old_sock = helpers._sock
     helpers._sock = BrokenSocket()
     try:
-        with patch("socket.socket", return_value=BrokenSocket()):
+        with patch("browser_harness.helpers.ipc.connect", side_effect=ConnectionRefusedError("no daemon")):
             try:
-                helpers._send({"meta": "session"})
+                helpers._send({"method": "Target.getTargets", "params": {}})
             except (BrokenPipeError, ConnectionRefusedError):
                 pass
             else:
                 raise AssertionError("expected socket error")
     finally:
         helpers._sock = None
+
+
+def test_send_does_not_replay_runtime_evaluate_after_transport_error():
+    class BrokenSocket:
+        def close(self):
+            pass
+        def sendall(self, data):
+            raise BrokenPipeError("closed")
+        def recv(self, size):
+            return b""
+
+    helpers._sock = BrokenSocket()
+    try:
+        with patch("browser_harness.helpers.ipc.connect") as connect:
+            with pytest.raises(RuntimeError, match="Runtime.evaluate"):
+                helpers._send({"method": "Runtime.evaluate", "params": {"expression": "window.clicked++"}})
+        connect.assert_not_called()
+    finally:
+        helpers._sock = None
+
+
+def test_js_detaches_target_session_after_evaluation():
+    calls = []
+
+    def fake_cdp(method, **params):
+        calls.append((method, params))
+        if method == "Target.attachToTarget":
+            return {"sessionId": "session-iframe"}
+        if method == "Runtime.evaluate":
+            return {"result": {"value": 7}}
+        if method == "Target.detachFromTarget":
+            return {}
+        raise AssertionError(method)
+
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp):
+        assert helpers.js("3 + 4", target_id="target-iframe") == 7
+
+    assert calls == [
+        ("Target.attachToTarget", {"targetId": "target-iframe", "flatten": True}),
+        ("Runtime.evaluate", {"session_id": "session-iframe", "expression": "3 + 4", "returnByValue": True, "awaitPromise": True}),
+        ("Target.detachFromTarget", {"sessionId": "session-iframe"}),
+    ]
 
 
 def test_switch_tab_reports_missing_session_id():
@@ -1935,6 +1991,7 @@ def test_max_dim_default_is_no_resize(fake_png):
 def test_goto_url_omits_domain_skills_when_no_skill_dir(tmp_path):
     # tmp_path has no "example" subdirectory → domain_skills absent from result
     with patch("browser_harness.helpers.cdp", return_value={"frameId": "f"}), \
+         patch("browser_harness.helpers.drain_events", return_value=[]), \
          patch("browser_harness.helpers._asset_dir", return_value=tmp_path):
         result = helpers.goto_url("https://www.example.com/")
     assert result == {"frameId": "f"}
@@ -1945,6 +2002,7 @@ def test_goto_url_includes_domain_skills_when_skill_dir_present(tmp_path):
     site.mkdir()
     (site / "scraping.md").write_text("hi")
     with patch("browser_harness.helpers.cdp", return_value={"frameId": "f"}), \
+         patch("browser_harness.helpers.drain_events", return_value=[]), \
          patch("browser_harness.helpers._asset_dir", return_value=tmp_path):
         result = helpers.goto_url("https://www.example.com/")
     assert result == {"frameId": "f", "domain_skills": ["scraping.md"]}

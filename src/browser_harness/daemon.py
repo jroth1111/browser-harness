@@ -1,7 +1,6 @@
 """CDP WS holder + Unix socket relay. One daemon per BH_NAME."""
 import asyncio
 import errno
-import fcntl
 import ipaddress
 import json
 import os
@@ -12,6 +11,16 @@ import urllib.request
 from collections import deque
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+try:
+    import fcntl
+except ModuleNotFoundError:  # Windows
+    fcntl = None
+
+try:
+    import msvcrt
+except ModuleNotFoundError:  # POSIX
+    msvcrt = None
 
 try:
     from cdp_use.client import CDPClient
@@ -35,10 +44,10 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BH_NAME", "default")
-SOCK = f"/tmp/bh-{NAME}.sock"
-LOG = f"/tmp/bh-{NAME}.log"
-PID = f"/tmp/bh-{NAME}.pid"
+NAME = os.environ.get("BU_NAME") or os.environ.get("BH_NAME", "default")
+ipc._check(NAME)
+LOG = str(ipc.log_path(NAME))
+PID = str(ipc.pid_path(NAME))
 BUF = 500
 PROFILES = [
     Path.home() / "Library/Application Support/Google/Chrome",
@@ -415,9 +424,6 @@ class Daemon:
 
 
 async def serve(d):
-    if os.path.exists(SOCK):
-        os.unlink(SOCK)
-
     async def handler(reader, writer):
         try:
             while True:
@@ -441,11 +447,16 @@ async def serve(d):
             except Exception:
                 pass
 
-    server = await asyncio.start_unix_server(handler, path=SOCK)
-    os.chmod(SOCK, 0o600)
-    log(f"listening on {SOCK} (name={NAME})")
-    async with server:
+    log(f"listening on {ipc.sock_addr(NAME)} (name={NAME})")
+    server_task = asyncio.create_task(ipc.serve(NAME, handler))
+    try:
         await d.stop.wait()
+    finally:
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            pass
 
 
 async def main():
@@ -455,19 +466,13 @@ async def main():
 
 
 def already_running():
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(1)
-            s.connect(SOCK)
-            return True
-    except OSError:
-        return False
+    return ipc.ping(NAME, timeout=1.0)
 
 
 def acquire_daemon_lock():
     lock_file = open(PID, "a+")
     try:
-        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_daemon_file(lock_file)
     except OSError as e:
         lock_file.close()
         if e.errno in {errno.EACCES, errno.EAGAIN}:
@@ -480,9 +485,19 @@ def acquire_daemon_lock():
     return lock_file
 
 
+def _lock_daemon_file(lock_file):
+    if fcntl is not None:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return
+    if msvcrt is None:
+        raise OSError(errno.ENOSYS, "no supported daemon file lock implementation")
+    lock_file.seek(0)
+    msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+
+
 if __name__ == "__main__":
     if already_running():
-        print(f"daemon already running on {SOCK}", file=sys.stderr)
+        print(f"daemon already running on {ipc.sock_addr(NAME)}", file=sys.stderr)
         sys.exit(1)
     with open(LOG, "w"):
         pass

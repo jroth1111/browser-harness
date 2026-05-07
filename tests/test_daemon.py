@@ -277,6 +277,19 @@ def test_set_session_does_not_run_runtime_evaluate():
     assert runtime_evals == []
 
 
+def test_daemon_ping_uses_ipc_protocol():
+    d = daemon.Daemon()
+    result = asyncio.run(d.handle({"meta": "ping"}))
+    assert result["pong"] is True
+    assert isinstance(result["pid"], int)
+
+
+def test_daemon_paths_come_from_ipc():
+    assert daemon.LOG == str(daemon.ipc.log_path(daemon.NAME))
+    assert daemon.PID == str(daemon.ipc.pid_path(daemon.NAME))
+    assert not hasattr(daemon, "SOCK")
+
+
 def test_browser_scoped_cdp_methods_do_not_use_page_session():
     d = daemon.Daemon()
     d.session = "page-session"
@@ -345,6 +358,9 @@ def test_already_running_closes_socket_on_permission_error():
             self.closed = True
             return False
 
+        def close(self):
+            self.closed = True
+
         def settimeout(self, timeout):
             pass
 
@@ -370,6 +386,31 @@ def test_acquire_daemon_lock_excludes_second_process(tmp_path, monkeypatch):
     finally:
         fcntl.flock(first, fcntl.LOCK_UN)
         first.close()
+
+
+def test_acquire_daemon_lock_windows_fallback_writes_pid(tmp_path, monkeypatch):
+    class FakeMsvcrt:
+        LK_NBLCK = 1
+
+        def __init__(self):
+            self.calls = []
+
+        def locking(self, fd, mode, nbytes):
+            self.calls.append((fd, mode, nbytes))
+
+    fake_msvcrt = FakeMsvcrt()
+    pid_path = tmp_path / "bh.pid"
+    monkeypatch.setattr(daemon, "PID", str(pid_path))
+    monkeypatch.setattr(daemon, "fcntl", None)
+    monkeypatch.setattr(daemon, "msvcrt", fake_msvcrt)
+    monkeypatch.setattr(daemon.os, "getpid", lambda: 4242)
+
+    lock_file = daemon.acquire_daemon_lock()
+    try:
+        assert pid_path.read_text() == "4242"
+        assert fake_msvcrt.calls == [(lock_file.fileno(), fake_msvcrt.LK_NBLCK, 1)]
+    finally:
+        lock_file.close()
 
 
 async def _run_handler(d, requests):

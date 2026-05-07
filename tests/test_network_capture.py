@@ -84,6 +84,25 @@ def test_capture_without_bodies_omits_body_key():
     assert "body" not in result[0]
 
 
+def test_redacted_capture_entries_omits_body_secret_material():
+    entries = [{
+        "url": "https://x.com/api",
+        "method": "GET",
+        "headers": {"Cookie": "sid=secret", "X-Trace": "ok"},
+        "response_headers": {"Set-Cookie": "sid=secret", "Content-Type": "application/json"},
+        "body": '{"access_token":"secret"}',
+    }]
+
+    redacted = network_capture.redacted_capture_entries(entries)[0]
+
+    assert redacted["headers"]["Cookie"] == "REDACTED"
+    assert redacted["response_headers"]["Set-Cookie"] == "REDACTED"
+    assert redacted["body_omitted"] is True
+    assert redacted["body_length"] == len('{"access_token":"secret"}')
+    assert "body" not in redacted
+    assert "secret" not in repr(redacted)
+
+
 def test_capture_handles_request_without_response():
     events = [
         {"method": "Network.requestWillBeSent", "params": {

@@ -736,10 +736,17 @@ def save_auth_profile(client, domain, urls=None, session_id=None):
     domain = _registrable_domain(domain)
     profile_dir = _PROFILES_DIR / domain
     profile_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        _PROFILES_DIR.chmod(0o700)
+        profile_dir.chmod(0o700)
+    except OSError:
+        pass
     urls = urls or [f"https://{domain}"]
 
     manifest = session_manifest(client, urls, site=domain, session_id=session_id)
-    (profile_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    manifest_path = profile_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    manifest_path.chmod(0o600)
 
     state = session_state(client, urls, site=domain, session_id=session_id)
     state_path = profile_dir / "state.json"
@@ -749,26 +756,82 @@ def save_auth_profile(client, domain, urls=None, session_id=None):
     return str(profile_dir)
 
 
-def load_auth_profile(client, domain, ttl=_PROFILE_TTL, session_id=None):
+def _restore_profile_state_on_saved_origins(client, state, include_session_storage=False, session_id=None):
+    send_cdp(client, "Page.enable", session_id=session_id)
+    send_cdp(client, "Network.enable", session_id=session_id)
+    cookie_result = restore_cookies(client, state.get("cookies") or [], session_id=session_id)
+    storage_results = []
+    for origin_state in state.get("origins") or []:
+        origin = origin_state.get("origin")
+        if not origin or origin == "about:blank":
+            continue
+        send_cdp(client, "Page.navigate", {"url": origin.rstrip("/") + "/"}, session_id=session_id)
+        origin_status = wait_for_origin(client, origin, timeout=10.0, poll=0.25, session_id=session_id)
+        if not origin_status.get("ok"):
+            storage_results.append({"origin": origin, "ok": False, "reason": origin_status.get("reason")})
+            continue
+        restored = restore_origin_storage(
+            client,
+            origin_state,
+            include_session_storage=include_session_storage,
+            session_id=session_id,
+        )
+        storage_results.append({**restored, "ok": True})
+    return {"cookies": cookie_result, "storage": storage_results}
+
+
+def auth_restore_ok(restore, state=None):
+    cookies = restore.get("cookies") or {}
+    cookie_count = int(cookies.get("restored") or 0)
+    expected_cookies = len([c for c in (state or {}).get("cookies", []) if c.get("name") and c.get("value") is not None])
+    expected_storage = 0
+    for origin_state in (state or {}).get("origins") or []:
+        expected_storage += len(origin_state.get("localStorage") or {})
+        expected_storage += len(origin_state.get("sessionStorage") or {})
+    storage_count = 0
+    storage_failures = 0
+    for item in restore.get("storage") or []:
+        if item.get("ok") is False:
+            storage_failures += 1
+        storage_count += int(item.get("localStorageRestored") or 0)
+        storage_count += int(item.get("sessionStorageRestored") or 0)
+    cookies_ok = cookie_count >= expected_cookies
+    storage_ok = storage_count >= expected_storage
+    return cookies_ok and storage_ok and storage_failures == 0 and (expected_cookies > 0 or expected_storage > 0)
+
+
+def load_auth_profile_result(client, domain, ttl=_PROFILE_TTL, session_id=None):
     """Load and restore auth profile for *domain* if fresh enough.
 
-    Returns True if restored, False if no profile or expired.
+    Returns a structured restore result with ok=False for missing, expired,
+    unreadable, or partially unrestored profiles.
     """
     domain = _registrable_domain(domain)
     state_path = _PROFILES_DIR / domain / "state.json"
     if not state_path.exists():
-        return False
+        return {"ok": False, "reason": "missing_profile"}
 
     try:
         age = time.time() - os.path.getmtime(state_path)
         if age > ttl:
-            return False
+            return {"ok": False, "reason": "expired_profile", "age_seconds": age}
     except OSError:
-        return False
+        return {"ok": False, "reason": "stat_failed"}
 
     try:
         state = json.loads(state_path.read_text())
     except (OSError, json.JSONDecodeError):
+        return {"ok": False, "reason": "read_failed"}
+    restore = _restore_profile_state_on_saved_origins(client, state, include_session_storage=True, session_id=session_id)
+    return {"ok": auth_restore_ok(restore, state), "reason": "restored", "restore": restore}
+
+
+def load_auth_profile(client, domain, ttl=_PROFILE_TTL, session_id=None):
+    """Load and restore auth profile for *domain* if fresh enough.
+
+    Returns True only when the saved profile was restored on its saved origins.
+    """
+    try:
+        return bool(load_auth_profile_result(client, domain, ttl=ttl, session_id=session_id).get("ok"))
+    except Exception:
         return False
-    restore_session_state(client, state, session_id=session_id)
-    return True

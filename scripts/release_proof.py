@@ -13,6 +13,9 @@ import textwrap
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import check_source_archive
+
 
 FORBIDDEN_MEMBER_PARTS = (
     ".private-data/",
@@ -78,6 +81,14 @@ def inspect_wheel(wheel: Path) -> dict[str, object]:
         "required_members": list(REQUIRED_MEMBERS),
         "forbidden_member_matches": [],
     }
+
+
+def inspect_source_archive(archive: Path) -> dict[str, object]:
+    violations = check_source_archive.archive_violations(archive)
+    if violations:
+        joined = "\n".join(violations[:40])
+        raise SystemExit(f"source archive contains forbidden private/auth material:\n{joined}")
+    return {"archive": str(archive), "forbidden_matches": []}
 
 
 def venv_python(venv_dir: Path) -> Path:
@@ -147,18 +158,22 @@ def main(argv: list[str] | None = None) -> int:
         try:
             temp_root = Path(td)
             dist_dir = temp_root / "dist"
-            run(["uv", "build", "--wheel", "--out-dir", str(dist_dir)], cwd=root)
+            run(["uv", "build", "--out-dir", str(dist_dir)], cwd=root)
             wheels = sorted(dist_dir.glob("*.whl"))
             if len(wheels) != 1:
                 raise SystemExit(f"expected exactly one wheel, found {len(wheels)}")
+            archives = sorted(path for path in dist_dir.iterdir() if path.suffixes[-2:] == [".tar", ".gz"] or path.suffix == ".zip")
+            if len(archives) != 1:
+                raise SystemExit(f"expected exactly one source archive, found {len(archives)}")
             wheel_info = inspect_wheel(wheels[0])
+            source_archive_info = inspect_source_archive(archives[0])
             smoke_info = smoke_installed_wheel(temp_root / "venv", wheels[0], temp_root)
         finally:
             for generated in (egg_info, build_dir):
                 if generated.exists():
                     shutil.rmtree(generated)
 
-    proof = {"wheel": wheel_info, "install_smoke": smoke_info}
+    proof = {"wheel": wheel_info, "source_archive": source_archive_info, "install_smoke": smoke_info}
     if args.json:
         print(json.dumps(proof, indent=2))
     else:

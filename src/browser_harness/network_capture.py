@@ -1,10 +1,34 @@
 """Capture network requests observed during browser navigation."""
 import base64
+import hashlib
 import time
 
 from . import helpers
 
 _MAX_BODY_CHARS = 2 * 1024 * 1024  # 2MB
+_SENSITIVE_HEADERS = {"authorization", "cookie", "set-cookie", "x-api-key", "x-csrf-token", "x-xsrf-token"}
+
+
+def redact_capture_entry(entry):
+    """Return a receipt-safe copy of a captured network entry."""
+    safe = dict(entry)
+    for header_key in ("headers", "response_headers"):
+        safe[header_key] = {
+            key: ("REDACTED" if str(key).lower() in _SENSITIVE_HEADERS else value)
+            for key, value in (safe.get(header_key) or {}).items()
+        }
+    if "body" in safe:
+        body = safe.pop("body") or ""
+        if not isinstance(body, str):
+            body = str(body)
+        safe["body_omitted"] = True
+        safe["body_length"] = len(body)
+        safe["body_sha256"] = hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()
+    return safe
+
+
+def redacted_capture_entries(entries):
+    return [redact_capture_entry(entry) for entry in entries]
 
 
 def capture_network_requests(url, timeout=15.0, capture_bodies=False):

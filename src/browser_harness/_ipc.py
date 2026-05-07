@@ -68,7 +68,11 @@ def connect(name, timeout=1.0):
     if not IS_WINDOWS:
         # uv-Python on Windows lacks socket.AF_UNIX, so this branch must be gated.
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(timeout); s.connect(str(_sock_path(name))); return s, None
+        try:
+            s.settimeout(timeout); s.connect(str(_sock_path(name))); return s, None
+        except BaseException:
+            s.close()
+            raise
     port, token = _read_port_file(name)
     if port is None: raise FileNotFoundError(str(port_path(name)))
     s = socket.create_connection(("127.0.0.1", port), timeout=timeout)
