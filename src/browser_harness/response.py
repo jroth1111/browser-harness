@@ -112,12 +112,12 @@ class Response:
                 parsed = json.loads(b)
             except json.JSONDecodeError:
                 continue
-            if schema_type is None:
-                results.append(parsed)
-                continue
             items = parsed if isinstance(parsed, list) else [parsed]
             for item in items:
                 if not isinstance(item, dict):
+                    continue
+                if schema_type is None:
+                    results.append(item)
                     continue
                 types = item.get("@type", [])
                 if isinstance(types, str):

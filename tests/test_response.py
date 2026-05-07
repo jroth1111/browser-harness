@@ -125,6 +125,19 @@ def test_json_ld_handles_array_with_type_filter():
     assert products[0]["name"] == "A"
 
 
+def test_json_ld_without_filter_flattens_arrays_and_skips_scalars():
+    html = (
+        '<script type="application/ld+json">"not-json-ld-object"</script>'
+        '<script type="application/ld+json">[{"@type":"Product","name":"A"},"bad-item",{"@type":"Review","name":"B"}]</script>'
+    )
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+
+    assert r.json_ld() == [
+        {"@type": "Product", "name": "A"},
+        {"@type": "Review", "name": "B"},
+    ]
+
+
 def test_json_ld_handles_string_type():
     html = '<script type="application/ld+json">{"@type":"Product","name":"Widget"}</script>'
     r = Response(html=html, text="", url="https://x.com", status=200, source="http")
