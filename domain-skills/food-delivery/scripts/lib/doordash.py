@@ -27,7 +27,10 @@ API_DISCOVERY_PATH = Path(__file__).parent / "api_discovery_doordash.json"
 
 def load_api_discovery():
     if API_DISCOVERY_PATH.exists():
-        data = json.loads(API_DISCOVERY_PATH.read_text())
+        try:
+            data = json.loads(API_DISCOVERY_PATH.read_text())
+        except json.JSONDecodeError:
+            return None
         return data if isinstance(data, dict) else None
     return None
 

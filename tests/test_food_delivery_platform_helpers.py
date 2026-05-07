@@ -23,3 +23,13 @@ def test_load_api_discovery_rejects_malformed_json_shapes(tmp_path, monkeypatch)
         monkeypatch.setattr(module, "API_DISCOVERY_PATH", discovery)
 
         assert module.load_api_discovery() is None
+
+
+def test_load_api_discovery_ignores_corrupt_json_cache(tmp_path, monkeypatch):
+    for name in ("doordash", "ubereats"):
+        module = load_module(name)
+        discovery = tmp_path / f"{name}.json"
+        discovery.write_text("{not-json", encoding="utf-8")
+        monkeypatch.setattr(module, "API_DISCOVERY_PATH", discovery)
+
+        assert module.load_api_discovery() is None
