@@ -36,7 +36,8 @@ def redact_text(value: str) -> str:
 
 
 def safe_backend_summary(backend: dict) -> dict:
-    js_probe = backend.get("js") or {}
+    backend = backend if isinstance(backend, dict) else {}
+    js_probe = backend.get("js") if isinstance(backend.get("js"), dict) else {}
     return {
         "kind": backend.get("kind"),
         "risks": backend.get("risks", []),
@@ -49,6 +50,7 @@ def safe_backend_summary(backend: dict) -> dict:
 
 
 def safe_content_status(status: dict) -> dict:
+    status = status if isinstance(status, dict) else {}
     return {key: value for key, value in status.items() if key not in {"text", "html"}}
 
 

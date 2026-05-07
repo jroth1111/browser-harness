@@ -630,6 +630,28 @@ def test_youtube_live_smoke_content_status_tolerates_malformed_shapes():
     assert module.content_is_usable({"textLength": 250, "block": {}}) is True
 
 
+def test_youtube_live_smoke_receipt_helpers_tolerate_malformed_shapes():
+    spec = importlib.util.spec_from_file_location(
+        "youtube_live_smoke",
+        YOUTUBE / "scripts" / "live_smoke.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.safe_backend_summary("not-an-object") == {
+        "kind": None,
+        "risks": [],
+        "js": {"webdriver": None, "plugins": None, "platform": None},
+    }
+    assert module.safe_backend_summary({"kind": "chromium", "js": "not-an-object"})["js"] == {
+        "webdriver": None,
+        "plugins": None,
+        "platform": None,
+    }
+    assert module.safe_content_status("not-an-object") == {}
+
+
 def test_youtube_forbidden_path_guard_passes_and_catches_synthetic_violations(tmp_path):
     spec = importlib.util.spec_from_file_location(
         "assert_no_forbidden_paths",
