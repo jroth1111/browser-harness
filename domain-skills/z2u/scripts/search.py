@@ -532,7 +532,7 @@ def cmd_extract_js(args):
     print(EXTRACT_CATEGORIES_JS)
 
 
-def _report_field_triage(items, label=""):
+def _report_fill_rate_triage(items, label=""):
     """Report per-field fill rates and flag systematic gaps."""
     fields = CSV_FIELDNAMES
     total = len(items)
@@ -623,8 +623,8 @@ def cmd_merge(args):
     # Sort by product_name
     items.sort(key=lambda x: text_value(x.get('product_name')).lower())
 
-    # Field triage report (pre-export)
-    _report_field_triage(items, label=" (pre-filter)" if args.filter else "")
+    # Fill-rate triage report (pre-export)
+    _report_fill_rate_triage(items, label=" (pre-filter)" if args.filter else "")
 
     # Export CSV with tri-state normalisation
     output_path = args.output or derive_output_path(args.input, '.json', '.csv')
@@ -682,7 +682,7 @@ def cmd_verify(args):
     for t, count in sorted(types.items(), key=lambda x: -x[1]):
         print(f"  {t}: {count}", file=sys.stderr)
 
-    # Per-type field triage
+    # Per-type fill-rate triage
     all_flagged = []
     for entity_type in types:
         type_items = [p for p in products if p.get('type') == entity_type]
@@ -703,7 +703,7 @@ def cmd_verify(args):
                 'sold_out': str(p.get('sold_out', False)).lower(),
                 'type': p.get('type', 'product'),
             })
-        flagged = _report_field_triage(csv_items, label=f" type={entity_type}")
+        flagged = _report_fill_rate_triage(csv_items, label=f" type={entity_type}")
         if flagged:
             all_flagged.extend(flagged)
 
@@ -724,7 +724,7 @@ def cmd_verify(args):
             'sold_out': str(p.get('sold_out', False)).lower(),
             'type': p.get('type', 'product'),
         })
-    _report_field_triage(csv_items_all, label=" (overall)")
+    _report_fill_rate_triage(csv_items_all, label=" (overall)")
 
     # Coverage probe results
     if coverage:

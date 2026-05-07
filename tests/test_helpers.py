@@ -1715,17 +1715,17 @@ def test_crawl_state_receipt_includes_marginal_blocked_and_safety():
     assert receipt["safety"]["429_count"] == 1
 
 
-def test_field_triage_returns_empty_for_no_records():
-    assert helpers.field_triage([]) == {}
+def test_fill_rate_triage_returns_empty_for_no_records():
+    assert helpers.fill_rate_triage([]) == {}
 
 
-def test_field_triage_computes_fill_rates():
+def test_fill_rate_triage_computes_fill_rates():
     records = [
         {"name": "Alice", "age": 30, "city": None},
         {"name": "Bob", "age": None, "city": None},
         {"name": "Carol", "age": 25, "city": "__UNOBSERVABLE__"},
     ]
-    triage = helpers.field_triage(records)
+    triage = helpers.fill_rate_triage(records)
     assert triage["name"]["status"] == "OK"
     assert triage["name"]["fill_rate"] == 1.0
     assert triage["age"]["fill_rate"] == round(2 / 3, 3)
@@ -1733,15 +1733,15 @@ def test_field_triage_computes_fill_rates():
     assert triage["city"]["status"] == "BLOCKED"
 
 
-def test_field_triage_all_null_is_ok():
+def test_fill_rate_triage_all_null_is_ok():
     records = [{"name": "Alice", "seller": None}, {"name": "Bob", "seller": None}]
-    triage = helpers.field_triage(records)
+    triage = helpers.fill_rate_triage(records)
     assert triage["seller"]["status"] == "OK"
 
 
-def test_field_triage_broken_selector():
+def test_fill_rate_triage_broken_selector():
     records = [{"name": "A", "price": 10}, {"name": "B", "price": None}, {"name": "C", "price": None}]
-    triage = helpers.field_triage(records)
+    triage = helpers.fill_rate_triage(records)
     assert triage["price"]["status"] == "BROKEN"
 
 

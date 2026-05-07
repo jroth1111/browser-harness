@@ -337,7 +337,7 @@ certificate cannot be emitted — UNKNOWN blocks absence claims.
     "deduped": 0
   },
   "unobservable_count": 0,
-  "field_triage_summary": {
+  "fill_rate_triage_summary": {
     "product_aggregation": "OK",
     "individual_offer": "OK"
   },
@@ -614,7 +614,7 @@ This document covers steps from two phases of domain skill creation. Steps
 |---|---|---|---|
 | Missed dynamic content | `wait_for_content()` timeout with no block flag | Scroll/click exploration, longer timeout, `wait_for_content(min_text=200, timeout=30)` | Anti-bot, auth gates, session-specific content |
 | Missed list items | Coverage probe < 1.0, `suspect` flag true | Embedded JSON fallback, selector rediscovery | Irregular templates, hidden pagination, personalization |
-| Missed fields | `field_triage()` LOW/BROKEN status | Selector discovery via `js()` probes, local retry | Ambiguous labels, fields only visible after interaction |
+| Missed fields | `fill_rate_triage()` LOW/BROKEN status | Selector discovery via `js()` probes, local retry | Ambiguous labels, fields only visible after interaction |
 | Hallucinated values | Schema validation, grounding checks | `?? null` semantics (no `|| ''` fallbacks) | Model may infer values under pressure |
 | False absence | No closure certificate emitted | Four-state semantics, closure certificates | Global absence unprovable without scope definition |
 | Blocked pages | `detect_block_page()`, `wait_for_content()` block=true | `__UNOBSERVABLE__` state, session retry with `seed_browser_session()`, backoff | Persistent blocks, geo-fences |

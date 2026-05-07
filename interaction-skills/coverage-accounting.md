@@ -224,7 +224,7 @@ A crawl output should include these metrics alongside the extracted data:
 | Missing-key count | `CrawlState.summary()["missing_key"]` | Records that could not be safely deduped |
 | Blocked page count | `CrawlState.summary()["blocked"]` | Access reliability |
 | Unobservable fraction | `blocked / total_pages` | Whether coverage gaps are from blocks or extraction failures |
-| Field-state matrix | `field_triage(records)` — counts of present/null/__UNOBSERVABLE__ per field | Extraction health per field |
+| Field-state matrix | `fill_rate_triage(records)` — counts of present/null/__UNOBSERVABLE__ per field | Extraction health per field |
 | Marginal discovery curve | `CrawlState._marginal` deque values | Whether exploration is saturated |
 | Estimated unseen items | `CrawlState.estimated_unseen()` (Chao1 lower bound) | Statistical unseen-mass signal when page counts unavailable |
 | Closure certificate | Emitted when coverage ratio 1.0 + all triage OK + no unobservable required fields | Formal absence claim |
