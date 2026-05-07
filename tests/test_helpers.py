@@ -2003,6 +2003,26 @@ def test_replay_endpoints_captures_errors():
     assert result["summary"]["errors"] == 0
 
 
+def test_replay_endpoints_skips_malformed_endpoint_rows():
+    class Capture:
+        @staticmethod
+        def endpoints():
+            return [
+                "not an endpoint",
+                {"method": "GET"},
+                {"url": "https://api.example.com/a", "method": "POST", "status": 200},
+            ]
+
+    with patch("time.sleep"):
+        result = helpers.replay_endpoints(Capture())
+
+    assert result["results"] == [
+        {"url": "", "skipped": True, "reason": "missing-url"},
+        {"url": "https://api.example.com/a", "skipped": True, "reason": "non-GET"},
+    ]
+    assert result["summary"] == {"total": 2, "matched": 0, "mismatched": 0, "errors": 0}
+
+
 def test_install_blocker_probe_enables_page_and_injects_script():
     calls = []
     with patch("browser_harness.helpers.cdp", side_effect=lambda m, **kw: calls.append(m) or {"identifier": "1"}):

@@ -2489,7 +2489,12 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
     """
     results = []
     for ep in capture.endpoints():
-        url, method = ep["url"], ep.get("method", "GET")
+        if not isinstance(ep, dict):
+            continue
+        url, method = ep.get("url", ""), ep.get("method", "GET")
+        if not url:
+            results.append({"url": "", "skipped": True, "reason": "missing-url"})
+            continue
         if method.upper() != "GET":
             results.append({"url": url, "skipped": True, "reason": "non-GET"})
             continue
