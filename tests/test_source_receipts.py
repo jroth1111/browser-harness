@@ -47,6 +47,34 @@ def test_blocked_source_receipt_cannot_be_canonical():
         )
 
 
+def test_source_receipt_rejects_scalar_block_evidence():
+    receipt = build_source_receipt(
+        source_type="api",
+        source_context={"domain": "example.com"},
+        backend={"kind": "chromium"},
+        fields_found=["title"],
+        canonical=True,
+        diagnostic_only=False,
+    )
+    receipt["block"]["evidence"] = "/login"
+
+    with pytest.raises(ValueError, match="block.evidence must be a list"):
+        validate_source_receipt(receipt)
+
+
+def test_blocked_source_receipt_requires_block_kind():
+    with pytest.raises(ValueError, match="blocked sources require block.kind"):
+        build_source_receipt(
+            source_type="browser_ui",
+            source_context={"domain": "example.com"},
+            backend={"kind": "chromium"},
+            fields_found=["title"],
+            block={"blocked": True, "kind": "", "evidence": ["/login"]},
+            canonical=False,
+            diagnostic_only=False,
+        )
+
+
 def test_source_receipt_rejects_overlapping_found_and_missing_fields():
     with pytest.raises(ValueError, match="both found and missing"):
         build_source_receipt(

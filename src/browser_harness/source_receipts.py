@@ -99,6 +99,12 @@ def validate_source_receipt(receipt):
     block = receipt.get("block")
     if not isinstance(block, dict) or not REQUIRED_BLOCK_FIELDS <= set(block):
         raise ValueError("block must include blocked, kind, and evidence")
+    if not isinstance(block.get("blocked"), bool):
+        raise ValueError("block.blocked must be a boolean")
+    if not isinstance(block.get("evidence"), list):
+        raise ValueError("block.evidence must be a list")
+    if block.get("blocked") and not block.get("kind"):
+        raise ValueError("blocked sources require block.kind")
     if block.get("blocked") and receipt.get("canonical"):
         raise ValueError("blocked source cannot be canonical")
     if receipt.get("diagnostic_only") and receipt.get("canonical"):
