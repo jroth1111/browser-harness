@@ -56,3 +56,40 @@ def test_sync_account_filter_tolerates_scalar_account_labels(tmp_path, monkeypat
     assert module.main(["--db", str(tmp_path / "archive.sqlite3"), "--account", "123"]) == 0
     assert synced[0]["account_label"] == 12345
     assert "sync complete: 1 captures across 1 jar(s)" in capsys.readouterr().out
+
+
+def test_sync_main_marks_jar_failed_when_sync_raises(tmp_path, monkeypatch, capsys):
+    module = load_sync_script()
+    statuses = []
+
+    monkeypatch.setattr(module.schema, "init_db", lambda path: SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(module.archive_db, "connect", lambda path: object())
+    monkeypatch.setattr(module, "list_provider_ids", lambda: ["chatgpt"])
+    monkeypatch.setattr(
+        module.archive_db,
+        "list_cookie_jars",
+        lambda db, provider_id, only_active: [
+            {
+                "provider_id": provider_id,
+                "jar_id": "jar-1",
+                "account_label": "me@example.test",
+                "source_browser": "chrome",
+                "source_profile": "Default",
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        module.archive_db,
+        "mark_jar_status",
+        lambda db, jar_id, status, used=False: statuses.append((jar_id, status, used)),
+    )
+    monkeypatch.setattr(
+        module,
+        "sync_one_jar",
+        lambda db, jar, *, fresh, limit, options: (_ for _ in ()).throw(RuntimeError("auth failed")),
+    )
+
+    assert module.main(["--db", str(tmp_path / "archive.sqlite3")]) == 0
+
+    assert statuses == [("jar-1", "failed", True)]
+    assert "failed: auth failed" in capsys.readouterr().err

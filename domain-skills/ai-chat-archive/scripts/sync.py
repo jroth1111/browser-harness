@@ -92,6 +92,10 @@ def main(argv: list[str] | None = None) -> int:
                     options={},
                 )
             except Exception as e:
+                try:
+                    archive_db.mark_jar_status(db, jar["jar_id"], status="failed", used=True)
+                except Exception:
+                    pass
                 if not args.json:
                     print(f"  failed: {e}", file=sys.stderr)
                 summaries.append({
