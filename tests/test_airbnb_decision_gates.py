@@ -784,6 +784,31 @@ def test_content_optimization_brief_generates_copy_and_missing_shots():
     assert result["ab_test_plan"]["variants"][0]["above_fold"] == result["above_fold_primary"]
 
 
+def test_content_optimization_brief_rejects_boolean_capacity_numbers():
+    module = load_module()
+
+    result = module.build_listing_content_optimization_brief({
+        "listing_id": "123",
+        "source_issue_class": "hero_photo_gap",
+        "target_guest_segment": "business",
+        "why_book": "skyline balcony",
+        "listing_facts": {
+            "max_guests": True,
+            "bedrooms": True,
+            "beds": False,
+        },
+        "own_public_listing_audit": {
+            "hero_photo_subject": "living_area",
+            "first_five_photo_subjects": ["living_area"],
+        },
+        "evidence_refs": ["own-public"],
+    })
+
+    assert "Sleeps 1" not in result["above_fold_primary"]
+    assert "1 bedroom" not in result["above_fold_primary"]
+    assert "0 beds" not in result["above_fold_primary"]
+
+
 def test_content_optimization_brief_requires_evidence_unless_forced():
     module = load_module()
 

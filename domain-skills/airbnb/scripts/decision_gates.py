@@ -51,6 +51,8 @@ def as_dict(value):
 
 
 def as_number(value, default=None):
+    if isinstance(value, bool):
+        return default
     try:
         if value in (None, ""):
             return default
