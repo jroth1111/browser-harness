@@ -1,6 +1,7 @@
 import csv
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -93,3 +94,50 @@ def test_load_records_rejects_invalid_shapes(tmp_path):
         module.load_records(non_array_field, "restaurants")
     with pytest.raises(ValueError, match="records must be objects"):
         module.load_records(non_object_row, "restaurants")
+
+
+def test_main_preserves_same_named_menu_items_across_categories_and_prices(tmp_path, monkeypatch):
+    module = load_module()
+    restaurants = tmp_path / "restaurants.json"
+    menus = tmp_path / "menus.json"
+    output = tmp_path / "food_data"
+    restaurants.write_text(json.dumps({
+        "restaurants": [{
+            "platform": "doordash",
+            "store_id": "store-1",
+            "name": "Example Cafe",
+        }]
+    }), encoding="utf-8")
+    menus.write_text(json.dumps({
+        "menu_items": [
+            {
+                "platform": "doordash",
+                "store_id": "store-1",
+                "item_name": "Coffee",
+                "item_price": "$4.00",
+                "category": "Drinks",
+            },
+            {
+                "platform": "doordash",
+                "store_id": "store-1",
+                "item_name": "Coffee",
+                "item_price": "$5.50",
+                "category": "Breakfast",
+            },
+        ]
+    }), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "export.py",
+        "--restaurants", str(restaurants),
+        "--menus", str(menus),
+        "--output", str(output),
+    ])
+
+    module.main()
+
+    with (tmp_path / "food_data.csv").open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert [(row["category"], row["item_price"]) for row in rows] == [
+        ("Drinks", "$4.00"),
+        ("Breakfast", "$5.50"),
+    ]

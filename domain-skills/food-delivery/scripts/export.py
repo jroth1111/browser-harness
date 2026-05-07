@@ -175,11 +175,17 @@ def main():
             seen_rest.add(key)
             deduped_rest.append(r)
 
-    # Dedup menus by (platform, store_id, item_name)
+    # Dedup exact menu variants, not all same-named items in a store.
     seen_menu = set()
     deduped_menu = []
     for m in all_menus:
-        key = f"{m.get('platform')}::{m.get('store_id')}::{m.get('item_name')}"
+        key = (
+            m.get("platform"),
+            m.get("store_id"),
+            m.get("category"),
+            m.get("item_name"),
+            m.get("item_price"),
+        )
         if key not in seen_menu:
             seen_menu.add(key)
             deduped_menu.append(m)
