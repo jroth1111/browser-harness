@@ -17,6 +17,10 @@ from lib.sb_helpers import create_sb_session, harvest_session_cookies, harvest_h
 from lib.network_capture_sb import SBCapture
 
 
+def dict_rows(rows):
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
 def discover_platform(sb, platform):
     """Browse platform pages with network capture, discover JSON APIs."""
     from lib import doordash, ubereats
@@ -151,7 +155,7 @@ def discover_platform(sb, platform):
     if captured:
         reqs = json.loads(captured)
         print(f"  Intercepted {len(reqs)} fetch/XHR requests")
-        for r in reqs:
+        for r in dict_rows(reqs):
             u = r.get("url", "")
             if "/api/" in u or "graphql" in u or "/v1/" in u or "/v2/" in u:
                 all_json_responses.append({
@@ -166,7 +170,7 @@ def discover_platform(sb, platform):
     print(f"\nHarvested {cookie_count} cookies for HTTP replay")
 
     # Step 6: Try HTTP replay on discovered endpoints
-    api_endpoints = [e for e in all_json_responses if e.get("source") != "embedded"]
+    api_endpoints = [e for e in dict_rows(all_json_responses) if e.get("source") != "embedded"]
     http_results = try_http_replay(api_endpoints, platform, headers)
     all_json_responses.extend(http_results)
 
@@ -235,12 +239,16 @@ def try_http_replay(endpoints, platform, headers):
     if not cookie_file.exists():
         return results
 
-    cookies = json.loads(cookie_file.read_text())
-    cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+    cookies = dict_rows(json.loads(cookie_file.read_text()))
+    cookie_str = "; ".join(
+        f"{c['name']}={c['value']}"
+        for c in cookies
+        if c.get("name") and c.get("value") is not None
+    )
     headers["Cookie"] = cookie_str
 
     seen_urls = set()
-    for ep in endpoints:
+    for ep in dict_rows(endpoints):
         url = ep.get("url", "")
         if not url or url in seen_urls:
             continue
@@ -279,7 +287,7 @@ def dedup_endpoints(endpoints):
     """Deduplicate endpoints by URL."""
     seen = set()
     deduped = []
-    for ep in endpoints:
+    for ep in dict_rows(endpoints):
         url = ep.get("url", "")
         if url and url not in seen:
             seen.add(url)
