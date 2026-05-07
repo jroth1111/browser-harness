@@ -1115,8 +1115,9 @@ def parse_rea_rental_listing_text(text, url=None):
 
 
 def page_failure(status):
-    if status.get("block", {}).get("blocked"):
-        return status.get("block", {}).get("kind") or "blocked"
+    block = status.get("block") if isinstance(status.get("block"), dict) else {}
+    if block.get("blocked"):
+        return block.get("kind") or "blocked"
     text = (status.get("text") or "").lower()
     title = (status.get("title") or "").lower()
     if "too many requests" in text or "http error 429" in text or "429" in title:
