@@ -140,6 +140,11 @@ def _send(req, timeout=30):
         except OSError: pass
         _sock = None
         raise RuntimeError(f"invalid CDP response ({len(data)} bytes): {e}") from e
+    if not isinstance(r, dict):
+        try: _sock.close()
+        except OSError: pass
+        _sock = None
+        raise RuntimeError(f"invalid CDP response shape: expected object, got {type(r).__name__}")
     if "error" in r:
         err = r["error"]
         msg = err["message"] if isinstance(err, dict) and "message" in err else err

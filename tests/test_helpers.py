@@ -940,6 +940,35 @@ def test_page_info_js_reports_missing_runtime_value():
             raise AssertionError("expected RuntimeError")
 
 
+def test_send_rejects_non_object_ipc_response():
+    class Sock:
+        def __init__(self):
+            self.closed = False
+
+        def sendall(self, _payload):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    sock = Sock()
+    helpers._sock = sock
+    helpers._sock_token = None
+    try:
+        with patch("browser_harness.helpers._recv", return_value=b"[]\n"):
+            try:
+                helpers._send({"method": "Browser.getVersion"})
+            except RuntimeError as e:
+                assert "invalid CDP response shape: expected object, got list" in str(e)
+            else:
+                raise AssertionError("expected RuntimeError")
+        assert sock.closed is True
+        assert helpers._sock is None
+    finally:
+        helpers._sock = None
+        helpers._sock_token = None
+
+
 def test_endpoint_info_reads_daemon_metadata():
     with patch("browser_harness.helpers._send", return_value={"endpoint_info": {"browser": "Chrome/135"}}):
         assert helpers.endpoint_info() == {"browser": "Chrome/135"}
