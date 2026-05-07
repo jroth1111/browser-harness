@@ -40,7 +40,13 @@ def _read_port_file(name):
     """(port, token) from the Windows port file, or (None, None) on any failure."""
     try:
         d = json.loads(port_path(name).read_text())
-        return int(d["port"]), d["token"]
+        port = int(d["port"])
+        token = d["token"]
+        if port <= 0 or port > 65535:
+            return None, None
+        if not isinstance(token, str) or not token:
+            return None, None
+        return port, token
     except (FileNotFoundError, ValueError, KeyError, TypeError, OSError):
         return None, None
 
