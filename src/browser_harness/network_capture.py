@@ -49,40 +49,40 @@ def capture_network_requests(url, timeout=15.0, capture_bodies=False):
     helpers.cdp("Network.enable")
     helpers.drain_events()
 
-    helpers.goto_url(url)
-    time.sleep(timeout)
-
-    events = helpers.drain_events()
-
-    # Index request → {requestId, url, method, resourceType}
-    requests = {}
-    # Index response → {requestId, status, mimeType, headers}
-    responses = {}
-
-    for ev in events:
-        ev = _dict(ev)
-        method = ev.get("method", "")
-        params = _dict(ev.get("params"))
-        rid = params.get("requestId")
-
-        if method == "Network.requestWillBeSent" and rid:
-            req = _dict(params.get("request"))
-            requests[rid] = {
-                "requestId": rid,
-                "url": req.get("url", ""),
-                "method": req.get("method", ""),
-                "resource_type": params.get("type", ""),
-            }
-        elif method == "Network.responseReceived" and rid:
-            resp = _dict(params.get("response"))
-            responses[rid] = {
-                "requestId": rid,
-                "status": resp.get("status", 0),
-                "mime_type": resp.get("mimeType", ""),
-                "response_headers": _dict(resp.get("headers")),
-            }
-
     try:
+        helpers.goto_url(url)
+        time.sleep(timeout)
+
+        events = helpers.drain_events()
+
+        # Index request -> {requestId, url, method, resourceType}
+        requests = {}
+        # Index response -> {requestId, status, mimeType, headers}
+        responses = {}
+
+        for ev in events:
+            ev = _dict(ev)
+            method = ev.get("method", "")
+            params = _dict(ev.get("params"))
+            rid = params.get("requestId")
+
+            if method == "Network.requestWillBeSent" and rid:
+                req = _dict(params.get("request"))
+                requests[rid] = {
+                    "requestId": rid,
+                    "url": req.get("url", ""),
+                    "method": req.get("method", ""),
+                    "resource_type": params.get("type", ""),
+                }
+            elif method == "Network.responseReceived" and rid:
+                resp = _dict(params.get("response"))
+                responses[rid] = {
+                    "requestId": rid,
+                    "status": resp.get("status", 0),
+                    "mime_type": resp.get("mimeType", ""),
+                    "response_headers": _dict(resp.get("headers")),
+                }
+
         out = []
         for rid, req in requests.items():
             entry = {

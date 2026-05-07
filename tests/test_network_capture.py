@@ -84,6 +84,21 @@ def test_capture_without_bodies_omits_body_key():
     assert "body" not in result[0]
 
 
+def test_capture_disables_network_when_navigation_fails():
+    with patch("browser_harness.network_capture.helpers.cdp") as cdp, \
+         patch("browser_harness.network_capture.helpers.drain_events", return_value=[]), \
+         patch("browser_harness.network_capture.helpers.goto_url", side_effect=RuntimeError("navigation failed")), \
+         patch("browser_harness.network_capture.time.sleep"):
+        try:
+            network_capture.capture_network_requests("https://x.com")
+        except RuntimeError as exc:
+            assert str(exc) == "navigation failed"
+        else:
+            raise AssertionError("navigation failure was not propagated")
+
+    assert call("Network.disable") in cdp.mock_calls
+
+
 def test_redacted_capture_entries_omits_body_secret_material():
     entries = [{
         "url": "https://x.com/api",
