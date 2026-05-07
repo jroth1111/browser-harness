@@ -115,6 +115,13 @@ VERSION_CACHE_TTL = 24 * 3600
 DOCTOR_TEXT_LIMIT = 140
 
 
+def _safe_int(value, default=None):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _log_tail(name):
     try:
         return ipc.log_path(name or NAME).read_text().strip().splitlines()[-1]
@@ -448,8 +455,10 @@ def list_cloud_profiles():
                 "cookieDomains": detail.get("cookieDomains") or [],
                 "lastUsedAt": detail.get("lastUsedAt"),
             })
-        if isinstance(listing, dict) and seen >= listing.get("totalItems", seen):
-            break
+        if isinstance(listing, dict):
+            total_items = _safe_int(listing.get("totalItems"), None)
+            if total_items is not None and seen >= total_items:
+                break
         page += 1
     return out
 

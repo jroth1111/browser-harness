@@ -259,6 +259,31 @@ def test_list_cloud_profiles_skips_malformed_rows(monkeypatch):
     }]
 
 
+def test_list_cloud_profiles_tolerates_malformed_total_items(monkeypatch):
+    calls = []
+
+    def fake_browser_use(path, method, body=None):
+        calls.append((path, method, body))
+        if path == "/profiles?pageSize=100&pageNumber=1":
+            return {"items": [{"id": "profile-1"}], "totalItems": "not-a-count"}
+        if path == "/profiles/profile-1":
+            return {"id": "profile-1", "name": "Main"}
+        if path == "/profiles?pageSize=100&pageNumber=2":
+            return {"items": []}
+        raise AssertionError((path, method, body))
+
+    monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
+
+    assert admin.list_cloud_profiles() == [{
+        "id": "profile-1",
+        "name": "Main",
+        "userId": None,
+        "cookieDomains": [],
+        "lastUsedAt": None,
+    }]
+    assert calls[-1] == ("/profiles?pageSize=100&pageNumber=2", "GET", None)
+
+
 @pytest.mark.parametrize("listing, message", [
     ("not-a-listing", "expected object or array, got str"),
     ({"items": "not-a-list"}, "items.*must be an array"),
