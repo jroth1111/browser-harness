@@ -98,8 +98,11 @@ def test_price_partition_helpers_tolerate_malformed_bands():
 
     assert module.split_price_band("not-a-band") == []
     assert module.split_price_band({"price_min": "cheap", "price_max": "expensive"}) == []
+    assert module.split_price_band({"price_min": True, "price_max": 100}) == []
     assert module.split_price_band({"price_min": 0, "price_max": 100, "partition_depth": "deep"}) == []
+    assert module.split_price_band({"price_min": 0, "price_max": 100, "partition_depth": True}) == []
     assert module.should_partition_price_band(12, 12, "not-a-band", max_depth=2) is False
+    assert module.should_partition_price_band(True, 1, {"price_min": 0, "price_max": 100}, max_depth=2) is False
     assert module.partition_key("100", "2026-05-10", 3, "not-a-band") == "100|2026-05-10|3|all_prices|d0"
 
 

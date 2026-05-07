@@ -36,6 +36,8 @@ def parse_bool(value, default=False):
 
 
 def safe_int(value, default=0):
+    if isinstance(value, bool):
+        return int(default)
     try:
         return int(value if value not in (None, "") else default)
     except (TypeError, ValueError):
@@ -44,6 +46,8 @@ def safe_int(value, default=0):
 
 def optional_int(value):
     if value in (None, ""):
+        return None
+    if isinstance(value, bool):
         return None
     try:
         return int(value)
@@ -193,6 +197,8 @@ def fixed_width_price_bands(price_min, price_max, width):
 
 def split_price_band(band):
     def parse_int(value):
+        if value in (None, "") or isinstance(value, bool):
+            return None
         try:
             return int(value)
         except (TypeError, ValueError):
@@ -230,6 +236,8 @@ def split_price_band(band):
 
 
 def should_partition_price_band(visible_result_count, threshold, band, max_depth):
+    if isinstance(visible_result_count, bool) or isinstance(threshold, bool) or isinstance(max_depth, bool):
+        return False
     threshold = int(threshold)
     max_depth = int(max_depth)
     band = band if isinstance(band, dict) else {}
