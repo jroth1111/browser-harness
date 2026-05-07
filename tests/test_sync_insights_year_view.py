@@ -84,6 +84,30 @@ def test_validate_collect_output_rejects_empty_summary(tmp_path, monkeypatch):
         module.validate_collect_output("run-empty", allow_partial=True)
 
 
+def test_validate_collect_output_rejects_malformed_count_metadata(tmp_path, monkeypatch):
+    module = load_sync_module()
+    output_path = tmp_path / "insights"
+    session_path = tmp_path / "session"
+    output_path.mkdir()
+    session_path.mkdir()
+    monkeypatch.setattr(module, "OUTPUT_PATH", output_path)
+    monkeypatch.setattr(module, "SESSION_PATH", session_path)
+    (output_path / "run-malformed.json").write_text(
+        json.dumps({
+            "failures_count": 0,
+            "summary_rows_count": "not-a-count",
+            "daily_rows_count": 1,
+            "listing_count": 1,
+            "total_active_listings": 1,
+            "listing_scope_complete": True,
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="invalid summary_rows_count"):
+        module.validate_collect_output("run-malformed", allow_partial=True)
+
+
 def test_validate_collect_output_rejects_non_object_snapshot(tmp_path, monkeypatch):
     module = load_sync_module()
     output_path = tmp_path / "insights"

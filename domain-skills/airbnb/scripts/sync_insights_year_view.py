@@ -184,14 +184,23 @@ def validate_collect_output(run_id, allow_partial=False, allow_quarantined=False
     except ValueError as error:
         raise RuntimeError(str(error)) from error
 
-    failures_count = int(snapshot.get("failures_count") or 0)
-    summary_rows_count = int(snapshot.get("summary_rows_count") or 0)
-    daily_rows_count = int(snapshot.get("daily_rows_count") or 0)
-    chart_request_count = int(snapshot.get("chart_request_count") or 0)
-    sentinel_rows_count = int(snapshot.get("sentinel_rows_count") or 0)
-    listing_count = int(snapshot.get("listing_count") or 0)
-    total_active_listings = int(snapshot.get("total_active_listings") or 0)
-    total_scope_listings = int(snapshot.get("total_scope_listings") or total_active_listings or 0)
+    def count_field(name, default=0):
+        raw = snapshot.get(name)
+        if raw in (None, ""):
+            raw = default
+        try:
+            return int(raw)
+        except (TypeError, ValueError) as error:
+            raise RuntimeError(f"Collector output has invalid {name}: {raw!r}") from error
+
+    failures_count = count_field("failures_count")
+    summary_rows_count = count_field("summary_rows_count")
+    daily_rows_count = count_field("daily_rows_count")
+    chart_request_count = count_field("chart_request_count")
+    sentinel_rows_count = count_field("sentinel_rows_count")
+    listing_count = count_field("listing_count")
+    total_active_listings = count_field("total_active_listings")
+    total_scope_listings = count_field("total_scope_listings", total_active_listings)
     listing_status_scope = snapshot.get("listing_status_scope") or "active"
     # listing_scope_complete is a newer field. On legacy snapshots without
     # total_active_listings (pre-sentinel collector), skip the scope check
