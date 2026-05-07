@@ -94,6 +94,11 @@ def _coerce_spec(item):
         }
     if isinstance(item, tuple) and len(item) == 2:
         label, src = item
+        if isinstance(src, dict):
+            spec = _coerce_spec(src)
+            if spec["label"] is None:
+                spec["label"] = str(label) if label is not None else None
+            return spec
         return {
             "label": str(label) if label is not None else None,
             "path": pathlib.Path(src),

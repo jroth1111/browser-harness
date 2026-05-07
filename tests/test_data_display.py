@@ -773,6 +773,21 @@ def test_render_dataset_accepts_top_level_dict_spec(tmp_path):
     assert ds["default_view"] == "table"
 
 
+def test_render_dataset_accepts_mapping_to_dict_specs(tmp_path):
+    p = tmp_path / "rows.json"
+    p.write_text(json.dumps([{"x": 1}]), encoding="utf-8")
+
+    out_path = pathlib.Path(data_display.render_dataset({
+        "Rows": {"path": str(p), "view": "table", "key": "x"},
+    }))
+    payload = _extract_payload(out_path)
+    ds = payload["datasets"][0]
+
+    assert ds["label"] == "Rows"
+    assert ds["default_view"] == "table"
+    assert ds["key"] == "x"
+
+
 def test_render_dataset_dedupes_label_collisions(tmp_path):
     a = tmp_path / "first" ; a.mkdir()
     b = tmp_path / "second" ; b.mkdir()
