@@ -766,6 +766,21 @@ def test_discover_local_cdp_endpoints_reads_json_version():
         }]
 
 
+def test_discover_local_cdp_endpoints_skips_malformed_json_version_shape():
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return json.dumps(["not", "an", "object"]).encode()
+
+    with patch("urllib.request.urlopen", return_value=Response()):
+        assert helpers.discover_local_cdp_endpoints(ports=(9222,)) == []
+
+
 def test_discover_local_cdp_endpoints_brackets_ipv6_loopback():
     opened = []
 

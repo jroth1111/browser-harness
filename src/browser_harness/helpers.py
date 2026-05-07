@@ -1934,6 +1934,8 @@ def discover_local_cdp_endpoints(ports=(9222, 3000, 5050), host="127.0.0.1", tim
                 data = json.loads(r.read().decode())
         except Exception:
             continue
+        if not isinstance(data, dict):
+            continue
         found.append({
             "http_base": base,
             "webSocketDebuggerUrl": data.get("webSocketDebuggerUrl"),
