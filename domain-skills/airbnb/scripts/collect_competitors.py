@@ -604,16 +604,23 @@ def record_search_surface_capabilities(records, resource_urls, source_url, searc
 
 
 def score_comp(target, card, result_position):
+    def numeric(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
     score = 1000 - (result_position * 8)
     for field, weight in (("bedrooms", 35), ("bathrooms", 25), ("beds", 10)):
-        target_value = target.get(field)
-        card_value = card.get(field)
+        target_value = numeric(target.get(field))
+        card_value = numeric(card.get(field))
         if target_value is not None and card_value is not None:
-            score -= abs(float(target_value) - float(card_value)) * weight
+            score -= abs(target_value - card_value) * weight
     if card.get("visible_price_total"):
         score += 20
-    if card.get("visible_rating"):
-        score += min(float(card["visible_rating"]), 5) * 3
+    rating = numeric(card.get("visible_rating"))
+    if rating is not None:
+        score += min(rating, 5) * 3
     target_location = str(target.get("location_label") or "").split(",")[0].lower()
     if target_location and target_location in str(card.get("visible_location_label") or "").lower():
         score += 30
