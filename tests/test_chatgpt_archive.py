@@ -263,6 +263,31 @@ def test_upsert_thread_preserves_existing_status_on_partial_update():
     assert row["status"] == "complete"
 
 
+def test_upsert_thread_refreshes_artifact_count_to_zero():
+    conn = _init_mem(sqlite3.connect(":memory:"))
+    ak = _setup_account(conn)
+    tk = compute_thread_key("chatgpt", "conv-1")
+
+    upsert_thread(conn, {
+        "thread_key": tk, "provider_id": "chatgpt", "account_key": ak,
+        "provider_thread_id": "conv-1",
+        "title": "Known title", "status": "complete",
+        "artifact_count": 2,
+    })
+    upsert_thread(conn, {
+        "thread_key": tk, "provider_id": "chatgpt", "account_key": ak,
+        "provider_thread_id": "conv-1",
+        "title": "Known title", "status": "complete",
+        "artifact_count": 0,
+    })
+
+    row = conn.execute(
+        "SELECT current_artifact_count FROM threads WHERE thread_key = ?", (tk,)
+    ).fetchone()
+
+    assert row["current_artifact_count"] == 0
+
+
 def test_upsert_message_inserts_new():
     conn = _init_mem(sqlite3.connect(":memory:"))
     ak = _setup_account(conn)

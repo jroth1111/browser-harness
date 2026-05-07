@@ -113,6 +113,7 @@ def finish_run(
 def upsert_thread(conn: sqlite3.Connection, thread: dict, run_id: str | None = None) -> None:
     now = _utc_now()
     status_present = "status" in thread and thread.get("status") not in (None, "")
+    artifact_count_present = "artifact_count" in thread and not isinstance(thread.get("artifact_count"), bool)
     conn.execute(
         """INSERT INTO threads (
              thread_key, provider_id, account_key, provider_thread_id, canonical_url,
@@ -125,7 +126,7 @@ def upsert_thread(conn: sqlite3.Connection, thread: dict, run_id: str | None = N
              title = COALESCE(NULLIF(excluded.title, ''), threads.title),
              status = CASE WHEN ? THEN excluded.status ELSE threads.status END,
              current_content_hash = COALESCE(excluded.current_content_hash, threads.current_content_hash),
-             current_artifact_count = CASE WHEN excluded.current_artifact_count > 0 THEN excluded.current_artifact_count ELSE threads.current_artifact_count END,
+             current_artifact_count = CASE WHEN ? THEN excluded.current_artifact_count ELSE threads.current_artifact_count END,
              last_observed_at = excluded.last_observed_at,
              latest_capture_id = COALESCE(excluded.latest_capture_id, threads.latest_capture_id)""",
         (
@@ -142,6 +143,7 @@ def upsert_thread(conn: sqlite3.Connection, thread: dict, run_id: str | None = N
             thread.get("last_observed_at", now),
             thread.get("capture_id"),
             1 if status_present else 0,
+            1 if artifact_count_present else 0,
         ),
     )
     conn.commit()
