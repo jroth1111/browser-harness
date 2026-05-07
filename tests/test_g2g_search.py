@@ -92,6 +92,31 @@ def test_search_offers_falls_back_when_total_metadata_is_malformed(monkeypatch):
     assert total == 2
 
 
+def test_coverage_report_tolerates_scalar_row_fields():
+    module = load_g2g_module()
+
+    report = module.build_csv_coverage_report([
+        {
+            "search_query": 12345,
+            "target_keywords": 101,
+            "discovery_path": 202,
+            "subcategory": 303,
+            "keyword_match_found": "true",
+            "matched_keywords": 101,
+            "coverage_notes": 404,
+            "top_level_result_name": 505,
+            "top_level_result_type": 606,
+        }
+    ])
+
+    assert report["query"] == "12345"
+    assert report["target_keywords"] == ["101"]
+    assert report["summary"]["offers_deduplicated"] == 0
+    assert report["target_keyword_results"] == {"101": 1}
+    assert report["by_category"]["303"]["name"] == "505"
+    assert report["by_category"]["303"]["type"] == "606"
+
+
 def load_g2g_module():
     import importlib.util
 

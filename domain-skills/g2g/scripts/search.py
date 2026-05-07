@@ -85,6 +85,12 @@ def safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def text_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
+
+
 # --- G2G API Client ---
 
 class G2GClient:
@@ -1234,22 +1240,22 @@ def build_csv_coverage_report(rows: list[dict]) -> dict:
     target_keywords: list[str] = []
     for row in rows:
         if not query:
-            query = row.get("search_query", "")
-        tk = row.get("target_keywords", "")
+            query = text_value(row.get("search_query"))
+        tk = text_value(row.get("target_keywords"))
         if tk and not target_keywords:
             target_keywords = [k.strip() for k in tk.split(",") if k.strip()]
 
         # Extract category key from discovery_path
-        dp = row.get("discovery_path", "")
+        dp = text_value(row.get("discovery_path"))
         # wave4:{seo_term}:{service_id}:{filter_attr}
         parts = dp.split(":") if dp else []
-        cat_key = parts[1] if len(parts) >= 2 else row.get("subcategory", "unknown")
+        cat_key = parts[1] if len(parts) >= 2 else text_value(row.get("subcategory")) or "unknown"
         by_category.setdefault(cat_key, []).append(row)
 
     keyword_match_counts: dict[str, int] = {kw: 0 for kw in target_keywords}
     for row in rows:
         if row.get("keyword_match_found") == "true":
-            matched = row.get("matched_keywords", "")
+            matched = text_value(row.get("matched_keywords"))
             for kw in matched.split(","):
                 kw = kw.strip()
                 if kw in keyword_match_counts:
@@ -1264,7 +1270,7 @@ def build_csv_coverage_report(rows: list[dict]) -> dict:
             "categories_inspected": len(by_category),
             "offers_collected": len(rows),
             "offers_deduplicated": sum(
-                1 for r in rows if r.get("coverage_notes", "").startswith("dedup")
+                1 for r in rows if text_value(r.get("coverage_notes")).startswith("dedup")
             ),
             "target_keyword_matches": sum(keyword_match_counts.values()),
         },
@@ -1278,8 +1284,8 @@ def build_csv_coverage_report(rows: list[dict]) -> dict:
             1 for r in cat_rows if r.get("keyword_match_found") == "true"
         )
         report["by_category"][cat_key] = {
-            "name": cat_rows[0].get("top_level_result_name", cat_key) if cat_rows else cat_key,
-            "type": cat_rows[0].get("top_level_result_type", "") if cat_rows else "",
+            "name": text_value(cat_rows[0].get("top_level_result_name")) or cat_key if cat_rows else cat_key,
+            "type": text_value(cat_rows[0].get("top_level_result_type")) if cat_rows else "",
             "collected_offers": len(cat_rows),
             "keyword_matched_offers": matched_in_cat,
         }
