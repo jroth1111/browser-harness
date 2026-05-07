@@ -83,6 +83,31 @@ def test_evaluate_field_contract_tolerates_malformed_page_text_length():
     }
 
 
+def test_evaluate_field_contract_rejects_boolean_page_text_length():
+    class Client:
+        def __init__(self):
+            self.calls = 0
+
+        def send_raw(self, method, params, session_id=None):
+            self.calls += 1
+            if self.calls == 1:
+                return {"result": {"value": {"textLength": True}}}
+            return {"result": {"value": True}}
+
+    result = lightpanda_control.evaluate_field_contract(
+        Client(),
+        {"aud_prices": "true"},
+        min_text=1,
+    )
+
+    assert result == {
+        "ok": False,
+        "page": {"textLength": True},
+        "passed": {"aud_prices": True},
+        "missing": ["min_text"],
+    }
+
+
 def test_evaluate_field_contract_tolerates_malformed_checks_mapping():
     class Client:
         def send_raw(self, method, params, session_id=None):

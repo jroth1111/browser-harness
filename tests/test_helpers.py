@@ -1063,6 +1063,17 @@ def test_wait_for_content_tolerates_non_numeric_text_length():
     assert result["reason"] == "timeout"
 
 
+def test_wait_for_content_rejects_boolean_text_length():
+    with patch("browser_harness.helpers.page_content_status", return_value={
+        "url": "https://example.com",
+        "textLength": True,
+        "block": {"blocked": False, "kind": None, "evidence": []},
+    }), patch("time.sleep"):
+        result = helpers.wait_for_content(min_text=1, timeout=0.01, poll=0)
+    assert result["ok"] is False
+    assert result["reason"] == "timeout"
+
+
 def test_wait_for_content_tolerates_malformed_block_metadata():
     with patch("browser_harness.helpers.page_content_status", return_value={
         "url": "https://example.com",
