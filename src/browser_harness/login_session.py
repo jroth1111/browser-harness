@@ -183,6 +183,7 @@ def browser_cookies(client, urls, session_id=None):
     return [
         cookie
         for cookie in cookies
+        if isinstance(cookie, dict)
         if any(cookie_matches_url(cookie, url) for url in urls)
     ]
 

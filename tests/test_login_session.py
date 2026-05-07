@@ -113,6 +113,22 @@ def test_browser_cookies_falls_back_to_browser_level_storage_cookies():
     ]
 
 
+def test_browser_cookies_skips_malformed_browser_level_cookie_rows():
+    def client(method, session_id=None, **params):
+        if method == "Network.getCookies":
+            raise RuntimeError("{'code': -32601, 'message': \"'Network.getCookies' wasn't found\"}")
+        if method == "Storage.getCookies":
+            return {"cookies": [
+                "not-a-cookie",
+                {"name": "sid", "value": "abc", "domain": ".example.com", "path": "/", "secure": True},
+            ]}
+        raise AssertionError(method)
+
+    cookies = login_session.browser_cookies(client, "https://www.example.com/account")
+
+    assert [cookie["name"] for cookie in cookies] == ["sid"]
+
+
 def test_restore_cookies_falls_back_to_browser_level_storage_set_cookies():
     calls = []
 
