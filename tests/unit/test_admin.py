@@ -139,6 +139,21 @@ def test_browser_connections_returns_attached_page(monkeypatch):
     ]
 
 
+def test_browser_connections_skips_malformed_status_response(monkeypatch):
+    monkeypatch.setattr(admin, "_daemon_endpoint_names", lambda: ["default", "bad-page", "scalar"])
+
+    def fake_connect(name, timeout=1.0):
+        if name == "bad-page":
+            return FakeSocket(b'{"target_id":"target-1","page":"not a page object"}\n'), None
+        if name == "scalar":
+            return FakeSocket(b'["not", "a", "status"]\n'), None
+        return FakeSocket(), None
+
+    monkeypatch.setattr(admin.ipc, "connect", fake_connect)
+
+    assert admin.browser_connections() == [{"name": "default", "page": None}]
+
+
 def test_run_doctor_prints_active_browser_connections_and_active_pages(monkeypatch, capsys):
     monkeypatch.setattr(admin, "_version", lambda: "0.1.0")
     monkeypatch.setattr(admin, "_install_mode", lambda: "git")

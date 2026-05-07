@@ -182,9 +182,13 @@ def _daemon_browser_connection(name):
     try:
         c, token = ipc.connect(name, timeout=1.0)
         response = ipc.request(c, token, {"meta": "connection_status"})
+        if not isinstance(response, dict):
+            return None
         if "error" in response:
             return None
         page = response.get("page")
+        if page is not None and not isinstance(page, dict):
+            return None
         if page:
             page = {"title": page.get("title") or "(untitled)", "url": page.get("url") or ""}
         return {"name": name, "page": page}
