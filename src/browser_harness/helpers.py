@@ -2011,9 +2011,10 @@ def detect_turnstile(timeout=5.0):
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
-        for t in cdp("Target.getTargets").get("targetInfos", []):
-            if t.get("type") == "iframe" and "challenges.cloudflare.com" in t.get("url", ""):
-                return {"found": True, "challenge_type": "turnstile_iframe", "iframe_target_id": t["targetId"]}
+        for t in _target_infos(cdp("Target.getTargets")):
+            target_id = t.get("targetId")
+            if t.get("type") == "iframe" and target_id and "challenges.cloudflare.com" in t.get("url", ""):
+                return {"found": True, "challenge_type": "turnstile_iframe", "iframe_target_id": target_id}
         # Check for Turnstile script or widget in DOM
         found = js("""!!(
             document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]') ||

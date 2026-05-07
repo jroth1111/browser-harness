@@ -1212,6 +1212,23 @@ def test_detect_turnstile_returns_not_found_when_no_targets():
         assert result["challenge_type"] is None
 
 
+def test_detect_turnstile_skips_malformed_target_rows():
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
+        ["not", "an", "object"],
+        {"type": "iframe", "url": "https://challenges.cloudflare.com/no-id"},
+    ]}), \
+         patch("browser_harness.helpers.js", return_value=None), \
+         patch("time.sleep"):
+        result = helpers.detect_turnstile(timeout=0.1)
+        assert result == {"found": False, "challenge_type": None, "iframe_target_id": None}
+
+
+def test_detect_turnstile_rejects_malformed_target_infos_envelope():
+    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": "not-a-list"}):
+        with pytest.raises(RuntimeError, match="targetInfos.*must be a list"):
+            helpers.detect_turnstile(timeout=0.1)
+
+
 def test_detect_turnstile_finds_cloudflare_iframe():
     with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
         {"type": "iframe", "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/turnstile", "targetId": "abc123"},
