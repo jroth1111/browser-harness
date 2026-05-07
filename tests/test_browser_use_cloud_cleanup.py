@@ -36,6 +36,29 @@ def test_list_active_browsers_skips_malformed_rows(monkeypatch):
     assert module.list_active_browsers() == [{"id": "active", "startedAt": "2026-05-07T00:00:00Z"}]
 
 
+def test_list_active_browsers_tolerates_malformed_total_items(monkeypatch):
+    module = load_cleanup_module()
+    calls = []
+    pages = iter([
+        {
+            "items": [
+                {"id": "active", "startedAt": "2026-05-07T00:00:00Z"},
+            ],
+            "totalItems": "not-a-count",
+        },
+        {"items": []},
+    ])
+
+    def fake_call(method, path):
+        calls.append((method, path))
+        return next(pages)
+
+    monkeypatch.setattr(module, "_call", fake_call)
+
+    assert module.list_active_browsers() == [{"id": "active", "startedAt": "2026-05-07T00:00:00Z"}]
+    assert calls[-1] == ("GET", "/browsers?pageSize=100&pageNumber=2")
+
+
 @pytest.mark.parametrize("listing, message", [
     (["not", "an", "object"], "expected object, got list"),
     ({"items": "not-a-list"}, "items.*must be a list"),

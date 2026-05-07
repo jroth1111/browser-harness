@@ -33,6 +33,13 @@ import urllib.request
 API = "https://api.browser-use.com/api/v3"
 
 
+def _safe_int(value, default=None):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _headers() -> dict[str, str]:
     key = os.environ.get("BROWSER_USE_API_KEY")
     if not key:
@@ -69,7 +76,8 @@ def list_active_browsers() -> list[dict]:
             break
         well_formed = [b for b in items if isinstance(b, dict) and b.get("id") and b.get("startedAt")]
         out.extend(b for b in well_formed if not b.get("finishedAt"))
-        if len(out) + sum(1 for b in well_formed if b.get("finishedAt")) >= listing.get("totalItems", len(items)):
+        total_items = _safe_int(listing.get("totalItems"), None)
+        if total_items is not None and len(out) + sum(1 for b in well_formed if b.get("finishedAt")) >= total_items:
             break
         page += 1
     return out
