@@ -97,6 +97,7 @@ def local_caption_payload_text(fmt: str, raw: str) -> dict[str, Any]:
         if normalized_fmt == "vtt":
             text = parsers.vtt_to_text(raw)
         elif normalized_fmt == "json3":
+            json.loads(raw)
             text = parsers.json3_to_text(raw)
         elif normalized_fmt in {"xml", "ttml", "srv3", "timedtext"}:
             text = parsers.xml_to_text(raw)
