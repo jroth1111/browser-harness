@@ -1955,6 +1955,35 @@ def test_network_capture_poll_skips_malformed_cdp_event_shapes():
     }]
 
 
+def test_network_capture_sanitizes_malformed_response_status_values():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1",
+            "request": {"url": "https://api.example.com/bad-string", "method": "GET", "headers": {}},
+            "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1",
+            "response": {"status": "ok", "headers": {}, "mimeType": "json"},
+        }},
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r2",
+            "request": {"url": "https://api.example.com/bad-bool", "method": "GET", "headers": {}},
+            "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r2",
+            "response": {"status": True, "headers": {}, "mimeType": "json"},
+        }},
+    ]
+    with patch("browser_harness.helpers.drain_events", return_value=events):
+        cap = helpers.NetworkCapture()
+        cap.poll()
+
+    assert [entry["status"] for entry in cap.responses_for("bad-")] == [0, 0]
+    assert cap.summary()["by_status"] == {0: 2}
+
+
 def test_network_capture_redacted_entries_ignore_scalar_header_maps():
     cap = helpers.NetworkCapture()
     cap._entries.append({

@@ -190,6 +190,10 @@ def _int_count(value):
         return 0
 
 
+def _status_code(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
 def _env_int(name, default):
     try:
         value = int(os.environ.get(name, str(default)))
@@ -2306,7 +2310,7 @@ class NetworkCapture:
             elif m == "Network.responseReceived":
                 resp = p.get("response") if isinstance(p.get("response"), dict) else {}
                 self._responses[rid] = {
-                    "status": resp.get("status", 0),
+                    "status": _status_code(resp.get("status")),
                     "headers": resp.get("headers") if isinstance(resp.get("headers"), dict) else {},
                     "content_type": resp.get("mimeType", ""),
                 }
@@ -2322,7 +2326,7 @@ class NetworkCapture:
                         pass
                 if rid in self._requests:
                     self._finalize(rid,
-                                   resp.get("status", 0),
+                                   _status_code(resp.get("status")),
                                    resp.get("headers") if isinstance(resp.get("headers"), dict) else {},
                                    resp.get("mimeType", ""))
                     n += 1
