@@ -679,6 +679,45 @@ def test_building_price_snapshot_rows_aggregate_observed_prices_by_building():
     assert snapshots[1]["snapshot_status"] == "no_active_rent_observed"
 
 
+def test_building_price_snapshot_rows_skip_malformed_rent_values():
+    module = load_module()
+    targets = [
+        {
+            "building_key": "118 kavanagh st|southbank|VIC|3006",
+            "building_address": "118 Kavanagh Street",
+            "street_address": "118 Kavanagh St",
+            "suburb": "Southbank",
+            "state": "VIC",
+            "postcode": "3006",
+        },
+    ]
+    observations = [
+        {
+            "observation_id": "obs-1",
+            "listing_key": "rea:1",
+            "building_key": "118 kavanagh st|southbank|VIC|3006",
+            "listing_state": "active",
+            "rent_per_week_aud": "not-a-rent",
+            "bedrooms": 1,
+        },
+        {
+            "observation_id": "obs-2",
+            "listing_key": "rea:2",
+            "building_key": "118 kavanagh st|southbank|VIC|3006",
+            "listing_state": "active",
+            "rent_per_week_aud": 800,
+            "bedrooms": 2,
+        },
+    ]
+
+    snapshot = module.building_price_snapshot_rows(targets, observations, "2026-04-29T00:00:00Z", "run-1")[0]
+
+    assert snapshot["active_listing_count"] == 2
+    assert snapshot["active_rents_per_week_aud"] == [800]
+    assert snapshot["rent_count"] == 1
+    assert snapshot["bedroom_rent_summary"]["1"]["rent_count"] == 0
+
+
 def test_retry_backoff_seconds_exponential_and_capped(monkeypatch):
     module = load_module()
 

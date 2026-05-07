@@ -1708,8 +1708,15 @@ def median_number(values):
     return int(value) if value.is_integer() else value
 
 
+def parse_rent_value(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def rent_summary(values):
-    rents = sorted(int(value) for value in values if value is not None)
+    rents = sorted(rent for rent in (parse_rent_value(value) for value in values) if rent is not None)
     if not rents:
         return {
             "rent_count": 0,
@@ -1750,7 +1757,11 @@ def building_price_snapshot_rows(targets, observations, observed_at, run_id):
         ]
         unavailable_rows = [row for row in rows if row.get("listing_state") in {"leased_or_unavailable", "removed_or_unknown"}]
         unknown_rows = [row for row in rows if row.get("listing_state") not in {"active", "leased_or_unavailable", "removed_or_unknown"}]
-        active_rents = sorted(int(row["rent_per_week_aud"]) for row in active_rows)
+        active_rents = sorted(
+            rent
+            for rent in (parse_rent_value(row.get("rent_per_week_aud")) for row in active_rows)
+            if rent is not None
+        )
         snapshot = {
             "run_id": run_id,
             "observed_at": observed_at,
