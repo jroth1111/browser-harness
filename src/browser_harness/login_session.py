@@ -549,10 +549,13 @@ def restore_session_state_and_verify(
     The caller is responsible for providing a fresh browser profile/process when
     they need proof that the state is restorable without an existing login.
     """
+    state = _state_dict(state)
     send_cdp(client, "Page.enable", session_id=session_id)
     send_cdp(client, "Network.enable", session_id=session_id)
-    origin_state = (state.get("origins") or [{}])[0]
-    origin = origin_state.get("origin") or origin_url((state.get("urls") or ["about:blank"])[0]).rstrip("/")
+    origin_items = _dict_items(state.get("origins") or [])
+    origin_state = origin_items[0] if origin_items else {}
+    state_urls = state.get("urls") if isinstance(state.get("urls"), list) else []
+    origin = origin_state.get("origin") or origin_url((state_urls or ["about:blank"])[0]).rstrip("/")
     if origin and origin != "about:blank":
         send_cdp(client, "Page.navigate", {"url": origin + "/"}, session_id=session_id)
         wait_for_origin(client, origin, timeout=timeout, poll=poll, session_id=session_id)

@@ -362,6 +362,37 @@ def test_restore_session_state_and_verify_passes_authenticated_urls():
     assert result["resources_checked"][0]["title"] == "Private"
 
 
+def test_restore_session_state_and_verify_handles_malformed_state_shapes():
+    calls = []
+    statuses = iter([
+        {"url": "about:blank", "title": "", "readyState": "complete", "textLength": 0},
+        {"url": "https://www.example.com/private", "title": "Private", "readyState": "complete", "textLength": 500},
+    ])
+
+    def client(method, session_id=None, **params):
+        calls.append((method, params, session_id))
+        if method == "Runtime.evaluate":
+            expression = params["expression"]
+            if expression == "location.origin":
+                return {"result": {"value": "about:blank"}}
+            return {"result": {"value": next(statuses)}}
+        return {}
+
+    with patch("time.sleep"):
+        result = login_session.restore_session_state_and_verify(
+            client,
+            {"cookies": ["bad-cookie"], "origins": ["bad-origin"], "urls": "not-a-list"},
+            ["https://www.example.com/private"],
+            min_text=250,
+            timeout=1,
+        )
+
+    assert result["ok"] is True
+    assert result["restore"] == {"cookies": {"restored": 0}, "storage": []}
+    navigated_urls = [call[1]["url"] for call in calls if call[0] == "Page.navigate"]
+    assert navigated_urls == ["https://www.example.com/private"]
+
+
 def test_verify_authenticated_urls_fails_login_redirect():
     states = iter([
         # navigate_and_wait pre_url
