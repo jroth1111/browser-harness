@@ -46,7 +46,49 @@ def test_bh_cdp_ws_websocket_passes_through():
         resolved, info = daemon.resolve_cdp_endpoint()
     assert resolved == url
     assert info["source"] == "env"
+    assert info["input"] == "BH_CDP_WS"
     assert info["is_loopback"]
+
+
+def test_documented_cdp_ws_aliases_pass_through():
+    for key in ("BU_CDP_WS", "BH_CDP_URL", "BU_CDP_URL"):
+        url = "ws://127.0.0.1:9222/devtools/browser/abc"
+        with patch.dict(os.environ, {key: url}, clear=True):
+            resolved, info = daemon.resolve_cdp_endpoint()
+        assert resolved == url
+        assert info["input"] == key
+        assert info["is_loopback"]
+
+
+def test_documented_cdp_http_alias_resolves_json_version():
+    opened = []
+
+    def fake_open(url, timeout=0):
+        opened.append(url)
+        return FakeResponse({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/abc"})
+
+    with patch.dict(os.environ, {"BU_CDP_URL": "http://127.0.0.1:9222"}, clear=True), \
+         patch("urllib.request.urlopen", side_effect=fake_open):
+        resolved, info = daemon.resolve_cdp_endpoint()
+
+    assert resolved == "ws://127.0.0.1:9222/devtools/browser/abc"
+    assert info["input"] == "BU_CDP_URL"
+    assert info["http_base"] == "http://127.0.0.1:9222"
+    assert opened == ["http://127.0.0.1:9222/json/version"]
+
+
+def test_cdp_endpoint_alias_precedence_prefers_bh_ws():
+    env = {
+        "BH_CDP_WS": "ws://127.0.0.1:9222/devtools/browser/bh",
+        "BU_CDP_WS": "ws://127.0.0.1:9222/devtools/browser/bu",
+        "BH_CDP_URL": "ws://127.0.0.1:9222/devtools/browser/bh-url",
+        "BU_CDP_URL": "ws://127.0.0.1:9222/devtools/browser/bu-url",
+    }
+    with patch.dict(os.environ, env, clear=True):
+        resolved, info = daemon.resolve_cdp_endpoint()
+
+    assert resolved == env["BH_CDP_WS"]
+    assert info["input"] == "BH_CDP_WS"
 
 
 def test_bh_cdp_ws_http_base_resolves_json_version():

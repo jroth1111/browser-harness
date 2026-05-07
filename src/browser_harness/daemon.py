@@ -135,7 +135,10 @@ def _remote_allowed():
     return os.environ.get("BH_CDP_ALLOW_REMOTE") == "1"
 
 
-def _validate_endpoint_url(url, *, source, http_base=None):
+CDP_ENDPOINT_ENV_KEYS = ("BH_CDP_WS", "BU_CDP_WS", "BH_CDP_URL", "BU_CDP_URL")
+
+
+def _validate_endpoint_url(url, *, source, input_name=None, http_base=None):
     parsed = urlparse(url)
     if parsed.scheme not in {"ws", "wss", "http", "https"}:
         raise RuntimeError(f"unsupported CDP endpoint scheme: {parsed.scheme or '(missing)'}")
@@ -158,7 +161,7 @@ def _validate_endpoint_url(url, *, source, http_base=None):
         warnings.append(f"{parsed.scheme} on loopback is unusual; ws/http to 127.0.0.1 is the normal local shape")
     return {
         "source": source,
-        "input": "BH_CDP_WS" if source == "env" else "DevToolsActivePort",
+        "input": input_name if source == "env" else "DevToolsActivePort",
         "resolved_url": _redact_url(url),
         "http_base": _redact_url(http_base) if http_base else None,
         "host": host,
@@ -178,17 +181,17 @@ def _devtools_version_url(url):
     return urlunparse((parsed.scheme, parsed.netloc, path, "", parsed.query, ""))
 
 
-def _resolve_devtools_http_base(url):
+def _resolve_devtools_http_base(url, *, input_name):
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         raise RuntimeError(f"unsupported DevTools HTTP endpoint scheme: {parsed.scheme or '(missing)'}")
-    info = _validate_endpoint_url(url, source="env", http_base=url)
+    info = _validate_endpoint_url(url, source="env", input_name=input_name, http_base=url)
     with urllib.request.urlopen(_devtools_version_url(url), timeout=5) as resp:
         data = json.loads(resp.read().decode())
     ws_url = data.get("webSocketDebuggerUrl")
     if not ws_url:
         raise RuntimeError(f"{_redact_url(url)}/json/version did not include webSocketDebuggerUrl")
-    ws_info = _validate_endpoint_url(ws_url, source="env", http_base=url)
+    ws_info = _validate_endpoint_url(ws_url, source="env", input_name=input_name, http_base=url)
     ws_info["browser"] = data.get("Browser")
     ws_info["protocol_version"] = data.get("Protocol-Version")
     ws_info["warnings"] = _merge_warnings(info["warnings"], ws_info["warnings"])
@@ -196,13 +199,20 @@ def _resolve_devtools_http_base(url):
 
 
 def _resolve_cdp_endpoint_from_env():
-    url = os.environ.get("BH_CDP_WS")
-    if not url:
+    input_name = None
+    url = None
+    for key in CDP_ENDPOINT_ENV_KEYS:
+        value = os.environ.get(key)
+        if value:
+            input_name = key
+            url = value
+            break
+    if not input_name or not url:
         return None
     parsed = urlparse(url)
     if parsed.scheme in {"http", "https"}:
-        return _resolve_devtools_http_base(url)
-    info = _validate_endpoint_url(url, source="env")
+        return _resolve_devtools_http_base(url, input_name=input_name)
+    info = _validate_endpoint_url(url, source="env", input_name=input_name)
     return url, info
 
 

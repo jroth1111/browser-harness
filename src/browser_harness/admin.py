@@ -142,11 +142,13 @@ def _needs_chrome_remote_debugging_prompt(msg):
 
 
 def _is_local_chrome_mode(env=None):
-    """True when the daemon discovers a local Chrome instead of a remote CDP WS."""
+    """True when the daemon discovers a local Chrome instead of an explicit CDP endpoint."""
     e = env or {}
     return not (
-        e.get("BU_CDP_WS") or e.get("BH_CDP_WS")
-        or os.environ.get("BU_CDP_WS") or os.environ.get("BH_CDP_WS")
+        e.get("BH_CDP_WS") or e.get("BU_CDP_WS")
+        or e.get("BH_CDP_URL") or e.get("BU_CDP_URL")
+        or os.environ.get("BH_CDP_WS") or os.environ.get("BU_CDP_WS")
+        or os.environ.get("BH_CDP_URL") or os.environ.get("BU_CDP_URL")
     )
 
 

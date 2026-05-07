@@ -22,10 +22,17 @@ class FakeSocket:
 
 def test_local_chrome_mode_is_false_when_env_provides_remote_cdp():
     assert not admin._is_local_chrome_mode({"BU_CDP_WS": "ws://example.test/devtools/browser/1"})
+    assert not admin._is_local_chrome_mode({"BH_CDP_URL": "http://127.0.0.1:9222"})
+    assert not admin._is_local_chrome_mode({"BU_CDP_URL": "http://127.0.0.1:9222"})
 
 
 def test_local_chrome_mode_is_false_when_process_env_provides_remote_cdp(monkeypatch):
     monkeypatch.setenv("BU_CDP_WS", "ws://example.test/devtools/browser/1")
+
+    assert not admin._is_local_chrome_mode()
+
+    monkeypatch.delenv("BU_CDP_WS", raising=False)
+    monkeypatch.setenv("BU_CDP_URL", "http://127.0.0.1:9222")
 
     assert not admin._is_local_chrome_mode()
 
