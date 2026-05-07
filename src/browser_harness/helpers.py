@@ -2712,10 +2712,11 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
 
     try:
         result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
-        block = detect_block_page(html=result.get("text", ""), text=result.get("text", ""), url=url)
-        if result.get("ok") and not block.get("blocked") and len((result.get("text") or "").strip()) >= min_text:
+        text = str(result.get("text") or "")
+        block = detect_block_page(html=text, text=text, url=url)
+        if result.get("ok") and not block.get("blocked") and len(text.strip()) >= min_text:
             return Response(
-                html=result.get("text", ""), text=result.get("text", ""),
+                html=text, text=text,
                 url=result.get("url", url), status=result.get("status", 0),
                 source="session", headers=result.get("headers", {}),
             )

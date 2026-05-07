@@ -1506,6 +1506,23 @@ def test_fetch_browser_timeout_is_not_reported_as_empty_success():
     assert response.block == {"blocked": False, "kind": None, "evidence": []}
 
 
+def test_fetch_auto_tolerates_scalar_session_text():
+    with patch("browser_harness.helpers.http_get", side_effect=RuntimeError("plain http failed")), \
+         patch("browser_harness.helpers.http_get_browser_session_response", return_value={
+             "ok": True,
+             "text": 12345,
+             "url": "https://example.com/session",
+             "status": 200,
+             "headers": {},
+         }), \
+         patch("browser_harness.helpers.new_tab") as new_tab:
+        response = helpers.fetch("https://example.com/session", min_text=1)
+
+    assert response.source == "session"
+    assert response.text == "12345"
+    new_tab.assert_not_called()
+
+
 def test_response_repr():
     from browser_harness.response import Response
     r = Response(html="<html></html>", text="content", url="https://example.com",
