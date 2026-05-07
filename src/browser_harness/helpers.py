@@ -2333,9 +2333,14 @@ class NetworkCapture:
         """Deduplicated list of URLs seen.  Returns [{url, method, resource_type, status, content_type, count}]."""
         agg = {}
         for e in self._entries:
-            key = normalize_fn(e["url"]) if normalize_fn else e["url"]
+            if not isinstance(e, dict):
+                continue
+            url = _text_value(e.get("url", ""))
+            if not url:
+                continue
+            key = normalize_fn(url) if normalize_fn else url
             if key not in agg:
-                agg[key] = {"url": e["url"], "method": e["method"],
+                agg[key] = {"url": url, "method": _string_field(e.get("method")),
                             "resource_type": e.get("resource_type", ""),
                             "status": e.get("status", 0),
                             "content_type": e.get("content_type", ""),
@@ -2345,7 +2350,18 @@ class NetworkCapture:
 
     def responses_for(self, pattern):
         """Full request/response pairs where URL matches *pattern* regex."""
-        return [e for e in self._entries if re.search(pattern, e["url"])]
+        matches = []
+        for e in self._entries:
+            if not isinstance(e, dict):
+                continue
+            url = _text_value(e.get("url", ""))
+            if not re.search(pattern, url):
+                continue
+            if url == e.get("url"):
+                matches.append(e)
+            else:
+                matches.append({**e, "url": url})
+        return matches
 
     def redacted_entries(self):
         """Captured entries with sensitive headers removed for receipts/logs."""

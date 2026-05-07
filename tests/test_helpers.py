@@ -2036,6 +2036,38 @@ def test_network_capture_responses_for_tolerates_scalar_urls():
     assert cap.responses_for("12345")[0]["url"] == "12345"
 
 
+def test_network_capture_query_helpers_skip_malformed_entries():
+    cap = helpers.NetworkCapture()
+    cap._entries = [
+        "not an entry",
+        {"method": "GET", "status": 200},
+        {"url": 12345, "method": "GET", "status": 200, "resource_type": "XHR", "content_type": "json"},
+        {"url": "https://api.example.com/users", "method": "POST", "status": 201},
+    ]
+
+    eps = cap.endpoints()
+    assert eps == [
+        {
+            "url": "12345",
+            "method": "GET",
+            "resource_type": "XHR",
+            "status": 200,
+            "content_type": "json",
+            "count": 1,
+        },
+        {
+            "url": "https://api.example.com/users",
+            "method": "POST",
+            "resource_type": "",
+            "status": 201,
+            "content_type": "",
+            "count": 1,
+        },
+    ]
+    assert cap.responses_for("12345")[0]["url"] == "12345"
+    assert cap.responses_for(r"api\.example")[0]["url"] == "https://api.example.com/users"
+
+
 def test_network_capture_handles_redirect():
     events = [
         {"method": "Network.requestWillBeSent", "params": {
