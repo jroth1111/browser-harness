@@ -115,6 +115,13 @@ def collection_status(*, last_good_guard_record=None, failures_count=0, complete
     return "complete" if complete else "partial_unverified"
 
 
+def safe_int(value, default=0):
+    try:
+        return int(value if value not in (None, "") else default)
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def warehouse_manifest(rows):
     """Build a stable BI/export manifest for generated JSON/CSV artifacts."""
     manifest = []
@@ -128,7 +135,7 @@ def warehouse_manifest(rows):
         manifest.append({
             "table": table,
             "path": str(path),
-            "row_count": int(row.get("row_count") or 0),
+            "row_count": safe_int(row.get("row_count"), 0),
             "grain": row.get("grain"),
             "source_family": row.get("source_family"),
             "surface_class": row.get("surface_class"),

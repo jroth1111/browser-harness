@@ -113,6 +113,20 @@ def test_warehouse_manifest_rejects_malformed_rows_with_value_error():
         raise AssertionError("malformed warehouse manifest row should fail validation")
 
 
+def test_warehouse_manifest_defaults_malformed_row_count():
+    module = load_module()
+
+    manifest = module.warehouse_manifest([
+        {
+            "table": "airbnb_public_search_result_snapshot",
+            "path": "/tmp/results.csv",
+            "row_count": "not-a-count",
+        }
+    ])
+
+    assert manifest[0]["row_count"] == 0
+
+
 def test_contract_stamp_and_schema_validation_require_common_receipt_fields():
     module = load_module()
 
