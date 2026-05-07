@@ -278,6 +278,29 @@ def test_runtime_value_tolerates_malformed_result_envelope():
     assert login_session.runtime_value(client, "navigator.userAgent") is None
 
 
+def test_runtime_value_surfaces_javascript_exceptions():
+    def client(method, **params):
+        assert method == "Runtime.evaluate"
+        return {
+            "exceptionDetails": {
+                "text": "Uncaught",
+                "exception": {"description": "ReferenceError: missing is not defined"},
+            }
+        }
+
+    with pytest.raises(RuntimeError, match="ReferenceError: missing is not defined"):
+        login_session.runtime_value(client, "missing.value")
+
+
+def test_runtime_value_tolerates_malformed_exception_details():
+    def client(method, **params):
+        assert method == "Runtime.evaluate"
+        return {"exceptionDetails": "not-an-object"}
+
+    with pytest.raises(RuntimeError, match="JS exception evaluating 'bad\\(\\)'"):
+        login_session.runtime_value(client, "bad()")
+
+
 def test_session_manifest_redacts_cookie_and_storage_values():
     def client(method, **params):
         if method == "Network.getCookies":

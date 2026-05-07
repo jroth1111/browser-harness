@@ -216,6 +216,11 @@ def runtime_value(client, expression, session_id=None):
         {"expression": expression, "returnByValue": True, "awaitPromise": True},
         session_id=session_id,
     )
+    if "exceptionDetails" in result:
+        details = _dict_value(result.get("exceptionDetails"))
+        exception = _dict_value(details.get("exception"))
+        desc = exception.get("description") or details.get("text", "")
+        raise RuntimeError(f"JS exception evaluating {expression!r}: {desc}")
     return _dict_value(result.get("result")).get("value")
 
 
