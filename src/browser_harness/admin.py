@@ -872,9 +872,29 @@ def launch_browser(headless=False, profile=None, proxy=None, extensions=None,
         raise RuntimeError(f"unexpected DevToolsActivePort format: {dap_lines!r}") from e
     ws_path = dap_lines[1].strip() if len(dap_lines) > 1 else ""
     env_ws = f"ws://127.0.0.1:{actual_port}{ws_path}"
+    previous_ws = os.environ.get("BH_CDP_WS")
     os.environ["BH_CDP_WS"] = env_ws
-    restart_daemon()
-    ensure_daemon()
+    try:
+        restart_daemon()
+        ensure_daemon()
+    except BaseException:
+        if previous_ws is None:
+            os.environ.pop("BH_CDP_WS", None)
+        else:
+            os.environ["BH_CDP_WS"] = previous_ws
+        try:
+            proc.terminate()
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        if proc.stderr:
+            proc.stderr.close()
+        if is_temp:
+            shutil.rmtree(user_data_dir, ignore_errors=True)
+        raise
     if proc.stderr:
         proc.stderr.close()
     return {

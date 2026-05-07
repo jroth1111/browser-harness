@@ -239,6 +239,49 @@ def test_stop_cloud_browser_swallows_baseexception_from_stop_request(monkeypatch
 
     admin._stop_cloud_browser("browser-123")
 
+
+def test_launch_browser_cleans_process_and_temp_profile_when_daemon_attach_fails(monkeypatch, tmp_path):
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / "DevToolsActivePort").write_text("9333\n/devtools/browser/abc\n")
+
+    class Proc:
+        pid = 1234
+        stderr = None
+
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            self.killed = True
+
+    proc = Proc()
+    monkeypatch.setattr(admin, "_default_chrome_executable", lambda: "/bin/chrome")
+    monkeypatch.setattr(admin.tempfile, "mkdtemp", lambda prefix: str(profile))
+    monkeypatch.setattr(admin.subprocess, "Popen", lambda *args, **kwargs: proc)
+    monkeypatch.setattr(admin, "restart_daemon", lambda: None)
+    monkeypatch.setattr(admin, "ensure_daemon", lambda: (_ for _ in ()).throw(RuntimeError("daemon attach failed")))
+    monkeypatch.setenv("BH_CDP_WS", "ws://previous")
+
+    with pytest.raises(RuntimeError, match="daemon attach failed"):
+        admin.launch_browser()
+
+    assert proc.terminated is True
+    assert proc.killed is False
+    assert not profile.exists()
+    assert admin.os.environ["BH_CDP_WS"] == "ws://previous"
+
+
 def test_start_remote_daemon_does_not_stop_created_browser_on_success(monkeypatch):
     calls = []
     browser = {"id": "browser-123", "cdpUrl": "http://127.0.0.1:9333", "liveUrl": "https://live.example"}
