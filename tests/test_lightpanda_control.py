@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from browser_harness import lightpanda_control
 
 
@@ -111,6 +113,34 @@ def test_lightpanda_cdp_ensure_page_creates_and_attaches_target():
     ]
 
 
+def test_lightpanda_cdp_ensure_page_rejects_malformed_create_response():
+    client = lightpanda_control.LightpandaCDP.__new__(lightpanda_control.LightpandaCDP)
+    client.page_session_id = None
+    client.target_id = None
+    client._request = lambda method, params=None, session_id=None: {}
+
+    with pytest.raises(RuntimeError, match="Target.createTarget response missing required field: targetId"):
+        client.ensure_page("about:blank")
+
+
+def test_lightpanda_cdp_ensure_page_rejects_malformed_attach_response():
+    client = lightpanda_control.LightpandaCDP.__new__(lightpanda_control.LightpandaCDP)
+    client.page_session_id = None
+    client.target_id = None
+
+    def request(method, params=None, session_id=None):
+        if method == "Target.createTarget":
+            return {"targetId": "FID-1"}
+        if method == "Target.attachToTarget":
+            return []
+        return {}
+
+    client._request = request
+
+    with pytest.raises(RuntimeError, match="Target.attachToTarget returned invalid response shape: expected object, got list"):
+        client.ensure_page("about:blank")
+
+
 def test_lightpanda_server_launches_serve_and_closes_process(tmp_path):
     proc = MagicMock()
     proc.pid = 12345
@@ -138,3 +168,23 @@ def test_lightpanda_server_launches_serve_and_closes_process(tmp_path):
     cdp_class.return_value.close.assert_called_once_with()
     proc.terminate.assert_called_once()
     proc.wait.assert_called_once_with(timeout=5)
+
+
+@pytest.mark.parametrize("version, message", [
+    ({}, "missing required field: webSocketDebuggerUrl"),
+    (["not", "an", "object"], "expected object, got list"),
+])
+def test_lightpanda_server_rejects_malformed_version_response(version, message):
+    proc = MagicMock()
+    proc.pid = 12345
+
+    with patch("subprocess.Popen", return_value=proc), \
+         patch("browser_harness.lightpanda_control.wait_json_version", return_value=version), \
+         patch("browser_harness.lightpanda_control.LightpandaCDP") as cdp_class:
+        server = lightpanda_control.LightpandaServer("/bin/lightpanda", port=9222)
+
+        with pytest.raises(RuntimeError, match=message):
+            server.start()
+
+    cdp_class.assert_not_called()
+    proc.terminate.assert_called_once()

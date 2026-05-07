@@ -53,6 +53,19 @@ def wait_json_version(port, timeout=20.0):
     raise RuntimeError(f"Lightpanda did not expose {url}: {last_error}")
 
 
+def _require_object(value, context):
+    if not isinstance(value, dict):
+        raise RuntimeError(f"{context} returned invalid response shape: expected object, got {type(value).__name__}")
+    return value
+
+
+def _require_field(value, key, context):
+    data = _require_object(value, context)
+    if not data.get(key):
+        raise RuntimeError(f"{context} response missing required field: {key}")
+    return data[key]
+
+
 def runtime_value(client, expression, session_id=None):
     result = client.send_raw(
         "Runtime.evaluate",
@@ -149,12 +162,16 @@ class LightpandaCDP:
     def ensure_page(self, url="about:blank"):
         if self.page_session_id:
             return self.page_session_id
-        self.target_id = self._request("Target.createTarget", {"url": url})["targetId"]
+        self.target_id = _require_field(
+            self._request("Target.createTarget", {"url": url}),
+            "targetId",
+            "Target.createTarget",
+        )
         attached = self._request("Target.attachToTarget", {
             "targetId": self.target_id,
             "flatten": True,
         })
-        self.page_session_id = attached["sessionId"]
+        self.page_session_id = _require_field(attached, "sessionId", "Target.attachToTarget")
         self.send_raw("Page.enable")
         self.send_raw("Runtime.enable")
         self.send_raw("Network.enable")
@@ -193,7 +210,9 @@ class LightpandaServer:
         )
         try:
             self.version = wait_json_version(self.port, timeout=timeout)
-            self.client = LightpandaCDP(self.version["webSocketDebuggerUrl"])
+            self.client = LightpandaCDP(
+                _require_field(self.version, "webSocketDebuggerUrl", "Lightpanda /json/version")
+            )
             self.client.ensure_page()
         except Exception:
             self.close()
