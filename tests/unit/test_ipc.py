@@ -15,6 +15,13 @@ def test_read_port_file_rejects_out_of_range_port(tmp_path, monkeypatch):
     assert ipc._read_port_file("default") == (None, None)
 
 
+def test_read_port_file_rejects_boolean_port(tmp_path, monkeypatch):
+    monkeypatch.setattr(ipc, "_TMP", tmp_path)
+    ipc.port_path("default").write_text('{"port": true, "token": "tok"}', encoding="utf-8")
+
+    assert ipc._read_port_file("default") == (None, None)
+
+
 # --- identify(): ping payload sanitation ---
 
 class _FakeConn:

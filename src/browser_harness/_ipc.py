@@ -40,6 +40,8 @@ def _read_port_file(name):
     """(port, token) from the Windows port file, or (None, None) on any failure."""
     try:
         d = json.loads(port_path(name).read_text())
+        if isinstance(d.get("port"), bool):
+            return None, None
         port = int(d["port"])
         token = d["token"]
         if port <= 0 or port > 65535:
