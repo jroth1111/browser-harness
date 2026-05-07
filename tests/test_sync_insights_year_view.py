@@ -84,6 +84,20 @@ def test_validate_collect_output_rejects_empty_summary(tmp_path, monkeypatch):
         module.validate_collect_output("run-empty", allow_partial=True)
 
 
+def test_validate_collect_output_rejects_non_object_snapshot(tmp_path, monkeypatch):
+    module = load_sync_module()
+    output_path = tmp_path / "insights"
+    session_path = tmp_path / "session"
+    output_path.mkdir()
+    session_path.mkdir()
+    monkeypatch.setattr(module, "OUTPUT_PATH", output_path)
+    monkeypatch.setattr(module, "SESSION_PATH", session_path)
+    (output_path / "run-list.json").write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="expected object, got list"):
+        module.validate_collect_output("run-list")
+
+
 def test_validate_collect_output_accepts_steady_state_with_zero_chart_rows(tmp_path, monkeypatch):
     """Regression: a fully-covered ledger legitimately produces 0 chart requests
     and 0 daily rows. This is the steady-state convergence outcome and must NOT

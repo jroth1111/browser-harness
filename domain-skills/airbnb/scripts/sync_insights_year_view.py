@@ -169,6 +169,8 @@ def validate_collect_output(run_id, allow_partial=False, allow_quarantined=False
     if not snapshot_json.exists():
         raise RuntimeError(f"Collector did not write expected snapshot: {snapshot_json}")
     snapshot = json.loads(snapshot_json.read_text(encoding="utf-8"))
+    if not isinstance(snapshot, dict):
+        raise RuntimeError(f"Collector wrote invalid snapshot JSON shape: expected object, got {type(snapshot).__name__}")
     receipt = {}
     if receipt_json.exists():
         receipt = json.loads(receipt_json.read_text(encoding="utf-8"))
