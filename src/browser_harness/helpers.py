@@ -1287,6 +1287,7 @@ def _js_snippet(expression, limit=160):
 
 def _js_exception_description(result, details):
     desc = result.get("description")
+    details = _dict_value(details)
     exc = details.get("exception") if details else None
     if not desc and isinstance(exc, dict):
         desc = exc.get("description")
@@ -1318,6 +1319,7 @@ def _runtime_value(response, expression):
     details = response.get("exceptionDetails")
     if details or result.get("subtype") == "error":
         desc = _js_exception_description(result, details)
+        details = _dict_value(details)
         if details:
             line = details.get("lineNumber")
             col = details.get("columnNumber")

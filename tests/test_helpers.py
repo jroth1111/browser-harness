@@ -1333,6 +1333,15 @@ def test_js_raises_on_exception_details():
             helpers.js("bad syntax }}}")
 
 
+def test_js_tolerates_malformed_exception_details():
+    with patch("browser_harness.helpers.cdp", return_value={
+        "result": {"type": "undefined"},
+        "exceptionDetails": "not-an-object",
+    }):
+        with pytest.raises(RuntimeError, match="JavaScript evaluation failed"):
+            helpers.js("bad syntax }}}")
+
+
 def test_detect_turnstile_returns_not_found_when_no_targets():
     with patch("browser_harness.helpers.cdp", return_value={"targetInfos": []}), \
          patch("browser_harness.helpers.js", return_value=None), \
