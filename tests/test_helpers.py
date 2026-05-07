@@ -729,6 +729,17 @@ def test_ax_snapshot_default_unchanged():
     assert result == [{"ref": "1", "role": "button", "name": "Save", "value": ""}]
 
 
+def test_ax_snapshot_skips_malformed_nodes_and_properties():
+    nodes = [
+        "bad-node",
+        {"nodeId": "1", "role": {"value": "button"}, "name": {"value": "Save"}, "properties": ["bad-prop"]},
+    ]
+    with patch("browser_harness.helpers.cdp", return_value={"nodes": nodes}):
+        assert helpers.ax_snapshot() == [{"ref": "1", "role": "button", "name": "Save", "value": ""}]
+        result = helpers.ax_snapshot(compact=True)
+    assert result == ['button "Save" [ref=e0]']
+
+
 def test_screenshot_trace_is_opt_in(tmp_path):
     trace_dir = tmp_path / "trace"
     with patch("browser_harness.helpers.capture_screenshot", side_effect=lambda path, full=False: path) as capture, \
@@ -2063,6 +2074,15 @@ def test_pending_blockers_empty_when_no_blockers():
     assert result == {"cdp": [], "js": []}
 
 
+def test_pending_blockers_ignores_malformed_rows():
+    cdp_blockers = ["bad-blocker", {"kind": "dialog", "params": {"type": "alert"}, "t": 1.0}]
+    js_blockers = ["bad-js", {"kind": "geolocation", "t": 2.0}]
+    with patch("browser_harness.helpers._send", return_value={"blockers": cdp_blockers}), \
+         patch("browser_harness.helpers.js", return_value=js_blockers):
+        result = helpers.pending_blockers()
+    assert result == {"cdp": [cdp_blockers[1]], "js": [js_blockers[1]]}
+
+
 def test_dismiss_dialog_accepts_and_returns_info():
     dialog_event = {
         "method": "Page.javascriptDialogOpening",
@@ -2081,6 +2101,18 @@ def test_dismiss_dialog_returns_none_when_no_dialog():
          patch("browser_harness.helpers.cdp", side_effect=Exception("no dialog")):
         info = helpers.dismiss_dialog()
     assert info is None
+
+
+def test_dismiss_dialog_skips_malformed_events_and_params():
+    events = [
+        "bad-event",
+        {"method": "Page.javascriptDialogOpening", "params": "bad-params"},
+        {"method": "Page.javascriptDialogOpening", "params": {"type": "alert", "message": "Hi"}},
+    ]
+    with patch("browser_harness.helpers.drain_events", return_value=events), \
+         patch("browser_harness.helpers.cdp", return_value={}):
+        info = helpers.dismiss_dialog()
+    assert info == {"type": "alert", "message": "Hi", "url": ""}
 
 
 def test_capture_dialogs_stubs_window_methods():

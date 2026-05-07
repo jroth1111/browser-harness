@@ -160,6 +160,10 @@ def _target_infos(response, context="Target.getTargets response"):
     return [target for target in targets if isinstance(target, dict)]
 
 
+def _dict_rows(value):
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
 _RECOVERABLE_PATTERNS = (
     "Session with given id not found",
     "Not attached to target",
@@ -204,7 +208,7 @@ def cdp(method, session_id=None, timeout=30, **params):
     return _send({"method": method, "params": params, "session_id": session_id}, timeout=timeout).get("result", {})
 
 
-def drain_events():  return _send({"meta": "drain_events"}).get("events", [])
+def drain_events():  return _dict_rows(_send({"meta": "drain_events"}).get("events", []))
 def endpoint_info(): return _send({"meta": "endpoint_info"}).get("endpoint_info", {})
 
 
@@ -1396,7 +1400,7 @@ def pending_blockers(clear_js=False):
     CDP-side: Page.javascriptDialogOpening, Page.fileChooserOpened, Page.downloadWillBegin.
     Returns {"cdp": [...], "js": [...]}. Falls back to CDP-only if JS is frozen.
     """
-    cdp_side = _send({"meta": "pending_blockers"}).get("blockers") or []
+    cdp_side = _dict_rows(_send({"meta": "pending_blockers"}).get("blockers") or [])
     js_expr = "(function(){const a=window.__bh_blockers__||[];" + \
               ("window.__bh_blockers__=[];" if clear_js else "") + \
               "return a;})()"
@@ -1404,7 +1408,7 @@ def pending_blockers(clear_js=False):
         raw = js(js_expr)
     except Exception:
         raw = None
-    js_side = raw if isinstance(raw, list) else []
+    js_side = _dict_rows(raw)
     return {"cdp": cdp_side, "js": js_side}
 
 
@@ -1414,11 +1418,11 @@ def dismiss_dialog(accept=True):
     Works even when the JS thread is frozen. Peeks at buffered CDP events first
     to extract dialog info. Returns {type, message, url} or None if no dialog.
     """
-    events = drain_events()
+    events = _dict_rows(drain_events())
     info = None
     for e in events:
         if e.get("method") == "Page.javascriptDialogOpening":
-            p = e.get("params", {})
+            p = e.get("params") if isinstance(e.get("params"), dict) else {}
             info = {"type": p.get("type", ""), "message": p.get("message", ""), "url": p.get("url", "")}
     try:
         cdp("Page.handleJavaScriptDialog", accept=accept)
@@ -1513,7 +1517,7 @@ def _ax_value(field):
 
 
 def _ax_props(node):
-    props = node.get("properties") or []
+    props = _dict_rows(node.get("properties") or [])
     out = {}
     for p in props:
         name = p.get("name")
@@ -1532,7 +1536,7 @@ def ax_snapshot(max_nodes=120, compact=False):
     original list-of-dicts format.
     """
     global _ref_map, _ref_seq
-    nodes = cdp("Accessibility.getFullAXTree").get("nodes", [])
+    nodes = _dict_rows(cdp("Accessibility.getFullAXTree").get("nodes", []))
     if not compact:
         out = []
         for node in nodes[:max_nodes]:
@@ -1620,7 +1624,7 @@ def _resolve_ref_center(ref):
 
 def _resolve_ref_fallback(entry):
     """Fallback: re-query AX tree to find fresh backend_node_id by role/name."""
-    nodes = cdp("Accessibility.getFullAXTree").get("nodes", [])
+    nodes = _dict_rows(cdp("Accessibility.getFullAXTree").get("nodes", []))
     role, name, nth = entry["role"], entry["name"], entry["nth"]
     match_count = 0
     for node in nodes:
