@@ -120,6 +120,38 @@ def test_load_records_json_nested_key_removes_discovered_records_from_meta(tmp_p
     assert meta["payload"] == {"other": {"kept": True}}
 
 
+def test_load_records_json_normalizes_mixed_nested_record_rows(tmp_path):
+    p = tmp_path / "mixed.json"
+    p.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {"id": 1},
+                    {"id": 2},
+                    {"id": 3},
+                    {"id": 4},
+                    {"id": 5},
+                    6,
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rows, meta = data_display._load_records(p)
+
+    assert rows == [
+        {"id": 1},
+        {"id": 2},
+        {"id": 3},
+        {"id": 4},
+        {"id": 5},
+        {"value": 6},
+    ]
+    assert meta["records_key"] == "records"
+    assert meta["row_count"] == 6
+
+
 def test_load_records_unsupported_extension(tmp_path):
     p = tmp_path / "rows.txt"
     p.write_text("x", encoding="utf-8")

@@ -346,7 +346,7 @@ def _load_jsonl(path):
 def _load_json(path):
     obj = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(obj, list):
-        rows = [r if isinstance(r, dict) else {"value": r} for r in obj]
+        rows = _normalize_json_rows(obj)
         meta = {
             "source_file": str(path),
             "row_count": len(rows),
@@ -359,14 +359,19 @@ def _load_json(path):
         meta = {"source_file": str(path), "row_count": 1, "format": "json"}
         return rows, meta
     records, key, key_path = _find_records_info(obj)
+    rows = _normalize_json_rows(records)
     wrapper_meta = _copy_without_path(obj, key_path) if key_path else dict(obj)
     wrapper_meta.update({
         "source_file": str(path),
-        "row_count": len(records),
+        "row_count": len(rows),
         "format": "json",
         "records_key": ".".join(str(part) for part in key_path) if key_path else "(none)",
     })
-    return records, wrapper_meta
+    return rows, wrapper_meta
+
+
+def _normalize_json_rows(records):
+    return [row if isinstance(row, dict) else {"value": row} for row in records]
 
 
 def _find_records(obj):
