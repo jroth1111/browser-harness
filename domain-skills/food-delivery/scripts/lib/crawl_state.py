@@ -14,6 +14,7 @@ class CrawlState:
         self._occurrences = {}
         self._records = []
         self._dup_attempts = 0
+        self._missing_key = 0
         self._blocked = []
         self._scope_totals = {}
         self._marginal = deque(maxlen=marginal_window)
@@ -21,6 +22,7 @@ class CrawlState:
     def add(self, record):
         key = record.get(self.key_field)
         if key is None:
+            self._missing_key += 1
             return False
         if key in self._occurrences:
             self._occurrences[key] += 1
@@ -57,10 +59,22 @@ class CrawlState:
         return {
             "records": len(self._records),
             "deduped": self._dup_attempts,
+            "missing_key": self._missing_key,
             "blocked": len(self._blocked),
             "scope_totals": dict(self._scope_totals),
             "saturated": self.saturation_reached(),
             "estimated_unseen": self.estimated_unseen(),
+        }
+
+    def receipt(self, source_context=None, safety=None):
+        safety_summary = safety.summary() if safety is not None else None
+        return {
+            "key_field": self.key_field,
+            "source_context": dict(source_context or {}),
+            "summary": self.summary(),
+            "marginal": list(self._marginal),
+            "blocked_sample": self._blocked[:5],
+            "safety": safety_summary,
         }
 
     def save(self, path):
@@ -70,6 +84,7 @@ class CrawlState:
             "occurrences": self._occurrences,
             "records": self._records,
             "dup_attempts": self._dup_attempts,
+            "missing_key": self._missing_key,
             "blocked": self._blocked,
             "scope_totals": self._scope_totals,
             "marginal": list(self._marginal),
@@ -85,6 +100,7 @@ class CrawlState:
         cs._occurrences = data.get("occurrences", {})
         cs._records = data.get("records", [])
         cs._dup_attempts = data.get("dup_attempts", 0)
+        cs._missing_key = data.get("missing_key", 0)
         cs._blocked = data.get("blocked", [])
         cs._scope_totals = data.get("scope_totals", {})
         cs._marginal = deque(data.get("marginal", []), maxlen=cs._marginal.maxlen)
@@ -106,7 +122,7 @@ class CrawlState:
         for field, expected_type in expected_shapes.items():
             if field in data and not isinstance(data[field], expected_type):
                 raise ValueError(f"{path}: crawl checkpoint field '{field}' must be {expected_type.__name__}")
-        for field in ("dup_attempts", "marginal_window"):
+        for field in ("dup_attempts", "missing_key", "marginal_window"):
             if field in data and (isinstance(data[field], bool) or not isinstance(data[field], int)):
                 raise ValueError(f"{path}: crawl checkpoint field '{field}' must be int")
 

@@ -33,3 +33,18 @@ def test_standalone_crawl_state_load_rejects_boolean_integer_fields(tmp_path):
 
     with pytest.raises(ValueError, match="marginal_window.*int"):
         module.CrawlState.load(path)
+
+
+def test_standalone_crawl_state_reports_missing_keys_in_receipts_and_checkpoints(tmp_path):
+    module = load_module()
+    state = module.CrawlState("store_id")
+
+    assert state.add({"name": "missing id"}) is False
+    receipt = state.receipt(source_context={"domain": "food"}, safety=None)
+    assert receipt["summary"]["missing_key"] == 1
+    assert receipt["source_context"] == {"domain": "food"}
+
+    path = tmp_path / "checkpoint.json"
+    state.save(path)
+    restored = module.CrawlState.load(path)
+    assert restored.summary()["missing_key"] == 1
