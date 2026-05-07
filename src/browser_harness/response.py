@@ -4,6 +4,15 @@ import json
 import re
 
 _MAX_RESPONSE_CHARS = 2 * 1024 * 1024  # 2MB
+_SCRIPT_RE = re.compile(r"<script\b(?P<attrs>[^>]*)>(?P<body>.*?)</script>", re.DOTALL | re.IGNORECASE)
+
+
+def _script_attr(attrs, name):
+    pattern = rf"""\b{re.escape(name)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))"""
+    match = re.search(pattern, attrs, re.IGNORECASE)
+    if not match:
+        return None
+    return next(group for group in match.groups() if group is not None)
 
 
 class Response:
@@ -82,18 +91,18 @@ class Response:
 
     def next_data(self):
         """Extract __NEXT_DATA__ JSON from Next.js pages."""
-        m = re.search(
-            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
-            self.html, re.DOTALL,
-        )
-        return json.loads(m.group(1)) if m else None
+        for match in _SCRIPT_RE.finditer(self.html):
+            if _script_attr(match.group("attrs"), "id") == "__NEXT_DATA__":
+                return json.loads(match.group("body"))
+        return None
 
     def json_ld(self, schema_type=None):
         """Extract application/ld+json blocks. Optionally filter by @type."""
-        blocks = re.findall(
-            r'<script type="application/ld\+json">(.*?)</script>',
-            self.html, re.DOTALL,
-        )
+        blocks = [
+            match.group("body")
+            for match in _SCRIPT_RE.finditer(self.html)
+            if (_script_attr(match.group("attrs"), "type") or "").lower() == "application/ld+json"
+        ]
         results = []
         for b in blocks:
             try:

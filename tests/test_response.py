@@ -71,6 +71,15 @@ def test_next_data_extracts_json():
     assert r.next_data() == {"props": {"pageProps": {"items": [1, 2, 3]}}}
 
 
+def test_next_data_handles_flexible_script_attributes():
+    html = (
+        "<html><script nonce='abc' type='application/json' "
+        "id='__NEXT_DATA__'>{\"props\":{\"pageProps\":{\"ok\":true}}}</script></html>"
+    )
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert r.next_data() == {"props": {"pageProps": {"ok": True}}}
+
+
 def test_next_data_returns_none_when_absent():
     r = Response(html="<p>no next data</p>", text="x", url="https://x.com",
                  status=200, source="http")
@@ -83,6 +92,12 @@ def test_json_ld_extracts_blocks():
     results = r.json_ld()
     assert len(results) == 1
     assert results[0]["name"] == "Widget"
+
+
+def test_json_ld_handles_flexible_script_attributes():
+    html = "<script nonce='abc' data-rh='true' type='application/ld+json'>{\"@type\":\"Product\",\"name\":\"Widget\"}</script>"
+    r = Response(html=html, text="", url="https://x.com", status=200, source="http")
+    assert r.json_ld("Product")[0]["name"] == "Widget"
 
 
 def test_json_ld_filters_by_type():
