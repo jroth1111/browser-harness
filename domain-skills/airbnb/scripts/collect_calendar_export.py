@@ -243,6 +243,13 @@ def build_collection(text, *, listing_id, observed_at, source, include_raw_text=
     return events, snapshots
 
 
+def safe_int(value, default=0):
+    try:
+        return int(value if value not in (None, "") else default)
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def latest_prior_event_count(listing_id):
     latest = None
     for path in sorted(OUTPUT_PATH.glob("*.json")):
@@ -254,7 +261,7 @@ def latest_prior_event_count(listing_id):
             continue
         if latest is None or str(payload.get("observed_at") or "") > str(latest.get("observed_at") or ""):
             latest = payload
-    return int((latest or {}).get("event_count") or 0)
+    return safe_int((latest or {}).get("event_count"), 0)
 
 
 def write_csv(path, rows, fieldnames):
