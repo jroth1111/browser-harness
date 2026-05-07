@@ -658,3 +658,22 @@ def test_competitor_score_skips_malformed_numeric_fields():
     )
 
     assert score == 1042
+
+
+def test_competitor_score_skips_boolean_numeric_fields():
+    module = load_competitors_module()
+
+    score = module.score_comp(
+        {"location_label": "Melbourne, Victoria", "bedrooms": True, "bathrooms": 1, "beds": 2},
+        {
+            "visible_location_label": "Apartment in Melbourne",
+            "visible_price_total": "$500",
+            "visible_rating": "not-a-rating",
+            "bedrooms": 2,
+            "bathrooms": True,
+            "beds": 2,
+        },
+        result_position=1,
+    )
+
+    assert score == 1042

@@ -624,6 +624,8 @@ def record_search_surface_capabilities(records, resource_urls, source_url, searc
 
 def score_comp(target, card, result_position):
     def numeric(value):
+        if isinstance(value, bool):
+            return None
         try:
             return float(value)
         except (TypeError, ValueError):
