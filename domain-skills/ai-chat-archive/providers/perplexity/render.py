@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.render_safety import dict_items, sorted_messages
+
 
 def render_perplexity_markdown(normalized: dict[str, Any]) -> str:
     title = normalized.get("title") or "Untitled"
@@ -12,7 +14,7 @@ def render_perplexity_markdown(normalized: dict[str, Any]) -> str:
         parts.append(f"Source: {canonical_url}")
     parts.append("")
 
-    for msg in sorted(normalized.get("messages", []), key=lambda m: m.get("ordinal", 0)):
+    for msg in sorted_messages(normalized.get("messages")):
         role = msg.get("role", "unknown")
         ordinal = msg.get("ordinal", 0)
         meta = msg.get("metadata") or {}
@@ -35,7 +37,7 @@ def render_perplexity_markdown(normalized: dict[str, Any]) -> str:
         parts.append("")
         parts.append("## Sources")
         parts.append("")
-        for c in citations:
+        for c in dict_items(citations):
             label = c.get("label") or c.get("url", "")
             url = c.get("url", "")
             if url:

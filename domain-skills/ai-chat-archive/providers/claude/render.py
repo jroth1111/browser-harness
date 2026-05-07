@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.render_safety import dict_items, sorted_messages
+
 
 def render_claude_markdown(normalized: dict[str, Any]) -> str:
     title = normalized.get("title") or "Untitled"
@@ -14,7 +16,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
         parts.append(f"Default model: `{normalized['model']}`")
     parts.append("")
 
-    for msg in sorted(normalized.get("messages", []), key=lambda m: m.get("ordinal", 0)):
+    for msg in sorted_messages(normalized.get("messages")):
         role = msg.get("role", "unknown")
         ordinal = msg.get("ordinal", 0)
         meta = msg.get("metadata") or {}
@@ -34,7 +36,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
             parts.append("")
 
         rich = msg.get("rich_parts") or []
-        for block in rich:
+        for block in dict_items(rich):
             btype = block.get("type")
             if btype == "thinking":
                 t = (block.get("thinking") or block.get("text") or "").strip()
@@ -51,7 +53,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
                 parts.append("_tool result_")
                 parts.append("")
 
-        for ref in msg.get("artifact_refs") or []:
+        for ref in dict_items(msg.get("artifact_refs")):
             parts.append(f"- attachment: `{ref.get('file_uuid', '?')}` ({ref.get('kind')})")
         if msg.get("artifact_refs"):
             parts.append("")
@@ -62,7 +64,7 @@ def render_claude_markdown(normalized: dict[str, Any]) -> str:
         parts.append("")
         parts.append("## Artifacts")
         parts.append("")
-        for art in artifacts:
+        for art in dict_items(artifacts):
             label = art.get("label") or "unnamed"
             atype = art.get("artifact_type") or "unknown"
             byte_length = art.get("byte_length")

@@ -1,5 +1,7 @@
 """Render structured capture data to deterministic Markdown."""
 
+from lib.render_safety import dict_items, sorted_messages
+
 
 def render_thread_markdown(capture: dict) -> str:
     title = capture.get("title") or "Untitled"
@@ -9,7 +11,7 @@ def render_thread_markdown(capture: dict) -> str:
         parts.append(f"Source: {url}")
     parts.append("")
 
-    for msg in sorted(capture.get("messages", []), key=lambda m: m.get("ordinal", 0)):
+    for msg in sorted_messages(capture.get("messages")):
         role = msg.get("role", "unknown")
         content = msg.get("content", "")
         ordinal = msg.get("ordinal", 0)
@@ -28,7 +30,7 @@ def render_thread_markdown(capture: dict) -> str:
         parts.append("")
         parts.append("## Artifacts")
         parts.append("")
-        for art in artifacts:
+        for art in dict_items(artifacts):
             label = art.get("label", "unnamed")
             art_type = art.get("artifact_type", "unknown")
             detail = ""
@@ -59,7 +61,7 @@ def render_thread_markdown(capture: dict) -> str:
         parts.append("")
         parts.append("## Sources")
         parts.append("")
-        for cit in citations:
+        for cit in dict_items(citations):
             label = cit.get("label", "")
             url = cit.get("url", "")
             if url:

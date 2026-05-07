@@ -15,6 +15,11 @@ from lib.archive_db import (
 )
 from lib.render import render_thread_markdown
 from lib.chatgpt_http import ChatGPTHTTPAPI
+from providers.chatgpt.render import render_chatgpt_markdown
+from providers.claude.render import render_claude_markdown
+from providers.gemini.render import render_gemini_markdown
+from providers.grok.render import render_grok_markdown
+from providers.perplexity.render import render_perplexity_markdown
 
 
 def _fresh_db():
@@ -370,6 +375,44 @@ def test_render_includes_artifacts_and_citations():
     assert "report.pdf" in md
     assert "deep_research_report" in md
     assert "[Wikipedia](https://wikipedia.org)" in md
+
+
+def test_archive_renderers_ignore_malformed_collection_rows():
+    capture = {
+        "title": "Malformed",
+        "messages": ["bad-message", {"role": "user", "ordinal": 2, "content": "Hello"}],
+        "artifacts": ["bad-artifact", {"label": "report.pdf", "artifact_type": "file"}],
+        "citations": ["bad-citation", {"label": "Source", "url": "https://example.com"}],
+    }
+    md = render_thread_markdown(capture)
+    assert "Hello" in md
+    assert "report.pdf" in md
+    assert "[Source](https://example.com)" in md
+
+    normalized = {
+        **capture,
+        "messages": [
+            "bad-message",
+            {
+                "role": "assistant",
+                "ordinal": 1,
+                "content": "Provider hello",
+                "artifact_refs": ["bad-ref", {"url": "https://example.com/image.png", "file_uuid": "file-1"}],
+                "rich_parts": ["bad-rich-part", {"type": "tool_use", "name": "search"}],
+            },
+        ],
+    }
+    renderers = [
+        render_chatgpt_markdown,
+        render_claude_markdown,
+        render_gemini_markdown,
+        render_grok_markdown,
+        render_perplexity_markdown,
+    ]
+    for renderer in renderers:
+        provider_md = renderer(normalized)
+        assert "Provider hello" in provider_md
+        assert "bad-message" not in provider_md
 
 
 def test_render_artifact_status():

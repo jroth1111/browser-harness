@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.render_safety import dict_items, sorted_messages
+
 
 def render_chatgpt_markdown(normalized: dict[str, Any]) -> str:
     title = normalized.get("title") or "Untitled"
@@ -19,7 +21,7 @@ def render_chatgpt_markdown(normalized: dict[str, Any]) -> str:
         parts.append(f"Default model: `{normalized['model_slug']}`")
     parts.append("")
 
-    for msg in sorted(normalized.get("messages", []), key=lambda m: m.get("ordinal", 0)):
+    for msg in sorted_messages(normalized.get("messages")):
         role = msg.get("role", "unknown")
         ordinal = msg.get("ordinal", 0)
         meta = msg.get("metadata") or {}
@@ -42,7 +44,7 @@ def render_chatgpt_markdown(normalized: dict[str, Any]) -> str:
             parts.append(content)
             parts.append("")
 
-        for ref in msg.get("artifact_refs") or []:
+        for ref in dict_items(msg.get("artifact_refs")):
             parts.append(f"- artifact ref: `{_short_ref(ref)}`")
         if msg.get("artifact_refs"):
             parts.append("")
@@ -53,7 +55,7 @@ def render_chatgpt_markdown(normalized: dict[str, Any]) -> str:
         parts.append("")
         parts.append("## Artifacts")
         parts.append("")
-        for art in artifacts:
+        for art in dict_items(artifacts):
             label = art.get("label") or "unnamed"
             atype = art.get("artifact_type") or "unknown"
             detail = ""
