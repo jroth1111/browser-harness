@@ -32,10 +32,25 @@ CSV_FIELDNAMES = [
 def load_json(path):
     if not path or not Path(path).exists():
         return None
-    data = json.loads(Path(path).read_text())
-    if isinstance(data, dict):
-        return data.get("restaurants") or data.get("menu_items") or data
-    return data
+    return json.loads(Path(path).read_text())
+
+
+def load_records(path, field_name):
+    data = load_json(path)
+    if data is None:
+        return []
+    if isinstance(data, list):
+        records = data
+    elif isinstance(data, dict):
+        records = data.get(field_name, [])
+        if not isinstance(records, list):
+            raise ValueError(f"{path}: field '{field_name}' must be an array")
+    else:
+        raise ValueError(f"{path}: input must be an array or an object with '{field_name}'")
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError(f"{path}: '{field_name}' records must be objects")
+    return records
 
 
 def fill_rates(records, fields):
@@ -142,20 +157,12 @@ def main():
     # Load all restaurant files
     all_restaurants = []
     for path in (args.restaurants or []):
-        data = load_json(path)
-        if isinstance(data, list):
-            all_restaurants.extend(data)
-        elif isinstance(data, dict) and "restaurants" in data:
-            all_restaurants.extend(data["restaurants"])
+        all_restaurants.extend(load_records(path, "restaurants"))
 
     # Load all menu files
     all_menus = []
     for path in (args.menus or []):
-        data = load_json(path)
-        if isinstance(data, list):
-            all_menus.extend(data)
-        elif isinstance(data, dict) and "menu_items" in data:
-            all_menus.extend(data["menu_items"])
+        all_menus.extend(load_records(path, "menu_items"))
 
     print(f"Loaded {len(all_restaurants)} restaurants, {len(all_menus)} menu items")
 

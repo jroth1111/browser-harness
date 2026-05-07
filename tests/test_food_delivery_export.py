@@ -1,6 +1,9 @@
 import csv
 import importlib.util
+import json
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,3 +65,31 @@ def test_export_csv_uses_stable_header_for_joined_rows(tmp_path):
         exported_rows = list(reader)
     assert exported_rows[0]["store_url"] == "https://example.test/store-1"
     assert exported_rows[0]["item_name"] == "Toast"
+
+
+def test_load_records_accepts_top_level_and_wrapped_arrays(tmp_path):
+    module = load_module()
+    top_level = tmp_path / "restaurants.json"
+    wrapped = tmp_path / "menus.json"
+    top_level.write_text(json.dumps([{"store_id": "1"}]), encoding="utf-8")
+    wrapped.write_text(json.dumps({"menu_items": [{"item_name": "Toast"}]}), encoding="utf-8")
+
+    assert module.load_records(top_level, "restaurants") == [{"store_id": "1"}]
+    assert module.load_records(wrapped, "menu_items") == [{"item_name": "Toast"}]
+
+
+def test_load_records_rejects_invalid_shapes(tmp_path):
+    module = load_module()
+    scalar = tmp_path / "scalar.json"
+    non_array_field = tmp_path / "non-array.json"
+    non_object_row = tmp_path / "non-object-row.json"
+    scalar.write_text(json.dumps("not records"), encoding="utf-8")
+    non_array_field.write_text(json.dumps({"restaurants": {"store_id": "1"}}), encoding="utf-8")
+    non_object_row.write_text(json.dumps({"restaurants": ["not a row"]}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="input must be an array"):
+        module.load_records(scalar, "restaurants")
+    with pytest.raises(ValueError, match="must be an array"):
+        module.load_records(non_array_field, "restaurants")
+    with pytest.raises(ValueError, match="records must be objects"):
+        module.load_records(non_object_row, "restaurants")
