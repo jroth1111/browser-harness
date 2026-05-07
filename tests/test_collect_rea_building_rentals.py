@@ -58,6 +58,22 @@ def test_building_targets_normalize_named_building_prefixes():
     assert targets[0]["building_key"] == "69 palmer st|richmond|VIC|3121"
 
 
+def test_live_listing_file_rejects_malformed_counts(tmp_path):
+    module = load_module()
+    path = tmp_path / "airbnb-live-listings-bad-counts.json"
+    path.write_text(
+        """{
+          "records": [{"status": "ACTIVE"}],
+          "active_count": "not-a-count",
+          "status_counts": {"ACTIVE": "not-a-count"},
+          "field_validation": {"all_active_detail_pages_ok": true}
+        }""",
+        encoding="utf-8",
+    )
+
+    assert module.is_complete_live_listing_file(path) is False
+
+
 def test_building_watchlist_targets_add_new_buildings_and_merge_existing():
     module = load_module()
     airbnb_targets = module.building_targets_from_airbnb_records(

@@ -500,12 +500,22 @@ def is_complete_live_listing_file(path: Path) -> bool:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return False
-    active_status_count = int((data.get("status_counts") or {}).get("ACTIVE") or 0)
+
+    def safe_int(value) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    status_counts = data.get("status_counts")
+    if not isinstance(status_counts, dict):
+        status_counts = {}
+    active_status_count = safe_int(status_counts.get("ACTIVE"))
     records = data.get("records") or []
     validation = data.get("field_validation") or {}
     return (
         bool(records)
-        and len(records) == int(data.get("active_count") or 0)
+        and len(records) == safe_int(data.get("active_count"))
         and len(records) == active_status_count
         and validation.get("all_active_detail_pages_ok") is True
         and not data.get("partial_run")
