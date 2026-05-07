@@ -177,6 +177,10 @@ def _text_value(value):
     return "" if value is None else str(value)
 
 
+def _string_field(value, default=""):
+    return value if isinstance(value, str) else default
+
+
 def _int_count(value):
     try:
         return int(value or 0)
@@ -2289,10 +2293,10 @@ class NetworkCapture:
                                    redir.get("mimeType", ""))
                 request = p.get("request") if isinstance(p.get("request"), dict) else {}
                 self._requests[rid] = {
-                    "url": request.get("url", ""),
-                    "method": request.get("method", "GET"),
+                    "url": _text_value(request.get("url", "")),
+                    "method": _string_field(request.get("method"), "GET"),
                     "headers": request.get("headers") if isinstance(request.get("headers"), dict) else {},
-                    "resource_type": p.get("type", ""),
+                    "resource_type": _string_field(p.get("type")),
                 }
                 n += 1
             elif m == "Network.responseReceived":

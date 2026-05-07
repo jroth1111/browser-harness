@@ -2009,6 +2009,22 @@ def test_network_capture_responses_for_filters():
     assert api[0]["url"] == "https://api.example.com/users"
 
 
+def test_network_capture_responses_for_tolerates_scalar_urls():
+    events = [
+        {"method": "Network.requestWillBeSent", "params": {
+            "requestId": "r1", "request": {"url": 12345, "method": "GET", "headers": {}}, "type": "XHR",
+        }},
+        {"method": "Network.responseReceived", "params": {
+            "requestId": "r1", "response": {"status": 200, "headers": {}, "mimeType": "json"},
+        }},
+    ]
+    with patch("browser_harness.helpers.drain_events", return_value=events):
+        cap = helpers.NetworkCapture()
+        cap.poll()
+
+    assert cap.responses_for("12345")[0]["url"] == "12345"
+
+
 def test_network_capture_handles_redirect():
     events = [
         {"method": "Network.requestWillBeSent", "params": {
