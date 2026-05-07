@@ -60,11 +60,16 @@ def list_active_browsers() -> list[dict]:
     out, page = [], 1
     while True:
         listing = _call("GET", f"/browsers?pageSize=100&pageNumber={page}")
+        if not isinstance(listing, dict):
+            raise RuntimeError(f"GET /browsers returned invalid response shape: expected object, got {type(listing).__name__}")
         items = listing.get("items") or []
+        if not isinstance(items, list):
+            raise RuntimeError("GET /browsers response field 'items' must be a list")
         if not items:
             break
-        out.extend(b for b in items if not b.get("finishedAt"))
-        if len(out) + sum(1 for b in items if b.get("finishedAt")) >= listing.get("totalItems", len(items)):
+        well_formed = [b for b in items if isinstance(b, dict) and b.get("id") and b.get("startedAt")]
+        out.extend(b for b in well_formed if not b.get("finishedAt"))
+        if len(out) + sum(1 for b in well_formed if b.get("finishedAt")) >= listing.get("totalItems", len(items)):
             break
         page += 1
     return out
