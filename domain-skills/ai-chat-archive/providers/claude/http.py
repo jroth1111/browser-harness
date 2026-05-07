@@ -28,6 +28,10 @@ from typing import Any
 CLAUDE_BASE = "https://claude.ai"
 
 
+def _dict_rows(rows: Any) -> list[dict]:
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
 class ClaudeHTTPAPI:
     def __init__(self, cookies_by_domain: dict[str, dict[str, str]]):
         self._cookies = cookies_by_domain
@@ -164,16 +168,14 @@ class ClaudeHTTPAPI:
         so artifact extraction can re-walk later.
         """
         msgs: list[dict] = []
-        chat = detail.get("chat_messages") or []
+        chat = _dict_rows(detail.get("chat_messages"))
         for i, m in enumerate(chat, start=1):
             sender = m.get("sender", "")
             role = "user" if sender == "human" else "assistant" if sender == "assistant" else sender
-            blocks = m.get("content") or []
+            blocks = _dict_rows(m.get("content"))
             text_parts: list[str] = []
             rich: list[dict] = []
             for b in blocks:
-                if not isinstance(b, dict):
-                    continue
                 btype = b.get("type", "")
                 if btype == "text":
                     t = b.get("text") or ""
@@ -185,14 +187,14 @@ class ClaudeHTTPAPI:
             if not text_parts and m.get("text"):
                 text_parts.append(m["text"])
 
-            attachments = m.get("attachments") or []
-            files = m.get("files_v2") or m.get("files") or []
+            attachments = _dict_rows(m.get("attachments"))
+            files = _dict_rows(m.get("files_v2") or m.get("files"))
             artifact_refs = []
             for a in attachments:
-                if isinstance(a, dict) and a.get("file_uuid"):
+                if a.get("file_uuid"):
                     artifact_refs.append({"file_uuid": a["file_uuid"], "kind": "attachment"})
             for f in files:
-                if isinstance(f, dict) and f.get("file_uuid"):
+                if f.get("file_uuid"):
                     artifact_refs.append({"file_uuid": f["file_uuid"], "kind": "file"})
 
             msgs.append({
@@ -217,11 +219,9 @@ class ClaudeHTTPAPI:
     def extract_artifacts(detail: dict) -> list[dict]:
         """Pull artifact metadata: attachments, files, and rendered Artifact panels."""
         artifacts: list[dict] = []
-        for m in detail.get("chat_messages") or []:
+        for m in _dict_rows(detail.get("chat_messages")):
             mid = m.get("uuid")
-            for a in m.get("attachments") or []:
-                if not isinstance(a, dict):
-                    continue
+            for a in _dict_rows(m.get("attachments")):
                 artifacts.append({
                     "artifact_type": "attachment",
                     "provider_artifact_id": a.get("file_uuid") or a.get("id"),
@@ -231,9 +231,7 @@ class ClaudeHTTPAPI:
                     "mime_type": a.get("file_type"),
                     "rich_part": a,
                 })
-            for f in (m.get("files_v2") or m.get("files") or []):
-                if not isinstance(f, dict):
-                    continue
+            for f in _dict_rows(m.get("files_v2") or m.get("files")):
                 artifacts.append({
                     "artifact_type": "file",
                     "provider_artifact_id": f.get("file_uuid") or f.get("uuid"),
@@ -245,11 +243,11 @@ class ClaudeHTTPAPI:
                 })
             # Claude Artifacts (the named code/text panels) appear as tool_use
             # blocks with name='artifacts' or as separate "artifact" entries.
-            for b in (m.get("content") or []):
-                if not isinstance(b, dict):
-                    continue
+            for b in _dict_rows(m.get("content")):
                 if b.get("type") == "tool_use" and b.get("name") in ("artifacts", "create_artifact"):
                     inp = b.get("input") or {}
+                    if not isinstance(inp, dict):
+                        inp = {}
                     artifacts.append({
                         "artifact_type": "claude_artifact",
                         "provider_artifact_id": inp.get("id") or b.get("id"),
