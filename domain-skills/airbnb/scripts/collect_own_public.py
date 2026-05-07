@@ -559,8 +559,9 @@ def listing_url_with_context(room_url, checkin=None, nights=None, adults=None):
 def page_failure(status):
     title = (status.get("title") or "").lower()
     text = (status.get("text") or "").lower()
-    if status.get("block", {}).get("blocked"):
-        return status.get("block", {}).get("kind") or "blocked"
+    block = status.get("block") if isinstance(status.get("block"), dict) else {}
+    if block.get("blocked"):
+        return block.get("kind") or "blocked"
     if "429" in title or "too many requests" in text:
         return "http_429_or_too_many_requests"
     if "503 service unavailable" in title or "error code: 503" in text or "stay tuned" in text:

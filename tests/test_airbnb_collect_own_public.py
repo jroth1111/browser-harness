@@ -21,6 +21,16 @@ def load_competitors_module():
     return load_module("domain-skills/airbnb/scripts/collect_competitors.py", "airbnb_collect_competitors")
 
 
+def test_public_page_failure_tolerates_malformed_block_metadata():
+    own = load_own_public_module()
+    competitors = load_competitors_module()
+
+    status = {"title": "Search results", "text": "Normal page", "block": "not-an-object"}
+
+    assert own.page_failure(status) is None
+    assert competitors.page_failure(status) is None
+
+
 def test_parse_listing_text_extracts_review_distribution_and_categories():
     module = load_own_public_module()
     parsed = module.parse_listing_text(
