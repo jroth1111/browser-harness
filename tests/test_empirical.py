@@ -359,6 +359,30 @@ class TestDomainSkillsEmpirical:
         assert router.risk_for_action("airbnb", "host_listing_inventory") == "authenticated_read"
         assert router.risk_for_action("airbnb", "nonexistent_action") == "low_risk_write"
 
+    def test_malformed_manifest_returns_none(self, tmp_path):
+        """Manifest with invalid risk_max returns None, not ValueError.
+
+        Before the fix, a typo in risk_max or transport would crash
+        load_manifest with ValueError instead of returning None.
+        """
+        bad_manifest = tmp_path / "manifest.json"
+        bad_manifest.write_text(json.dumps({
+            "version": "1.0.0",
+            "route_rules": [{"origin": "https://example.com", "risk_max": "typo"}],
+        }))
+        router = SkillRouter()
+        assert router.load_manifest("broken_skill", bad_manifest) is None
+
+    def test_malformed_transport_returns_none(self, tmp_path):
+        """Manifest with invalid transport returns None."""
+        bad_manifest = tmp_path / "manifest.json"
+        bad_manifest.write_text(json.dumps({
+            "version": "1.0.0",
+            "route_rules": [{"origin": "https://example.com", "transport": "teleport"}],
+        }))
+        router = SkillRouter()
+        assert router.load_manifest("broken_transport", bad_manifest) is None
+
 
 # ===========================================================================
 # 3. Action policy — live classification

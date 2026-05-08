@@ -81,29 +81,32 @@ class SkillRouter:
         except (json.JSONDecodeError, OSError):
             return None
 
-        rules = []
-        for r in data.get("route_rules", []):
-            rules.append(RouteRule(
-                origin=r.get("origin", ""),
-                path_pattern=r.get("path_pattern", ".*"),
-                allowed_methods=r.get("allowed_methods", ["GET"]),
-                risk_max=RiskLevel(r.get("risk_max", "public_read")),
-                transport_preference=TransportType(r.get("transport", "public_http")),
-                auth_required=r.get("auth_required", False),
-                source="skill_manifest",
-            ))
+        try:
+            rules = []
+            for r in data.get("route_rules", []):
+                rules.append(RouteRule(
+                    origin=r.get("origin", ""),
+                    path_pattern=r.get("path_pattern", ".*"),
+                    allowed_methods=r.get("allowed_methods", ["GET"]),
+                    risk_max=RiskLevel(r.get("risk_max", "public_read")),
+                    transport_preference=TransportType(r.get("transport", "public_http")),
+                    auth_required=r.get("auth_required", False),
+                    source="skill_manifest",
+                ))
 
-        manifest = SkillManifest(
-            name=skill_name,
-            version=data.get("version", "0.1.0"),
-            domain=data.get("domain", ""),
-            description=data.get("description", ""),
-            surfaces=data.get("surfaces", []),
-            route_rules=rules,
-            risk_policies=data.get("risk_policies", {}),
-            extraction_fields=data.get("extraction_fields", []),
-            handoff_triggers=data.get("handoff_triggers", []),
-            forbidden_patterns=data.get("forbidden_patterns", []),
-        )
-        self._manifests[skill_name] = manifest
-        return manifest
+            manifest = SkillManifest(
+                name=skill_name,
+                version=data.get("version", "0.1.0"),
+                domain=data.get("domain", ""),
+                description=data.get("description", ""),
+                surfaces=data.get("surfaces", []),
+                route_rules=rules,
+                risk_policies=data.get("risk_policies", {}),
+                extraction_fields=data.get("extraction_fields", []),
+                handoff_triggers=data.get("handoff_triggers", []),
+                forbidden_patterns=data.get("forbidden_patterns", []),
+            )
+            self._manifests[skill_name] = manifest
+            return manifest
+        except (ValueError, TypeError, KeyError):
+            return None
