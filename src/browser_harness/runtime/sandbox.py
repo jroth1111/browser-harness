@@ -48,6 +48,21 @@ WORKER_ALLOWLIST = frozenset({
     "browser_harness.authority.action_policy",
 })
 
+# Private stdlib modules that provide dangerous capabilities: raw network
+# I/O, FFI (arbitrary C function calls), or process spawning.  These are
+# blocked even though the _-prefix convention allows other private stdlib
+# internals through.  This is an explicit override — the default for _
+# modules is permissive because allowlisted modules lazily import private
+# C extensions (e.g. hashlib -> _hashlib).  Adding an entry here is a
+# security decision.
+DANGEROUS_PRIVATE_MODULES = frozenset({
+    "_socket",      # raw socket: network I/O
+    "_ssl",         # SSL/TLS: encrypted network I/O
+    "_ctypes",      # FFI: call any C function
+    "_multiprocessing",  # shared memory / process spawning
+    "_overlapped",  # Windows async I/O
+})
+
 # Builtins removed from the worker namespace.  exec/eval/compile/__import__
 # would bypass the audit hook by routing imports through other paths.
 RESTRICTED_BUILTINS = frozenset({
@@ -87,11 +102,15 @@ def install_audit_hook() -> None:
         module = args[0] if args else ""
         if not module:
             return
-        # Allow private/dunder modules — these are stdlib internals
-        # (e.g. _thread, _weakrefset, __future__) used by allowlisted code.
-        if module.startswith("_"):
-            return
         top = module.split(".")[0]
+        # Private/dunder modules are stdlib internals used by allowlisted
+        # code (e.g. _json pulled in by json, _hashlib by hashlib) — but
+        # DANGEROUS_PRIVATE_MODULES are explicitly blocked because they
+        # provide raw network/FFI/process capabilities.
+        if top.startswith("_"):
+            if top in DANGEROUS_PRIVATE_MODULES:
+                raise ImportError(f"import denied by sandbox: {module}")
+            return
         if top in STDLIB_ALLOWLIST:
             return
         if module in _allowed_prefixes:

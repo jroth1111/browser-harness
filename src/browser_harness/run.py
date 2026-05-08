@@ -176,6 +176,9 @@ def _run_handoff(handoff_id: str, session_broker=None) -> None:
     session_ref_id = ref.ref_id if ref else ""
 
     token = broker.complete(handoff_id, session_ref_id=session_ref_id)
+    if not token:
+        print("Handoff expired or not found. Cannot complete.", file=sys.stderr)
+        sys.exit(1)
     print(f"Handoff complete. Resume token signed (nonce={token.nonce}).")
     if session_ref_id:
         print(f"Session ref: {session_ref_id}")

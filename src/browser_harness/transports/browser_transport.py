@@ -66,7 +66,7 @@ class NavigationController:
 
         try:
             result = self._goto_fn(url, **kw)
-            status_code = 200 if result.get("ok", True) else 502
+            status_code = 200 if result.get("ok", False) else 502
             self.budget.record(origin, status=status_code)
 
             # Check for challenge/block

@@ -99,27 +99,20 @@ class HandoffBroker:
         account_id: str = "",
         session_ref_id: str = "",
         ttl: float = 3600.0,
-    ) -> ResumeToken:
+    ) -> ResumeToken | None:
+        request = self.get(handoff_id)
+        if not request:
+            return None
+
         now = time.time()
         token = ResumeToken(
-            origin="",
+            origin=request.origin,
             account_id=account_id,
             session_ref_id=session_ref_id,
             completed_at=now,
             expires_at=now + ttl,
             nonce=uuid.uuid4().hex[:16],
         )
-        # Fill origin from the request
-        request = self.get(handoff_id)
-        if request:
-            token = ResumeToken(
-                origin=request.origin,
-                account_id=account_id,
-                session_ref_id=session_ref_id,
-                completed_at=now,
-                expires_at=now + ttl,
-                nonce=uuid.uuid4().hex[:16],
-            )
 
         sig = self._sign(token)
         token = ResumeToken(

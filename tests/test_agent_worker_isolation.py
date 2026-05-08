@@ -177,6 +177,58 @@ class TestWorkerIsolation:
             f"stderr={result.stderr}"
         )
 
+    def test_worker_audit_hook_blocks_private_socket(self):
+        """Audit hook rejects `import _socket` — raw network access not allowed."""
+        src_dir = str(Path(__file__).resolve().parent.parent / "src")
+        bootstrap = (
+            f"import sys; sys.path.insert(0, {src_dir!r}); "
+            "from browser_harness.runtime.sandbox import install_audit_hook; "
+            "install_audit_hook(); "
+            "import_blocked = False\n"
+            "try:\n"
+            "    import _socket  # noqa: F401\n"
+            "except ImportError as e:\n"
+            "    if 'denied by sandbox' in str(e):\n"
+            "        import_blocked = True\n"
+            "sys.exit(42 if import_blocked else 1)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", bootstrap],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 42, (
+            f"audit hook failed to block _socket; "
+            f"returncode={result.returncode} stderr={result.stderr}"
+        )
+
+    def test_worker_audit_hook_blocks_private_ctypes(self):
+        """Audit hook rejects `import _ctypes` — arbitrary FFI not allowed."""
+        src_dir = str(Path(__file__).resolve().parent.parent / "src")
+        bootstrap = (
+            f"import sys; sys.path.insert(0, {src_dir!r}); "
+            "from browser_harness.runtime.sandbox import install_audit_hook; "
+            "install_audit_hook(); "
+            "import_blocked = False\n"
+            "try:\n"
+            "    import _ctypes  # noqa: F401\n"
+            "except ImportError as e:\n"
+            "    if 'denied by sandbox' in str(e):\n"
+            "        import_blocked = True\n"
+            "sys.exit(42 if import_blocked else 1)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", bootstrap],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 42, (
+            f"audit hook failed to block _ctypes; "
+            f"returncode={result.returncode} stderr={result.stderr}"
+        )
+
     def test_worker_clean_shutdown(self):
         """Worker shuts down cleanly on shutdown frame."""
         proc = _spawn_worker()

@@ -138,12 +138,7 @@ class PolicyEngine:
     def _check_risk(self, request: WebRequest) -> AuthorityDecision:
         risk = request.risk
         action = WebAction(kind="request", risk=risk)
-        decision = self.authorize_action(action)
-
-        if not decision.allowed and decision.status == "allowed":
-            decision.allowed = True
-
-        return decision
+        return self.authorize_action(action)
 
     @staticmethod
     def _transport_order(risk: RiskLevel) -> list[TransportType]:

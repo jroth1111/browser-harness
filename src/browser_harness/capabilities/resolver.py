@@ -49,6 +49,9 @@ class AccessResult:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+_MAX_CACHE_ENTRIES = 256
+
+
 class AccessPlane:
     """The authority-preserving access pipeline.
 
@@ -117,8 +120,10 @@ class AccessPlane:
         # 5. Record budget
         self.budget.record(origin, status=result.status, block=result.block.get("blocked", False))
 
-        # 6. Cache successful results
+        # 6. Cache successful results (bounded — evict oldest when full)
         if result.status == 200 and request.risk == RiskLevel.PUBLIC_READ:
+            if len(self._cache) >= _MAX_CACHE_ENTRIES:
+                self._cache.pop(next(iter(self._cache)))
             self._cache[cache_key] = result
 
         return result
@@ -195,7 +200,7 @@ class AccessPlane:
                     block_state=challenge.status,
                     block=block,
                     reason="blocked",
-                    extra=self._handoff_extra(request, challenge.status),
+                    extra=self._handoff_extra(request, challenge.status, kind.value),
                 )
             return AccessResult(
                 url=request.url,
@@ -240,7 +245,7 @@ class AccessPlane:
                     block_state=challenge.status,
                     block=block,
                     reason="blocked",
-                    extra=self._handoff_extra(request, challenge.status),
+                    extra=self._handoff_extra(request, challenge.status, kind.value),
                 )
             return AccessResult(
                 url=request.url,
@@ -267,18 +272,25 @@ class AccessPlane:
             status = 200 if ok else 502
             challenge_status = ChallengeStatus.OK
 
+            kind = ChallengeKind.UNKNOWN
             if not ok:
+                kind = self._block_kind_to_challenge_kind(block) if block.get("blocked") else ChallengeKind.UNKNOWN
                 detection = ChallengeDetection(
                     found=block.get("blocked", False),
-                    kind=self._block_kind_to_challenge_kind(block) if block.get("blocked") else ChallengeKind.UNKNOWN,
+                    kind=kind,
                     evidence=block.get("evidence", []),
                 )
                 challenge = self.challenge_sm.evaluate(detection)
                 challenge_status = challenge.status
+                # Transport failed without a detected block — the page is
+                # unobservable.  Leaving this as OK causes agent_host to
+                # report status="ok" for a 502 response.
+                if not block.get("blocked"):
+                    challenge_status = ChallengeStatus.UNOBSERVABLE
 
             extra: dict[str, Any] = {}
             if not ok and block.get("blocked"):
-                extra = self._handoff_extra(request, challenge_status)
+                extra = self._handoff_extra(request, challenge_status, kind.value)
 
             return AccessResult(
                 url=result.get("url", request.url),
@@ -320,14 +332,14 @@ class AccessPlane:
                 return kind
         return ChallengeKind.BLOCKED if block.get("blocked") else ChallengeKind.UNKNOWN
 
-    def _handoff_extra(self, request: WebRequest, status: ChallengeStatus) -> dict[str, Any]:
+    def _handoff_extra(self, request: WebRequest, status: ChallengeStatus, challenge_kind: str = "unknown") -> dict[str, Any]:
         if status != ChallengeStatus.NEED_HANDOFF or not self._handoff_broker:
             return {}
         origin = self._origin(request.url)
         handoff = self._handoff_broker.create(
             url=request.url,
             origin=origin,
-            challenge_kind="unknown",
+            challenge_kind=challenge_kind,
         )
         return {"handoff_id": handoff.handoff_id}
 

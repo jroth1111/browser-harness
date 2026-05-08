@@ -1,4 +1,5 @@
 __pycache__/
+loop.md
 *.pyc
 *.log
 .DS_Store

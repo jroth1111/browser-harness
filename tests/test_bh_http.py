@@ -15,7 +15,7 @@ from browser_harness.capabilities.resolver import AccessPlane, AccessResult
 from browser_harness.authority.policy import PolicyEngine
 from browser_harness.authority.challenge import ChallengeStateMachine
 from browser_harness.sessions.broker import SessionBroker
-from browser_harness.scheduler.budgets import BudgetController
+from browser_harness.scheduler.budgets import BudgetController, BudgetConfig
 
 
 # --- bh_http tests ---
@@ -143,6 +143,15 @@ class TestHandoffBroker:
         broker.complete(req.handoff_id)
         assert not path.exists()
 
+    def test_complete_expired_returns_none(self, tmp_path):
+        broker = HandoffBroker(store_dir=tmp_path)
+        req = broker.create("https://example.com/p", "https://example.com", "cloudflare", ttl=-1.0)
+        assert broker.complete(req.handoff_id) is None
+
+    def test_complete_nonexistent_returns_none(self, tmp_path):
+        broker = HandoffBroker(store_dir=tmp_path)
+        assert broker.complete("nonexistent_id") is None
+
     def test_access_plane_produces_handoff_id(self, tmp_path):
         """Blocked fetch with handoff broker returns handoff_id in extra."""
         from browser_harness.authority.handoff import HandoffBroker
@@ -159,6 +168,25 @@ class TestHandoffBroker:
         result = plane.execute(req)
         assert result.block_state == ChallengeStatus.NEED_HANDOFF
         assert result.extra.get("handoff_id")
+
+    def test_access_plane_propagates_challenge_kind(self, tmp_path):
+        """Blocked fetch stores the detected challenge kind, not 'unknown'."""
+        broker = HandoffBroker(store_dir=tmp_path)
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(),
+            challenge_sm=ChallengeStateMachine(),
+            handoff_broker=broker,
+            http_fn=lambda url, **kw: "challenge page",
+            block_detect_fn=lambda **kw: {"blocked": True, "kind": "captcha", "evidence": []},
+        )
+        req = WebRequest(url="https://example.com/protected", risk=RiskLevel.PUBLIC_READ)
+        result = plane.execute(req)
+        handoff_id = result.extra.get("handoff_id")
+        assert handoff_id
+        stored = broker.get(handoff_id)
+        assert stored is not None
+        assert stored.challenge_kind == "captcha"
 
     def test_authenticated_http_blocked_emits_handoff_id(self, tmp_path):
         """When session HTTP returns a Cloudflare-block, AccessPlane emits a handoff_id."""
@@ -220,6 +248,94 @@ class TestHandoffBroker:
         result = plane.execute(req)
         assert result.block_state == ChallengeStatus.NEED_HANDOFF
         assert result.extra.get("handoff_id")
+
+    def test_browser_failure_without_block_reports_unobservable(self, tmp_path):
+        """When browser fails (ok=False) but no block detected, block_state is UNOBSERVABLE.
+
+        Before the fix, block_state was OK, causing agent_host to report
+        status="ok" for a 502 response.
+        """
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(),
+            challenge_sm=ChallengeStateMachine(),
+            browser_fn=lambda url, **kw: {
+                "ok": False,
+                "text": "",
+                "html": "",
+                "url": url,
+                "reason": "timeout",
+            },
+        )
+        req = WebRequest(
+            url="https://example.com/timeout-page",
+            risk=RiskLevel.AUTHENTICATED_READ,
+        )
+        result = plane.execute(req)
+        assert result.status == 502
+        assert result.block_state == ChallengeStatus.UNOBSERVABLE
+        assert result.reason == "timeout"
+
+
+class TestAccessPlaneCache:
+    """Verify cache behavior: hits, misses, and bounded eviction."""
+
+    def test_cache_returns_same_result_on_hit(self):
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+            http_fn=lambda url, **kw: f"content from {url}",
+        )
+        req1 = WebRequest(url="https://example.com/page", risk=RiskLevel.PUBLIC_READ)
+        result1 = plane.execute(req1)
+        assert result1.status == 200
+
+        # Second request should return cached result (same object)
+        req2 = WebRequest(url="https://example.com/page", risk=RiskLevel.PUBLIC_READ)
+        result2 = plane.execute(req2)
+        assert result2 is result1
+
+    def test_cache_evicts_oldest_when_full(self):
+        from browser_harness.capabilities.resolver import _MAX_CACHE_ENTRIES
+        call_count = 0
+
+        def counting_http(url, **kw):
+            nonlocal call_count
+            call_count += 1
+            return f"response {call_count}"
+
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(BudgetConfig(
+                request_interval_seconds=0,
+                max_requests_per_origin=_MAX_CACHE_ENTRIES + 20,
+                max_total_requests=_MAX_CACHE_ENTRIES + 20,
+            )),
+            http_fn=counting_http,
+        )
+        # Fill cache past capacity to trigger eviction of page0
+        for i in range(_MAX_CACHE_ENTRIES + 1):
+            req = WebRequest(url=f"https://example.com/page{i}", risk=RiskLevel.PUBLIC_READ)
+            plane.execute(req)
+        assert call_count == _MAX_CACHE_ENTRIES + 1
+
+        # page0 was evicted — re-requesting must call the transport again
+        req_again = WebRequest(url="https://example.com/page0", risk=RiskLevel.PUBLIC_READ)
+        plane.execute(req_again)
+        assert call_count == _MAX_CACHE_ENTRIES + 2
+
+    def test_cache_skips_non_public_read(self):
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+            http_fn=lambda url, **kw: "auth content",
+        )
+        req1 = WebRequest(url="https://example.com/api", risk=RiskLevel.AUTHENTICATED_READ)
+        result1 = plane.execute(req1)
+        assert result1.status == 200
+
+        # Authenticated reads should NOT be cached
+        assert len(plane._cache) == 0
 
 
 class TestDefaultPlane:
