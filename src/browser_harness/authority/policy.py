@@ -144,20 +144,14 @@ class PolicyEngine:
     def _transport_order(risk: RiskLevel) -> list[TransportType]:
         """Return allowed transport types in preference order for a risk level."""
         cache_up = [
-            TransportType.CACHE,
-            TransportType.EXISTING_CAPABILITY,
-            TransportType.OFFICIAL_API,
             TransportType.PUBLIC_HTTP,
         ]
         authed = [
             TransportType.AUTHENTICATED_HTTP,
             TransportType.BROWSER_BOOTSTRAP,
-            TransportType.BROWSER_DERIVED_LEASE,
             TransportType.FULL_BROWSER,
         ]
 
         if risk == RiskLevel.PUBLIC_READ:
             return cache_up
-        if risk == RiskLevel.AUTHENTICATED_READ:
-            return cache_up + authed
         return cache_up + authed
