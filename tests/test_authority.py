@@ -876,3 +876,203 @@ class TestHandoffCLI:
             _run_handoff("nonexistent123")
 
 
+# --- 19. Handoff session capture (Step 6) ---
+
+class TestHandoffSessionCapture:
+    """Prove _run_handoff captures cookies + storage and binds the
+    SecretRef to the signed ResumeToken."""
+
+    def _patch_handoff_store(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            "browser_harness.authority.handoff.HandoffBroker.__init__",
+            lambda self, store_dir=None: (
+                setattr(self, "_store_dir", tmp_path),
+                tmp_path.mkdir(parents=True, exist_ok=True),
+            )[0],
+        )
+
+    def test_capture_populates_session_ref_id(self, tmp_path, monkeypatch, capsys):
+        from browser_harness import helpers
+        from browser_harness.authority.handoff import HandoffBroker
+        from browser_harness.run import _run_handoff
+        from browser_harness.sessions.broker import SessionBroker
+
+        # Real handoff request stored in tmp_path
+        broker = HandoffBroker(store_dir=tmp_path)
+        request = broker.create(
+            url="https://example.com/protected",
+            origin="https://example.com",
+            challenge_kind="cloudflare",
+        )
+
+        # Daemon: new_tab succeeds
+        monkeypatch.setattr(helpers, "new_tab", lambda url: 1)
+        # CDP capture: synthetic cookie + storage
+        synthetic_cookie = {
+            "name": "sid",
+            "value": "secret",
+            "domain": "example.com",
+            "path": "/",
+        }
+        monkeypatch.setattr(
+            "browser_harness.sessions.login_adapter.browser_cookies",
+            lambda client, urls, session_id=None: [synthetic_cookie],
+        )
+        monkeypatch.setattr(
+            "browser_harness.sessions.login_adapter.storage_value_snapshot",
+            lambda client, session_id=None: {
+                "url": "https://example.com/",
+                "origin": "https://example.com",
+                "localStorage": {"k": "v"},
+                "sessionStorage": {},
+            },
+        )
+        monkeypatch.setattr("builtins.input", lambda: "")
+
+        # Force HandoffBroker() inside _run_handoff to point at tmp_path
+        self._patch_handoff_store(monkeypatch, tmp_path)
+
+        # Inject a SessionBroker we can inspect after the run
+        session_broker = SessionBroker()
+        _run_handoff(request.handoff_id, session_broker=session_broker)
+
+        out = capsys.readouterr().out
+        assert "Captured session" in out
+        assert "sid" in out
+        assert "Session ref" in out
+
+        # Broker holds a bundle for the origin, retrievable via the ref
+        ref = session_broker.ref_for_origin("https://example.com")
+        assert ref is not None
+        bundle = session_broker.materialize_for_transport(
+            ref, target_origin="https://example.com"
+        )
+        assert bundle is not None
+        assert any(c["name"] == "sid" for c in bundle.cookies)
+
+    def test_resume_token_signature_covers_session_ref_id(self, tmp_path):
+        """ResumeToken.session_ref_id is bound by the HMAC."""
+        from browser_harness.authority.handoff import HandoffBroker, ResumeToken
+
+        broker = HandoffBroker(store_dir=tmp_path)
+        req = broker.create("https://example.com/p", "https://example.com", "cloudflare")
+        token = broker.complete(req.handoff_id, session_ref_id="ref_abc")
+
+        assert token.session_ref_id == "ref_abc"
+
+        # Tamper with session_ref_id, signature must fail to verify.
+        tampered = ResumeToken(
+            origin=token.origin,
+            account_id=token.account_id,
+            session_ref_id="ref_evil",
+            completed_at=token.completed_at,
+            expires_at=token.expires_at,
+            nonce=token.nonce,
+            signature=token.signature,
+        )
+        assert broker.consume(tampered.to_bytes()) is None
+
+
+# --- 20. End-to-end handoff flow (Step 7) ---
+
+class TestEndToEndHandoffFlow:
+    """The single test that proves the authority claim end-to-end:
+    blocked request → handoff_id → user completes via CLI → captured
+    session lands in broker → retry succeeds via authenticated_http."""
+
+    def test_blocked_request_through_cli_to_session_capture(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from browser_harness import helpers
+        from browser_harness.authority.handoff import HandoffBroker
+        from browser_harness.authority.policy import PolicyEngine
+        from browser_harness.authority.challenge import ChallengeStateMachine
+        from browser_harness.capabilities.models import (
+            ChallengeStatus,
+            RiskLevel,
+            WebRequest,
+        )
+        from browser_harness.capabilities.resolver import AccessPlane
+        from browser_harness.scheduler.budgets import BudgetController
+        from browser_harness.sessions.broker import SessionBroker
+        from browser_harness.run import _run_handoff
+
+        # Shared brokers (single-process verification per plan)
+        handoff_broker = HandoffBroker(store_dir=tmp_path)
+        session_broker = SessionBroker()
+
+        # First run: public_http returns a Cloudflare challenge page → handoff_id
+        block_page = "challenge"
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0.0)),
+            broker=session_broker,
+            challenge_sm=ChallengeStateMachine(),
+            handoff_broker=handoff_broker,
+            http_fn=lambda url, **kw: block_page,
+            session_http_fn=lambda url, **kw: {
+                "status": 200,
+                "text": "after-login content",
+                "headers": {},
+            },
+            block_detect_fn=lambda **kw: (
+                {"blocked": True, "kind": "cloudflare", "evidence": []}
+                if kw.get("html") == block_page
+                else {}
+            ),
+        )
+
+        req = WebRequest(
+            url="https://example.com/protected",
+            risk=RiskLevel.AUTHENTICATED_READ,
+            auth_required=True,
+        )
+        first = plane.execute(req)
+        assert first.block_state == ChallengeStatus.NEED_HANDOFF
+        handoff_id = first.extra.get("handoff_id")
+        assert handoff_id
+
+        # Second: simulate the user running `browser-harness --handoff <id>`.
+        # Patch HandoffBroker() inside _run_handoff to point at our tmp_path.
+        monkeypatch.setattr(
+            "browser_harness.authority.handoff.HandoffBroker.__init__",
+            lambda self, store_dir=None: (
+                setattr(self, "_store_dir", tmp_path),
+                tmp_path.mkdir(parents=True, exist_ok=True),
+            )[0],
+        )
+        monkeypatch.setattr(helpers, "new_tab", lambda url: 1)
+        monkeypatch.setattr(
+            "browser_harness.sessions.login_adapter.browser_cookies",
+            lambda client, urls, session_id=None: [
+                {"name": "sid", "value": "ok", "domain": "example.com", "path": "/"}
+            ],
+        )
+        monkeypatch.setattr(
+            "browser_harness.sessions.login_adapter.storage_value_snapshot",
+            lambda client, session_id=None: {
+                "url": "https://example.com/",
+                "origin": "https://example.com",
+                "localStorage": {},
+                "sessionStorage": {},
+            },
+        )
+        monkeypatch.setattr("builtins.input", lambda: "")
+
+        _run_handoff(handoff_id, session_broker=session_broker)
+
+        # Third: retry the original request.  AccessPlane now finds a
+        # SessionBroker ref for the origin and routes through
+        # authenticated_http, which returns 200.
+        # New plane uses the same brokers; clear cache so the prior 403
+        # doesn't shadow this attempt.
+        plane._cache.clear()
+        retry = plane.execute(req)
+        assert retry.status == 200, (
+            f"expected 200 via authenticated_http, got {retry.status} "
+            f"(source={retry.source}, reason={retry.reason})"
+        )
+        assert retry.source == "session"
+        assert retry.transport.value == "authenticated_http"
+
+

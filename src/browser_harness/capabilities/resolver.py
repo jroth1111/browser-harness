@@ -124,8 +124,25 @@ class AccessPlane:
         return result
 
     def _resolve_and_execute(self, request: WebRequest, decision: AuthorityDecision) -> AccessResult:
-        """Try transports in preference order per the decision."""
-        for transport in decision.allowed_capability_types:
+        """Try transports in preference order per the decision.
+
+        If a SessionBroker ref exists for the origin, promote
+        AUTHENTICATED_HTTP ahead of PUBLIC_HTTP — captured sessions exist
+        because the public path was previously blocked, so retrying it
+        first would just rediscover the block.
+        """
+        order = list(decision.allowed_capability_types)
+        origin = self._origin(request.url)
+        if (
+            self.broker.ref_for_origin(origin) is not None
+            and TransportType.AUTHENTICATED_HTTP in order
+        ):
+            order = (
+                [TransportType.AUTHENTICATED_HTTP]
+                + [t for t in order if t != TransportType.AUTHENTICATED_HTTP]
+            )
+
+        for transport in order:
             if transport == TransportType.PUBLIC_HTTP:
                 result = self._try_public_http(request)
                 if result:

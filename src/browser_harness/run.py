@@ -102,7 +102,49 @@ def _explicit_cdp_configured():
     )
 
 
-def _run_handoff(handoff_id: str) -> None:
+def _capture_session_after_handoff(request, session_broker=None):
+    """Capture cookies + storage from the daemon-controlled tab after the
+    user finishes a challenge.  Returns a SecretRef on success, None on
+    failure.  The caller decides how to surface the failure.
+    """
+    from . import helpers
+    from .sessions import login_adapter
+    from .sessions.broker import SessionBroker
+
+    broker = session_broker or SessionBroker()
+    try:
+        cookies = login_adapter.browser_cookies(helpers.cdp, [request.url])
+    except Exception as e:
+        print(f"warning: cookie capture failed: {e}", file=sys.stderr)
+        cookies = []
+    try:
+        storage = login_adapter.storage_value_snapshot(helpers.cdp)
+    except Exception as e:
+        print(f"warning: storage capture failed: {e}", file=sys.stderr)
+        storage = {"localStorage": {}, "sessionStorage": {}}
+
+    if not cookies and not storage.get("localStorage") and not storage.get("sessionStorage"):
+        return None
+
+    ref = broker.store_secret_bundle(
+        origin=request.origin,
+        cookies=cookies,
+        local_storage=storage.get("localStorage", {}) or {},
+        session_storage=storage.get("sessionStorage", {}) or {},
+        allowed_actions=["read"],
+    )
+    cookie_names = sorted({c.get("name", "") for c in cookies if c.get("name")})
+    has_local = bool(storage.get("localStorage"))
+    has_session = bool(storage.get("sessionStorage"))
+    print(f"Captured session: {len(cookie_names)} cookies "
+          f"(local_storage={has_local}, session_storage={has_session}).")
+    if cookie_names:
+        print(f"  cookie names: {', '.join(cookie_names)}")
+    return ref
+
+
+def _run_handoff(handoff_id: str, session_broker=None) -> None:
+    from . import helpers
     from .authority.handoff import HandoffBroker
 
     broker = HandoffBroker()
@@ -111,16 +153,32 @@ def _run_handoff(handoff_id: str) -> None:
         print(f"handoff {handoff_id} not found or expired", file=sys.stderr)
         sys.exit(1)
 
-    import webbrowser
     print(f"Challenge: {request.challenge_kind}")
     print(f"URL: {request.url}")
     print(f"Origin: {request.origin}")
     print()
-    webbrowser.open(request.url)
+
+    daemon_available = True
+    try:
+        helpers.new_tab(request.url)
+    except Exception as e:
+        daemon_available = False
+        print(f"daemon unavailable ({e}); falling back to system browser", file=sys.stderr)
+        import webbrowser
+        webbrowser.open(request.url)
+
     print("Browser opened. Complete the challenge, then press Enter to continue...")
     input()
-    token = broker.complete(handoff_id)
+
+    ref = None
+    if daemon_available:
+        ref = _capture_session_after_handoff(request, session_broker=session_broker)
+    session_ref_id = ref.ref_id if ref else ""
+
+    token = broker.complete(handoff_id, session_ref_id=session_ref_id)
     print(f"Handoff complete. Resume token signed (nonce={token.nonce}).")
+    if session_ref_id:
+        print(f"Session ref: {session_ref_id}")
     print("The agent can now retry the original request.")
 
 
