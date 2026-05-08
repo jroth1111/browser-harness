@@ -53,7 +53,14 @@ def _public_http(url: str, headers: dict[str, str] | None = None, **_: Any) -> s
             data = resp.read()
             charset = resp.headers.get_content_charset() or "utf-8"
             return data.decode(charset, errors="replace")
-    except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+    except urllib.error.HTTPError as e:
+        # 4xx/5xx responses may contain challenge/block pages — return
+        # the body so AccessPlane's block detection can analyze it.
+        try:
+            return e.read().decode("utf-8", errors="replace")
+        except Exception:
+            return None
+    except (urllib.error.URLError, OSError):
         return None
 
 

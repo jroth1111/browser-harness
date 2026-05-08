@@ -466,3 +466,32 @@ class TestDefaultPlane:
 
         plane = bh_http._default_plane()
         assert plane._handoff_broker is not None
+
+    def test_public_http_returns_error_body_on_httperror(self, monkeypatch):
+        """_public_http returns HTTPError body instead of None for 4xx/5xx.
+
+        Before the fix, _public_http caught HTTPError and returned None,
+        discarding the response body. Challenge pages served as 403 were
+        invisible to block detection.
+        """
+        from browser_harness.transports import bh_http
+        import urllib.error
+        import email.message
+
+        err = urllib.error.HTTPError(
+            url="https://example.com/protected",
+            code=403,
+            msg="Forbidden",
+            hdrs=email.message.Message(),
+            fp=None,
+        )
+        err._body = b"just a moment... cloudflare challenge"
+        err.read = lambda: err._body
+
+        def fake_urlopen(req, timeout=None):
+            raise err
+
+        monkeypatch.setattr(bh_http.urllib.request, "urlopen", fake_urlopen)
+        result = bh_http._public_http("https://example.com/protected")
+        assert result is not None, "HTTPError body must be returned, not None"
+        assert "cloudflare" in result
