@@ -1097,46 +1097,6 @@ def test_cookie_matches_url_respects_domain_path_and_secure():
     )
 
 
-def test_browser_cookie_header_filters_to_target_domain():
-    cookies = [
-        {"name": "KP_UIDz", "value": "rea", "domain": ".realestate.com.au", "path": "/", "secure": True},
-        {"name": "other", "value": "prop", "domain": ".property.com.au", "path": "/", "secure": True},
-        {"name": "empty", "value": "", "domain": ".realestate.com.au", "path": "/", "secure": True},
-    ]
-    with patch("browser_harness.helpers.login_session.browser_cookies", return_value=cookies):
-        assert helpers.browser_cookie_header("https://www.realestate.com.au/property/1") == "KP_UIDz=rea; empty="
-
-
-def test_http_get_browser_session_sends_browser_ua_and_matching_cookies():
-    opened = []
-
-    class Response:
-        headers = {"Content-Encoding": "gzip"}
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def read(self):
-            return gzip.compress(b"<html>ok</html>")
-
-    def fake_open(req, timeout=0):
-        opened.append((req, timeout))
-        return Response()
-
-    with patch("browser_harness.login_session.browser_user_agent", return_value="Browser UA"), \
-         patch("browser_harness.login_session.cookie_header", return_value="KP_UIDz=rea"), \
-         patch("urllib.request.OpenerDirector.open", side_effect=fake_open):
-        assert helpers.http_get_browser_session("https://www.realestate.com.au/property/1") == "<html>ok</html>"
-
-    req, timeout = opened[0]
-    assert timeout == 20.0
-    assert req.headers["User-agent"] == "Browser UA"
-    assert req.headers["Cookie"] == "KP_UIDz=rea"
-
-
 def test_login_session_manifest_uses_redacted_generic_module():
     with patch("browser_harness.helpers.login_session.session_manifest", return_value={"cookie_names": ["sid"]}) as manifest:
         assert helpers.login_session_manifest("https://example.com", site="example") == {"cookie_names": ["sid"]}
@@ -1185,29 +1145,6 @@ def test_http_get_browser_session_response_captures_blocking_http_error():
     assert "window.KPSDK" in result["text"]
 
 
-def test_seed_browser_session_closes_tab_and_returns_cookie_names():
-    with patch("browser_harness.helpers.new_tab", return_value="target-1") as new_tab, \
-         patch("browser_harness.helpers.wait_for_load", return_value=True) as wait_for_load, \
-         patch("browser_harness.helpers.wait_for_content", return_value={
-             "ok": True,
-             "reason": "content",
-             "textLength": 800,
-             "block": {"blocked": False, "kind": None, "evidence": []},
-         }) as wait_for_content, \
-         patch("browser_harness.helpers.browser_cookies", return_value=[
-             {"name": "KP_UIDz", "value": "rea", "domain": ".realestate.com.au", "path": "/", "secure": True},
-             {"name": "other", "value": "prop", "domain": ".property.com.au", "path": "/", "secure": True},
-         ]), \
-         patch("browser_harness.helpers.close_tab") as close_tab:
-        result = helpers.seed_browser_session("https://www.realestate.com.au/property/1", min_text=500, timeout=7)
-
-    new_tab.assert_called_once_with("https://www.realestate.com.au/property/1")
-    wait_for_load.assert_called_once_with(timeout=7)
-    wait_for_content.assert_called_once_with(min_text=500, timeout=7)
-    close_tab.assert_called_once_with("target-1")
-    assert result["ok"] is True
-    assert result["targetId"] == "target-1"
-    assert result["cookieNames"] == ["KP_UIDz"]
 
 
 def test_browser_backend_info_detects_lightpanda_risks():

@@ -319,16 +319,6 @@
       "use": "public static pages, oEmbed, RSS, thumbnails, initial HTML"
     },
     {
-      "name": "seed_browser_session",
-      "path_type": "browser",
-      "use": "establish same-domain browser state without logging cookies"
-    },
-    {
-      "name": "http_get_browser_session",
-      "path_type": "hybrid",
-      "use": "same-domain HTTP with browser-established cookies; do not log cookie headers"
-    },
-    {
       "name": "http_get_browser_session_response",
       "path_type": "hybrid",
       "use": "same-domain HTTP with status/header receipt"
@@ -470,11 +460,6 @@
     },
     {
       "name": "browser_cookies",
-      "path_type": "local",
-      "use": "local same-domain session helper only; never commit output"
-    },
-    {
-      "name": "browser_cookie_header",
       "path_type": "local",
       "use": "local same-domain session helper only; never commit output"
     },

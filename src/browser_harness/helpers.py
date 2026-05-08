@@ -654,16 +654,26 @@ def _cookie_matches_url(cookie, url):
     return login_session.cookie_matches_url(cookie, url)
 
 def browser_cookies(urls):
-    """Return cookies visible to the attached browser for `urls`.
+    """Return redacted cookie manifest for `urls`.
 
-    This explicitly queries browser session state through CDP. Do not print or
-    commit the returned values.
+    Returns cookie names, domains, and flags — never raw values.
+    For internal transport use, login_session.browser_cookies provides
+    the full dict including values.
     """
-    return login_session.browser_cookies(cdp, urls)
-
-def browser_cookie_header(url, cookie_urls=None):
-    """Cookie header for `url` from attached-browser cookies, domain-filtered."""
-    return login_session.cookie_header(cdp, url, cookie_urls=cookie_urls)
+    raw = login_session.browser_cookies(cdp, urls)
+    return [
+        {
+            "name": c.get("name", ""),
+            "domain": c.get("domain", ""),
+            "path": c.get("path", "/"),
+            "secure": c.get("secure", False),
+            "httpOnly": c.get("httpOnly", False),
+            "sameSite": c.get("sameSite", ""),
+            "expires": c.get("expires", -1),
+        }
+        for c in raw
+        if isinstance(c, dict)
+    ]
 
 def _origin_url(url):
     return login_session.origin_url(url)
@@ -712,42 +722,6 @@ def prompt_user_login(login_url, success_url_contains=None, min_text=200, timeou
         timeout=timeout,
         poll=poll,
     )
-
-def http_get_browser_session(url, headers=None, cookie_urls=None, timeout=20.0):
-    """HTTP GET using the attached browser's user agent and matching cookies.
-
-    This is useful after a real browser profile has passed a site challenge and
-    you want to fetch additional same-domain HTML/API pages without rendering
-    each one. It does not solve challenges; without valid browser cookies it will
-    receive the same block page as ordinary HTTP.
-    """
-    result = http_get_browser_session_response(url, headers=headers, cookie_urls=cookie_urls, timeout=timeout)
-    if not result["http_ok"]:
-        raise RuntimeError(f"browser-session HTTP failed: {result['status']} {result['url']}")
-    return result["text"]
-
-def seed_browser_session(url, min_text=500, timeout=20.0, close=True):
-    """Navigate a real browser tab to `url` and verify useful content appears.
-
-    Returns a structured status with `ok`, `reason`, `block`, `cookieNames`, and
-    `targetId`. This is the explicit "solve/refresh the browser session first"
-    primitive for domains whose direct HTTP requests depend on browser cookies.
-    """
-    tid = None
-    try:
-        tid = new_tab(url)
-        wait_for_load(timeout=timeout)
-        status = wait_for_content(min_text=min_text, timeout=timeout)
-        cookie_names = sorted({
-            c.get("name", "")
-            for c in browser_cookies([_origin_url(url), url])
-            if c.get("name") and _cookie_matches_url(c, url)
-        })
-        return {**status, "targetId": tid, "seedUrl": url, "cookieNames": cookie_names}
-    finally:
-        if close and tid:
-            try: close_tab(tid)
-            except Exception: pass
 
 def browser_backend_info():
     """Diagnose the attached CDP backend. Explicitly runs JS for page-level facts."""

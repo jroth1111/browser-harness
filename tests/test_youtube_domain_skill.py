@@ -53,9 +53,7 @@ def test_youtube_browser_harness_helper_coverage_is_explicit():
         "detect_block_page",
         "discover_local_cdp_endpoints",
         "http_get",
-        "http_get_browser_session",
         "http_get_browser_session_response",
-        "seed_browser_session",
         "new_tab",
         "goto_url",
         "wait_for_load",
@@ -84,14 +82,12 @@ def test_youtube_browser_harness_helper_coverage_is_explicit():
         "close_tabs",
         "iframe_target",
         "browser_cookies",
-        "browser_cookie_header",
         "login_session_manifest",
         "prompt_user_login",
         "upload_file",
     }
     assert expected <= set(helpers)
     assert helpers["upload_file"]["use"].startswith("out of extraction scope")
-    assert "never commit output" in helpers["browser_cookie_header"]["use"]
 
 
 def test_youtube_json3_caption_parser_tolerates_malformed_payloads():
