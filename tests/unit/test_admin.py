@@ -220,6 +220,7 @@ def test_start_remote_daemon_stops_created_browser_when_daemon_start_fails(monke
     monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: "ws://example.test/devtools/browser/1")
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setenv("BU_AUTOSPAWN", "1")
 
     with pytest.raises(RuntimeError, match="boom"):
         admin.start_remote_daemon()
@@ -355,6 +356,7 @@ def test_start_remote_daemon_stops_created_browser_when_daemon_start_is_interrup
     monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: "ws://example.test/devtools/browser/1")
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: (_ for _ in ()).throw(exc_type()))
+    monkeypatch.setenv("BU_AUTOSPAWN", "1")
 
     with pytest.raises(exc_type):
         admin.start_remote_daemon()
@@ -496,6 +498,7 @@ def test_start_remote_daemon_does_not_stop_created_browser_on_success(monkeypatc
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: "ws://example.test/devtools/browser/1")
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: None)
     monkeypatch.setattr(admin, "_show_live_url", lambda url: None)
+    monkeypatch.setenv("BU_AUTOSPAWN", "1")
 
     assert admin.start_remote_daemon() == browser
     assert calls == [
@@ -521,6 +524,7 @@ def test_start_remote_daemon_rejects_malformed_create_response(monkeypatch, brow
     monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: (_ for _ in ()).throw(AssertionError("should not resolve ws")))
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not start daemon")))
+    monkeypatch.setenv("BU_AUTOSPAWN", "1")
 
     with pytest.raises(RuntimeError, match=message):
         admin.start_remote_daemon()

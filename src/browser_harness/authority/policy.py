@@ -104,6 +104,14 @@ class PolicyEngine:
             )
 
         if risk == RiskLevel.EXTERNAL_SIDE_EFFECT:
+            if risk in self.standing_permissions:
+                return AuthorityDecision(
+                    allowed=True,
+                    status="allowed",
+                    risk_max=risk,
+                    allowed_capability_types=self._transport_order(risk),
+                    reason="R3: external side effect with standing permission",
+                )
             return AuthorityDecision(
                 allowed=False,
                 status="need_user_approval",

@@ -493,7 +493,26 @@ def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
     """Provision a Browser Use cloud browser and start a daemon attached to it.
 
     Returns the full browser dict including `liveUrl`. Prints the liveUrl and
-    auto-opens it locally when a GUI is detected, so the user can watch along."""
+    auto-opens it locally when a GUI is detected, so the user can watch along.
+
+    Requires PolicyEngine authorization for the provision_browser action.
+    BU_AUTOSPAWN env var is treated as a standing permission seed.
+    """
+    # Authority gate: provision_browser is an external side effect
+    from .authority.policy import PolicyEngine
+    from .capabilities.models import WebAction, RiskLevel
+    standing = {RiskLevel.PUBLIC_READ}
+    if os.environ.get("BU_AUTOSPAWN"):
+        standing.add(RiskLevel.EXTERNAL_SIDE_EFFECT)
+    policy = PolicyEngine(standing_permissions=standing)
+    action = WebAction(kind="provision_browser", risk=RiskLevel.EXTERNAL_SIDE_EFFECT)
+    decision = policy.authorize_action(action)
+    if not decision.allowed:
+        raise RuntimeError(
+            f"provision_browser denied: {decision.reason}. "
+            "Set BU_AUTOSPAWN=1 for standing permission or call from dev_runtime."
+        )
+
     if daemon_alive(name):
         raise RuntimeError(f"daemon {name!r} already alive -- restart_daemon({name!r}) first")
     if profileName:
