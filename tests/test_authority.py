@@ -13,8 +13,14 @@ import json
 import pytest
 from pathlib import Path
 
-from browser_harness.runtime.agent_runtime import AgentRuntime
-from browser_harness.runtime.sandbox import AgentSandbox, FORBIDDEN_MODULES, FORBIDDEN_NAMES
+from browser_harness.runtime.agent_host import AgentHost
+from browser_harness.runtime.agent_worker import ALLOWED_TOOLS
+from browser_harness.runtime.sandbox import (
+    FORBIDDEN_TOOLS,
+    RESTRICTED_BUILTINS,
+    STDLIB_ALLOWLIST,
+    WORKER_ALLOWLIST,
+)
 from browser_harness.authority.policy import PolicyEngine
 from browser_harness.capabilities.resolver import AccessPlane
 from browser_harness.authority.challenge import (
@@ -48,44 +54,44 @@ from browser_harness.transports.provider_registry import (
 )
 
 
-# --- 1. Runtime sandbox / no raw import test ---
+# --- 1. Sandbox structural invariants ---
 
-class TestAgentRuntimeSandbox:
-    def test_agent_runtime_cannot_import_raw_authorities(self):
-        sandbox = AgentSandbox({})
-        for mod in [
-            "browser_harness._ipc",
-            "browser_harness.helpers",
-            "browser_harness.stealth_helpers",
-            "urllib.request",
-            "subprocess",
-            "socket",
-        ]:
-            result = sandbox.check_import(mod)
-            assert result["status"] == "denied", f"import {mod} should be denied"
+class TestSandboxInvariants:
+    """Structural facts the worker subprocess relies on.
 
-    def test_agent_runtime_cannot_eval_arbitrary_python(self):
-        runtime = AgentRuntime()
-        result = runtime._sandbox.eval_restricted("import os")
-        assert result["status"] == "denied"
+    Behavioral end-to-end checks (audit hook actually rejects imports,
+    worker actually denies forbidden tools, host actually routes valid
+    calls) live in tests/test_agent_worker_isolation.py — they spawn a
+    real subprocess.  These are static guarantees the build can verify
+    without a worker.
+    """
+    def test_allowed_and_forbidden_tools_disjoint(self):
+        assert ALLOWED_TOOLS.isdisjoint(FORBIDDEN_TOOLS)
 
-    def test_forbidden_tools_denied(self):
-        runtime = AgentRuntime()
-        for tool in ["cdp", "_send", "_ipc", "browser_cookies", "stealth_session",
-                      "solve_turnstile", "navigate_via_google"]:
-            result = runtime.call(tool, {})
-            assert result["status"] == "denied", f"tool {tool} should be denied"
+    def test_forbidden_tools_cover_known_authority_leaks(self):
+        for leak in ["cdp", "_send", "_ipc", "browser_cookies",
+                     "stealth_session", "solve_turnstile",
+                     "navigate_via_google"]:
+            assert leak in FORBIDDEN_TOOLS
 
-    def test_unknown_tools_denied(self):
-        runtime = AgentRuntime()
-        result = runtime.call("nonexistent_tool", {})
-        assert result["status"] == "denied"
+    def test_dangerous_builtins_restricted(self):
+        for name in ("exec", "eval", "compile", "__import__"):
+            assert name in RESTRICTED_BUILTINS
 
-    def test_available_tools_excludes_forbidden(self):
-        runtime = AgentRuntime()
-        tools = runtime._sandbox.available_tools()
-        for forbidden in FORBIDDEN_NAMES:
-            assert forbidden not in tools, f"{forbidden} should not be available"
+    def test_stdlib_allowlist_excludes_network_and_spawn(self):
+        for forbidden in ("urllib", "http", "socket", "subprocess",
+                          "ctypes", "multiprocessing", "threading",
+                          "signal", "os", "sys", "pathlib", "tempfile",
+                          "importlib", "pickle"):
+            assert forbidden not in STDLIB_ALLOWLIST
+
+    def test_worker_allowlist_only_validation_modules(self):
+        for mod in WORKER_ALLOWLIST:
+            assert mod.startswith("browser_harness.")
+            assert "transport" not in mod
+            assert "helpers" not in mod
+            assert "daemon" not in mod
+            assert "_ipc" not in mod
 
 
 # --- 2. Raw CDP bypass test ---
@@ -509,10 +515,13 @@ class TestDomainSkillAuthority:
 
 class TestProviderRegistry:
     def test_agent_cannot_launch_provider_directly(self):
-        """Agent runtime doesn't expose provider launch capability."""
-        runtime = AgentRuntime()
-        result = runtime.call("stealth_session", {})
-        assert result["status"] == "denied"
+        """Subprocess agent does not expose provider launch as a tool."""
+        host = AgentHost()
+        try:
+            result = host.call("stealth_session", {})
+            assert result["status"] == "denied"
+        finally:
+            host.shutdown()
 
     def test_default_registry_has_providers(self):
         registry = default_registry()
@@ -529,46 +538,28 @@ class TestProviderRegistry:
         assert "local_chrome" not in ids
 
 
-# --- 12. Agent runtime CLI ---
+# --- 12. Subprocess agent host CLI ---
 
-class TestAgentRuntimeCLI:
-    def test_call_with_valid_tool(self):
-        runtime = AgentRuntime()
-        result = runtime.call("fetch", {"url": "https://example.com", "risk": "public_read"})
-        # Without a transport adapter, fetch returns unobservable (no transport available)
-        # but the request was authorized by policy
-        assert result["status"] in ("ok", "unobservable")
+class TestAgentHostCLI:
+    def test_high_risk_action_requires_handoff(self):
+        """Click on a payment target is gated to need_handoff, not allowed."""
+        host = AgentHost()
+        try:
+            result = host.call(
+                "click",
+                {"target": "pay", "risk": "payment_delete_security"},
+            )
+            assert result["status"] == "need_handoff"
+        finally:
+            host.shutdown()
 
-    def test_fetch_with_transport_adapter_succeeds(self):
-        from browser_harness.capabilities.resolver import AccessPlane
+    def test_allowed_tools_set_includes_authority_tools(self):
+        for tool in ("fetch", "click", "extract", "navigate", "fill", "press"):
+            assert tool in ALLOWED_TOOLS
 
-        def http_fn(url, **kw):
-            return "hello world"
-
-        plane = AccessPlane(
-            policy=PolicyEngine(),
-            http_fn=http_fn,
-        )
-        runtime = AgentRuntime(access_plane=plane)
-        result = runtime.call("fetch", {"url": "https://example.com", "risk": "public_read"})
-        assert result["status"] == "ok"
-        assert result["source"] == "http"
-
-    def test_call_denied_high_risk(self):
-        runtime = AgentRuntime()
-        result = runtime.call("click", {"target": "pay", "risk": "payment_delete_security"})
-        assert result["status"] == "need_handoff"
-
-    def test_list_tools(self):
-        runtime = AgentRuntime()
-        tools = runtime._sandbox.available_tools()
-        assert "fetch" in tools
-        assert "click" in tools
-        assert "extract" in tools
-        assert "navigate" in tools
-        # Forbidden tools excluded
-        assert "cdp" not in tools
-        assert "browser_cookies" not in tools
+    def test_allowed_tools_excludes_authority_leaks(self):
+        for tool in ("cdp", "browser_cookies", "_send", "stealth_session"):
+            assert tool not in ALLOWED_TOOLS
 
 
 # --- 13. Daemon lazy domain enabling ---

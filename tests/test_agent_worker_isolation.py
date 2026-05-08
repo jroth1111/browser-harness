@@ -99,27 +99,83 @@ class TestWorkerIsolation:
             proc.kill()
             proc.wait()
 
-    def test_worker_import_audit_hook_blocks_urllib(self):
-        """Audit hook blocks urllib.request import inside the worker.
+    def test_worker_audit_hook_blocks_http_client(self):
+        """Audit hook actively rejects `import http.client` after install.
 
-        We test this by sending a Python eval command through a special
-        _eval tool — but since _eval is forbidden, the worker denies it
-        at the tool level. The audit hook is tested by the worker script
-        itself: if the worker could import urllib, it would have already
-        failed at import time.
+        Spawns a subprocess that installs the audit hook, attempts the
+        forbidden import, and exits with a sentinel code on success
+        (i.e. the import was correctly denied).
         """
-        # The worker script itself imports from browser_harness.runtime.sandbox
-        # which calls install_audit_hook(). If the audit hook didn't work,
-        # the worker process would fail to start properly.
-        proc = _spawn_worker()
-        try:
-            # If the worker started, it means the audit hook is installed
-            _send_frame(proc, {"type": "call", "id": 1, "tool": "fetch", "params": {"url": "test"}})
-            result = _recv_frame(proc)
-            assert result is not None  # Worker is alive and responding
-        finally:
-            proc.kill()
-            proc.wait()
+        src_dir = str(Path(__file__).resolve().parent.parent / "src")
+        bootstrap = (
+            f"import sys; sys.path.insert(0, {src_dir!r}); "
+            "from browser_harness.runtime.sandbox import install_audit_hook; "
+            "install_audit_hook(); "
+            "import_blocked = False\n"
+            "try:\n"
+            "    import http.client  # noqa: F401\n"
+            "except ImportError as e:\n"
+            "    if 'denied by sandbox' in str(e):\n"
+            "        import_blocked = True\n"
+            "sys.exit(42 if import_blocked else 1)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", bootstrap],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 42, (
+            f"audit hook failed to block http.client; "
+            f"returncode={result.returncode} stderr={result.stderr}"
+        )
+
+    def test_worker_audit_hook_blocks_urllib_request(self):
+        """Audit hook actively rejects `import urllib.request` after install."""
+        src_dir = str(Path(__file__).resolve().parent.parent / "src")
+        bootstrap = (
+            f"import sys; sys.path.insert(0, {src_dir!r}); "
+            "from browser_harness.runtime.sandbox import install_audit_hook; "
+            "install_audit_hook(); "
+            "import_blocked = False\n"
+            "try:\n"
+            "    import urllib.request  # noqa: F401\n"
+            "except ImportError as e:\n"
+            "    if 'denied by sandbox' in str(e):\n"
+            "        import_blocked = True\n"
+            "sys.exit(42 if import_blocked else 1)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", bootstrap],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 42, (
+            f"audit hook failed to block urllib.request; "
+            f"returncode={result.returncode} stderr={result.stderr}"
+        )
+
+    def test_worker_audit_hook_allows_json(self):
+        """Audit hook permits stdlib modules in STDLIB_ALLOWLIST (sanity check)."""
+        src_dir = str(Path(__file__).resolve().parent.parent / "src")
+        bootstrap = (
+            f"import sys; sys.path.insert(0, {src_dir!r}); "
+            "from browser_harness.runtime.sandbox import install_audit_hook; "
+            "install_audit_hook(); "
+            "import json; import hashlib; import struct; "
+            "sys.exit(0 if (json and hashlib and struct) else 1)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", bootstrap],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0, (
+            f"audit hook incorrectly blocked allowlisted stdlib; "
+            f"stderr={result.stderr}"
+        )
 
     def test_worker_clean_shutdown(self):
         """Worker shuts down cleanly on shutdown frame."""

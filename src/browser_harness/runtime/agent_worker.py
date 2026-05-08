@@ -11,6 +11,11 @@ import struct
 import sys
 
 from .sandbox import install_audit_hook, restrict_builtins, FORBIDDEN_TOOLS
+from ..capabilities.models import (
+    RiskLevel,
+    WebRequest,
+    WebAction,
+)
 
 # Only these tools may be dispatched; everything else is denied.
 ALLOWED_TOOLS = frozenset({
@@ -25,19 +30,20 @@ ALLOWED_TOOLS = frozenset({
     "wait",
 })
 
-# Install enforcement BEFORE any other imports
-install_audit_hook()
 
-# Restrict builtins
-_safe_builtins = restrict_builtins()
-__builtins__ = _safe_builtins  # type: ignore[assignment]
+def _activate_sandbox() -> None:
+    """Install audit hook and restrict builtins.
 
-# Now import allowed modules
-from ..capabilities.models import (  # noqa: E402
-    RiskLevel,
-    WebRequest,
-    WebAction,
-)
+    Called from worker_main() rather than at module import so that a test
+    importing this module does not activate the sandbox in the test runner.
+    Pre-imports above ensure transitive stdlib dependencies are already
+    cached before the hook installs — audit events fire only on uncached
+    imports, so once a module is in sys.modules subsequent `import`
+    statements are silent.
+    """
+    install_audit_hook()
+    safe_builtins = restrict_builtins()
+    globals()["__builtins__"] = safe_builtins
 
 
 def _read_frame() -> dict:
@@ -92,6 +98,7 @@ def _dispatch(msg: dict) -> dict:
 
 def worker_main() -> int:
     """Main loop for the worker process."""
+    _activate_sandbox()
     try:
         while True:
             msg = _read_frame()

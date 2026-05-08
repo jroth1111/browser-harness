@@ -161,9 +161,9 @@ FORBIDDEN_AGENT_IMPORTS = [
 
 def assert_authority(root: Path) -> None:
     """Authority proof gates — verify the authority model is enforced."""
-    # Gate 1: Agent runtime import isolation
+    # Gate 1: Worker subprocess sandbox blocks forbidden imports at runtime
     result = run(
-        ["uv", "run", "pytest", "-q", "-x", "-k", "test_agent_runtime_cannot_import_raw_authorities"],
+        ["uv", "run", "pytest", "-q", "-x", "-k", "test_worker_audit_hook_blocks_http_client"],
         cwd=root,
     )
 
