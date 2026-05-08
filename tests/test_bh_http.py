@@ -3,7 +3,7 @@ import json
 import pytest
 from pathlib import Path
 
-from browser_harness.transports.bh_http import get, execute, _risk
+from browser_harness.transports.bh_http import get, execute, post, _risk
 from browser_harness.authority.handoff import HandoffBroker, HandoffRequest, ResumeToken
 from browser_harness.capabilities.models import (
     RiskLevel,
@@ -75,6 +75,19 @@ class TestBhHttp:
         for bad in ("", "public_red", "authenticate_read", "low_risk", "high_risk", None):
             with pytest.raises(ValueError):
                 _risk(bad)
+
+    def test_post_does_not_crash_on_webrequest_construction(self):
+        """post() must not pass an 'extra' kwarg to WebRequest — it would crash
+        with TypeError. Before the fix, extra={"body": body} was passed but
+        WebRequest has no 'extra' field."""
+        plane = AccessPlane(
+            policy=PolicyEngine(standing_permissions={RiskLevel.LOW_RISK_WRITE}),
+            budget=BudgetController(),
+            http_fn=lambda url, **kw: "posted",
+        )
+        resp = post("https://example.com/api", body=b"test", plane=plane)
+        assert resp.source == "authority"
+        assert resp.status == 200
 
 
 class TestAgentHostRiskFromStr:

@@ -188,7 +188,7 @@ def post(
         method="POST",
         headers=headers or {},
         auth_required=False,
-        extra={"body": body},
+        body=body if isinstance(body, (bytes, type(None))) else None,
     )
     return execute(request, plane=plane)
 
