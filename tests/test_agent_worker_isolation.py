@@ -343,3 +343,26 @@ class TestAgentHostSubprocess:
             assert result.get("status") in ("denied", "error")
         finally:
             host.shutdown()
+
+    def test_sandbox_restricts_open_builtin(self):
+        """restrict_builtins() must remove open — the worker has no legitimate
+        file I/O.  Without this, a compromised worker could read/write files."""
+        src_dir = str(Path(__file__).resolve().parent.parent / "src")
+        bootstrap = (
+            f"import sys; sys.path.insert(0, {src_dir!r}); "
+            "from browser_harness.runtime.sandbox import install_audit_hook, restrict_builtins; "
+            "install_audit_hook(); "
+            "safe = restrict_builtins(); "
+            "has_open = 'open' in safe; "
+            "sys.exit(1 if has_open else 42)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", bootstrap],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 42, (
+            f"open should be removed from restricted builtins; "
+            f"returncode={result.returncode} stderr={result.stderr}"
+        )

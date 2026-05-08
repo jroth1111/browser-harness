@@ -76,8 +76,12 @@ NEEDED_PRIVATE_MODULES = frozenset({
 
 # Builtins removed from the worker namespace.  exec/eval/compile/__import__
 # would bypass the audit hook by routing imports through other paths.
+# open provides filesystem access — the worker has no legitimate file I/O.
+# input reads from stdin which is the IPC pipe — not user input.
+# quit/exit terminate the process — worker must stay alive for the host.
 RESTRICTED_BUILTINS = frozenset({
     "exec", "eval", "compile", "__import__", "breakpoint", "memoryview",
+    "open", "input", "quit", "exit",
 })
 
 # Tool names the worker must always reject, even if a future allowlist
