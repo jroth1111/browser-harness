@@ -61,7 +61,40 @@ class TestBhHttp:
     def test_risk_parsing(self):
         assert _risk("public_read") == RiskLevel.PUBLIC_READ
         assert _risk("authenticated_read") == RiskLevel.AUTHENTICATED_READ
-        assert _risk("invalid_value") == RiskLevel.PUBLIC_READ
+        with pytest.raises(ValueError):
+            _risk("invalid_value")
+
+    def test_invalid_risk_does_not_downgrade_to_public_read(self):
+        """Authority bypass closure: invalid risk must raise, not silently downgrade.
+
+        Before the fix, _risk("typo") returned PUBLIC_READ, letting a caller
+        that passed an incorrect risk string bypass the authority pipeline and
+        route what should have been an authenticated request through unauthenticated
+        public HTTP.
+        """
+        for bad in ("", "public_red", "authenticate_read", "low_risk", "high_risk", None):
+            with pytest.raises(ValueError):
+                _risk(bad)
+
+
+class TestAgentHostRiskFromStr:
+    """Agent host uses _risk_from_str with identical semantics — must also raise."""
+
+    def test_valid_risk_levels(self):
+        from browser_harness.runtime.agent_host import _risk_from_str
+
+        assert _risk_from_str("public_read") == RiskLevel.PUBLIC_READ
+        assert _risk_from_str("authenticated_read") == RiskLevel.AUTHENTICATED_READ
+        assert _risk_from_str("low_risk_write") == RiskLevel.LOW_RISK_WRITE
+        assert _risk_from_str("external_side_effect") == RiskLevel.EXTERNAL_SIDE_EFFECT
+
+    def test_invalid_risk_raises(self):
+        """A compromised worker must not bypass authority by sending an invalid risk."""
+        from browser_harness.runtime.agent_host import _risk_from_str
+
+        for bad in ("", "bypass", "admin", "sudo", None):
+            with pytest.raises(ValueError):
+                _risk_from_str(bad)
 
 
 # --- handoff tests ---
@@ -151,6 +184,38 @@ class TestHandoffBroker:
     def test_complete_nonexistent_returns_none(self, tmp_path):
         broker = HandoffBroker(store_dir=tmp_path)
         assert broker.complete("nonexistent_id") is None
+
+    def test_get_rejects_path_traversal(self, tmp_path):
+        """handoff_id with path traversal characters must not escape store dir."""
+        broker = HandoffBroker(store_dir=tmp_path)
+        # Create a file outside the store dir to prove it can't be read
+        outside = tmp_path.parent / "secret.json"
+        outside.write_text('{"handoff_id":"../../secret","origin":"x","url":"x","challenge_kind":"x","created_at":0,"expires_at":9999999999}')
+        try:
+            result = broker.get("../../secret")
+            assert result is None, "path traversal must be rejected"
+        finally:
+            outside.unlink(missing_ok=True)
+
+    def test_get_rejects_non_hex_id(self, tmp_path):
+        """handoff_id must be hex only — rejects slashes, dots, special chars."""
+        broker = HandoffBroker(store_dir=tmp_path)
+        assert broker.get("../etc/passwd") is None
+        assert broker.get("abc/def") is None
+        assert broker.get("id with spaces") is None
+        assert broker.get("id\x00evil") is None
+
+    def test_complete_rejects_path_traversal(self, tmp_path):
+        """complete() must not delete files outside the store dir."""
+        broker = HandoffBroker(store_dir=tmp_path)
+        outside = tmp_path.parent / "target.json"
+        outside.write_text('{"handoff_id":"../../target","origin":"x","url":"x","challenge_kind":"x","created_at":0,"expires_at":9999999999}')
+        try:
+            result = broker.complete("../../target")
+            assert result is None, "path traversal must be rejected"
+            assert outside.exists(), "file outside store dir must NOT be deleted"
+        finally:
+            outside.unlink(missing_ok=True)
 
     def test_access_plane_produces_handoff_id(self, tmp_path):
         """Blocked fetch with handoff broker returns handoff_id in extra."""

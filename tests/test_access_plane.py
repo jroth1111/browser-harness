@@ -77,6 +77,40 @@ class TestAccessPlanePolicyGate:
         assert result.status == 200
         assert result.source == "session"
 
+    def test_auth_required_skips_public_http(self):
+        """auth_required=True must not use PUBLIC_HTTP, even when available.
+
+        Before the fix, auth_required was ignored by AccessPlane — it tried
+        PUBLIC_HTTP first regardless, only falling back to authenticated
+        transports if public HTTP failed or a session happened to exist.
+        """
+        public_calls = []
+        session_calls = []
+
+        def http_fn(url, **kw):
+            public_calls.append(url)
+            return "public content"
+
+        def session_http_fn(url, **kw):
+            session_calls.append(url)
+            return {"text": "authenticated content", "status": 200, "ok": True}
+
+        broker = SessionBroker()
+        broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "sid", "value": "test", "domain": "example.com", "path": "/"}],
+        )
+        plane = AccessPlane(
+            broker=broker,
+            http_fn=http_fn,
+            session_http_fn=session_http_fn,
+        )
+        req = WebRequest(url="https://example.com/api", risk=RiskLevel.AUTHENTICATED_READ, auth_required=True)
+        result = plane.execute(req)
+        assert result.status == 200
+        assert result.source == "session"
+        assert public_calls == [], "auth_required=True must skip PUBLIC_HTTP entirely"
+
 
 class TestAccessPlaneBudgetGate:
     def test_circuit_breaker_stops_requests(self):
@@ -141,6 +175,78 @@ class TestAccessPlaneCache:
         assert r1.text == "content-1"
         assert r2.text == "content-1"  # cached
         assert call_count[0] == 1  # only one actual fetch
+
+    def test_cache_does_not_serve_public_read_for_authenticated_read(self):
+        """Cache bypass closure: PUBLIC_READ cache hit must not be served
+        for AUTHENTICATED_READ requests at the same URL.
+
+        Before the fix, the cache key was method:url without risk level.
+        A PUBLIC_READ result cached at GET:https://example.com/api would
+        be served to an AUTHENTICATED_READ request for the same URL,
+        bypassing the transport selection enforcement.
+        """
+        session_calls = []
+
+        def http_fn(url, **kw):
+            return "public content"
+
+        def session_http_fn(url, **kw):
+            session_calls.append(url)
+            return {"text": "authenticated content", "status": 200, "ok": True}
+
+        broker = SessionBroker()
+        broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "s", "value": "v"}],
+        )
+        plane = AccessPlane(
+            broker=broker,
+            http_fn=http_fn,
+            session_http_fn=session_http_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+
+        # First: PUBLIC_READ → cached
+        r1 = plane.execute(WebRequest(url="https://example.com/api", risk=RiskLevel.PUBLIC_READ))
+        assert r1.status == 200
+        assert r1.source == "http"
+        assert session_calls == []
+
+        # Second: AUTHENTICATED_READ at same URL → must NOT use cache
+        r2 = plane.execute(WebRequest(url="https://example.com/api", risk=RiskLevel.AUTHENTICATED_READ))
+        assert r2.status == 200
+        assert r2.source == "session", "must use authenticated transport, not cached PUBLIC_READ"
+        assert session_calls == ["https://example.com/api"]
+
+    def test_cache_does_not_serve_public_read_when_auth_required(self):
+        """auth_required=True must bypass cache even with PUBLIC_READ risk."""
+        session_calls = []
+
+        def http_fn(url, **kw):
+            return "public content"
+
+        def session_http_fn(url, **kw):
+            session_calls.append(url)
+            return {"text": "authenticated content", "status": 200, "ok": True}
+
+        broker = SessionBroker()
+        broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "s", "value": "v"}],
+        )
+        plane = AccessPlane(
+            broker=broker,
+            http_fn=http_fn,
+            session_http_fn=session_http_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+
+        # Cache a PUBLIC_READ response
+        plane.execute(WebRequest(url="https://example.com/api", risk=RiskLevel.PUBLIC_READ))
+
+        # Request same URL with auth_required=True → must bypass cache
+        r = plane.execute(WebRequest(url="https://example.com/api", risk=RiskLevel.PUBLIC_READ, auth_required=True))
+        assert r.source == "session", "auth_required=True must bypass PUBLIC_READ cache"
 
 
 class TestAccessPlaneTransportFallback:

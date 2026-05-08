@@ -77,3 +77,6 @@ browser_harness_domain_skills = [
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]
 testpaths = ["tests"]
+markers = [
+    "network: tests that make live HTTP requests",
+]

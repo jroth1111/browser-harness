@@ -20,10 +20,12 @@ from ..capabilities.resolver import AccessPlane
 
 
 def _risk_from_str(risk: str) -> RiskLevel:
-    try:
-        return RiskLevel(risk)
-    except ValueError:
-        return RiskLevel.PUBLIC_READ
+    """Convert a risk string from the worker protocol to RiskLevel.
+
+    Raises ValueError on invalid input. Silent downgrade would let a
+    compromised worker bypass authority by sending an invalid risk string.
+    """
+    return RiskLevel(risk)
 
 
 class AgentHost:
@@ -74,6 +76,8 @@ class AgentHost:
         self._worker.stdin.write(data)
         self._worker.stdin.flush()
 
+    _MAX_FRAME = 10 * 1024 * 1024  # 10MB — matches worker's limit
+
     def _recv_frame(self) -> dict:
         if not self._worker or not self._worker.stdout:
             raise RuntimeError("worker not running")
@@ -81,7 +85,11 @@ class AgentHost:
         if not raw_len or len(raw_len) < 4:
             raise RuntimeError("worker closed")
         length = struct.unpack(">I", raw_len)[0]
+        if length > self._MAX_FRAME:
+            raise RuntimeError(f"frame too large: {length} bytes")
         data = self._worker.stdout.read(length)
+        if len(data) < length:
+            raise RuntimeError("worker died mid-frame")
         return json.loads(data)
 
     def call(self, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -100,7 +108,11 @@ class AgentHost:
 
         if response.get("type") == "callback":
             # Worker validated the call; host executes the tool
-            return self._execute_tool(response["tool"], response["params"])
+            tool = response.get("tool", "")
+            params = response.get("params")
+            if not tool or not isinstance(params, dict):
+                return {"status": "error", "reason": "malformed callback from worker"}
+            return self._execute_tool(tool, params)
         if response.get("type") == "result":
             return response
         if response.get("type") == "error":
@@ -109,20 +121,31 @@ class AgentHost:
         return {"status": "error", "reason": f"unexpected response: {response}"}
 
     def _execute_tool(self, tool: str, params: dict) -> dict[str, Any]:
-        """Execute a tool call in the host process."""
-        if tool == "fetch":
-            return self._tool_fetch(**params)
-        if tool == "click":
-            return self._tool_click(**params)
-        if tool == "extract":
-            return self._tool_extract(**params)
-        if tool == "navigate":
-            return self._tool_navigate(**params)
-        if tool == "fill":
-            return self._tool_fill(**params)
-        if tool == "press":
-            return self._tool_press(**params)
-        return {"status": "error", "reason": f"unknown tool: {tool}"}
+        """Execute a tool call in the host process.
+
+        Catches all exceptions so the host never crashes because of
+        invalid input from the worker subprocess. The host is the authority
+        boundary; the worker is untrusted.
+        """
+        if tool not in ("fetch", "click", "extract", "navigate", "fill", "press"):
+            return {"status": "error", "reason": f"unknown tool: {tool}"}
+        try:
+            if tool == "fetch":
+                return self._tool_fetch(**params)
+            if tool == "click":
+                return self._tool_click(**params)
+            if tool == "extract":
+                return self._tool_extract(**params)
+            if tool == "navigate":
+                return self._tool_navigate(**params)
+            if tool == "fill":
+                return self._tool_fill(**params)
+            if tool == "press":
+                return self._tool_press(**params)
+        except (ValueError, TypeError) as e:
+            return {"status": "error", "reason": f"invalid params for {tool}: {e}"}
+        except Exception as e:
+            return {"status": "error", "reason": f"tool execution failed: {e}"}
 
     def shutdown(self) -> None:
         if self._worker:

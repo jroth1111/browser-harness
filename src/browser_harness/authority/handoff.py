@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -52,6 +53,8 @@ class ResumeToken:
 class HandoffBroker:
     """Manage handoff requests and resume tokens."""
 
+    _SAFE_ID = re.compile(r"^[0-9a-f]{1,32}$")
+
     def __init__(self, store_dir: Path | None = None):
         self._store_dir = store_dir or Path(
             os.environ.get("BH_HANDOFFS_DIR", os.path.expanduser("~/.bh-handoffs"))
@@ -81,6 +84,8 @@ class HandoffBroker:
         return request
 
     def get(self, handoff_id: str) -> HandoffRequest | None:
+        if not self._SAFE_ID.match(handoff_id):
+            return None
         path = self._store_dir / f"{handoff_id}.json"
         if not path.exists():
             return None
@@ -100,6 +105,8 @@ class HandoffBroker:
         session_ref_id: str = "",
         ttl: float = 3600.0,
     ) -> ResumeToken | None:
+        if not self._SAFE_ID.match(handoff_id):
+            return None
         request = self.get(handoff_id)
         if not request:
             return None

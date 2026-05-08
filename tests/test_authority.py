@@ -368,6 +368,55 @@ class TestActionPolicy:
         assert not decision.allowed
         assert decision.status in ("need_user_approval", "need_handoff")
 
+    def test_classify_escalates_payment_keyword_even_with_public_read(self):
+        """Keyword analysis must escalate regardless of caller-declared risk.
+
+        Before the fix, classify() short-circuited when action.risk was
+        anything other than LOW_RISK_WRITE. A caller could bypass keyword
+        detection of payment/delete/security hints by setting a lower risk.
+        """
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="pay now", risk=RiskLevel.PUBLIC_READ)
+        risk = policy.classify(action)
+        assert risk == RiskLevel.PAYMENT_DELETE_SECURITY
+
+    def test_classify_escalates_external_side_effect_even_with_public_read(self):
+        """Keyword analysis must detect submit/purchase even when caller says PUBLIC_READ."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="submit purchase", risk=RiskLevel.PUBLIC_READ)
+        risk = policy.classify(action)
+        assert risk == RiskLevel.EXTERNAL_SIDE_EFFECT
+
+    def test_classify_respects_caller_escalation_above_keyword(self):
+        """If caller declares a higher risk than keywords find, use caller's risk."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="expand-details", risk=RiskLevel.PAYMENT_DELETE_SECURITY)
+        risk = policy.classify(action)
+        assert risk == RiskLevel.PAYMENT_DELETE_SECURITY
+
+    def test_classify_escalates_payment_keyword_even_with_authenticated_read(self):
+        """AUTHENTICATED_READ does not bypass keyword escalation."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="delete account", risk=RiskLevel.AUTHENTICATED_READ)
+        risk = policy.classify(action)
+        assert risk == RiskLevel.PAYMENT_DELETE_SECURITY
+
+    def test_authorize_denies_payment_click_with_public_read_risk(self):
+        """Full pipeline: click on payment button declared as PUBLIC_READ must be denied."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="pay now", risk=RiskLevel.PUBLIC_READ)
+        decision = policy.authorize(action)
+        assert not decision.allowed
+        assert decision.status == "need_handoff"
+
+    def test_authorize_denies_submit_click_with_public_read_risk(self):
+        """Full pipeline: click on submit declared as PUBLIC_READ must need approval."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="submit form", risk=RiskLevel.PUBLIC_READ)
+        decision = policy.authorize(action)
+        assert not decision.allowed
+        assert decision.status == "need_user_approval"
+
 
 # --- 8. Budget and circuit breaker ---
 
@@ -1025,7 +1074,7 @@ class TestEndToEndHandoffFlow:
         req = WebRequest(
             url="https://example.com/protected",
             risk=RiskLevel.AUTHENTICATED_READ,
-            auth_required=True,
+            auth_required=False,
         )
         first = plane.execute(req)
         assert first.block_state == ChallengeStatus.NEED_HANDOFF
@@ -1067,7 +1116,12 @@ class TestEndToEndHandoffFlow:
         # New plane uses the same brokers; clear cache so the prior 403
         # doesn't shadow this attempt.
         plane._cache.clear()
-        retry = plane.execute(req)
+        retry_req = WebRequest(
+            url="https://example.com/protected",
+            risk=RiskLevel.AUTHENTICATED_READ,
+            auth_required=True,
+        )
+        retry = plane.execute(retry_req)
         assert retry.status == 200, (
             f"expected 200 via authenticated_http, got {retry.status} "
             f"(source={retry.source}, reason={retry.reason})"

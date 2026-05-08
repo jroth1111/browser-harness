@@ -194,10 +194,12 @@ def post(
 
 
 def _risk(risk: str) -> RiskLevel:
-    try:
-        return RiskLevel(risk)
-    except ValueError:
-        return RiskLevel.PUBLIC_READ
+    """Convert a risk string to RiskLevel. Raises ValueError on invalid input.
+
+    Silent downgrade to PUBLIC_READ would be an authority bypass — a caller
+    that passes an invalid risk string has a bug and must be told about it.
+    """
+    return RiskLevel(risk)
 
 
 def _result_to_response(result: AccessResult) -> Response:

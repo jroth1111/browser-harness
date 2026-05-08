@@ -51,23 +51,52 @@ class ActionPolicy:
         "security",
     })
 
-    def classify(self, action: WebAction) -> RiskLevel:
-        """Classify an action into a risk level based on its properties."""
-        if action.risk != RiskLevel.LOW_RISK_WRITE:
-            return action.risk  # caller already classified
+    _RISK_RANK = {
+        RiskLevel.PUBLIC_READ: 0,
+        RiskLevel.AUTHENTICATED_READ: 1,
+        RiskLevel.LOW_RISK_WRITE: 2,
+        RiskLevel.EXTERNAL_SIDE_EFFECT: 3,
+        RiskLevel.PAYMENT_DELETE_SECURITY: 4,
+        RiskLevel.LOGIN_CHALLENGE_2FA: 5,
+    }
 
+    def classify(self, action: WebAction) -> RiskLevel:
+        """Classify an action into a risk level based on its properties.
+
+        Always runs keyword analysis for defense in depth. Keyword
+        escalation takes the max of caller-declared risk and keyword
+        risk, preventing callers from bypassing HIGH_RISK_HINTS /
+        EXTERNAL_SIDE_EFFECT_HINTS by setting a lower risk level.
+        """
+        keyword_risk = self._classify_by_keywords(action)
+        caller_risk = action.risk
+
+        # Keyword escalation: never allow de-escalation below what
+        # keyword analysis determines.
+        if self._RISK_RANK[keyword_risk] > self._RISK_RANK[caller_risk]:
+            return keyword_risk
+
+        # Read-only action downgrade: only from LOW_RISK_WRITE to
+        # PUBLIC_READ.  The caller used the default/unclassified risk,
+        # and the action kind is inherently non-mutating.
+        if caller_risk == RiskLevel.LOW_RISK_WRITE and keyword_risk == RiskLevel.PUBLIC_READ:
+            return RiskLevel.PUBLIC_READ
+
+        return caller_risk
+
+    def _classify_by_keywords(self, action: WebAction) -> RiskLevel:
+        """Keyword-based risk classification independent of caller's risk."""
         kind = action.kind.lower()
         target = action.target.lower()
         value = action.value.lower()
-
-        # Check for high-risk keywords in target/value
         text = f"{kind} {target} {value}"
+
         for hint in self.HIGH_RISK_HINTS:
-            if hint in text:
+            if hint.replace("_", " ") in text:
                 return RiskLevel.PAYMENT_DELETE_SECURITY
 
         for hint in self.EXTERNAL_SIDE_EFFECT_HINTS:
-            if hint in text:
+            if hint.replace("_", " ") in text:
                 return RiskLevel.EXTERNAL_SIDE_EFFECT
 
         if kind in self.LOW_RISK_ACTIONS:
@@ -78,13 +107,6 @@ class ActionPolicy:
     def authorize(self, action: WebAction) -> AuthorityDecision:
         """Authorize an action after classification."""
         classified_risk = self.classify(action)
-        classified_action = WebAction(
-            kind=action.kind,
-            target=action.target,
-            value=action.value,
-            risk=classified_risk,
-            coordinates=action.coordinates,
-        )
 
         if classified_risk == RiskLevel.PUBLIC_READ:
             return AuthorityDecision(

@@ -95,30 +95,6 @@ class ChallengeStateMachine:
         self._history.append(decision)
         return decision
 
-    def evaluate_block_detection(
-        self,
-        html: str = "",
-        text: str = "",
-        url: str = "",
-        block_result: dict[str, Any] | None = None,
-    ) -> ChallengeDecision:
-        """Convenience: evaluate block-page detection output."""
-        if block_result and block_result.get("kind"):
-            kind_str = block_result["kind"]
-            try:
-                kind = ChallengeKind(kind_str)
-            except ValueError:
-                kind = ChallengeKind.UNKNOWN
-            detection = ChallengeDetection(
-                found=True,
-                kind=kind,
-                evidence=block_result.get("evidence", []),
-                raw=block_result,
-            )
-            return self.evaluate(detection)
-
-        return ChallengeDecision(status=ChallengeStatus.OK, kind=ChallengeKind.NONE)
-
     @property
     def history(self) -> list[ChallengeDecision]:
         return list(self._history)

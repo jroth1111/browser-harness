@@ -110,9 +110,11 @@ class AccessPlane:
                 block_state=ChallengeStatus.RATE_LIMITED,
             )
 
-        # 3. Cache check
+        # 3. Cache check (only PUBLIC_READ results are cached; don't serve
+        #    them to higher-risk or auth_required requests — that would
+        #    bypass the transport selection enforcement.)
         cache_key = f"{request.method}:{request.url}"
-        if cache_key in self._cache:
+        if cache_key in self._cache and request.risk == RiskLevel.PUBLIC_READ and not request.auth_required:
             return self._cache[cache_key]
 
         # 4. Transport selection and execution
@@ -135,10 +137,27 @@ class AccessPlane:
         AUTHENTICATED_HTTP ahead of PUBLIC_HTTP — captured sessions exist
         because the public path was previously blocked, so retrying it
         first would just rediscover the block.
+
+        If request.auth_required is True, PUBLIC_HTTP is removed from the
+        order and AUTHENTICATED_HTTP is promoted to first position. The
+        caller explicitly said the public path is not acceptable.
         """
         order = list(decision.allowed_capability_types)
         origin = self._origin(request.url)
-        if (
+
+        if request.auth_required:
+            # Caller requires authentication — remove public path entirely
+            order = [t for t in order if t != TransportType.PUBLIC_HTTP]
+            # Ensure AUTHENTICATED_HTTP is available even if the risk level's
+            # default transport order doesn't include it (e.g. PUBLIC_READ).
+            if TransportType.AUTHENTICATED_HTTP not in order:
+                order.insert(0, TransportType.AUTHENTICATED_HTTP)
+            else:
+                order = (
+                    [TransportType.AUTHENTICATED_HTTP]
+                    + [t for t in order if t != TransportType.AUTHENTICATED_HTTP]
+                )
+        elif (
             self.broker.ref_for_origin(origin) is not None
             and TransportType.AUTHENTICATED_HTTP in order
         ):

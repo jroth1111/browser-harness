@@ -293,3 +293,53 @@ class TestAgentHostSubprocess:
             assert result.get("status") == "ok"
         finally:
             host.shutdown()
+
+    def test_host_returns_error_on_invalid_risk_from_worker(self):
+        """Host must not crash when worker sends an invalid risk string.
+
+        The host is the authority boundary — it validates worker input and
+        returns error responses instead of crashing.
+        """
+        from browser_harness.runtime.agent_host import AgentHost
+        host = AgentHost()
+        try:
+            # Simulate: worker echoes back a malformed risk string.
+            # The host's _tool_fetch calls _risk_from_str("bypass") → ValueError.
+            # Before the fix, this crashed the host process.
+            result = host.call("fetch", {"url": "https://example.com", "risk": "bypass"})
+            assert result.get("status") == "error"
+            assert "invalid" in result.get("reason", "").lower()
+        finally:
+            host.shutdown()
+
+    def test_host_returns_error_on_missing_params_from_worker(self):
+        """Host must not crash when worker sends incomplete params.
+
+        Before the fix, missing required fields could crash with unhandled
+        TypeError/KeyError. The host must return a response, not crash.
+        """
+        from browser_harness.runtime.agent_host import AgentHost
+        host = AgentHost()
+        try:
+            result = host.call("fetch", {})
+            assert isinstance(result, dict), "host must return a dict, not crash"
+            assert "status" in result
+        finally:
+            host.shutdown()
+
+    def test_host_handles_unknown_tool_from_callback(self):
+        """Host returns error for tools not in its dispatch table.
+
+        Even if the worker somehow sends a callback for an unknown tool,
+        the host must return an error, not crash.
+        """
+        from browser_harness.runtime.agent_host import AgentHost
+        host = AgentHost()
+        try:
+            # The worker will deny 'scroll' as unknown in its dispatch,
+            # but let's verify through the full pipeline.
+            result = host.call("scroll", {"direction": "down"})
+            # Worker denies unknown tools at its level
+            assert result.get("status") in ("denied", "error")
+        finally:
+            host.shutdown()
