@@ -209,6 +209,10 @@ class AccessPlane:
             text = str(result.get("text", ""))
             block = result.get("block") or self._detect_block(text, text, request.url)
             if block.get("blocked"):
+                kind = self._block_kind_to_challenge_kind(block)
+                challenge = self.challenge_sm.evaluate(
+                    ChallengeDetection(found=True, kind=kind, evidence=block.get("evidence", []))
+                )
                 return AccessResult(
                     url=request.url,
                     status=result.get("status", 403),
@@ -216,9 +220,10 @@ class AccessPlane:
                     html=text,
                     source="session",
                     transport=TransportType.AUTHENTICATED_HTTP,
-                    block_state=ChallengeStatus.BLOCKED,
+                    block_state=challenge.status,
                     block=block,
                     reason="blocked",
+                    extra=self._handoff_extra(request, challenge.status),
                 )
             return AccessResult(
                 url=request.url,
@@ -248,10 +253,15 @@ class AccessPlane:
             if not ok:
                 detection = ChallengeDetection(
                     found=block.get("blocked", False),
-                    kind=ChallengeKind.UNKNOWN,
+                    kind=self._block_kind_to_challenge_kind(block) if block.get("blocked") else ChallengeKind.UNKNOWN,
+                    evidence=block.get("evidence", []),
                 )
                 challenge = self.challenge_sm.evaluate(detection)
                 challenge_status = challenge.status
+
+            extra: dict[str, Any] = {}
+            if not ok and block.get("blocked"):
+                extra = self._handoff_extra(request, challenge_status)
 
             return AccessResult(
                 url=result.get("url", request.url),
@@ -263,6 +273,7 @@ class AccessPlane:
                 block_state=challenge_status,
                 block=block,
                 reason=result.get("reason", ""),
+                extra=extra,
             )
         except Exception:
             return None

@@ -2474,6 +2474,7 @@ def _authority_fetch(url, headers=None, timeout=20.0, min_text=500):
     from .capabilities.resolver import AccessPlane
     from .authority.policy import PolicyEngine
     from .authority.challenge import ChallengeStateMachine
+    from .authority.handoff import HandoffBroker
     from .sessions.broker import SessionBroker
     from .scheduler.budgets import BudgetController
     from .response import Response
@@ -2524,6 +2525,7 @@ def _authority_fetch(url, headers=None, timeout=20.0, min_text=500):
         session_http_fn=_session_http,
         browser_fn=_browser,
         block_detect_fn=detect_block_page,
+        handoff_broker=HandoffBroker(),
     )
     request = WebRequest(
         url=url,

@@ -159,3 +159,116 @@ class TestHandoffBroker:
         result = plane.execute(req)
         assert result.block_state == ChallengeStatus.NEED_HANDOFF
         assert result.extra.get("handoff_id")
+
+    def test_authenticated_http_blocked_emits_handoff_id(self, tmp_path):
+        """When session HTTP returns a Cloudflare-block, AccessPlane emits a handoff_id."""
+        broker = HandoffBroker(store_dir=tmp_path)
+
+        # Pre-seed a session ref so authenticated_http is attempted.
+        sess_broker = SessionBroker()
+        ref = sess_broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "sid", "value": "x", "domain": "example.com", "path": "/"}],
+        )
+
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(),
+            broker=sess_broker,
+            challenge_sm=ChallengeStateMachine(),
+            handoff_broker=broker,
+            session_http_fn=lambda url, **kw: {
+                "status": 403,
+                "text": "challenge",
+                "block": {"blocked": True, "kind": "cloudflare", "evidence": []},
+            },
+        )
+        req = WebRequest(
+            url="https://example.com/api",
+            risk=RiskLevel.AUTHENTICATED_READ,
+            auth_required=True,
+        )
+        result = plane.execute(req)
+        assert result.block_state == ChallengeStatus.NEED_HANDOFF
+        assert result.extra.get("handoff_id")
+
+    def test_browser_blocked_emits_handoff_id(self, tmp_path):
+        """When browser navigation lands on a Cloudflare-block, AccessPlane emits a handoff_id.
+
+        Uses AUTHENTICATED_READ so the policy admits the browser transport;
+        public_http and authenticated_http both decline (no http_fn / no
+        session ref), so the resolver falls through to ``_try_browser``.
+        """
+        broker = HandoffBroker(store_dir=tmp_path)
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(),
+            challenge_sm=ChallengeStateMachine(),
+            handoff_broker=broker,
+            browser_fn=lambda url, **kw: {
+                "ok": False,
+                "text": "challenge",
+                "html": "<html>cf</html>",
+                "url": url,
+                "block": {"blocked": True, "kind": "cloudflare", "evidence": []},
+            },
+        )
+        req = WebRequest(
+            url="https://example.com/protected",
+            risk=RiskLevel.AUTHENTICATED_READ,
+        )
+        result = plane.execute(req)
+        assert result.block_state == ChallengeStatus.NEED_HANDOFF
+        assert result.extra.get("handoff_id")
+
+
+class TestDefaultPlane:
+    """Step 5: bh_http._default_plane serves public_http when daemon absent."""
+
+    def test_default_plane_serves_public_http(self, monkeypatch):
+        """get(url) with no explicit plane returns 200 via the default urllib path."""
+        from browser_harness.transports import bh_http
+
+        captured = {}
+
+        class FakeResp:
+            headers = type("H", (), {"get_content_charset": staticmethod(lambda: "utf-8")})()
+
+            def __init__(self, body):
+                self._body = body
+
+            def read(self):
+                return self._body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=None):
+            captured["url"] = req.full_url if hasattr(req, "full_url") else req
+            return FakeResp(b"hello world")
+
+        monkeypatch.setattr(bh_http.urllib.request, "urlopen", fake_urlopen)
+
+        resp = bh_http.get("https://example.com/page")
+        assert resp.status == 200
+        assert resp.text == "hello world"
+        assert captured["url"] == "https://example.com/page"
+
+    def test_default_plane_session_http_returns_none_without_daemon(self):
+        """Session HTTP closure tolerates missing daemon by returning None."""
+        from browser_harness.transports import bh_http
+
+        # Without a live daemon, the closure should not crash; it should return None.
+        result = bh_http._session_http("https://example.com/")
+        # Either None (helpers fn missing/raises) or a dict — must not crash.
+        assert result is None or isinstance(result, dict)
+
+    def test_default_plane_wires_handoff_broker(self):
+        """_default_plane attaches a HandoffBroker so blocked paths can emit handoff_ids."""
+        from browser_harness.transports import bh_http
+
+        plane = bh_http._default_plane()
+        assert plane._handoff_broker is not None
