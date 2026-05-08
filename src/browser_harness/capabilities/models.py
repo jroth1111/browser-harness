@@ -16,13 +16,9 @@ class RiskLevel(enum.Enum):
 
 
 class TransportType(enum.Enum):
-    CACHE = "cache"
-    EXISTING_CAPABILITY = "existing_capability"
-    OFFICIAL_API = "official_api"
     PUBLIC_HTTP = "public_http"
     AUTHENTICATED_HTTP = "authenticated_http"
     BROWSER_BOOTSTRAP = "browser_bootstrap"
-    BROWSER_DERIVED_LEASE = "browser_derived_lease"
     FULL_BROWSER = "full_browser"
     HUMAN_HANDOFF = "human_handoff"
 

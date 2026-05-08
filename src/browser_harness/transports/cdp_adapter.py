@@ -58,7 +58,6 @@ class CDPAdapter:
                 )
             if capability.transport not in (
                 TransportType.FULL_BROWSER,
-                TransportType.BROWSER_DERIVED_LEASE,
                 TransportType.BROWSER_BOOTSTRAP,
             ):
                 raise PolicyDeniedError(
