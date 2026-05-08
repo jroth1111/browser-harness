@@ -136,6 +136,9 @@ class SessionBroker:
         if not bundle:
             return None
 
+        if bundle.expires_at and time.time() > bundle.expires_at:
+            return None
+
         return RedactedManifest(
             origin=bundle.origin,
             account_id=bundle.account_id,
