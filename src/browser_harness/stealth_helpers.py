@@ -189,6 +189,7 @@ class _CamoufoxSession:
         self._user_data_dir = user_data_dir
         self._proxy = proxy
         self._stealth_page = None
+        self._cf = None
 
     def __enter__(self):
         launch_kwargs = {"headless": self._headless}
@@ -197,16 +198,22 @@ class _CamoufoxSession:
         if self._proxy:
             launch_kwargs["proxy"] = {"server": self._proxy}
 
-        cf = _Camoufox(**launch_kwargs)
-        browser = cf.__enter__()
+        self._cf = _Camoufox(**launch_kwargs)
+        browser = self._cf.__enter__()
         page = browser.new_page()
-        self._stealth_page = StealthPage(page, browser, browser, cf)
+        self._stealth_page = StealthPage(page, browser, browser, None)
         return self._stealth_page
 
     def __exit__(self, *exc):
         if self._stealth_page:
             self._stealth_page.close()
             self._stealth_page = None
+        if self._cf:
+            try:
+                self._cf.__exit__(*exc)
+            except Exception:
+                pass
+            self._cf = None
 
 
 def camoufox_session(headless=False, user_data_dir=None, proxy=None):
