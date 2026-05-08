@@ -203,6 +203,8 @@ class AccessPlane:
             return None
         try:
             text = self._http_fn(request.url, headers=request.headers)
+            if not isinstance(text, str):
+                return None
             block = self._detect_block(text, text, request.url)
             if block.get("blocked"):
                 kind = self._block_kind_to_challenge_kind(block)

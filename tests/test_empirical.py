@@ -174,6 +174,25 @@ class TestAuthorityPipelineLive:
         assert calls[0] == 1
 
     @network
+    def test_http_fn_returning_none_falls_through(self):
+        """http_fn returning None (adapter failure) must not produce bogus 200 OK.
+
+        Before the fix, _try_public_http treated None as text content and
+        returned AccessResult(status=200, text=None). The transport loop
+        stopped, and the empty result could be cached for PUBLIC_READ.
+        """
+        plane = AccessPlane(
+            http_fn=lambda url, **kw: None,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        result = plane.execute(WebRequest(url="https://example.com", risk=RiskLevel.PUBLIC_READ))
+        assert result.status == 502, (
+            f"expected 502 (no transport available), got {result.status} — "
+            f"http_fn returning None must not produce 200 OK"
+        )
+        assert result.text == ""
+
+    @network
     def test_auth_required_skips_public_http(self):
         """auth_required=True must not use PUBLIC_HTTP transport."""
         public_calls = []
