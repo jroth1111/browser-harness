@@ -1,0 +1,115 @@
+{
+  "name": "airbnb",
+  "version": "0.1.0",
+  "domain": "airbnb",
+  "description": "Airbnb host intelligence: pricing, calendar, conversion, operations, listing quality, comp-set positioning, portfolio reporting",
+
+  "surfaces": [
+    {"name": "search_results", "url_pattern": "/s/.*/homes", "method": "GET"},
+    {"name": "listing_page", "url_pattern": "/rooms/.*", "method": "GET"},
+    {"name": "host_listings", "url_pattern": "/hosting/listings", "method": "GET"},
+    {"name": "host_listing_detail", "url_pattern": "/hosting/listings/.*", "method": "GET"},
+    {"name": "performance_dashboard", "url_pattern": "/performance/.*", "method": "GET"},
+    {"name": "api_v3", "url_pattern": "/api/v3/.*", "method": "POST"},
+    {"name": "calendar_router", "url_pattern": "/calendar-router", "method": "GET"},
+    {"name": "transaction_history", "url_pattern": "/users/transaction_history", "method": "GET"}
+  ],
+
+  "route_rules": [
+    {
+      "origin": "https://www.airbnb.com.au",
+      "path_pattern": "/s/.*/homes",
+      "allowed_methods": ["GET"],
+      "risk_max": "public_read",
+      "transport": "public_http",
+      "auth_required": false
+    },
+    {
+      "origin": "https://www.airbnb.com.au",
+      "path_pattern": "/rooms/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "public_read",
+      "transport": "public_http",
+      "auth_required": false
+    },
+    {
+      "origin": "https://www.airbnb.com.au",
+      "path_pattern": "/hosting/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://www.airbnb.com.au",
+      "path_pattern": "/api/v3/.*",
+      "allowed_methods": ["GET", "POST"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://www.airbnb.com.au",
+      "path_pattern": "/performance/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://www.airbnb.com",
+      "path_pattern": ".*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    }
+  ],
+
+  "risk_policies": {
+    "public_comp_search": "public_read",
+    "market_research_scan": "public_read",
+    "own_public_audit": "public_read",
+    "host_listing_inventory": "authenticated_read",
+    "host_reviews": "authenticated_read",
+    "pricing_rules": "authenticated_read",
+    "calendar_availability": "authenticated_read",
+    "earnings_reservations_payouts": "high_risk_write",
+    "export": "public_read"
+  },
+
+  "extraction_fields": [
+    "listing_id",
+    "listing_name",
+    "price",
+    "currency",
+    "location",
+    "room_type",
+    "guest_count",
+    "rating",
+    "review_count",
+    "availability",
+    "booking_url",
+    "host_id",
+    "metrics",
+    "date_range"
+  ],
+
+  "handoff_triggers": [
+    "login_redirect",
+    "captcha",
+    "rate_limit_429",
+    "account_locked",
+    "cloudflare_challenge"
+  ],
+
+  "forbidden_patterns": [
+    "urllib.request.urlopen",
+    "requests.get",
+    "stealth_session",
+    "cdp(",
+    "browser_cookies",
+    "solve_turnstile",
+    "navigate_via_google"
+  ]
+}

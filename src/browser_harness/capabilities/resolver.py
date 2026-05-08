@@ -70,6 +70,7 @@ class AccessPlane:
         session_http_fn: Callable[..., dict] | None = None,
         browser_fn: Callable[..., dict] | None = None,
         block_detect_fn: Callable[..., dict] | None = None,
+        handoff_broker: Any | None = None,
     ):
         self.policy = policy or PolicyEngine()
         self.budget = budget or BudgetController()
@@ -79,6 +80,7 @@ class AccessPlane:
         self._session_http_fn = session_http_fn
         self._browser_fn = browser_fn
         self._block_detect_fn = block_detect_fn
+        self._handoff_broker = handoff_broker
         self._cache: dict[str, AccessResult] = {}
 
     def execute(self, request: WebRequest) -> AccessResult:
@@ -176,6 +178,7 @@ class AccessPlane:
                     block_state=challenge.status,
                     block=block,
                     reason="blocked",
+                    extra=self._handoff_extra(request, challenge.status),
                 )
             return AccessResult(
                 url=request.url,
@@ -288,6 +291,17 @@ class AccessPlane:
             if key in kind_str:
                 return kind
         return ChallengeKind.BLOCKED if block.get("blocked") else ChallengeKind.UNKNOWN
+
+    def _handoff_extra(self, request: WebRequest, status: ChallengeStatus) -> dict[str, Any]:
+        if status != ChallengeStatus.NEED_HANDOFF or not self._handoff_broker:
+            return {}
+        origin = self._origin(request.url)
+        handoff = self._handoff_broker.create(
+            url=request.url,
+            origin=origin,
+            challenge_kind="unknown",
+        )
+        return {"handoff_id": handoff.handoff_id}
 
     @staticmethod
     def _origin(url: str) -> str:

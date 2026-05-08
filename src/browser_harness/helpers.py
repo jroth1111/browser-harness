@@ -2645,6 +2645,87 @@ _AD_DOMAINS = (
 )
 
 
+def _authority_fetch(url, headers=None, timeout=20.0, min_text=500):
+    """Fetch through the authority pipeline — no challenge-solving.
+
+    When BU_AUTHORITY_MODE is set, fetch() delegates here instead of the
+    auto cascade. The AccessPlane orchestrates policy, budget, transport
+    selection, and challenge evaluation — but never calls solve_turnstile.
+    """
+    from .capabilities.models import ChallengeStatus, RiskLevel, WebRequest
+    from .capabilities.resolver import AccessPlane
+    from .authority.policy import PolicyEngine
+    from .authority.challenge import ChallengeStateMachine
+    from .sessions.broker import SessionBroker
+    from .scheduler.budgets import BudgetController
+    from .response import Response
+
+    def _public_http(url, headers=None, **kw):
+        try:
+            return http_get(url, headers=headers, timeout=timeout)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+            return None
+
+    def _session_http(url, headers=None, **kw):
+        try:
+            return http_get_browser_session_response(url, headers=headers, timeout=timeout)
+        except (urllib.error.URLError, OSError):
+            return None
+
+    def _browser(url, **kw):
+        tid = None
+        try:
+            tid = new_tab(url)
+            wait_for_load(timeout=timeout)
+            status = wait_for_content(min_text=min_text, timeout=timeout)
+            html = js("document.documentElement.outerHTML") or ""
+            return {
+                "ok": status.get("ok", False),
+                "text": status.get("text", ""),
+                "html": html,
+                "url": status.get("url", url),
+                "status": 200 if status.get("ok") else 502,
+                "reason": status.get("reason", ""),
+                "block": status.get("block") or {},
+            }
+        except Exception:
+            return None
+        finally:
+            if tid:
+                try:
+                    close_tab(tid)
+                except Exception:
+                    pass
+
+    plane = AccessPlane(
+        policy=PolicyEngine(),
+        budget=BudgetController(),
+        broker=SessionBroker(),
+        challenge_sm=ChallengeStateMachine(),
+        http_fn=_public_http,
+        session_http_fn=_session_http,
+        browser_fn=_browser,
+        block_detect_fn=detect_block_page,
+    )
+    request = WebRequest(
+        url=url,
+        risk=RiskLevel.PUBLIC_READ,
+        method="GET",
+        headers=headers or {},
+    )
+    result = plane.execute(request)
+    return Response(
+        html=result.html,
+        text=result.text,
+        url=result.url,
+        status=result.status,
+        source="authority",
+        headers=result.headers,
+        reason=result.reason,
+        block=result.block,
+    )
+
+
 def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
     """Fetch URL and return a ``Response`` with CSS/XPath query support.
 
@@ -2654,10 +2735,15 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
     - ``"session"``: HTTP with browser cookies via ``http_get_browser_session_response()``.
     - ``"browser"``: real browser navigation via ``new_tab()`` + ``wait_for_content()``.
     - ``"auto"`` (default): tries HTTP, then session, then browser (with Turnstile fallback).
+    - ``"authority"``: routes through the AccessPlane pipeline with policy/budget/challenge gates.
+
+    When BU_AUTHORITY_MODE is set, ``source="auto"`` behaves like ``"authority"``.
 
     The returned Response may include a ``turnstile_solved`` key set to True when
     Cloudflare Turnstile was detected and solved during the browser fallback.
     """
+    if source == "authority" or (source == "auto" and os.environ.get("BU_AUTHORITY_MODE")):
+        return _authority_fetch(url, headers=headers, timeout=timeout, min_text=min_text)
     from .response import Response
 
     def _readiness_status_code(status):

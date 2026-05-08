@@ -1,0 +1,108 @@
+{
+  "name": "ai-chat-archive",
+  "version": "0.1.0",
+  "domain": "ai-chat-archive",
+  "description": "Archive and sync AI chat conversations from ChatGPT, Claude, Gemini, Grok, Perplexity via browser-harness",
+
+  "surfaces": [
+    {"name": "chatgpt_conversations", "url_pattern": "/backend-api/conversations", "method": "GET"},
+    {"name": "chatgpt_conversation_detail", "url_pattern": "/backend-api/conversation/.*", "method": "GET"},
+    {"name": "chatgpt_thread", "url_pattern": "/c/.*", "method": "GET"},
+    {"name": "claude_conversations", "url_pattern": "/api/organizations/.*/chat_conversations", "method": "GET"},
+    {"name": "claude_conversation_detail", "url_pattern": "/api/organizations/.*/chat_conversations/.*", "method": "GET"},
+    {"name": "gemini_batchexecute", "url_pattern": "/_/BardChatUi/data/batchexecute", "method": "POST"},
+    {"name": "grok_conversations", "url_pattern": "/rest/app-chat/conversations", "method": "GET"},
+    {"name": "grok_conversation_detail", "url_pattern": "/rest/app-chat/conversations/.*/responses", "method": "GET"},
+    {"name": "perplexity_threads", "url_pattern": "/rest/thread/.*", "method": "GET"},
+    {"name": "perplexity_thread_list", "url_pattern": "/rest/thread/list_ask_threads", "method": "POST"}
+  ],
+
+  "route_rules": [
+    {
+      "origin": "https://chatgpt.com",
+      "path_pattern": "/backend-api/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://chatgpt.com",
+      "path_pattern": "/api/auth/session",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://claude.ai",
+      "path_pattern": "/api/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://gemini.google.com",
+      "path_pattern": "/_/BardChatUi/.*",
+      "allowed_methods": ["POST"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://grok.com",
+      "path_pattern": "/rest/.*",
+      "allowed_methods": ["GET"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    },
+    {
+      "origin": "https://www.perplexity.ai",
+      "path_pattern": "/rest/.*",
+      "allowed_methods": ["GET", "POST"],
+      "risk_max": "authenticated_read",
+      "transport": "authenticated_http",
+      "auth_required": true
+    }
+  ],
+
+  "risk_policies": {
+    "discover_threads": "authenticated_read",
+    "archive_thread": "authenticated_read",
+    "archive_artifacts": "authenticated_read",
+    "sync_incremental": "authenticated_read",
+    "export": "public_read"
+  },
+
+  "extraction_fields": [
+    "thread_id",
+    "thread_title",
+    "messages",
+    "model_name",
+    "timestamp",
+    "artifacts",
+    "citations",
+    "attachments",
+    "provider",
+    "account_label"
+  ],
+
+  "handoff_triggers": [
+    "login_redirect",
+    "captcha",
+    "rate_limit_429",
+    "account_locked",
+    "cloudflare_challenge",
+    "session_expired"
+  ],
+
+  "forbidden_patterns": [
+    "urllib.request.urlopen",
+    "requests.get",
+    "stealth_session",
+    "cdp(",
+    "browser_cookies"
+  ]
+}
