@@ -44,15 +44,14 @@ def is_waf_blocked(html):
 
 When a page is blocked, try these in order:
 
-1. **Seed the browser session.** `seed_browser_session(url)` opens a real
-   browser tab to the URL and waits for content. If the user's browser profile
-   has a valid session (they previously completed a challenge or logged in),
-   this refreshes cookies and returns `{"ok": True, ...}`.
+1. **Use `fetch()` with `source="auto"`.** The authority pipeline routes through
+   the AccessPlane, trying HTTP, then browser session, then full browser render.
+   PolicyEngine governs each step through risk levels (R0-R5). This covers the
+   common case where a headless fetch fails but a real browser session succeeds.
 
-2. **Fetch with browser session cookies.** After seeding, use
-   `http_get_browser_session(url)` to fetch additional pages with the browser's
-   cookies and user agent. This works for same-domain pages that rely on
-   session cookies.
+2. **Fetch with browser session cookies.** Use `fetch(url, source="session")` to
+   fetch pages with the browser's cookies and user agent via the authority pipeline.
+   This works for same-domain pages that rely on session cookies.
 
 3. **Check for alternative data sources.** Many sites offer APIs, data exports,
    or structured backends that don't trigger WAF challenges. See
@@ -61,19 +60,13 @@ When a page is blocked, try these in order:
 
 4. **Ask the user to complete login.** If the block is an auth wall or expired
    session, ask the user to log in through their browser, then retry with
-   `seed_browser_session()`.
+   `fetch(url, source="session")`.
 
-5. **Use `fetch()` with `source="auto"`.** The auto cascade tries HTTP, then
-   browser, and handles Cloudflare Turnstile challenges when a visible browser
-   is available. This covers the common case where a headless fetch fails but
-   a real browser session succeeds.
-
-6. **Use the stealth browser.** If the CDP path is detected at the protocol
-   level (`Runtime.enable` fingerprints) or Turnstile cannot be solved,
-   `stealth_session()` from `stealth_helpers.py` launches a Patchright browser
-   that passes Cloudflare Turnstile natively. This is a different backend
-   entirely (tier 3), not a fix on the CDP session. See
-   `interaction-skills/stealth-browser.md`.
+5. **Challenge handoff.** When a challenge cannot be solved automatically
+   (Cloudflare Turnstile, Datadome, etc.), the authority pipeline produces a
+   handoff ID. This is a diagnostic signal — it indicates the challenge type
+   and that automated recovery was not possible. See
+   `interaction-skills/stealth-browser.md` for escalation options.
 
 ## When to stop
 
@@ -91,10 +84,12 @@ If none of the authorized recovery paths work:
 
 ## Cloudflare Turnstile
 
-For Cloudflare sites specifically, `detect_turnstile()` and `solve_turnstile()`
-handle interactive and non-interactive challenges through the attached browser.
-This is a browser-native interaction (clicking a checkbox or waiting for an
-automatic verification), not a bypass. Requires a visible (non-headless) browser.
+For Cloudflare sites, challenges produce a handoff ID through the authority
+pipeline rather than being solved automatically. The handoff ID is a diagnostic
+signal indicating the challenge type. This is not a bypass — it is an
+observation that the challenge exists and requires user intervention or an
+alternative approach. See `interaction-skills/stealth-browser.md` for when the
+standard path fails entirely.
 
 ## Dialog handling
 
