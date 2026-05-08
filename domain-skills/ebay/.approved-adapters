@@ -1,0 +1,4 @@
+# ebay search.py uses curl_cffi for anti-bot impersonation (not standard
+# requests). The token match "requests.get" is a false positive from
+# "cffi_requests.get". curl_cffi is the legitimate anti-bot transport.
+scripts/search.py

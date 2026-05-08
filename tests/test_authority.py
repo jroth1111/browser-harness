@@ -452,6 +452,28 @@ FORBIDDEN_DOMAIN_TOKENS = [
 ]
 
 
+def _load_approved_adapters(domain_dir: Path) -> set[str]:
+    """Load approved adapter paths from .approved-adapters files.
+
+    Each domain skill can contain a .approved-adapters file listing Python
+    file paths (relative to the domain skill directory, one per line) that
+    are intentionally using low-level transport APIs as adapter code.
+    Lines starting with # are comments; blank lines are ignored.
+    """
+    approved = set()
+    for adapters_file in domain_dir.rglob(".approved-adapters"):
+        skill_dir = adapters_file.parent
+        skill_rel = skill_dir.relative_to(domain_dir)
+        for line in adapters_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # Normalize: skill_dir/file.py relative to domain_dir
+            full_rel = str(skill_rel / line)
+            approved.add(full_rel)
+    return approved
+
+
 class TestDomainSkillAuthority:
     def test_domain_skills_do_not_import_transport_authority(self):
         """Domain skills should not contain raw transport authority.
@@ -464,19 +486,23 @@ class TestDomainSkillAuthority:
         if not domain_dir.exists():
             pytest.skip("domain-skills directory not found")
 
+        approved = _load_approved_adapters(domain_dir)
+
         violations = []
         for path in domain_dir.rglob("*.py"):
+            rel = str(path.relative_to(domain_dir))
+            if rel in approved:
+                continue
             text = path.read_text()
             for token in FORBIDDEN_DOMAIN_TOKENS:
                 if token in text:
                     violations.append(f"{path.relative_to(domain_dir.parent)}: {token}")
 
-        if violations:
-            pytest.xfail(
-                f"Domain skills contain forbidden transport authority ({len(violations)} violations):\n"
-                + "\n".join(violations[:5])
-                + f"\n... and {len(violations) - 5} more" if len(violations) > 5 else ""
-            )
+        assert not violations, (
+            f"Domain skills contain forbidden transport authority ({len(violations)} violations):\n"
+            + "\n".join(violations[:10])
+            + (f"\n... and {len(violations) - 10} more" if len(violations) > 10 else "")
+        )
 
 
 # --- 11. Provider registry ---

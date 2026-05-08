@@ -1,0 +1,5 @@
+# sync.py contains cdp() calls inside a browser probe template string
+# that gets sent to the browser-harness CLI. These are not direct cdp
+# calls from domain-skill code — they're embedded in a string executed
+# by the browser-harness runtime.
+scripts/sync.py

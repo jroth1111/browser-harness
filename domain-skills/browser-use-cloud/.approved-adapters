@@ -1,0 +1,4 @@
+# cleanup-zombies.py calls the Browser Use cloud API with PATCH (stop browser)
+# and custom API key headers. bh_http does not support PATCH with body, so
+# urllib.request is the appropriate transport for this API adapter.
+cleanup-zombies.py

@@ -1,0 +1,6 @@
+# AirBnb scripts use browser_cookies as a runtime built-in (injected by
+# browser-harness agent runtime). They only check cookie names for
+# logged-out guard verification, not values.
+scripts/collect_competitors.py
+scripts/collect_own_public.py
+scripts/sync_insights_year_view.py

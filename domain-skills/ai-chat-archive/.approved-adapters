@@ -1,0 +1,9 @@
+# These files are the HTTP adapter layer for their providers.
+# They use urllib.request directly because they implement provider-specific
+# authentication (dual cookie + bearer, custom headers) that the authority
+# pipeline does not support. They are intentionally low-level adapter code.
+lib/chatgpt_http.py
+providers/claude/http.py
+providers/gemini/http.py
+providers/grok/http.py
+providers/perplexity/http.py

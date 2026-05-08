@@ -114,7 +114,7 @@ PROFILES = {
 
 def fetch_leaderboard():
     """Fetch all leaderboard entries from the API via pagination."""
-    import urllib.request
+    from browser_harness.transports.bh_http import get
 
     all_rows = []
     offset = 0
@@ -122,11 +122,9 @@ def fetch_leaderboard():
 
     while True:
         url = f"{API_BASE}/leaderboard?limit={limit}&offset={offset}"
-        req = urllib.request.Request(url, headers={"User-Agent": "localmaxxing-scorer/1.0"})
-        with urllib.request.urlopen(req) as resp:
-            raw = resp.read().decode()
+        resp = get(url, risk="public_read", headers={"User-Agent": "localmaxxing-scorer/1.0"})
 
-        data = json.loads(raw)
+        data = json.loads(resp.text)
         all_rows.extend(data["rows"])
         offset += limit
         if offset >= data["total"]:
