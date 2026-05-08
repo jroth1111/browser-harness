@@ -87,6 +87,9 @@ def connect(name, timeout=1.0):
     s.settimeout(timeout); return s, token
 
 
+_MAX_RESPONSE = 10 * 1024 * 1024  # 10MB — matches agent worker frame limit
+
+
 def request(c, token, req):
     """One-shot send + recv + parse on an open socket. Injects token on Windows.
     Returns the parsed JSON response. Caller closes the socket."""
@@ -97,7 +100,11 @@ def request(c, token, req):
         chunk = c.recv(1 << 16)
         if not chunk: break
         data += chunk
-    return json.loads(data or b"{}")
+        if len(data) > _MAX_RESPONSE:
+            raise RuntimeError(f"IPC response exceeds {_MAX_RESPONSE} bytes")
+    if not data:
+        raise ConnectionError("daemon closed connection without response")
+    return json.loads(data)
 
 
 def ping(name, timeout=1.0):

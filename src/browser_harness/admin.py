@@ -200,7 +200,7 @@ def _daemon_browser_connection(name):
         if page:
             page = {"title": page.get("title") or "(untitled)", "url": page.get("url") or ""}
         return {"name": name, "page": page}
-    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, socket.timeout, OSError, KeyError, ValueError, json.JSONDecodeError):
+    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, socket.timeout, OSError, KeyError, ValueError, json.JSONDecodeError, RuntimeError):
         return None
     finally:
         if c:
@@ -693,7 +693,7 @@ def _daemon_meta(meta, name=None, timeout=2.0):
     try:
         c, token = ipc.connect(name or NAME, timeout=timeout)
         return ipc.request(c, token, {"meta": meta})
-    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, socket.timeout, OSError, ValueError, json.JSONDecodeError):
+    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, socket.timeout, OSError, ValueError, json.JSONDecodeError, RuntimeError):
         return {}
     finally:
         if c:
