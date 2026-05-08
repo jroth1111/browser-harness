@@ -354,6 +354,28 @@ class TestActionPolicyEmpirical:
         action = WebAction(kind="click", target="Place Order", risk=RiskLevel.LOW_RISK_WRITE)
         assert policy.classify(action) == RiskLevel.EXTERNAL_SIDE_EFFECT
 
+    def test_display_settings_not_escalated_by_pay_hint(self):
+        """'pay' must not match as a substring of 'display'. Word boundary
+        matching prevents false-positive escalation to PAYMENT_DELETE_SECURITY
+        for harmless UI interactions like 'Display Settings'."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="Display Settings", risk=RiskLevel.LOW_RISK_WRITE)
+        assert policy.classify(action) == RiskLevel.LOW_RISK_WRITE
+
+    def test_buy_textbook_not_escalated_by_book_hint(self):
+        """'book' must not match as a substring of 'textbook'. Word boundary
+        matching prevents false-positive escalation."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="Buy Textbook", risk=RiskLevel.LOW_RISK_WRITE)
+        assert policy.classify(action) != RiskLevel.EXTERNAL_SIDE_EFFECT
+
+    def test_message_sender_not_escalated_by_send_hint(self):
+        """'send' must not match as a substring of 'sender'. Word boundary
+        matching prevents false-positive escalation."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="Message Sender", risk=RiskLevel.LOW_RISK_WRITE)
+        assert policy.classify(action) != RiskLevel.EXTERNAL_SIDE_EFFECT
+
     def test_full_authorize_pipeline_payment(self):
         """Full pipeline: classify + authorize for payment action."""
         policy = ActionPolicy()

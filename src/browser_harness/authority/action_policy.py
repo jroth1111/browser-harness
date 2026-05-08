@@ -8,6 +8,8 @@ R4: payment/delete/sec   → human handoff
 """
 from __future__ import annotations
 
+import re
+
 from ..capabilities.models import AuthorityDecision, RiskLevel, TransportType, WebAction
 
 
@@ -51,6 +53,31 @@ class ActionPolicy:
         "security",
     })
 
+    @classmethod
+    def _compile_patterns(cls, hints: frozenset[str]) -> list[re.Pattern]:
+        patterns = []
+        for hint in hints:
+            phrase = hint.replace("_", " ")
+            # Word boundary around each word in the phrase
+            pat = r'\b' + r'\s+'.join(re.escape(w) for w in phrase.split()) + r'\b'
+            patterns.append(re.compile(pat, re.IGNORECASE))
+        return patterns
+
+    _HIGH_RISK_PATTERNS: list[re.Pattern] | None = None
+    _EXTERNAL_SIDE_EFFECT_PATTERNS: list[re.Pattern] | None = None
+
+    @classmethod
+    def _get_high_risk_patterns(cls) -> list[re.Pattern]:
+        if cls._HIGH_RISK_PATTERNS is None:
+            cls._HIGH_RISK_PATTERNS = cls._compile_patterns(cls.HIGH_RISK_HINTS)
+        return cls._HIGH_RISK_PATTERNS
+
+    @classmethod
+    def _get_external_side_effect_patterns(cls) -> list[re.Pattern]:
+        if cls._EXTERNAL_SIDE_EFFECT_PATTERNS is None:
+            cls._EXTERNAL_SIDE_EFFECT_PATTERNS = cls._compile_patterns(cls.EXTERNAL_SIDE_EFFECT_HINTS)
+        return cls._EXTERNAL_SIDE_EFFECT_PATTERNS
+
     _RISK_RANK = {
         RiskLevel.PUBLIC_READ: 0,
         RiskLevel.AUTHENTICATED_READ: 1,
@@ -91,12 +118,12 @@ class ActionPolicy:
         value = action.value.lower()
         text = f"{kind} {target} {value}"
 
-        for hint in self.HIGH_RISK_HINTS:
-            if hint.replace("_", " ") in text:
+        for pattern in self._get_high_risk_patterns():
+            if pattern.search(text):
                 return RiskLevel.PAYMENT_DELETE_SECURITY
 
-        for hint in self.EXTERNAL_SIDE_EFFECT_HINTS:
-            if hint.replace("_", " ") in text:
+        for pattern in self._get_external_side_effect_patterns():
+            if pattern.search(text):
                 return RiskLevel.EXTERNAL_SIDE_EFFECT
 
         if kind in self.LOW_RISK_ACTIONS:
