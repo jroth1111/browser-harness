@@ -16,7 +16,7 @@ class _FakeCDP:
 
 
 def _fresh_daemon():
-    d = daemon.Daemon()
+    d = daemon.Daemon(lazy_domains=False)
     d.cdp = _FakeCDP()
     return d
 
@@ -76,7 +76,7 @@ def test_enable_default_domains_swallows_errors_per_domain():
                 raise RuntimeError("simulated DOM failure")
             return {}
 
-    d = daemon.Daemon()
+    d = daemon.Daemon(lazy_domains=False)
     d.cdp = _PartialFailureCDP()
 
     asyncio.run(d._enable_default_domains("session-X"))
@@ -164,7 +164,7 @@ def test_set_session_runs_disable_and_enables_in_parallel():
             return {}
 
     async def run():
-        d = daemon.Daemon()
+        d = daemon.Daemon(lazy_domains=False)
         d.cdp = _ConcurrencyProbeCDP()
         d.session = "session-OLD"  # ensures Network.disable on old fires
         d.cdp.release = asyncio.Event()
@@ -219,7 +219,7 @@ def test_set_session_first_attach_runs_four_enables_in_parallel():
             return {}
 
     async def run():
-        d = daemon.Daemon()
+        d = daemon.Daemon(lazy_domains=False)
         d.cdp = _ConcurrencyProbeCDP()
         d.session = None  # no previous session
         d.cdp.release = asyncio.Event()

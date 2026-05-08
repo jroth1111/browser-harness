@@ -334,11 +334,6 @@
       "use": "same-domain HTTP with status/header receipt"
     },
     {
-      "name": "fetch_with_browser_session",
-      "path_type": "hybrid",
-      "use": "same-domain HTTP using browser-established state"
-    },
-    {
       "name": "new_tab",
       "path_type": "browser",
       "use": "first navigation without overwriting user's active tab"

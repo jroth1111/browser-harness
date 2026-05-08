@@ -746,62 +746,29 @@ class TestCrossOriginSecurity:
 
 
 class TestAuthorityFetchWiring:
-    """Prove fetch(source='authority') delegates to AccessPlane, not the auto cascade."""
+    """Prove fetch(source='auto') delegates to AccessPlane by default."""
 
-    def test_authority_source_routes_through_plane(self, monkeypatch):
-        """fetch(source='authority') uses AccessPlane, returning authority source."""
+    def test_auto_source_routes_through_plane(self, monkeypatch):
+        """fetch(source='auto') uses AccessPlane, returning authority source."""
         from browser_harness.helpers import fetch
         monkeypatch.setattr(
             "browser_harness.helpers.http_get",
             lambda url, **kw: "fetched via authority",
         )
-        resp = fetch("https://example.com/page", source="authority")
+        resp = fetch("https://example.com/page", source="auto")
         assert resp.source == "authority"
         assert resp.text == "fetched via authority"
         assert resp.status == 200
 
-    def test_env_var_activates_authority_mode(self, monkeypatch):
-        """BU_AUTHORITY_MODE=1 makes source='auto' behave like 'authority'."""
-        from browser_harness.helpers import fetch
-        monkeypatch.setenv("BU_AUTHORITY_MODE", "1")
-        monkeypatch.setattr(
-            "browser_harness.helpers.http_get",
-            lambda url, **kw: "authority via env",
-        )
-        resp = fetch("https://example.com/page", source="auto")
-        assert resp.source == "authority"
-        assert resp.text == "authority via env"
-
     def test_explicit_http_still_bypasses_authority(self, monkeypatch):
-        """source='http' always uses legacy path, even with BU_AUTHORITY_MODE set."""
+        """source='http' always uses direct path, not authority pipeline."""
         from browser_harness.helpers import fetch
-        monkeypatch.setenv("BU_AUTHORITY_MODE", "1")
         monkeypatch.setattr(
             "browser_harness.helpers.http_get",
-            lambda url, **kw: "legacy http",
+            lambda url, **kw: "direct http",
         )
         resp = fetch("https://example.com/page", source="http")
-        assert resp.source == "http"  # legacy, not authority
-
-    def test_authority_does_not_call_solve_turnstile(self, monkeypatch):
-        """Authority fetch never calls solve_turnstile, even when blocked."""
-        from browser_harness.helpers import fetch
-        solve_calls = []
-        monkeypatch.setattr(
-            "browser_harness.helpers.http_get",
-            lambda url, **kw: "cloudflare challenge page",
-        )
-        monkeypatch.setattr(
-            "browser_harness.helpers.detect_block_page",
-            lambda **kw: {"blocked": True, "kind": "cloudflare", "evidence": ["cf-ray"]},
-        )
-        monkeypatch.setattr(
-            "browser_harness.helpers.solve_turnstile",
-            lambda **kw: solve_calls.append(1),
-        )
-        resp = fetch("https://example.com/protected", source="authority")
-        assert resp.block.get("blocked") is True
-        assert len(solve_calls) == 0
+        assert resp.source == "http"
 
     def test_authority_returns_403_on_block(self, monkeypatch):
         """When blocked, authority fetch returns 403, not 200."""
@@ -814,7 +781,7 @@ class TestAuthorityFetchWiring:
             "browser_harness.helpers.detect_block_page",
             lambda **kw: {"blocked": True, "kind": "cloudflare", "evidence": []},
         )
-        resp = fetch("https://example.com/protected", source="authority")
+        resp = fetch("https://example.com/protected", source="auto")
         assert resp.status == 403
         assert resp.source == "authority"
 

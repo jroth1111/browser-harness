@@ -256,7 +256,7 @@ def test_unknown_scheme_rejected():
 
 
 def test_attach_first_page_attaches_then_enables_default_domains():
-    d = daemon.Daemon()
+    d = daemon.Daemon(lazy_domains=False)
     d.cdp = FakeCDP()
     asyncio.run(d.attach_first_page())
     assert d.cdp.calls[:2] == [
@@ -268,7 +268,7 @@ def test_attach_first_page_attaches_then_enables_default_domains():
 
 
 def test_attach_first_page_creates_blank_when_no_real_page():
-    d = daemon.Daemon()
+    d = daemon.Daemon(lazy_domains=False)
     d.cdp = FakeCDP({"Target.getTargets": {"targetInfos": []}})
     asyncio.run(d.attach_first_page())
     assert d.cdp.calls[:3] == [

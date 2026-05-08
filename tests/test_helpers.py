@@ -125,23 +125,6 @@ def test_goto_url_resolves_compound_domain_skill_assets(tmp_path):
     assert result == {"frameId": "frame-1", "domain_skills": ["overview.md"]}
 
 
-def test_goto_with_auth_loads_profile_before_navigation():
-    with patch("browser_harness.helpers.login_session.load_auth_profile", return_value=True) as mock_load, \
-         patch("browser_harness.helpers.cdp", return_value={"frameId": "f1"}), \
-         patch("browser_harness.helpers.drain_events", return_value=[]):
-        result = helpers.goto_with_auth("https://www.airbnb.com/rooms/123")
-    mock_load.assert_called_once()
-    assert mock_load.call_args[0][1] == "www.airbnb.com"
-
-
-def test_goto_with_auth_navigates_even_without_profile():
-    with patch("browser_harness.helpers.login_session.load_auth_profile", return_value=False), \
-         patch("browser_harness.helpers.cdp", return_value={"frameId": "f1"}), \
-         patch("browser_harness.helpers.drain_events", return_value=[]):
-        result = helpers.goto_with_auth("https://example.com")
-    assert result == {"frameId": "f1"}
-
-
 def test_switch_tab_does_not_mutate_title():
     calls = []
 
@@ -1420,72 +1403,6 @@ def test_js_tolerates_malformed_exception_details():
             helpers.js("bad syntax }}}")
 
 
-def test_detect_turnstile_returns_not_found_when_no_targets():
-    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": []}), \
-         patch("browser_harness.helpers.js", return_value=None), \
-         patch("time.sleep"):
-        result = helpers.detect_turnstile(timeout=0.1)
-        assert result["found"] is False
-        assert result["challenge_type"] is None
-
-
-def test_detect_turnstile_skips_malformed_target_rows():
-    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
-        ["not", "an", "object"],
-        {"type": "iframe", "url": "https://challenges.cloudflare.com/no-id"},
-    ]}), \
-         patch("browser_harness.helpers.js", return_value=None), \
-         patch("time.sleep"):
-        result = helpers.detect_turnstile(timeout=0.1)
-        assert result == {"found": False, "challenge_type": None, "iframe_target_id": None}
-
-
-def test_detect_turnstile_rejects_malformed_target_infos_envelope():
-    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": "not-a-list"}):
-        with pytest.raises(RuntimeError, match="targetInfos.*must be a list"):
-            helpers.detect_turnstile(timeout=0.1)
-
-
-def test_detect_turnstile_finds_cloudflare_iframe():
-    with patch("browser_harness.helpers.cdp", return_value={"targetInfos": [
-        {"type": "iframe", "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/turnstile", "targetId": "abc123"},
-    ]}):
-        result = helpers.detect_turnstile(timeout=0.1)
-        assert result["found"] is True
-        assert result["challenge_type"] == "turnstile_iframe"
-        assert result["iframe_target_id"] == "abc123"
-
-
-def test_solve_turnstile_tolerates_malformed_block_metadata():
-    js_results = iter([
-        "",
-        {"x": 10, "y": 20, "w": 300, "h": 65},
-        "Example",
-    ])
-
-    with patch("browser_harness.helpers.detect_turnstile", return_value={"found": True}), \
-         patch("browser_harness.helpers.js", side_effect=lambda *args, **kwargs: next(js_results)), \
-         patch("browser_harness.helpers.click_at_xy"), \
-         patch("browser_harness.helpers.page_content_status", return_value={"textLength": 500, "block": "not-an-object"}), \
-         patch("browser_harness.helpers.wait"), \
-         patch("time.sleep"):
-        assert helpers.solve_turnstile(timeout=0.1, poll=0.0, max_attempts=1) == {
-            "solved": True,
-            "reason": "content_appeared",
-            "attempts": 1,
-        }
-
-
-def test_response_turnstile_solved_flag():
-    from browser_harness.response import Response
-    r = Response(html="<html></html>", text="", url="https://example.com",
-                 status=200, source="browser", turnstile_solved=True)
-    assert r.turnstile_solved is True
-    r2 = Response(html="<html></html>", text="", url="https://example.com",
-                  status=200, source="browser")
-    assert r2.turnstile_solved is False
-
-
 def test_response_preserves_readiness_reason_and_block_state():
     from browser_harness.response import Response
 
@@ -1546,21 +1463,18 @@ def test_fetch_browser_timeout_is_not_reported_as_empty_success():
     assert response.block == {"blocked": False, "kind": None, "evidence": []}
 
 
-def test_fetch_auto_tolerates_scalar_session_text():
-    with patch("browser_harness.helpers.http_get", side_effect=RuntimeError("plain http failed")), \
-         patch("browser_harness.helpers.http_get_browser_session_response", return_value={
+def test_fetch_session_tolerates_scalar_session_text():
+    with patch("browser_harness.helpers.http_get_browser_session_response", return_value={
              "ok": True,
              "text": 12345,
              "url": "https://example.com/session",
              "status": 200,
              "headers": {},
-         }), \
-         patch("browser_harness.helpers.new_tab") as new_tab:
-        response = helpers.fetch("https://example.com/session", min_text=1)
+         }):
+        response = helpers.fetch("https://example.com/session", source="session")
 
     assert response.source == "session"
     assert response.text == "12345"
-    new_tab.assert_not_called()
 
 
 def test_response_repr():

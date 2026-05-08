@@ -422,16 +422,6 @@ def goto_url(url, wait_until=None):
         "domain_skills": ds,
     }
 
-def goto_with_auth(url, wait_until=None):
-    """Navigate to *url*, restoring a saved auth profile for the domain first.
-
-    Calls load_auth_profile before goto_url. If no profile exists or it's
-    expired, navigates without restored auth. Returns the goto_url result.
-    """
-    login_session.load_auth_profile(cdp, urlparse(url).hostname or "")
-    return goto_url(url, wait_until=wait_until)
-
-
 def _domain_skill_dir(url):
     root = _asset_dir("domain-skills", "browser_harness_domain_skills")
     hostname = (urlparse(url).hostname or "").lower().removeprefix("www.")
@@ -453,23 +443,7 @@ def _domain_skill_dir(url):
     return root / candidates[0]
 
 
-def navigate_via_google(url, google_base="https://www.google.com"):
-    """Navigate to URL with Google as the HTTP Referer.
-
-    Opens Google first, then redirects to the target URL. Some WAF systems
-    (Cloudflare, Akamai) treat search-engine referrals as organic traffic and
-    apply lighter challenge requirements.
-
-    Returns a dict with content health status (ok, reason, block, textLength)
-    plus viewport metrics (url, title, w, h). Check ``ok`` before extracting.
-    """
-    goto_url(google_base)
-    wait_for_load(timeout=10.0)
-    # Use JS navigation so the browser sends Google as the referrer
-    js(f"location.href = {json.dumps(url)}")
-    status = wait_for_content(min_text=200, timeout=15.0)
-    info = page_info()
-    return {**status, "w": info.get("w", 0), "h": info.get("h", 0)}
+@_recovered
 
 @_recovered
 def page_info():
@@ -2055,138 +2029,6 @@ def _detect_cloudflare_type(html):
     return None
 
 
-def detect_turnstile(timeout=5.0):
-    """Check if a Cloudflare Turnstile challenge is present on the current page.
-
-    Returns ``{"found": bool, "challenge_type": str|None, "iframe_target_id": str|None}``.
-    """
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        for t in _target_infos(cdp("Target.getTargets")):
-            target_id = t.get("targetId")
-            if t.get("type") == "iframe" and target_id and "challenges.cloudflare.com" in t.get("url", ""):
-                return {"found": True, "challenge_type": "turnstile_iframe", "iframe_target_id": target_id}
-        # Check for Turnstile script or widget in DOM
-        found = js("""!!(
-            document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]') ||
-            document.querySelector('.cf-turnstile') ||
-            document.querySelector('#cf-turnstile') ||
-            document.querySelector('#cf_turnstile')
-        )""")
-        if found:
-            return {"found": True, "challenge_type": "turnstile_widget", "iframe_target_id": None}
-        # Check page title for "Just a moment..." (CF challenge page)
-        title = js("document.title")
-        if title and "just a moment" in title.lower():
-            return {"found": True, "challenge_type": "cf_challenge_page", "iframe_target_id": None}
-        time.sleep(0.5)
-    return {"found": False, "challenge_type": None, "iframe_target_id": None}
-
-
-def solve_turnstile(timeout=30.0, poll=1.0, max_attempts=3):
-    """Click the Cloudflare Turnstile checkbox and wait for challenge completion.
-
-    Requires a visible browser (headful or headless with virtual display).
-    Uses Scrapling's offset coordinates (+26-28/+25-27px from widget top-left)
-    and humanized click timing. Retries recursively if the challenge persists.
-    Returns ``{"solved": bool, "reason": str, "attempts": int}``.
-    """
-    import random
-
-    for attempt in range(1, max_attempts + 1):
-        detection = detect_turnstile(timeout=5.0)
-        if not detection["found"]:
-            return {"solved": False, "reason": "no_turnstile_found", "attempts": attempt}
-
-        # Non-interactive challenges just need waiting
-        html = js("document.documentElement.outerHTML") or ""
-        challenge_type = _detect_cloudflare_type(html)
-
-        if challenge_type == "non-interactive":
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                title = js("document.title") or ""
-                if "just a moment" not in title.lower():
-                    return {"solved": True, "reason": "non_interactive_passed", "attempts": attempt}
-                time.sleep(1.0)
-            return {"solved": False, "reason": "timeout", "attempts": attempt}
-
-        # Embedded Turnstile — widget is inside the page, no CF challenge page.
-        # Wait for the hidden input to receive a token (indicates completion).
-        if challenge_type == "embedded":
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                token = js("""(() => {
-                    const inp = document.querySelector('input[name="cf-turnstile-response"]');
-                    if (inp && inp.value && inp.value.length > 10) return inp.value;
-                    return null;
-                })()""")
-                if token:
-                    return {"solved": True, "reason": "embedded_token_received", "attempts": attempt}
-                # Some sites use a data-callback instead
-                callback_done = js("""!!(
-                    window.turnstile && window.turnstile.getResponse &&
-                    window.turnstile.getResponse()
-                )""")
-                if callback_done:
-                    return {"solved": True, "reason": "embedded_callback_fired", "attempts": attempt}
-                time.sleep(1.0)
-            return {"solved": False, "reason": "embedded_timeout", "attempts": attempt}
-
-        # Find the Turnstile widget bounding box. Try iframe first, then CSS selectors.
-        box = js("""(() => {
-            // Method 1: CF iframe bounding box
-            const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
-            if (iframe) {
-                const r = iframe.getBoundingClientRect();
-                if (r.width > 0 && r.height > 0) return {x: r.x, y: r.y, w: r.width, h: r.height};
-            }
-            // Method 2: Turnstile widget container selectors (Scrapling fallback)
-            for (const sel of ['#cf-turnstile div', '#cf_turnstile div', '.turnstile>div>div',
-                               '.main-content p+div>div>div']) {
-                const el = document.querySelector(sel);
-                if (el) {
-                    const r = el.getBoundingClientRect();
-                    if (r.width > 0 && r.height > 0) return {x: r.x, y: r.y, w: r.width, h: r.height};
-                }
-            }
-            return null;
-        })()""")
-
-        if not box:
-            # No widget found — check if challenge already solved
-            title = js("document.title") or ""
-            if "just a moment" not in title.lower():
-                return {"solved": True, "reason": "already_solved", "attempts": attempt}
-            return {"solved": False, "reason": "widget_not_found", "attempts": attempt}
-
-        # Scrapling's exact offset: checkbox is +26-28px right and +25-27px down from top-left
-        x = box["x"] + random.randint(26, 28)
-        y = box["y"] + random.randint(25, 27)
-
-        # Humanized click: move to position first, then click with delay
-        click_at_xy(x, y, humanize=True)
-
-        # Wait for CF page to disappear
-        wait(0.5)  # Brief pause for click to register
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            title = js("document.title") or ""
-            if "just a moment" not in title.lower():
-                # Verify actual content appeared (not still a WAF shell)
-                status = page_content_status()
-                if _int_count(status.get("textLength")) >= 500:
-                    if not _dict_value(status.get("block")).get("blocked"):
-                        return {"solved": True, "reason": "content_appeared", "attempts": attempt}
-            time.sleep(poll)
-
-        # Challenge still present — retry if attempts remain
-        if attempt >= max_attempts:
-            return {"solved": False, "reason": "timeout_after_retries", "attempts": attempt}
-
-    return {"solved": False, "reason": "max_attempts_exceeded", "attempts": max_attempts}
-
-
 def block_resources(ad_domains=True, extra_domains=None, resource_types=None):
     """Block ad domains and/or resource types on the current page.
 
@@ -2648,9 +2490,8 @@ _AD_DOMAINS = (
 def _authority_fetch(url, headers=None, timeout=20.0, min_text=500):
     """Fetch through the authority pipeline — no challenge-solving.
 
-    When BU_AUTHORITY_MODE is set, fetch() delegates here instead of the
-    auto cascade. The AccessPlane orchestrates policy, budget, transport
-    selection, and challenge evaluation — but never calls solve_turnstile.
+    The AccessPlane orchestrates policy, budget, transport selection, and
+    challenge evaluation. Challenges produce handoff IDs instead of bypass.
     """
     from .capabilities.models import ChallengeStatus, RiskLevel, WebRequest
     from .capabilities.resolver import AccessPlane
@@ -2731,30 +2572,16 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
 
     *source* selects the fetch strategy:
 
+    - ``"auto"`` (default): routes through the authority pipeline (AccessPlane).
+      Policy gate, budget check, transport selection, challenge evaluation.
+      Never calls solve_turnstile — challenges produce handoff IDs instead.
     - ``"http"``: plain HTTP via ``http_get()`` — fastest, no browser state.
     - ``"session"``: HTTP with browser cookies via ``http_get_browser_session_response()``.
     - ``"browser"``: real browser navigation via ``new_tab()`` + ``wait_for_content()``.
-    - ``"auto"`` (default): tries HTTP, then session, then browser (with Turnstile fallback).
-    - ``"authority"``: routes through the AccessPlane pipeline with policy/budget/challenge gates.
-
-    When BU_AUTHORITY_MODE is set, ``source="auto"`` behaves like ``"authority"``.
-
-    The returned Response may include a ``turnstile_solved`` key set to True when
-    Cloudflare Turnstile was detected and solved during the browser fallback.
     """
-    if source == "authority" or (source == "auto" and os.environ.get("BU_AUTHORITY_MODE")):
+    if source in ("auto", "authority"):
         return _authority_fetch(url, headers=headers, timeout=timeout, min_text=min_text)
     from .response import Response
-
-    def _readiness_status_code(status):
-        if status.get("ok"):
-            return 200
-        block = status.get("block") or {}
-        if block.get("blocked"):
-            return 403
-        if status.get("reason") == "timeout":
-            return 504
-        return 502
 
     if source == "http":
         try:
@@ -2806,85 +2633,19 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
                 )
             return Response(
                 html=html, text=status.get("text", ""),
-                url=status.get("url", url), status=_readiness_status_code(status),
+                url=status.get("url", url),
+                status=200 if status.get("ok") else (
+                    403 if block.get("blocked") else (
+                        504 if status.get("reason") == "timeout" else 502)),
                 source="browser", reason=status.get("reason"), block=block,
             )
         finally:
             if tid:
                 try: close_tab(tid)
                 except Exception: pass
-    try:
-        text = http_get(url, headers=headers, timeout=timeout)
-        block = detect_block_page(html=text, text=text, url=url)
-        if not block.get("blocked") and len(text.strip()) >= min_text:
-            return Response(html=text, text=text, url=url, status=200, source="http")
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        block = detect_block_page(html=body, text=body, url=url)
-        if block.get("blocked") or len(body.strip()) < min_text:
-            pass  # fall through to session/browser
-        else:
-            return Response(html=body, text=body, url=url, status=e.code, source="http")
-    except (urllib.error.URLError, OSError, ConnectionError, RuntimeError):
-        pass
 
-    try:
-        result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
-        text = str(result.get("text") or "")
-        block = detect_block_page(html=text, text=text, url=url)
-        if result.get("ok") and not block.get("blocked") and len(text.strip()) >= min_text:
-            return Response(
-                html=text, text=text,
-                url=result.get("url", url), status=result.get("status", 0),
-                source="session", headers=result.get("headers", {}),
-            )
-    except (urllib.error.URLError, OSError, ConnectionError, RuntimeError):
-        pass
-    tid = None
-    try:
-        tid = new_tab(url)
-        wait_for_load(timeout=timeout)
-        status = wait_for_content(min_text=min_text, timeout=timeout)
-        html = js("document.documentElement.outerHTML") or ""
-        if status.get("ok"):
-            return Response(
-                html=html, text=status.get("text", ""),
-                url=status.get("url", url), status=200,
-                source="browser", reason=status.get("reason"),
-                block=status.get("block"),
-            )
-        # Blocked — try Turnstile if Cloudflare challenge detected
-        if not status.get("ok"):
-            detection = detect_turnstile(timeout=3.0)
-            if detection["found"]:
-                result = solve_turnstile(timeout=timeout)
-                if result.get("solved"):
-                    status2 = wait_for_content(min_text=min_text, timeout=timeout)
-                    html = js("document.documentElement.outerHTML") or html
-                    return Response(
-                        html=html, text=status2.get("text", ""),
-                        url=status2.get("url", url),
-                        status=_readiness_status_code(status2),
-                        source="browser",
-                        turnstile_solved=True,
-                        reason=status2.get("reason"),
-                        block=status2.get("block"),
-                    )
-        block = status.get("block") or {}
-        return Response(
-            html=html, text=status.get("text", ""),
-            url=status.get("url", url), status=_readiness_status_code(status),
-            source="browser", reason=status.get("reason"), block=block,
-        )
-    finally:
-        if tid:
-            try: close_tab(tid)
-            except Exception: pass
-
-
-def fetch_with_browser_session(url, headers=None, timeout=20.0, min_text=500):
-    """Fetch with browser-established cookies and return a Response object."""
-    return fetch(url, source="session", headers=headers, timeout=timeout, min_text=min_text)
+    return Response(html="", text="", url=url, status=400, source="unknown",
+                    reason=f"unknown source: {source}")
 
 
 def _close_sock():

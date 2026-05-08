@@ -303,7 +303,7 @@ def _is_attachable_page(t):
 
 
 class Daemon:
-    def __init__(self, lazy_domains=False):
+    def __init__(self, lazy_domains=True):
         self.cdp = None
         self.session = None
         self.target_id = None
