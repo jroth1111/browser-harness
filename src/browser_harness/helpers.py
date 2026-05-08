@@ -23,7 +23,7 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME") or os.environ.get("BH_NAME", "default")
+NAME = os.environ.get("BH_NAME", "default")
 ipc._check(NAME)
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
 

@@ -660,8 +660,10 @@ class TestDaemonLazyDomains:
         d.cdp = _FakeCDP()
         asyncio.run(d.attach_first_page())
 
+        # After stealth hardening: attach only enables Page.
+        # Runtime/DOM/Network are stealth leaks — enabled on-demand via ensure_domains.
         enabled = {call[0] for call in d.cdp.calls if call[0].endswith(".enable")}
-        assert enabled == {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}
+        assert enabled == {"Page.enable"}
 
     def test_ensure_domains_enables_on_demand(self):
         """Controllers can explicitly enable domains they need."""

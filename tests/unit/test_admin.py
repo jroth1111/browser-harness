@@ -30,18 +30,17 @@ class FakeUrlopenResponse:
 
 
 def test_local_chrome_mode_is_false_when_env_provides_remote_cdp():
-    assert not admin._is_local_chrome_mode({"BU_CDP_WS": "ws://example.test/devtools/browser/1"})
+    assert not admin._is_local_chrome_mode({"BH_CDP_WS": "ws://example.test/devtools/browser/1"})
     assert not admin._is_local_chrome_mode({"BH_CDP_URL": "http://127.0.0.1:9222"})
-    assert not admin._is_local_chrome_mode({"BU_CDP_URL": "http://127.0.0.1:9222"})
 
 
 def test_local_chrome_mode_is_false_when_process_env_provides_remote_cdp(monkeypatch):
-    monkeypatch.setenv("BU_CDP_WS", "ws://example.test/devtools/browser/1")
+    monkeypatch.setenv("BH_CDP_WS", "ws://example.test/devtools/browser/1")
 
     assert not admin._is_local_chrome_mode()
 
-    monkeypatch.delenv("BU_CDP_WS", raising=False)
-    monkeypatch.setenv("BU_CDP_URL", "http://127.0.0.1:9222")
+    monkeypatch.delenv("BH_CDP_WS", raising=False)
+    monkeypatch.setenv("BH_CDP_URL", "http://127.0.0.1:9222")
 
     assert not admin._is_local_chrome_mode()
 
@@ -68,10 +67,10 @@ def test_daemon_endpoint_names_discovers_valid_socket_names(tmp_path, monkeypatc
     monkeypatch.setattr(admin.ipc, "IS_WINDOWS", False)
     monkeypatch.setattr(admin.ipc, "BH_TMP_DIR", None)  # shared-tmpdir mode
     monkeypatch.setattr(admin.ipc, "_TMP", tmp_path)
-    (tmp_path / "bu-default.sock").touch()
-    (tmp_path / "bu-remote_1.sock").touch()
-    (tmp_path / "bu-invalid.name.sock").touch()
-    (tmp_path / "not-bu-default.sock").touch()
+    (tmp_path / "bh-default.sock").touch()
+    (tmp_path / "bh-remote_1.sock").touch()
+    (tmp_path / "bh-invalid.name.sock").touch()
+    (tmp_path / "not-bh-default.sock").touch()
 
     assert admin._daemon_endpoint_names() == ["default", "remote_1"]
 
@@ -81,7 +80,7 @@ def test_daemon_endpoint_names_with_bh_tmp_dir_returns_local_name_when_sock_exis
     monkeypatch.setattr(admin.ipc, "BH_TMP_DIR", str(tmp_path))
     monkeypatch.setattr(admin.ipc, "_TMP", tmp_path)
     monkeypatch.setattr(admin, "NAME", "session-xyz")
-    (tmp_path / "bu.sock").touch()
+    (tmp_path / "bh.sock").touch()
 
     assert admin._daemon_endpoint_names() == ["session-xyz"]
 
@@ -220,7 +219,7 @@ def test_start_remote_daemon_stops_created_browser_when_daemon_start_fails(monke
     monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: "ws://example.test/devtools/browser/1")
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
-    monkeypatch.setenv("BU_AUTOSPAWN", "1")
+    monkeypatch.setenv("BH_AUTOSPAWN", "1")
 
     with pytest.raises(RuntimeError, match="boom"):
         admin.start_remote_daemon()
@@ -356,7 +355,7 @@ def test_start_remote_daemon_stops_created_browser_when_daemon_start_is_interrup
     monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: "ws://example.test/devtools/browser/1")
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: (_ for _ in ()).throw(exc_type()))
-    monkeypatch.setenv("BU_AUTOSPAWN", "1")
+    monkeypatch.setenv("BH_AUTOSPAWN", "1")
 
     with pytest.raises(exc_type):
         admin.start_remote_daemon()
@@ -498,7 +497,7 @@ def test_start_remote_daemon_does_not_stop_created_browser_on_success(monkeypatc
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: "ws://example.test/devtools/browser/1")
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: None)
     monkeypatch.setattr(admin, "_show_live_url", lambda url: None)
-    monkeypatch.setenv("BU_AUTOSPAWN", "1")
+    monkeypatch.setenv("BH_AUTOSPAWN", "1")
 
     assert admin.start_remote_daemon() == browser
     assert calls == [
@@ -524,7 +523,7 @@ def test_start_remote_daemon_rejects_malformed_create_response(monkeypatch, brow
     monkeypatch.setattr(admin, "_browser_use", fake_browser_use)
     monkeypatch.setattr(admin, "_cdp_ws_from_url", lambda url: (_ for _ in ()).throw(AssertionError("should not resolve ws")))
     monkeypatch.setattr(admin, "ensure_daemon", lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not start daemon")))
-    monkeypatch.setenv("BU_AUTOSPAWN", "1")
+    monkeypatch.setenv("BH_AUTOSPAWN", "1")
 
     with pytest.raises(RuntimeError, match=message):
         admin.start_remote_daemon()

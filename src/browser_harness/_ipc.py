@@ -19,15 +19,15 @@ _NAME_RE = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
 _server_token = None
 
 
-def _check(name):  # path-traversal guard for BU_NAME
+def _check(name):  # path-traversal guard for BH_NAME
     if not _NAME_RE.match(name or ""):
-        raise ValueError(f"invalid BU_NAME {name!r}: must match [A-Za-z0-9_-]{{1,64}}")
+        raise ValueError(f"invalid BH_NAME {name!r}: must match [A-Za-z0-9_-]{{1,64}}")
     return name
 
 
-def _stem(name):  # "bu" when BH_TMP_DIR isolates us, else "bu-<NAME>"
+def _stem(name):  # "bh" when BH_TMP_DIR isolates us, else "bh-<NAME>"
     _check(name)
-    return "bu" if BH_TMP_DIR else f"bu-{name}"
+    return "bh" if BH_TMP_DIR else f"bh-{name}"
 
 
 def log_path(name):   return _TMP / f"{_stem(name)}.log"

@@ -88,16 +88,13 @@ def _local_chrome_listening():
     return False
 
 
-# BU_CDP_URL / BU_CDP_WS (and BH_* aliases) are documented to override local
-# Chrome discovery, so they must also block cloud auto-bootstrap. Without this
-# guard, start_remote_daemon() in admin.py overwrites the WS in the daemon env
-# with a cloud WebSocket URL, silently replacing the user's explicit endpoint
-# and billing them for a cloud browser they never asked for.
+# BH_CDP_URL / BH_CDP_WS override local Chrome discovery, so they must also
+# block cloud auto-bootstrap. Without this guard, start_remote_daemon() in
+# admin.py overwrites the WS in the daemon env with a cloud WebSocket URL,
+# silently replacing the user's explicit endpoint.
 def _explicit_cdp_configured():
     return bool(
-        os.environ.get("BU_CDP_URL")
-        or os.environ.get("BU_CDP_WS")
-        or os.environ.get("BH_CDP_URL")
+        os.environ.get("BH_CDP_URL")
         or os.environ.get("BH_CDP_WS")
     )
 
@@ -293,17 +290,16 @@ def main():
     else:
         sys.exit("Usage: browser-harness -c \"print(page_info())\"")
     print_update_banner()
-    # Auto-bootstrap a cloud browser is opt-in via BU_AUTOSPAWN — BROWSER_USE_API_KEY alone
+    # Auto-bootstrap a cloud browser is opt-in via BH_AUTOSPAWN — BROWSER_USE_API_KEY alone
     # is not enough, since the key is commonly set for unrelated reasons (profile sync,
-    # cloud API calls, parent agents managing their own session). An explicit BU_CDP_URL
-    # / BU_CDP_WS (or BH_* alias) also blocks the spawn so we honour the precedence
-    # install.md promises.
+    # cloud API calls, parent agents managing their own session). An explicit BH_CDP_URL
+    # / BH_CDP_WS also blocks the spawn so we honour the precedence install.md promises.
     if (
         not daemon_alive()
         and not _local_chrome_listening()
         and not _explicit_cdp_configured()
         and os.environ.get("BROWSER_USE_API_KEY")
-        and os.environ.get("BU_AUTOSPAWN")
+        and os.environ.get("BH_AUTOSPAWN")
     ):
         start_remote_daemon(NAME)
     ensure_daemon()

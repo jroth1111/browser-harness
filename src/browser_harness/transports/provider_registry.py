@@ -84,17 +84,25 @@ def default_registry() -> ProviderRegistry:
         description="Patchright stealth browser",
     ))
 
+    def _launch_camoufox(**kwargs):
+        from ..stealth_helpers import camoufox_session
+        return camoufox_session(
+            headless=kwargs.get("headless", False),
+            user_data_dir=kwargs.get("user_data_dir"),
+            proxy=kwargs.get("proxy"),
+        )
+
     registry.register(ProviderInfo(
         provider_id="camoufox",
         capabilities=(
-            ProviderCapability.CDP
-            | ProviderCapability.SCREENSHOTS
+            ProviderCapability.SCREENSHOTS
             | ProviderCapability.STEALTH
             | ProviderCapability.ISOLATED_PROFILE
             | ProviderCapability.IDENTITY_COHERENT_HTTP
             | ProviderCapability.HEADLESS
         ),
-        description="Camoufox anti-detect browser",
+        description="Camoufox anti-detect browser (Firefox-based, engine-level fingerprinting)",
+        launch_fn=_launch_camoufox,
     ))
 
     registry.register(ProviderInfo(

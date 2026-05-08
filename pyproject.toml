@@ -23,6 +23,7 @@ dev = [
 ]
 stealth = [
     "patchright>=1.59.0",
+    "camoufox>=0.4.0",
 ]
 
 [project.scripts]

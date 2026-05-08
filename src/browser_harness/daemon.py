@@ -44,7 +44,7 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME") or os.environ.get("BH_NAME", "default")
+NAME = os.environ.get("BH_NAME", "default")
 ipc._check(NAME)
 LOG = str(ipc.log_path(NAME))
 PID = str(ipc.pid_path(NAME))
@@ -146,7 +146,7 @@ def _remote_allowed():
     return os.environ.get("BH_CDP_ALLOW_REMOTE") == "1"
 
 
-CDP_ENDPOINT_ENV_KEYS = ("BH_CDP_WS", "BU_CDP_WS", "BH_CDP_URL", "BU_CDP_URL")
+CDP_ENDPOINT_ENV_KEYS = ("BH_CDP_WS", "BH_CDP_URL")
 
 
 def _validate_endpoint_url(url, *, source, input_name=None, http_base=None):
@@ -341,14 +341,11 @@ class Daemon:
 
     async def _enable_default_domains(self, session_id):
         # Each fresh CDP session starts with all domains disabled.
-        # In legacy (eager) mode: enable Page, DOM, Runtime, Network — preserves
-        # backward compatibility for dev_runtime and existing helpers.
-        # In lazy mode: only enable Page (needed for navigation events).
+        # Only enable Page (needed for navigation events).
         # Other domains are enabled on-demand via ensure_domains().
-        if self.lazy_domains:
-            domains = ("Page",)
-        else:
-            domains = ("Page", "DOM", "Runtime", "Network")
+        # Enabling Runtime/DOM/Network on attach is a stealth leak: those
+        # CDP commands are detectable by bot detection scripts.
+        domains = ("Page",)
         await self._enable_domains(session_id, *domains)
 
     async def _enable_domains(self, session_id, *domains):

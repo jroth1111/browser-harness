@@ -21,12 +21,9 @@ def _fresh_daemon():
     return d
 
 
-def test_set_session_enables_all_four_default_domains_on_new_session():
-    """Regression: switch_tab() / new_tab() in helpers.py route through the
-    `set_session` IPC, which previously only enabled Page on the new
-    session. With Network disabled, wait_for_network_idle() silently stops
-    receiving events after a tab switch. Initial attach enables all four
-    (Page, DOM, Runtime, Network); set_session must enable the same set."""
+def test_set_session_enables_default_domains_on_new_session():
+    """After stealth hardening: set_session enables only Page on the new session.
+    DOM/Runtime/Network are enabled on-demand via ensure_domains, not on attach."""
     d = _fresh_daemon()
     new_session = "session-AFTER-switch"
 
@@ -40,9 +37,8 @@ def test_set_session_enables_all_four_default_domains_on_new_session():
         method for (method, _params, sid) in d.cdp.calls
         if sid == new_session and method.endswith(".enable")
     ]
-    assert set(enabled_on_new) == {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}, (
-        f"set_session must enable Page/DOM/Runtime/Network on the new session "
-        f"(parity with initial attach). Got: {enabled_on_new}"
+    assert set(enabled_on_new) == {"Page.enable"}, (
+        f"set_session must enable only Page on the new session. Got: {enabled_on_new}"
     )
     assert d.session == new_session
     assert d.target_id == "target-2"
@@ -66,14 +62,14 @@ def test_set_session_falls_back_to_existing_target_id_when_not_provided():
 
 
 def test_enable_default_domains_swallows_errors_per_domain():
-    """A single domain failing to enable must not prevent the others from
-    being attempted — that would leave the daemon in a partially-configured
-    state. Each Domain.enable call has its own try/except inside the helper."""
+    """A single domain failing to enable must not prevent others from being
+    attempted. After stealth hardening, only Page is enabled by default;
+    the error-swallowing logic still applies to that single domain."""
     class _PartialFailureCDP(_FakeCDP):
         async def send_raw(self, method, params=None, session_id=None):
             self.calls.append((method, params, session_id))
-            if method == "DOM.enable":
-                raise RuntimeError("simulated DOM failure")
+            if method == "Page.enable":
+                raise RuntimeError("simulated Page failure")
             return {}
 
     d = daemon.Daemon(lazy_domains=False)
@@ -82,10 +78,7 @@ def test_enable_default_domains_swallows_errors_per_domain():
     asyncio.run(d._enable_default_domains("session-X"))
 
     attempted = [m for (m, _p, _s) in d.cdp.calls]
-    assert "Page.enable" in attempted
-    assert "DOM.enable" in attempted  # attempted, but raised
-    assert "Runtime.enable" in attempted
-    assert "Network.enable" in attempted
+    assert "Page.enable" in attempted  # attempted, but raised
 
 
 def test_set_session_disables_network_on_old_session_before_enabling_new():
@@ -112,12 +105,12 @@ def test_set_session_disables_network_on_old_session_before_enabling_new():
         f"the new one. Got: {disabled}"
     )
 
-    # Sanity: the new session still gets Network.enable.
+    # After stealth hardening: new session only gets Page.enable.
     enabled_on_new = {
         method for (method, _p, sid) in d.cdp.calls
         if sid == "session-NEW" and method.endswith(".enable")
     }
-    assert "Network.enable" in enabled_on_new
+    assert "Page.enable" in enabled_on_new
 
 
 def test_set_session_does_not_disable_network_when_no_previous_session():
@@ -140,12 +133,9 @@ def test_set_session_does_not_disable_network_when_no_previous_session():
 
 
 def test_set_session_runs_disable_and_enables_in_parallel():
-    """The four Domain.enable calls (plus Network.disable on the old session)
-    must run concurrently via asyncio.gather, not sequentially. With the old
-    sequential code, helpers.switch_tab() would block in _send() for up to
-    ~22s on a slow/remote daemon while the helper's IPC socket has a 5s
-    read timeout, causing client-side socket timeouts. Verifying that all
-    five CDP calls reach send_raw before any returns proves parallelization."""
+    """Network.disable on old session + Page.enable on new session must run
+    concurrently via asyncio.gather. After stealth hardening, only Page is
+    enabled by default — DOM/Runtime/Network are on-demand."""
     class _ConcurrencyProbeCDP:
         def __init__(self):
             self.calls = []
@@ -174,12 +164,11 @@ def test_set_session_runs_disable_and_enables_in_parallel():
             "session_id": "session-NEW",
             "target_id": "target-NEW",
         }))
-        # Yield repeatedly until everything that's going to be in-flight is
-        # in-flight. Cap iterations to avoid hanging if parallelization breaks.
+        # Yield until everything in-flight is in-flight.
         for _ in range(50):
             await asyncio.sleep(0)
-            # 5 = Network.disable on OLD + 4 enables on NEW.
-            if d.cdp.in_flight >= 5:
+            # 2 = Network.disable on OLD + Page.enable on NEW.
+            if d.cdp.in_flight >= 2:
                 break
         peak = d.cdp.max_concurrent
         d.cdp.release.set()
@@ -187,20 +176,19 @@ def test_set_session_runs_disable_and_enables_in_parallel():
         return peak, d.cdp.calls
 
     peak, calls = asyncio.run(run())
-    assert peak == 5, (
-        f"set_session must run disable + 4 enables concurrently via gather "
-        f"(observed peak in-flight = {peak}; expected 5 = 1 disable on OLD + "
-        f"4 enables on NEW). Sequential await would peak at 1."
+    assert peak == 2, (
+        f"set_session must run disable + Page.enable concurrently via gather "
+        f"(observed peak in-flight = {peak}; expected 2). Sequential await "
+        f"would peak at 1."
     )
-    # Sanity: the right calls were made.
     methods = sorted({m for (m, _p, _s) in calls})
     assert "Network.disable" in methods
-    assert {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}.issubset(methods)
+    assert "Page.enable" in methods
 
 
-def test_set_session_first_attach_runs_four_enables_in_parallel():
+def test_set_session_first_attach_runs_page_enable():
     """When there's no previous session, the disable path is skipped — only
-    the four enables run, still in parallel."""
+    Page.enable runs (stealth hardening: DOM/Runtime/Network are on-demand)."""
     class _ConcurrencyProbeCDP:
         def __init__(self):
             self.calls = []
@@ -231,15 +219,14 @@ def test_set_session_first_attach_runs_four_enables_in_parallel():
         }))
         for _ in range(50):
             await asyncio.sleep(0)
-            if d.cdp.in_flight >= 4:
+            if d.cdp.in_flight >= 1:
                 break
         peak = d.cdp.max_concurrent
         d.cdp.release.set()
         await handle_task
-        return peak
+        return peak, d.cdp.calls
 
-    peak = asyncio.run(run())
-    assert peak == 4, (
-        f"first set_session must run 4 enables concurrently "
-        f"(observed peak = {peak}). No Network.disable should fire."
-    )
+    peak, calls = asyncio.run(run())
+    methods = {m for (m, _p, _s) in calls}
+    assert "Page.enable" in methods
+    assert "Network.disable" not in methods  # no previous session to disable

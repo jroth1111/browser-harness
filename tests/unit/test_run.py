@@ -16,9 +16,9 @@ def test_c_flag_executes_code():
 
 
 def test_cloud_bootstrap_on_headless_server(monkeypatch):
-    """No daemon, no local Chrome, API key + BU_AUTOSPAWN set -> auto-provision cloud daemon."""
+    """No daemon, no local Chrome, API key + BH_AUTOSPAWN set -> auto-provision cloud daemon."""
     monkeypatch.setenv("BROWSER_USE_API_KEY", "test-key")
-    monkeypatch.setenv("BU_AUTOSPAWN", "1")
+    monkeypatch.setenv("BH_AUTOSPAWN", "1")
     with patch.object(sys, "argv", ["browser-harness", "-c", "x = 1"]), \
          patch("browser_harness.run.daemon_alive", return_value=False), \
          patch("browser_harness.run._local_chrome_listening", return_value=False), \
@@ -29,14 +29,14 @@ def test_cloud_bootstrap_on_headless_server(monkeypatch):
     mock_start.assert_called_once()
 
 
-def test_explicit_bu_cdp_url_blocks_cloud_bootstrap(monkeypatch):
-    """BU_CDP_URL is documented to override local Chrome discovery (install.md:58-59),
-    so it must also block cloud auto-bootstrap. Otherwise start_remote_daemon would
-    overwrite BU_CDP_WS in the daemon env and silently bill the user for a cloud
-    browser instead of attaching to their explicit endpoint."""
-    monkeypatch.setenv("BU_CDP_URL", "http://127.0.0.1:9333")
+def test_explicit_bh_cdp_url_blocks_cloud_bootstrap(monkeypatch):
+    """BH_CDP_URL overrides local Chrome discovery and blocks cloud auto-bootstrap.
+    Otherwise start_remote_daemon would overwrite BH_CDP_WS in the daemon env and
+    silently bill the user for a cloud browser instead of attaching to their
+    explicit endpoint."""
+    monkeypatch.setenv("BH_CDP_URL", "http://127.0.0.1:9333")
     monkeypatch.setenv("BROWSER_USE_API_KEY", "test-key")
-    monkeypatch.setenv("BU_AUTOSPAWN", "1")
+    monkeypatch.setenv("BH_AUTOSPAWN", "1")
     with patch.object(sys, "argv", ["browser-harness", "-c", "x = 1"]), \
          patch("browser_harness.run.daemon_alive", return_value=False), \
          patch("browser_harness.run._local_chrome_listening", return_value=False), \
@@ -64,13 +64,12 @@ def test_explicit_bu_cdp_ws_blocks_cloud_bootstrap(monkeypatch):
     mock_start.assert_not_called()
 
 
-def test_empty_bu_cdp_url_does_not_block_bootstrap(monkeypatch):
+def test_empty_bh_cdp_url_does_not_block_bootstrap(monkeypatch):
     """An env var set to empty string is conventionally treated as unset; the helper
-    must not let `BU_CDP_URL=""` accidentally suppress cloud bootstrap on the headless
-    fresh-box path #277 explicitly preserved."""
-    monkeypatch.setenv("BU_CDP_URL", "")
+    must not let `BH_CDP_URL=""` accidentally suppress cloud bootstrap."""
+    monkeypatch.setenv("BH_CDP_URL", "")
     monkeypatch.setenv("BROWSER_USE_API_KEY", "test-key")
-    monkeypatch.setenv("BU_AUTOSPAWN", "1")
+    monkeypatch.setenv("BH_AUTOSPAWN", "1")
     with patch.object(sys, "argv", ["browser-harness", "-c", "x = 1"]), \
          patch("browser_harness.run.daemon_alive", return_value=False), \
          patch("browser_harness.run._local_chrome_listening", return_value=False), \
@@ -135,16 +134,16 @@ def test_explicit_endpoint_does_not_break_local_chrome_short_circuit(monkeypatch
 
 
 def test_explicit_cdp_configured_helper_truthy(monkeypatch):
-    """Direct unit test of the helper: any non-empty BU_CDP_URL or BU_CDP_WS must
+    """Direct unit test of the helper: any non-empty BH_CDP_URL or BH_CDP_WS must
     return True so the bootstrap guard reads as 'caller has been explicit'."""
     for name, value in [
-        ("BU_CDP_URL", "http://127.0.0.1:9333"),
-        ("BU_CDP_WS", "ws://example.test/devtools/browser/abc"),
-        ("BU_CDP_URL", "http://[::1]:9333"),  # IPv6 host
-        ("BU_CDP_WS", "wss://cloud.example.com/devtools/browser/x"),  # secure WS
+        ("BH_CDP_URL", "http://127.0.0.1:9333"),
+        ("BH_CDP_WS", "ws://example.test/devtools/browser/abc"),
+        ("BH_CDP_URL", "http://[::1]:9333"),  # IPv6 host
+        ("BH_CDP_WS", "wss://cloud.example.com/devtools/browser/x"),  # secure WS
     ]:
-        monkeypatch.delenv("BU_CDP_URL", raising=False)
-        monkeypatch.delenv("BU_CDP_WS", raising=False)
+        monkeypatch.delenv("BH_CDP_URL", raising=False)
+        monkeypatch.delenv("BH_CDP_WS", raising=False)
         monkeypatch.setenv(name, value)
         assert run._explicit_cdp_configured() is True, f"{name}={value!r} should be truthy"
 
@@ -152,14 +151,14 @@ def test_explicit_cdp_configured_helper_truthy(monkeypatch):
 def test_explicit_cdp_configured_helper_falsy(monkeypatch):
     """Helper must return False for unset, empty-string, or both-unset cases —
     those are all 'caller has not chosen an endpoint' from the bootstrap's POV."""
-    monkeypatch.delenv("BU_CDP_URL", raising=False)
-    monkeypatch.delenv("BU_CDP_WS", raising=False)
+    monkeypatch.delenv("BH_CDP_URL", raising=False)
+    monkeypatch.delenv("BH_CDP_WS", raising=False)
     assert run._explicit_cdp_configured() is False, "both unset"
-    monkeypatch.setenv("BU_CDP_URL", "")
-    assert run._explicit_cdp_configured() is False, "BU_CDP_URL empty string"
-    monkeypatch.delenv("BU_CDP_URL", raising=False)
-    monkeypatch.setenv("BU_CDP_WS", "")
-    assert run._explicit_cdp_configured() is False, "BU_CDP_WS empty string"
+    monkeypatch.setenv("BH_CDP_URL", "")
+    assert run._explicit_cdp_configured() is False, "BH_CDP_URL empty string"
+    monkeypatch.delenv("BH_CDP_URL", raising=False)
+    monkeypatch.setenv("BH_CDP_WS", "")
+    assert run._explicit_cdp_configured() is False, "BH_CDP_WS empty string"
 
 
 def test_local_chrome_listening_rejects_non_chrome():

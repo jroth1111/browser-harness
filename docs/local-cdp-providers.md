@@ -32,6 +32,8 @@ Choose from what is actually available before acquiring a new backend:
 | Local Chrome/Edge | Usually already installed on developer machines | Default CDP backend for browser-harness helpers |
 | Codex Browser Use | Only available inside Codex sessions with the Browser plugin and Node REPL `js` tool | Use for Codex in-app browser/current-tab work, not `BH_CDP_WS` |
 | Lightpanda | Optional; may need a binary from upstream GitHub releases, the official install script, or Docker | Use only after install/serve and field capability proof |
+| Patchright | Optional; install the `stealth` dependency group | Stealth escalation tier 1 when CDP is detected (removes Runtime.enable fingerprints) |
+| Camoufox | Optional; install `camoufox` and fetch the browser binary | Stealth escalation tier 2 when Patchright fails (engine-level Firefox fingerprinting) |
 | Self-hosted CDP services | User-provided local or explicitly allowed remote endpoint | Consume endpoint only; browser-harness does not manage provider lifecycle |
 
 Do not install, download, or start an optional provider just because it is listed
@@ -342,3 +344,49 @@ Notes:
 - Kameleo owns fingerprint selection, profile lifecycle, and proxy consistency.
 - Browser-harness consumes the profile-specific Playwright CDP endpoint only.
 - Do not add Kameleo SDKs or profile lifecycle code to browser-harness core.
+
+## Camoufox (Stealth Escalation)
+
+Fit:
+Engine-level stealth browser, the strongest anti-detection option. Camoufox patches
+Firefox at the C++ level — TLS, canvas, WebGL, audio, and font fingerprints are all
+spoofed at the engine level. This is fundamentally harder to detect than any
+Chromium-based approach (Patchright, CloakBrowser). Use when Patchright fails.
+
+Not a CDP endpoint — Camoufox uses Playwright's Firefox driver, not Chrome DevTools
+Protocol. Connect through the `camoufox_session` Python API, not `BH_CDP_WS`.
+
+Install:
+
+```bash
+pip install camoufox
+python -m camoufox fetch
+```
+
+Use from Python:
+
+```python
+from browser_harness.stealth_helpers import camoufox_session
+
+with camoufox_session(headless=False) as s:
+    s.goto("https://protected-site.example.com")
+    html = s.content()
+    text = s.text()
+```
+
+One-shot fetch:
+
+```python
+from browser_harness.stealth_helpers import camoufox_fetch
+
+result = camoufox_fetch("https://protected-site.example.com")
+print(result["text"])
+```
+
+Notes:
+
+- Camoufox owns the browser binary, fingerprint generation, and profile lifecycle.
+- Browser-harness provides the `camoufox_session` / `camoufox_fetch` adapter.
+- Not suitable for CDP-only helpers. Use the `StealthPage` API (goto, js, content,
+  text, cookies, click, fill) instead of raw CDP commands.
+- Headed mode (`headless=False`) is more reliable against advanced detection.

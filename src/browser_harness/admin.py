@@ -107,8 +107,7 @@ def _load_env():
 
 _load_env()
 
-NAME = os.environ.get("BU_NAME") or os.environ.get("BH_NAME", "default")
-BU_API = "https://api.browser-use.com/api/v3"
+NAME = os.environ.get("BH_NAME", "default")
 GH_RELEASES = "https://api.github.com/repos/browser-use/browser-harness/releases/latest"
 VERSION_CACHE = Path(tempfile.gettempdir()) / "bh-version-cache.json"
 VERSION_CACHE_TTL = 24 * 3600
@@ -154,10 +153,10 @@ def _is_local_chrome_mode(env=None):
     """True when the daemon discovers a local Chrome instead of an explicit CDP endpoint."""
     e = env or {}
     return not (
-        e.get("BH_CDP_WS") or e.get("BU_CDP_WS")
-        or e.get("BH_CDP_URL") or e.get("BU_CDP_URL")
-        or os.environ.get("BH_CDP_WS") or os.environ.get("BU_CDP_WS")
-        or os.environ.get("BH_CDP_URL") or os.environ.get("BU_CDP_URL")
+        e.get("BH_CDP_WS")
+        or e.get("BH_CDP_URL")
+        or os.environ.get("BH_CDP_WS")
+        or os.environ.get("BH_CDP_URL")
     )
 
 
@@ -170,13 +169,13 @@ def daemon_alive(name=None):
 def _daemon_endpoint_names():
     # BH_TMP_DIR isolates one daemon per dir → no filename-prefix discovery,
     # just check whether our local endpoint exists. Without BH_TMP_DIR, _TMP
-    # is the shared default (`/tmp` etc.) and we glob `bu-*.<suffix>` to find
+    # is the shared default (`/tmp` etc.) and we glob `bh-*.<suffix>` to find
     # every daemon on the machine.
     suffix = ".port" if ipc.IS_WINDOWS else ".sock"
     if ipc.BH_TMP_DIR:
-        return [NAME] if (ipc._TMP / f"bu{suffix}").exists() else []
+        return [NAME] if (ipc._TMP / f"bh{suffix}").exists() else []
     names = []
-    for p in sorted(ipc._TMP.glob(f"bu-*{suffix}")):
+    for p in sorted(ipc._TMP.glob(f"bh-*{suffix}")):
         raw = p.name[3:-len(suffix)]
         try:
             ipc._check(raw)
@@ -254,7 +253,7 @@ def ensure_daemon(wait=60.0, name=None, env=None, accept_remote_debugging_dialog
 
     local = _is_local_chrome_mode(env)
     for attempt in (0, 1):
-        e = {**os.environ, **({"BH_NAME": name, "BU_NAME": name} if name else {}), **(env or {})}
+        e = {**os.environ, **({"BH_NAME": name} if name else {}), **(env or {})}
         root = os.path.dirname(os.path.abspath(__file__))
         p = subprocess.Popen(
             [sys.executable, os.path.join(root, "daemon.py")],
@@ -367,8 +366,9 @@ def _browser_use(path, method, body=None):
     key = os.environ.get("BROWSER_USE_API_KEY")
     if not key:
         raise RuntimeError("BROWSER_USE_API_KEY missing -- see .env.example")
+    api_base = "https://api.browser-use.com/api/v3"
     req = urllib.request.Request(
-        f"{BU_API}{path}",
+        f"{api_base}{path}",
         method=method,
         data=(json.dumps(body).encode() if body is not None else None),
         headers={"X-Browser-Use-API-Key": key, "Content-Type": "application/json"},
@@ -496,13 +496,13 @@ def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
     auto-opens it locally when a GUI is detected, so the user can watch along.
 
     Requires PolicyEngine authorization for the provision_browser action.
-    BU_AUTOSPAWN env var is treated as a standing permission seed.
+    BH_AUTOSPAWN env var is treated as a standing permission seed.
     """
     # Authority gate: provision_browser is an external side effect
     from .authority.policy import PolicyEngine
     from .capabilities.models import WebAction, RiskLevel
     standing = {RiskLevel.PUBLIC_READ}
-    if os.environ.get("BU_AUTOSPAWN"):
+    if os.environ.get("BH_AUTOSPAWN"):
         standing.add(RiskLevel.EXTERNAL_SIDE_EFFECT)
     policy = PolicyEngine(standing_permissions=standing)
     action = WebAction(kind="provision_browser", risk=RiskLevel.EXTERNAL_SIDE_EFFECT)
@@ -510,7 +510,7 @@ def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
     if not decision.allowed:
         raise RuntimeError(
             f"provision_browser denied: {decision.reason}. "
-            "Set BU_AUTOSPAWN=1 for standing permission or call from dev_runtime."
+            "Set BH_AUTOSPAWN=1 for standing permission or call from dev_runtime."
         )
 
     if daemon_alive(name):
@@ -525,9 +525,7 @@ def start_remote_daemon(name="remote", profileName=None, **create_kwargs):
         ensure_daemon(
             name=name,
             env={
-                "BU_CDP_WS": ws,
                 "BH_CDP_WS": ws,
-                "BU_BROWSER_ID": browser["id"],
                 "BH_BROWSER_ID": browser["id"],
             },
         )

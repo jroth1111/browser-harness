@@ -66,7 +66,7 @@ def test_bh_cdp_ws_websocket_passes_through():
 
 
 def test_documented_cdp_ws_aliases_pass_through():
-    for key in ("BU_CDP_WS", "BH_CDP_URL", "BU_CDP_URL"):
+    for key in ("BH_CDP_URL",):
         url = "ws://127.0.0.1:9222/devtools/browser/abc"
         with patch.dict(os.environ, {key: url}, clear=True):
             resolved, info = daemon.resolve_cdp_endpoint()
@@ -82,12 +82,12 @@ def test_documented_cdp_http_alias_resolves_json_version():
         opened.append(url)
         return FakeResponse({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/abc"})
 
-    with patch.dict(os.environ, {"BU_CDP_URL": "http://127.0.0.1:9222"}, clear=True), \
+    with patch.dict(os.environ, {"BH_CDP_URL": "http://127.0.0.1:9222"}, clear=True), \
          patch("urllib.request.urlopen", side_effect=fake_open):
         resolved, info = daemon.resolve_cdp_endpoint()
 
     assert resolved == "ws://127.0.0.1:9222/devtools/browser/abc"
-    assert info["input"] == "BU_CDP_URL"
+    assert info["input"] == "BH_CDP_URL"
     assert info["http_base"] == "http://127.0.0.1:9222"
     assert opened == ["http://127.0.0.1:9222/json/version"]
 
@@ -95,9 +95,7 @@ def test_documented_cdp_http_alias_resolves_json_version():
 def test_cdp_endpoint_alias_precedence_prefers_bh_ws():
     env = {
         "BH_CDP_WS": "ws://127.0.0.1:9222/devtools/browser/bh",
-        "BU_CDP_WS": "ws://127.0.0.1:9222/devtools/browser/bu",
         "BH_CDP_URL": "ws://127.0.0.1:9222/devtools/browser/bh-url",
-        "BU_CDP_URL": "ws://127.0.0.1:9222/devtools/browser/bu-url",
     }
     with patch.dict(os.environ, env, clear=True):
         resolved, info = daemon.resolve_cdp_endpoint()
@@ -263,8 +261,9 @@ def test_attach_first_page_attaches_then_enables_default_domains():
         ("Target.getTargets", {}, None),
         ("Target.attachToTarget", {"targetId": "page-1", "flatten": True}, None),
     ]
+    # Stealth hardening: attach only enables Page. Runtime/DOM/Network are on-demand.
     enabled = {m for (m, _p, sid) in d.cdp.calls[2:] if sid == "session-1" and m.endswith(".enable")}
-    assert enabled == {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}
+    assert enabled == {"Page.enable"}
 
 
 def test_attach_first_page_creates_blank_when_no_real_page():
@@ -277,7 +276,7 @@ def test_attach_first_page_creates_blank_when_no_real_page():
         ("Target.attachToTarget", {"targetId": "page-new", "flatten": True}, None),
     ]
     enabled = {m for (m, _p, sid) in d.cdp.calls[3:] if sid == "session-1" and m.endswith(".enable")}
-    assert enabled == {"Page.enable", "DOM.enable", "Runtime.enable", "Network.enable"}
+    assert enabled == {"Page.enable"}
 
 
 def test_attach_first_page_skips_malformed_targets_before_creating_blank():
