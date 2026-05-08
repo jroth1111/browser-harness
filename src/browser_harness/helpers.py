@@ -243,6 +243,9 @@ def _recovered(fn):
 
 def cdp(method, session_id=None, timeout=30, **params):
     """Raw CDP. cdp('Page.navigate', url='...'), cdp('DOM.getDocument', depth=-1)."""
+    import os as _os
+    if _os.environ.get("BH_AGENT_WORKER") == "1":
+        raise RuntimeError("cdp() not available in agent worker; use authority-routed tools")
     return _send({"method": method, "params": params, "session_id": session_id}, timeout=timeout).get("result", {})
 
 

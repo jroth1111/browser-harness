@@ -812,3 +812,76 @@ class TestAuthorityFetchWiring:
         assert resp.source == "authority"
 
 
+# --- 17. CDP capability gate ---
+
+class TestCDPCapabilityGate:
+    def test_cdp_blocked_in_agent_worker_env(self, monkeypatch):
+        """cdp() raises RuntimeError when BH_AGENT_WORKER=1."""
+        from browser_harness import helpers
+        monkeypatch.setenv("BH_AGENT_WORKER", "1")
+        with pytest.raises(RuntimeError, match="not available in agent worker"):
+            helpers.cdp("Runtime.evaluate")
+
+    def test_cdp_allowed_in_dev_runtime(self, monkeypatch):
+        """cdp() works normally when BH_AGENT_WORKER is unset."""
+        from browser_harness import helpers
+        monkeypatch.delenv("BH_AGENT_WORKER", raising=False)
+        # We can't actually call cdp() without a daemon, but we can verify
+        # the gate doesn't raise before the _send call.
+        # Patch _send to avoid needing a live daemon.
+        monkeypatch.setattr(helpers, "_send", lambda msg, **kw: {"result": {}})
+        result = helpers.cdp("Runtime.evaluate")
+        assert result == {}
+
+
+# --- 18. Handoff CLI ---
+
+class TestHandoffCLI:
+    def test_handoff_cli_completes_request(self, tmp_path, monkeypatch, capsys):
+        """--handoff looks up request, opens browser, waits for user, completes token."""
+        from browser_harness.authority.handoff import HandoffBroker
+
+        broker = HandoffBroker(store_dir=tmp_path)
+        request = broker.create(
+            url="https://example.com/challenge",
+            origin="https://example.com",
+            challenge_kind="cloudflare",
+        )
+
+        # Mock webbrowser.open and input
+        monkeypatch.setattr("webbrowser.open", lambda url: None)
+        monkeypatch.setattr("builtins.input", lambda: "")
+
+        from browser_harness.run import _run_handoff
+        # Point broker at tmp_path
+        monkeypatch.setattr(
+            "browser_harness.authority.handoff.HandoffBroker.__init__",
+            lambda self, store_dir=None: (
+                setattr(self, "_store_dir", tmp_path),
+                tmp_path.mkdir(parents=True, exist_ok=True),
+            )[0],
+        )
+
+        _run_handoff(request.handoff_id)
+        captured = capsys.readouterr()
+        assert "cloudflare" in captured.out
+        assert request.url in captured.out
+        assert "Resume token signed" in captured.out
+
+        # Request should be cleaned up
+        assert broker.get(request.handoff_id) is None
+
+    def test_handoff_cli_rejects_unknown_id(self, tmp_path, monkeypatch, capsys):
+        """--handoff exits with error for unknown handoff_id."""
+        monkeypatch.setattr(
+            "browser_harness.authority.handoff.HandoffBroker.__init__",
+            lambda self, store_dir=None: (
+                setattr(self, "_store_dir", tmp_path),
+                tmp_path.mkdir(parents=True, exist_ok=True),
+            )[0],
+        )
+        from browser_harness.run import _run_handoff
+        with pytest.raises(SystemExit, match="1"):
+            _run_handoff("nonexistent123")
+
+

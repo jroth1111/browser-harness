@@ -58,6 +58,7 @@ Commands:
                                    validate empirical skill-learning candidates
   browser-harness --update [-y]    pull the latest version (agents: pass -y)
   browser-harness --reload         stop the daemon so next call picks up code changes
+  browser-harness --handoff ID     complete a human-in-the-loop challenge handoff
 """
 
 
@@ -99,6 +100,28 @@ def _explicit_cdp_configured():
         or os.environ.get("BH_CDP_URL")
         or os.environ.get("BH_CDP_WS")
     )
+
+
+def _run_handoff(handoff_id: str) -> None:
+    from .authority.handoff import HandoffBroker
+
+    broker = HandoffBroker()
+    request = broker.get(handoff_id)
+    if not request:
+        print(f"handoff {handoff_id} not found or expired", file=sys.stderr)
+        sys.exit(1)
+
+    import webbrowser
+    print(f"Challenge: {request.challenge_kind}")
+    print(f"URL: {request.url}")
+    print(f"Origin: {request.origin}")
+    print()
+    webbrowser.open(request.url)
+    print("Browser opened. Complete the challenge, then press Enter to continue...")
+    input()
+    token = broker.complete(handoff_id)
+    print(f"Handoff complete. Resume token signed (nonce={token.nonce}).")
+    print("The agent can now retry the original request.")
 
 
 def main():
@@ -189,6 +212,11 @@ def main():
     if args and args[0] == "--reload":
         restart_daemon()
         print("daemon stopped — will restart fresh on next call")
+        return
+    if args and args[0] == "--handoff":
+        if len(args) < 2 or args[1].startswith("-"):
+            sys.exit("Usage: browser-harness --handoff <handoff_id>")
+        _run_handoff(args[1])
         return
     if args and args[0] == "--debug-clicks":
         os.environ["BH_DEBUG_CLICKS"] = "1"

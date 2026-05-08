@@ -55,6 +55,7 @@ class AgentHost:
         import os
         env = os.environ.copy()
         env["PYTHONPATH"] = os.pathsep.join(sys.path)
+        env["BH_AGENT_WORKER"] = "1"
         proc = subprocess.Popen(
             [sys.executable, "-S", "-c", worker_script],
             stdin=subprocess.PIPE,

@@ -202,6 +202,69 @@ def assert_authority(root: Path) -> None:
     print("authority gates passed")
 
 
+# Gate 6: src/ transport isolation — subprocess/socket/urllib only in approved modules
+_GATE6_APPROVED_MODULES = {
+    "src/browser_harness/transports/",       # transport layer
+    "src/browser_harness/admin.py",           # provision operations
+    "src/browser_harness/runtime/agent_host.py",  # spawns worker
+    "src/browser_harness/runtime/agent_worker.py", # worker entry
+    "src/browser_harness/runtime/sandbox.py",  # sandbox itself uses subprocess
+    "src/browser_harness/_ipc.py",            # daemon IPC (sockets)
+    "src/browser_harness/helpers.py",         # dev-runtime helpers (legacy, being deprecated)
+    "src/browser_harness/daemon.py",          # daemon management
+    "src/browser_harness/run.py",             # CLI entry points
+    "src/browser_harness/sessions/login_adapter.py",  # login adapter (uses urllib.request)
+    "src/browser_harness/lightpanda_control.py",  # lightpanda browser process
+}
+
+_GATE6_PATTERNS = [
+    "subprocess.run",
+    "subprocess.Popen",
+    "subprocess.CREATE_",
+    "subprocess.DEVNULL",
+    "socket.socket(",
+    "socket.create_connection(",
+    "socket.AF_",
+    "urllib.request.urlopen",
+    "urllib.request.Request",
+    "urllib.request.build_opener",
+]
+
+
+def _is_gate6_approved(path: str) -> bool:
+    for approved in _GATE6_APPROVED_MODULES:
+        if path.startswith(approved):
+            return True
+    return False
+
+
+def assert_gate6_src_transport_isolation(root: Path) -> None:
+    """Flag subprocess/socket/urllib usage in src/ outside approved modules."""
+    src_dir = root / "src" / "browser_harness"
+    if not src_dir.exists():
+        print("gate 6: src/ not found, skipping")
+        return
+
+    violations = []
+    for path in src_dir.rglob("*.py"):
+        rel = str(path.relative_to(root))
+        if _is_gate6_approved(rel):
+            continue
+        text = path.read_text()
+        for pattern in _GATE6_PATTERNS:
+            if pattern in text:
+                violations.append(f"{rel}: {pattern}")
+
+    if violations:
+        joined = "\n".join(violations)
+        raise SystemExit(
+            f"gate 6: transport authority leak — subprocess/socket/urllib "
+            f"outside approved modules:\n{joined}\n"
+            f"If this is legitimate, add the file to _GATE6_APPROVED_MODULES."
+        )
+    print("gate 6: src/ transport isolation OK")
+
+
 def is_generated_status_path(path: str) -> bool:
     parts = path.split("/")
     if any(part in FORBIDDEN_STATUS_DIRS for part in parts):
@@ -225,6 +288,7 @@ def main(argv: list[str] | None = None) -> int:
         run(RELEASE_PROOF(), cwd=root)
     assert_hygiene(root)
     assert_authority(root)
+    assert_gate6_src_transport_isolation(root)
     if args.live:
         env = dict(os.environ)
         env["BROWSER_HARNESS_DATA_DISPLAY_BROWSER_SMOKE"] = "1"

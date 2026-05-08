@@ -33,6 +33,16 @@ browser-harness-skill-learning-gate = "browser_harness.skill_learning_gate:main"
 [tool.setuptools]
 packages = [
     "browser_harness",
+    "browser_harness.actions",
+    "browser_harness.authority",
+    "browser_harness.capabilities",
+    "browser_harness.discovery",
+    "browser_harness.extraction",
+    "browser_harness.projections",
+    "browser_harness.runtime",
+    "browser_harness.scheduler",
+    "browser_harness.sessions",
+    "browser_harness.transports",
     "browser_harness_domain_skills",
     "browser_harness_interaction_skills",
     "browser_harness_docs",

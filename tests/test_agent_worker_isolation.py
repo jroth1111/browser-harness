@@ -134,6 +134,20 @@ class TestWorkerIsolation:
                 proc.wait()
 
 
+    def test_worker_cdp_gate(self):
+        """Worker denies cdp tool at tool level (FORBIDDEN_TOOLS)."""
+        proc = _spawn_worker()
+        try:
+            _send_frame(proc, {"type": "call", "id": 1, "tool": "cdp", "params": {"method": "Runtime.evaluate"}})
+            result = _recv_frame(proc)
+            assert result is not None
+            assert result.get("status") == "denied"
+            assert "forbidden" in result.get("reason", "").lower()
+        finally:
+            proc.kill()
+            proc.wait()
+
+
 class TestAgentHostSubprocess:
     """Prove AgentHost spawns worker and routes tool calls."""
 

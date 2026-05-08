@@ -1,22 +1,33 @@
 <img src="https://raw.githubusercontent.com/browser-use/media/main/browser-harness/banner-ink.svg" alt="Browser Harness" width="100%" />
 
-# Browser Harness ♞
+# Browser Harness
 
-Connect an LLM directly to your real browser with a thin, editable CDP harness. For browser tasks where you need **complete freedom**.
+Connect an LLM directly to your real browser through a typed authority layer. One websocket to Chrome, policy-governed access for agents.
 
-One websocket to Chrome, nothing between. The agent writes what's missing during execution. The harness improves itself every run.
+**Developer mode**: thin editable CDP harness with direct access. `browser-harness -c "code"` for human use.
+**Agent mode**: authority-routed tools via `PolicyEngine` → `AccessPlane` → transports. Every action classified by risk (R0–R5), every transport choice enforced.
 
 ```
-  ● agent: wants to upload a file
+  ● agent: wants to fetch a page
   │
-  ● src/browser_harness/agent_helpers.py → helper missing
+  ● PolicyEngine classifies: PUBLIC_READ
   │
-  ● agent writes it                         agent_helpers.py
-  │                                                       + custom helper
-  ✓ file uploaded
+  ● AccessPlane routes: cache → existing capability → HTTP
+  │
+  ✓ page returned through authority pipeline
 ```
 
-**You will never use the browser again.**
+When a challenge blocks the agent (CAPTCHA, 2FA, payment), the `HandoffBroker` pauses and waits for the human:
+```
+  ● agent: blocked by Cloudflare
+  │
+  ● ChallengeStateMachine → NEED_HANDOFF
+  │
+  ● browser-harness --handoff <id>
+  │   (human completes challenge in browser)
+  │
+  ✓ agent resumes with signed resume token
+```
 
 ## Setup prompt
 
@@ -50,8 +61,14 @@ Stealth, sub-agents, or headless deployment.<br>
 
 - `install.md` — first-time install and browser bootstrap
 - `SKILL.md` — day-to-day usage
-- `src/browser_harness/` — the package (helpers, daemon, admin, run, agent_helpers)
-- `domain-skills/` — community-contributed per-site playbooks the agent edits
+- `src/browser_harness/` — the package
+  - `authority/` — `PolicyEngine`, `AccessPlane`, `HandoffBroker`, `ChallengeStateMachine`
+  - `capabilities/` — risk levels, web actions, transport types
+  - `runtime/` — agent host/worker subprocess with audit-hook sandbox
+  - `transports/` — HTTP, browser, and CDP transport adapters
+  - `helpers.py` — dev-runtime convenience (thin facade for trusted developer access)
+- `domain-skills/` — community-contributed per-site playbooks
+- `scripts/quality_gate.py` — 6-gate CI enforcement
 
 ## Contributing
 
