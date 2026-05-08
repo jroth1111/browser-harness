@@ -71,6 +71,14 @@ def default_registry() -> ProviderRegistry:
         description="Local Chrome via CDP",
     ))
 
+    def _launch_patchright(**kwargs):
+        from ..stealth_helpers import stealth_session
+        return stealth_session(
+            headless=kwargs.get("headless", False),
+            user_data_dir=kwargs.get("user_data_dir"),
+            channel=kwargs.get("channel"),
+        )
+
     registry.register(ProviderInfo(
         provider_id="patchright",
         capabilities=(
@@ -82,6 +90,7 @@ def default_registry() -> ProviderRegistry:
             | ProviderCapability.HEADLESS
         ),
         description="Patchright stealth browser",
+        launch_fn=_launch_patchright,
     ))
 
     def _launch_camoufox(**kwargs):
@@ -103,6 +112,18 @@ def default_registry() -> ProviderRegistry:
         ),
         description="Camoufox anti-detect browser (Firefox-based, engine-level fingerprinting)",
         launch_fn=_launch_camoufox,
+    ))
+
+    registry.register(ProviderInfo(
+        provider_id="kernel",
+        capabilities=(
+            ProviderCapability.VISIBLE_UI
+            | ProviderCapability.CDP
+            | ProviderCapability.SCREENSHOTS
+            | ProviderCapability.HEADLESS
+            | ProviderCapability.ISOLATED_PROFILE
+        ),
+        description="Kernel Chromium Docker (isolated local Chromium via CDP)",
     ))
 
     registry.register(ProviderInfo(
