@@ -193,6 +193,25 @@ class TestAuthorityPipelineLive:
         assert result.text == ""
 
     @network
+    def test_http_error_body_reaches_block_detection(self):
+        """HTTP 4xx/5xx error body must reach block detection, not be swallowed.
+
+        When a server returns a challenge page as 403, the error body
+        contains block indicators. The _public_http adapter now returns
+        this body (instead of None), so _detect_block can identify the
+        challenge and produce the correct block state.
+        """
+        plane = AccessPlane(
+            http_fn=lambda url, **kw: "just a moment... cloudflare challenge",
+            block_detect_fn=lambda **kw: {"blocked": True, "kind": "cloudflare", "evidence": ["just a moment"]},
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        result = plane.execute(WebRequest(url="https://example.com", risk=RiskLevel.PUBLIC_READ))
+        assert result.status == 403, f"expected 403, got {result.status}"
+        assert result.block_state == ChallengeStatus.NEED_HANDOFF
+        assert "just a moment" in result.text
+
+    @network
     def test_auth_required_skips_public_http(self):
         """auth_required=True must not use PUBLIC_HTTP transport."""
         public_calls = []

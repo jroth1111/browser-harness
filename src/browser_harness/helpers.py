@@ -2482,7 +2482,14 @@ def _authority_fetch(url, headers=None, timeout=20.0, min_text=500):
     def _public_http(url, headers=None, **kw):
         try:
             return http_get(url, headers=headers, timeout=timeout)
-        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+        except urllib.error.HTTPError as e:
+            # 4xx/5xx responses often contain challenge/block pages —
+            # return the body so _detect_block can analyze it.
+            try:
+                return e.read().decode("utf-8", errors="replace")
+            except Exception:
+                return None
+        except (urllib.error.URLError, OSError):
             return None
 
     def _session_http(url, headers=None, **kw):
