@@ -173,6 +173,8 @@ class AgentHost:
             "transport": result.transport.value,
             "block_state": result.block_state.value,
             "reason": result.reason,
+            "text": result.text,
+            "html": result.html,
         }
 
     def _tool_click(self, target: str = "", risk: str = "low_risk_write", **kw: Any) -> dict[str, Any]:

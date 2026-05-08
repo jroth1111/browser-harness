@@ -18,6 +18,7 @@ from ..capabilities.models import (
 )
 
 # Only these tools may be dispatched; everything else is denied.
+# Must match AgentHost._execute_tool's allowlist exactly.
 ALLOWED_TOOLS = frozenset({
     "fetch",
     "click",
@@ -25,9 +26,6 @@ ALLOWED_TOOLS = frozenset({
     "navigate",
     "fill",
     "press",
-    "scroll",
-    "snapshot",
-    "wait",
 })
 
 
