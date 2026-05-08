@@ -201,6 +201,8 @@ class AccessPlane:
     def _try_public_http(self, request: WebRequest) -> AccessResult | None:
         if not self._http_fn:
             return None
+        if request.method.upper() != "GET":
+            return None
         try:
             text = self._http_fn(request.url, headers=request.headers)
             if not isinstance(text, str):
@@ -237,6 +239,8 @@ class AccessPlane:
 
     def _try_authenticated_http(self, request: WebRequest) -> AccessResult | None:
         if not self._session_http_fn:
+            return None
+        if request.method.upper() != "GET":
             return None
         origin = self._origin(request.url)
         ref = self.broker.ref_for_origin(origin)

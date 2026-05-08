@@ -232,6 +232,34 @@ class TestAuthorityPipelineLive:
         assert result.status == 502  # no authenticated transport available
 
     @network
+    def test_post_skips_public_http(self):
+        """POST requests must not silently become GETs through PUBLIC_HTTP.
+
+        Before the fix, _try_public_http ignored the request method and
+        always made GET requests. A POST with LOW_RISK_WRITE and standing
+        permission would succeed via PUBLIC_HTTP with a GET response — the
+        method and body were silently dropped.
+        """
+        public_calls = []
+        def http_fn(url, **kw):
+            public_calls.append(url)
+            return "got"
+
+        plane = AccessPlane(
+            policy=PolicyEngine(standing_permissions={RiskLevel.LOW_RISK_WRITE}),
+            http_fn=http_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        result = plane.execute(WebRequest(
+            url="https://example.com/api",
+            method="POST",
+            risk=RiskLevel.LOW_RISK_WRITE,
+            body=b"test data",
+        ))
+        assert len(public_calls) == 0, "POST must not be routed through GET-only PUBLIC_HTTP"
+        assert result.status == 502  # no POST-capable transport available
+
+    @network
     def test_challenge_detection_cloudflare(self):
         """Cloudflare challenge page triggers NEED_HANDOFF."""
         plane = AccessPlane(

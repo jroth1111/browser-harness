@@ -87,7 +87,9 @@ class TestBhHttp:
         )
         resp = post("https://example.com/api", body=b"test", plane=plane)
         assert resp.source == "authority"
-        assert resp.status == 200
+        # POST correctly skips GET-only PUBLIC_HTTP transport; no POST-capable
+        # transport is available, so the result is 502, not a silent GET-200.
+        assert resp.status == 502
 
 
 class TestAgentHostRiskFromStr:
