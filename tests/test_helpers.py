@@ -1449,6 +1449,24 @@ def test_fetch_session_exception_returns_502():
     assert response.reason == "session_error"
 
 
+def test_fetch_session_none_status_uses_502():
+    """fetch(source="session") must use 502 when session transport returns
+    status=None (network error), not pass None through as the Response status.
+
+    Before the fix, result.get("status", 0) returned None when the dict had
+    {"status": None} — the default is only used for missing keys.
+    """
+    with patch("browser_harness.helpers.http_get_browser_session_response", return_value={
+             "ok": False, "status": None, "url": "https://example.com/api",
+             "text": "", "block": {"blocked": False}, "headers": {},
+             "error": "connection refused",
+         }):
+        response = helpers.fetch("https://example.com/api", source="session")
+
+    assert response.status == 502, f"expected 502, got {response.status!r}"
+    assert response.source == "session"
+
+
 def test_fetch_browser_detects_block_even_when_ok_is_true():
     """When wait_for_content says ok=True but detect_block_page finds a block,
     the browser source must return the detected block, not discard it."""

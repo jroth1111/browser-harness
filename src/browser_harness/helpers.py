@@ -2391,7 +2391,7 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
         try:
             if use_session:
                 resp = http_get_browser_session_response(url, timeout=timeout)
-                replay_status = resp.get("status", 0)
+                replay_status = resp.get("status") or 0
                 replay_ct = _dict_value(resp.get("headers")).get("content-type", "")
             else:
                 req = urllib.request.Request(url, headers={"User-Agent": _real_user_agent()})
@@ -2615,7 +2615,7 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
         reason = "blocked" if block.get("blocked") else ("content" if result.get("ok") else "http_error")
         return Response(
             html=result.get("text", ""), text=result.get("text", ""),
-            url=result.get("url", url), status=result.get("status", 0),
+            url=result.get("url", url), status=result.get("status") or 502,
             source="session", headers=result.get("headers", {}),
             reason=reason, block=block,
         )
