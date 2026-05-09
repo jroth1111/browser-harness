@@ -2515,6 +2515,39 @@ def test_page_info_retries_once_not_twice_on_recoverable_error():
     assert reconnect_count == 1, f"expected 1 reconnect, got {reconnect_count}"
 
 
+def test_send_idempotent_retry_cleans_up_socket_on_second_failure():
+    """If the idempotent retry also fails, _sock must be None (not corrupt)."""
+    import socket as _socket
+
+    fake_sock = MagicMock()
+    fake_sock.sendall = MagicMock()
+    fake_sock.close = MagicMock()
+
+    call_count = 0
+
+    def fake_recv(timeout):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ConnectionResetError("first attempt lost")
+        raise RuntimeError("_recv() timeout — retry also failed")
+
+    def fake_reconnect():
+        helpers._sock = fake_sock
+        helpers._sock_token = None
+
+    helpers._sock = fake_sock
+    helpers._sock_token = None
+
+    with patch("browser_harness.helpers._recv", side_effect=fake_recv), \
+         patch("browser_harness.helpers._reconnect", side_effect=fake_reconnect):
+        with pytest.raises(RuntimeError, match="_recv.*timeout"):
+            helpers._send({"method": "Target.getTargets", "params": {}})
+
+    assert helpers._sock is None, "retry failure must set _sock = None"
+    assert fake_sock.close.called, "retry failure must close the socket"
+
+
 # --- fill_input ---
 
 def test_fill_input_focuses_types_and_fires_events():

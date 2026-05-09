@@ -124,8 +124,14 @@ def _send(req, timeout=30):
         token = _sock_token
         payload_req = {**req, "token": token} if token else req
         payload = (json.dumps(payload_req) + "\n").encode()
-        _sock.sendall(payload)
-        data = _recv(timeout)
+        try:
+            _sock.sendall(payload)
+            data = _recv(timeout)
+        except (OSError, RuntimeError, ValueError):
+            try: _sock.close()
+            except OSError: pass
+            _sock = None
+            raise
     except (RuntimeError, ValueError):
         # _recv() timeout/oversize — socket state is corrupt
         try: _sock.close()
