@@ -42,9 +42,16 @@ class AgentHost:
         action_policy: ActionPolicy | None = None,
     ):
         self.policy = policy or PolicyEngine()
-        self.access_plane = access_plane or AccessPlane(policy=self.policy)
         self.action_policy = action_policy or ActionPolicy()
+        self._access_plane = access_plane
         self._worker: subprocess.Popen | None = None
+
+    @property
+    def access_plane(self) -> AccessPlane:
+        if self._access_plane is None:
+            from ..transports.bh_http import _default_plane
+            self._access_plane = _default_plane()
+        return self._access_plane
 
     def _spawn_worker(self) -> subprocess.Popen:
         # -S skips usercustomize.  We pass the parent's sys.path via

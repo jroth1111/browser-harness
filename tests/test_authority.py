@@ -590,6 +590,40 @@ class TestProviderRegistry:
 # --- 12. Subprocess agent host CLI ---
 
 class TestAgentHostCLI:
+    def test_default_host_has_transports(self, monkeypatch):
+        """AgentHost without explicit plane must wire default transports.
+
+        Before the fix, AgentHost created a bare AccessPlane with no
+        transport functions — every fetch returned 502 "no transport available".
+        """
+        from browser_harness.transports import bh_http
+
+        class FakeResp:
+            headers = type("H", (), {"get_content_charset": staticmethod(lambda: "utf-8")})()
+            def __init__(self, body):
+                self._body = body
+            def read(self):
+                return self._body
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        monkeypatch.setattr(
+            bh_http.urllib.request, "urlopen",
+            lambda req, timeout=None: FakeResp(b"default plane works"),
+        )
+
+        host = AgentHost()
+        try:
+            # With a bare plane, this would return 502. With default
+            # transports, it routes through _public_http and returns 200.
+            result = host.call("fetch", {"url": "https://example.com/page"})
+            assert result.get("status") == "ok"
+            assert "default plane works" in result.get("text", "")
+        finally:
+            host.shutdown()
+
     def test_high_risk_action_requires_handoff(self):
         """Click on a payment target is gated to need_handoff, not allowed."""
         host = AgentHost()
