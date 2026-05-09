@@ -11,6 +11,7 @@ These tests verify that:
 """
 import json
 import pytest
+from unittest import mock
 from pathlib import Path
 
 from browser_harness.runtime.agent_host import AgentHost
@@ -987,6 +988,67 @@ class TestHandoffCLI:
         from browser_harness.run import _run_handoff
         with pytest.raises(SystemExit, match="1"):
             _run_handoff("nonexistent123")
+
+    def test_handoff_cli_closes_tab_after_completion(self, tmp_path, monkeypatch, capsys):
+        """--handoff must close the opened tab after the user completes the challenge."""
+        from browser_harness.authority.handoff import HandoffBroker
+
+        broker = HandoffBroker(store_dir=tmp_path)
+        request = broker.create(
+            url="https://example.com/challenge",
+            origin="https://example.com",
+            challenge_kind="cloudflare",
+        )
+
+        closed_tabs = []
+        monkeypatch.setattr("browser_harness.helpers.new_tab", lambda url: "tab-42")
+        monkeypatch.setattr("browser_harness.helpers.close_tab", lambda tid: closed_tabs.append(tid))
+        monkeypatch.setattr("builtins.input", lambda: "")
+
+        monkeypatch.setattr(
+            "browser_harness.authority.handoff.HandoffBroker.__init__",
+            lambda self, store_dir=None: (
+                setattr(self, "_store_dir", tmp_path),
+                tmp_path.mkdir(parents=True, exist_ok=True),
+            )[0],
+        )
+
+        from browser_harness.run import _run_handoff
+        _run_handoff(request.handoff_id)
+
+        assert closed_tabs == ["tab-42"], "tab was not closed after handoff completion"
+
+    def test_handoff_cli_handles_eoferror(self, tmp_path, monkeypatch, capsys):
+        """--handoff must handle EOFError from input() (non-interactive stdin)."""
+        from browser_harness.authority.handoff import HandoffBroker
+
+        broker = HandoffBroker(store_dir=tmp_path)
+        request = broker.create(
+            url="https://example.com/challenge",
+            origin="https://example.com",
+            challenge_kind="cloudflare",
+        )
+
+        closed_tabs = []
+        monkeypatch.setattr("browser_harness.helpers.new_tab", lambda url: "tab-99")
+        monkeypatch.setattr("browser_harness.helpers.close_tab", lambda tid: closed_tabs.append(tid))
+        monkeypatch.setattr("builtins.input", mock.Mock(side_effect=EOFError))
+
+        monkeypatch.setattr(
+            "browser_harness.authority.handoff.HandoffBroker.__init__",
+            lambda self, store_dir=None: (
+                setattr(self, "_store_dir", tmp_path),
+                tmp_path.mkdir(parents=True, exist_ok=True),
+            )[0],
+        )
+
+        from browser_harness.run import _run_handoff
+        _run_handoff(request.handoff_id)
+
+        # Tab must still be closed even when input raises EOFError
+        assert closed_tabs == ["tab-99"]
+        captured = capsys.readouterr()
+        assert "Resume token signed" in captured.out
 
 
 # --- 19. Handoff session capture (Step 6) ---

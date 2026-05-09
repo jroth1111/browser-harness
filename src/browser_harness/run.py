@@ -156,16 +156,26 @@ def _run_handoff(handoff_id: str, session_broker=None) -> None:
     print()
 
     daemon_available = True
+    tid = None
     try:
-        helpers.new_tab(request.url)
+        tid = helpers.new_tab(request.url)
     except Exception as e:
         daemon_available = False
         print(f"daemon unavailable ({e}); falling back to system browser", file=sys.stderr)
         import webbrowser
         webbrowser.open(request.url)
 
-    print("Browser opened. Complete the challenge, then press Enter to continue...")
-    input()
+    try:
+        print("Browser opened. Complete the challenge, then press Enter to continue...")
+        input()
+    except EOFError:
+        pass
+    finally:
+        if tid:
+            try:
+                helpers.close_tab(tid)
+            except Exception:
+                pass
 
     ref = None
     if daemon_available:
