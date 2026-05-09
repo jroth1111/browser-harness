@@ -356,6 +356,40 @@ class TestHandoffBroker:
         assert result.block_state == ChallengeStatus.UNOBSERVABLE
         assert result.reason == "timeout"
 
+    def test_post_skips_authenticated_http(self, tmp_path):
+        """POST requests must not silently become GETs through AUTHENTICATED_HTTP.
+
+        Before the fix, _try_authenticated_http ignored the request method.
+        A POST with a session ref available would succeed via session HTTP
+        with a GET response — the method and body silently dropped.
+        """
+        sess_broker = SessionBroker()
+        sess_broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "sid", "value": "x", "domain": "example.com", "path": "/"}],
+        )
+        session_calls = []
+        def session_http(url, **kw):
+            session_calls.append(url)
+            return {"status": 200, "text": "session content"}
+
+        plane = AccessPlane(
+            policy=PolicyEngine(standing_permissions={RiskLevel.AUTHENTICATED_READ}),
+            budget=BudgetController(),
+            broker=sess_broker,
+            session_http_fn=session_http,
+        )
+        req = WebRequest(
+            url="https://example.com/api",
+            method="POST",
+            risk=RiskLevel.AUTHENTICATED_READ,
+            auth_required=True,
+            body=b"test data",
+        )
+        result = plane.execute(req)
+        assert len(session_calls) == 0, "POST must not be routed through GET-only AUTHENTICATED_HTTP"
+        assert result.status == 502
+
 
 class TestAccessPlaneCache:
     """Verify cache behavior: hits, misses, and bounded eviction."""
