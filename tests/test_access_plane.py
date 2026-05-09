@@ -1,7 +1,7 @@
 """AccessPlane proof tests — verify the pipeline governs authority."""
 import pytest
 
-from browser_harness.authority.challenge import ChallengeStateMachine
+from browser_harness.authority.challenge import ChallengeKind, ChallengeStateMachine
 from browser_harness.authority.policy import PolicyEngine
 from browser_harness.capabilities.models import (
     ChallengeStatus,
@@ -280,3 +280,24 @@ class TestAccessPlaneTransportFallback:
         result = plane.execute(_public_request())
         assert result.status == 502
         assert result.block_state == ChallengeStatus.UNOBSERVABLE
+
+
+class TestBlockKindMapping:
+    """Every block kind from detect_block_page must map to the correct ChallengeKind."""
+
+    # Block kinds produced by helpers.detect_block_page
+    _BLOCK_KINDS = {
+        "kasada_kpsdk": ChallengeKind.KASADA_KPSDK,
+        "akamai": ChallengeKind.AKAMAI,
+        "perimeterx": ChallengeKind.PERIMETERX,
+        "imperva": ChallengeKind.BLOCKED,
+        "datadome": ChallengeKind.DATADOME,
+        "waf_generic": ChallengeKind.BLOCKED,
+        "auth_gate": ChallengeKind.LOGIN_REDIRECT,
+    }
+
+    @pytest.mark.parametrize("kind,expected", list(_BLOCK_KINDS.items()))
+    def test_block_kind_maps_correctly(self, kind, expected):
+        block = {"kind": kind, "blocked": True}
+        result = AccessPlane._block_kind_to_challenge_kind(block)
+        assert result == expected, f"{kind!r} mapped to {result!r}, expected {expected!r}"
