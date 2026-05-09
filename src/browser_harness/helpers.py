@@ -2593,9 +2593,20 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
                 reason="blocked" if block.get("blocked") else "http_error",
                 block=block,
             )
+        except (urllib.error.URLError, OSError):
+            return Response(
+                html="", text="", url=url, status=502, source="http",
+                reason="connection_error", block={},
+            )
 
     if source == "session":
-        result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
+        try:
+            result = http_get_browser_session_response(url, headers=headers, timeout=timeout)
+        except Exception:
+            return Response(
+                html="", text="", url=url, status=502, source="session",
+                reason="session_error", block={},
+            )
         block = result.get("block") or detect_block_page(
             html=result.get("text", ""),
             text=result.get("text", ""),
@@ -2619,18 +2630,18 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
             block = status.get("block") or detect_block_page(
                 html=html, text=status.get("text", ""), url=status.get("url", url),
             )
-            if status.get("ok"):
+            if status.get("ok") and not block.get("blocked"):
                 return Response(
                     html=html, text=status.get("text", ""),
                     url=status.get("url", url), status=200,
                     source="browser", reason=status.get("reason"),
-                    block=status.get("block"),
+                    block=block,
                 )
             return Response(
                 html=html, text=status.get("text", ""),
                 url=status.get("url", url),
-                status=200 if status.get("ok") else (
-                    403 if block.get("blocked") else (
+                status=403 if block.get("blocked") else (
+                    200 if status.get("ok") else (
                         504 if status.get("reason") == "timeout" else 502)),
                 source="browser", reason=status.get("reason"), block=block,
             )

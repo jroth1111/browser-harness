@@ -1427,6 +1427,51 @@ def test_fetch_session_tolerates_scalar_session_text():
     assert response.text == "12345"
 
 
+def test_fetch_http_urlerror_returns_502():
+    """fetch(source="http") must catch URLError, not just HTTPError."""
+    with patch("browser_harness.helpers.http_get",
+               side_effect=urllib.error.URLError("connection refused")):
+        response = helpers.fetch("https://example.com/down", source="http")
+
+    assert response.status == 502
+    assert response.source == "http"
+    assert response.reason == "connection_error"
+
+
+def test_fetch_session_exception_returns_502():
+    """fetch(source="session") must catch exceptions, not propagate them."""
+    with patch("browser_harness.helpers.http_get_browser_session_response",
+               side_effect=ConnectionError("daemon unreachable")):
+        response = helpers.fetch("https://example.com/api", source="session")
+
+    assert response.status == 502
+    assert response.source == "session"
+    assert response.reason == "session_error"
+
+
+def test_fetch_browser_detects_block_even_when_ok_is_true():
+    """When wait_for_content says ok=True but detect_block_page finds a block,
+    the browser source must return the detected block, not discard it."""
+    with patch("browser_harness.helpers.new_tab", return_value="target-1"), \
+         patch("browser_harness.helpers.wait_for_load"), \
+         patch("browser_harness.helpers.wait_for_content", return_value={
+             "ok": True,
+             "url": "https://example.com/challenge",
+             "text": "just a moment please",
+             "block": {},
+         }), \
+         patch("browser_harness.helpers.js", return_value="<html>just a moment</html>"), \
+         patch("browser_harness.helpers.detect_block_page", return_value={
+             "blocked": True, "kind": "cloudflare", "evidence": ["just a moment"],
+         }), \
+         patch("browser_harness.helpers.close_tab"):
+        response = helpers.fetch("https://example.com/page", source="browser")
+
+    assert response.status == 403
+    assert response.block["blocked"] is True
+    assert response.block["kind"] == "cloudflare"
+
+
 def test_response_repr():
     from browser_harness.response import Response
     r = Response(html="<html></html>", text="content", url="https://example.com",
