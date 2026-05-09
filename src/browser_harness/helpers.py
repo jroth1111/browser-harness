@@ -2616,7 +2616,9 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
             wait_for_load(timeout=timeout, pre_drain=False)
             status = wait_for_content(min_text=min_text, timeout=timeout)
             html = js("document.documentElement.outerHTML") or ""
-            block = status.get("block") or {}
+            block = status.get("block") or detect_block_page(
+                html=html, text=status.get("text", ""), url=status.get("url", url),
+            )
             if status.get("ok"):
                 return Response(
                     html=html, text=status.get("text", ""),
