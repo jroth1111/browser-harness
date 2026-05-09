@@ -257,9 +257,6 @@ class AccessPlane:
         ref = self.broker.ref_for_origin(origin)
         if not ref:
             return None
-        bundle = self.broker.materialize_for_transport(ref, target_origin=origin)
-        if not bundle:
-            return None
         try:
             result = self._session_http_fn(request.url, headers=request.headers)
             if not isinstance(result, dict):

@@ -1,4 +1,6 @@
 """AccessPlane proof tests — verify the pipeline governs authority."""
+import time
+
 import pytest
 
 from browser_harness.authority.challenge import ChallengeKind, ChallengeStateMachine
@@ -280,6 +282,29 @@ class TestAccessPlaneTransportFallback:
         result = plane.execute(_public_request())
         assert result.status == 502
         assert result.block_state == ChallengeStatus.UNOBSERVABLE
+
+    def test_expired_bundle_does_not_block_session_http(self):
+        """Session HTTP uses daemon live cookies, not stored credentials.
+        An expired bundle must not prevent the transport from trying."""
+        broker = SessionBroker()
+        broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "s", "value": "v"}],
+            expires_at=time.time() - 100,  # expired 100s ago
+        )
+
+        def session_http_fn(url, **kw):
+            return {"text": "daemon session content", "status": 200}
+
+        plane = AccessPlane(
+            broker=broker,
+            session_http_fn=session_http_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        req = WebRequest(url="https://example.com/api", risk=RiskLevel.AUTHENTICATED_READ, auth_required=True)
+        result = plane.execute(req)
+        assert result.status == 200
+        assert result.source == "session"
 
 
 class TestBlockKindMapping:
