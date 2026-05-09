@@ -417,6 +417,33 @@ class TestActionPolicy:
         assert not decision.allowed
         assert decision.status == "need_user_approval"
 
+    def test_underscore_action_kind_caught_by_keyword_analysis(self):
+        """Keyword analysis must match underscore-separated action kinds.
+
+        Before the fix, _compile_patterns converted "change_password" to
+        `\\bchange\\s+password\\b` (space-separated), but the input text kept
+        underscores intact. Action kinds like "change_password" or targets
+        like "change_password_button" bypassed keyword escalation entirely.
+        """
+        policy = ActionPolicy()
+        action = WebAction(kind="change_password", risk=RiskLevel.PUBLIC_READ)
+        risk = policy.classify(action)
+        assert risk == RiskLevel.PAYMENT_DELETE_SECURITY
+
+    def test_underscore_target_caught_by_keyword_analysis(self):
+        """Targets with underscores like 'remove_account_btn' must be caught."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="remove_account_btn", risk=RiskLevel.PUBLIC_READ)
+        risk = policy.classify(action)
+        assert risk == RiskLevel.PAYMENT_DELETE_SECURITY
+
+    def test_underscore_external_side_effect_caught(self):
+        """Underscore targets like 'place_order_button' must escalate to R3."""
+        policy = ActionPolicy()
+        action = WebAction(kind="click", target="place_order_button", risk=RiskLevel.PUBLIC_READ)
+        risk = policy.classify(action)
+        assert risk == RiskLevel.EXTERNAL_SIDE_EFFECT
+
 
 # --- 8. Budget and circuit breaker ---
 

@@ -116,7 +116,11 @@ class ActionPolicy:
         kind = action.kind.lower()
         target = action.target.lower()
         value = action.value.lower()
-        text = f"{kind} {target} {value}"
+        # Normalize underscores to spaces so that action kinds and targets
+        # like "change_password" match hint patterns compiled from
+        # HIGH_RISK_HINTS / EXTERNAL_SIDE_EFFECT_HINTS which convert
+        # underscores to word-boundary-separated regex alternatives.
+        text = f"{kind} {target} {value}".replace("_", " ")
 
         for pattern in self._get_high_risk_patterns():
             if pattern.search(text):
