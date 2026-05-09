@@ -304,6 +304,15 @@ class AccessPlane:
                 return None
             ok = result.get("ok", False)
             block = result.get("block") or {}
+            # Fallback: if browser function didn't detect a block, run
+            # block_detect_fn (mirrors _try_authenticated_http's fallback).
+            if not block.get("blocked"):
+                detected = self._detect_block(
+                    result.get("html", ""), result.get("text", ""), request.url,
+                )
+                if detected.get("blocked"):
+                    block = detected
+                    ok = False
             if block.get("blocked"):
                 status = 403
             elif ok:

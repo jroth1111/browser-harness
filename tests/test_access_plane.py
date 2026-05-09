@@ -379,6 +379,71 @@ class TestBrowserNoDoubleExecution:
         )
 
 
+class TestBrowserBlockDetectFallback:
+    """_try_browser must call _detect_block as fallback when the browser
+    function returns ok=True with no block — mirroring _try_authenticated_http."""
+
+    def _make_plane(self, browser_fn, block_fn=None, http_fn=None, session_http_fn=None):
+        return AccessPlane(
+            browser_fn=browser_fn,
+            block_detect_fn=block_fn or (lambda **kw: {}),
+            http_fn=http_fn,
+            session_http_fn=session_http_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+
+    def _browser_request(self, url="https://example.com/page"):
+        return WebRequest(url=url, risk=RiskLevel.AUTHENTICATED_READ)
+
+    def test_browser_ok_with_hidden_block_detected_by_fallback(self):
+        """Browser returns ok=True, no block; fallback detects Cloudflare."""
+        def browser_fn(url, **kw):
+            return {
+                "ok": True, "text": "just a moment... cloudflare challenge page",
+                "html": "<html>just a moment...</html>", "url": url, "status": 200,
+                "block": {},
+            }
+
+        def block_fn(html="", text="", url=""):
+            return {"blocked": True, "kind": "cloudflare", "evidence": ["just a moment"]}
+
+        plane = self._make_plane(browser_fn, block_fn)
+        result = plane.execute(self._browser_request())
+        assert result.status == 403, f"expected 403, got {result.status}"
+        assert result.block_state != ChallengeStatus.OK
+        assert result.block.get("blocked") is True
+        assert result.transport == TransportType.FULL_BROWSER
+
+    def test_browser_ok_with_no_block_passes_through(self):
+        """When browser ok=True and no block anywhere, result is 200."""
+        def browser_fn(url, **kw):
+            return {"ok": True, "text": "real content", "html": "<p>ok</p>", "url": url, "status": 200, "block": {}}
+
+        plane = self._make_plane(browser_fn)
+        result = plane.execute(self._browser_request())
+        assert result.status == 200
+        assert result.block_state == ChallengeStatus.OK
+
+    def test_browser_block_already_set_skips_fallback(self):
+        """When browser function already returns a block, fallback is not needed."""
+        def browser_fn(url, **kw):
+            return {
+                "ok": False, "text": "blocked", "html": "blocked", "url": url,
+                "status": 403, "block": {"blocked": True, "kind": "cloudflare", "evidence": ["blocked"]},
+            }
+
+        fallback_calls = []
+        def block_fn(**kw):
+            fallback_calls.append(1)
+            return {}
+
+        plane = self._make_plane(browser_fn, block_fn)
+        result = plane.execute(self._browser_request())
+        assert result.status == 403
+        assert result.block.get("kind") == "cloudflare"
+        assert fallback_calls == [], "fallback should not be called when browser already detected block"
+
+
 class TestBlockKindMapping:
     """Every block kind from detect_block_page must map to the correct ChallengeKind."""
 
