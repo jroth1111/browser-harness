@@ -2013,16 +2013,6 @@ def http_get(url, headers=None, timeout=20.0):
             return data.decode("utf-8", errors="replace")
 
 
-def _detect_cloudflare_type(html):
-    """Detect Cloudflare challenge type from page content. Returns type string or None."""
-    for ctype in ("non-interactive", "managed", "interactive"):
-        if f"cType: '{ctype}'" in html:
-            return ctype
-    if 'script[src*="challenges.cloudflare.com/turnstile"]' in html:
-        return "embedded"
-    return None
-
-
 def block_resources(ad_domains=True, extra_domains=None, resource_types=None):
     """Block ad domains and/or resource types on the current page.
 
