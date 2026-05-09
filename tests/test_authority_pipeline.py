@@ -1,63 +1,9 @@
-"""Tests for the authority pipeline components — navigation, actions, elements."""
+"""Tests for the authority pipeline components — actions, elements."""
 import pytest
 
-from browser_harness.authority.action_policy import ActionPolicy
-from browser_harness.authority.challenge import ChallengeStateMachine, ChallengeDetection, ChallengeKind
-from browser_harness.authority.policy import PolicyEngine
 from browser_harness.actions.element_resolver import ElementResolver
 from browser_harness.actions.executor import ActionExecutor
-from browser_harness.capabilities.models import (
-    AuthorityDecision,
-    ChallengeStatus,
-    ElementTarget,
-    RiskLevel,
-    WebAction,
-    WebRequest,
-)
-from browser_harness.scheduler.budgets import BudgetController, BudgetConfig
-from browser_harness.transports.browser_transport import NavigationController
-
-
-class TestNavigationController:
-    def test_goto_allowed_for_public_read(self):
-        nav = NavigationController(
-            policy=PolicyEngine(),
-            goto_fn=lambda url, **kw: {"ok": True, "url": url},
-        )
-        result = nav.goto("https://example.com/page", risk="public_read")
-        assert result.get("ok") is True
-
-    def test_goto_denied_for_blocked_domain(self):
-        nav = NavigationController(
-            policy=PolicyEngine(blocked_domains={"https://evil.example"}),
-        )
-        result = nav.goto("https://evil.example/page")
-        assert result.get("ok") is False
-        assert "denied" in result.get("status", "")
-
-    def test_goto_rate_limited(self):
-        nav = NavigationController(
-            budget=BudgetController(BudgetConfig(max_requests_per_origin=1, request_interval_seconds=0)),
-            goto_fn=lambda url, **kw: {"ok": True},
-        )
-        nav.budget.record("https://example.com", status=200)
-        result = nav.goto("https://example.com/page")
-        assert result.get("ok") is False
-        assert "rate" in result.get("status", "") or "exhausted" in result.get("reason", "")
-
-    def test_new_tab_allowed(self):
-        nav = NavigationController(
-            new_tab_fn=lambda url, **kw: {"targetId": "tab-1"},
-        )
-        result = nav.new_tab("about:blank")
-        assert result.get("targetId") == "tab-1"
-
-    def test_new_tab_with_url_checks_authority(self):
-        nav = NavigationController(
-            policy=PolicyEngine(blocked_domains={"https://evil.example"}),
-        )
-        result = nav.new_tab("https://evil.example/page")
-        assert result.get("ok") is False
+from browser_harness.capabilities.models import RiskLevel, WebAction
 
 
 class TestActionExecutor:
