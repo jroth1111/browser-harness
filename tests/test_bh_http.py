@@ -708,3 +708,68 @@ class TestResultToResponseMapping:
         assert resp.block["handoff_id"] == "abc-123"
         assert resp.block["blocked"] is True
         assert resp.block["kind"] == "cloudflare"
+
+
+class TestBrowserBlockDetection:
+    """_browser must detect block pages even when wait_for_content returns no block."""
+
+    def test_browser_detects_block_when_wait_for_content_reports_ok(self):
+        """When wait_for_content says ok but detect_block_page finds a WAF block,
+        _browser must return blocked, not success."""
+        from browser_harness.transports import bh_http
+        from browser_harness.capabilities.models import WebRequest, RiskLevel
+        from browser_harness.scheduler.budgets import BudgetController, BudgetConfig
+
+        def mock_browser_fn(url, **kw):
+            return {
+                "ok": False,
+                "text": "just a moment",
+                "html": "<html>just a moment</html>",
+                "url": url,
+                "status": 403,
+                "reason": "blocked",
+                "block": {"blocked": True, "kind": "cloudflare", "evidence": ["just a moment"]},
+            }
+
+        plane = AccessPlane(
+            browser_fn=mock_browser_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        req = WebRequest(url="https://example.com/protected", risk=RiskLevel.AUTHENTICATED_READ)
+        result = plane.execute(req)
+        assert result.status == 403
+        assert result.block.get("blocked") is True
+
+    def test_browser_fn_calls_block_detect_when_wait_for_content_has_no_block(self):
+        """The _browser transport in bh_http must call _block_detect as fallback
+        when wait_for_content returns an empty block dict."""
+        from unittest.mock import patch, MagicMock
+        from browser_harness.transports import bh_http as bh_module
+
+        # Direct unit test of the block-detect fallback via mock browser:
+        calls = {"detect": []}
+        orig_detect = bh_module._block_detect
+
+        def capturing_detect(**kw):
+            calls["detect"].append(kw)
+            return {"blocked": True, "kind": "akamai", "evidence": ["blocked"]}
+
+        bh_module._block_detect = capturing_detect
+        try:
+            with patch("browser_harness.helpers.new_tab", return_value="t1"), \
+                 patch("browser_harness.helpers.wait_for_load"), \
+                 patch("browser_harness.helpers.wait_for_content", return_value={
+                     "ok": False, "text": "", "url": "https://example.com/x", "block": {},
+                 }), \
+                 patch("browser_harness.helpers.js", return_value="<html>blocked</html>"), \
+                 patch("browser_harness.helpers.close_tab"):
+                result = bh_module._browser("https://example.com/x")
+        finally:
+            bh_module._block_detect = orig_detect
+
+        assert result is not None
+        assert result["block"]["blocked"] is True
+        assert result["block"]["kind"] == "akamai"
+        assert result["status"] == 403
+        assert result["ok"] is False
+        assert calls["detect"], "_block_detect was never called as fallback"

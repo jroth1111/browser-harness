@@ -98,14 +98,17 @@ def _browser(url: str, **_: Any) -> dict | None:
         wait_for_load(timeout=_DEFAULT_TIMEOUT, pre_drain=False)
         status = wait_for_content(min_text=500, timeout=_DEFAULT_TIMEOUT)
         html = js("document.documentElement.outerHTML") or ""
+        block = status.get("block") or _block_detect(
+            html=html, text=status.get("text", ""), url=status.get("url", url),
+        )
         return {
-            "ok": status.get("ok", False),
+            "ok": status.get("ok", False) and not block.get("blocked"),
             "text": status.get("text", ""),
             "html": html,
             "url": status.get("url", url),
-            "status": 200 if status.get("ok") else 502,
+            "status": 403 if block.get("blocked") else (200 if status.get("ok") else 502),
             "reason": status.get("reason", ""),
-            "block": status.get("block") or {},
+            "block": block,
         }
     except Exception:
         return None

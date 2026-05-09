@@ -304,7 +304,12 @@ class AccessPlane:
                 return None
             ok = result.get("ok", False)
             block = result.get("block") or {}
-            status = 200 if ok else 502
+            if block.get("blocked"):
+                status = 403
+            elif ok:
+                status = result.get("status", 200)
+            else:
+                status = result.get("status", 502)
             challenge_status = ChallengeStatus.OK
 
             kind = ChallengeKind.UNKNOWN
