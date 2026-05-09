@@ -91,6 +91,28 @@ class TestBhHttp:
         # transport is available, so the result is 502, not a silent GET-200.
         assert resp.status == 502
 
+    def test_post_encodes_string_body(self):
+        """String body must be encoded to bytes, not silently dropped."""
+        requests = []
+
+        class CapturingPlane(AccessPlane):
+            def execute(self, request):
+                requests.append(request)
+                return super().execute(request)
+
+        plane = CapturingPlane(
+            policy=PolicyEngine(standing_permissions={RiskLevel.LOW_RISK_WRITE}),
+            budget=BudgetController(),
+        )
+        post("https://example.com/api", body="key=value", plane=plane)
+        assert len(requests) == 1
+        assert requests[0].body == b"key=value", "string body must be encoded to bytes"
+
+    def test_post_rejects_dict_body(self):
+        """Dict body must raise TypeError — caller must JSON-encode."""
+        with pytest.raises(TypeError, match="body must be"):
+            post("https://example.com/api", body={"key": "value"})
+
 
 class TestAgentHostRiskFromStr:
     """Agent host uses _risk_from_str with identical semantics — must also raise."""

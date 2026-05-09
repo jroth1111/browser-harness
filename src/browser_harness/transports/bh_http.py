@@ -189,13 +189,17 @@ def post(
     plane: AccessPlane | None = None,
 ) -> Response:
     """HTTP POST through the authority pipeline."""
+    if isinstance(body, str):
+        body = body.encode("utf-8")
+    elif not isinstance(body, (bytes, type(None))):
+        raise TypeError(f"body must be bytes, str, or None, got {type(body).__name__}")
     request = WebRequest(
         url=url,
         risk=_risk(risk),
         method="POST",
         headers=headers or {},
         auth_required=False,
-        body=body if isinstance(body, (bytes, type(None))) else None,
+        body=body,
     )
     return execute(request, plane=plane)
 
