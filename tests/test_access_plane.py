@@ -307,6 +307,53 @@ class TestAccessPlaneTransportFallback:
         assert result.source == "session"
 
 
+class TestSessionHttpStatusNone:
+    """When session HTTP returns status=None (network error), AccessResult
+    must use a valid integer status, not None."""
+
+    def test_session_none_status_uses_200_on_success(self):
+        broker = SessionBroker()
+        broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "s", "value": "v"}],
+        )
+
+        def session_http_fn(url, **kw):
+            return {"ok": True, "status": None, "text": "content"}
+
+        plane = AccessPlane(
+            broker=broker,
+            session_http_fn=session_http_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        req = WebRequest(url="https://example.com/api", risk=RiskLevel.AUTHENTICATED_READ, auth_required=True)
+        result = plane.execute(req)
+        assert result.status == 200, f"expected 200, got {result.status!r}"
+        assert result.source == "session"
+
+    def test_session_none_status_blocked_uses_403(self):
+        broker = SessionBroker()
+        broker.store_secret_bundle(
+            origin="https://example.com",
+            cookies=[{"name": "s", "value": "v"}],
+        )
+
+        def session_http_fn(url, **kw):
+            return {
+                "ok": False, "status": None, "text": "access denied",
+                "block": {"blocked": True, "kind": "cloudflare", "evidence": ["denied"]},
+            }
+
+        plane = AccessPlane(
+            broker=broker,
+            session_http_fn=session_http_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        req = WebRequest(url="https://example.com/api", risk=RiskLevel.AUTHENTICATED_READ, auth_required=True)
+        result = plane.execute(req)
+        assert result.status == 403, f"expected 403, got {result.status!r}"
+
+
 class TestBrowserNoDoubleExecution:
     def test_browser_fn_called_once_not_twice_for_authenticated_read(self):
         """BROWSER_BOOTSTRAP and FULL_BROWSER share the same handler.

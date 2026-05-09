@@ -270,7 +270,7 @@ class AccessPlane:
                 )
                 return AccessResult(
                     url=request.url,
-                    status=result.get("status", 403),
+                    status=result.get("status") or 403,
                     text=text,
                     html=text,
                     source="session",
@@ -282,7 +282,7 @@ class AccessPlane:
                 )
             return AccessResult(
                 url=request.url,
-                status=result.get("status", 200),
+                status=result.get("status") or 200,
                 text=text,
                 html=text,
                 source="session",
