@@ -25,6 +25,7 @@ class ChallengeKind(enum.Enum):
     RATE_LIMIT = "rate_limit"
     CAPTCHA = "captcha"
     TWO_FA = "two_fa"
+    BLOCKED = "blocked"
     UNKNOWN = "unknown"
 
 
@@ -59,6 +60,7 @@ _KIND_RESPONSE: dict[ChallengeKind, ChallengeStatus] = {
     ChallengeKind.RATE_LIMIT: ChallengeStatus.RATE_LIMITED,
     ChallengeKind.CAPTCHA: ChallengeStatus.NEED_HANDOFF,
     ChallengeKind.TWO_FA: ChallengeStatus.NEED_HANDOFF,
+    ChallengeKind.BLOCKED: ChallengeStatus.NEED_HANDOFF,
     ChallengeKind.UNKNOWN: ChallengeStatus.UNOBSERVABLE,
 }
 

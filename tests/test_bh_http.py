@@ -390,6 +390,33 @@ class TestHandoffBroker:
         assert len(session_calls) == 0, "POST must not be routed through GET-only AUTHENTICATED_HTTP"
         assert result.status == 502
 
+    def test_unrecognized_block_kind_does_not_crash(self, tmp_path):
+        """Blocked page with unrecognized challenge kind must not crash the pipeline.
+
+        Before the fix, _block_kind_to_challenge_kind returned ChallengeKind.BLOCKED
+        which did not exist in the enum — AttributeError at runtime. Any blocked
+        page with an unrecognized kind (e.g. a new bot-protection vendor) would
+        crash the entire request pipeline instead of triggering a handoff.
+        """
+        broker = HandoffBroker(store_dir=tmp_path)
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            budget=BudgetController(),
+            challenge_sm=ChallengeStateMachine(),
+            handoff_broker=broker,
+            http_fn=lambda url, **kw: "access denied",
+            block_detect_fn=lambda **kw: {
+                "blocked": True,
+                "kind": "some_new_vendor_we_have_never_seen",
+                "evidence": ["unknown challenge page"],
+            },
+        )
+        req = WebRequest(url="https://example.com/protected", risk=RiskLevel.PUBLIC_READ)
+        result = plane.execute(req)
+        assert result.status == 403
+        assert result.block_state == ChallengeStatus.NEED_HANDOFF
+        assert result.extra.get("handoff_id")
+
 
 class TestAccessPlaneCache:
     """Verify cache behavior: hits, misses, and bounded eviction."""
