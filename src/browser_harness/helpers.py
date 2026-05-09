@@ -808,7 +808,7 @@ def diagnose_url_capability(url, min_text=500, timeout=20.0, close=True):
     tid = None
     try:
         tid = new_tab(url)
-        wait_for_load(timeout=timeout)
+        wait_for_load(timeout=timeout, pre_drain=False)
         status = wait_for_content(min_text=min_text, timeout=timeout)
         backend = browser_backend_info()
         return {
@@ -1250,9 +1250,15 @@ def poll_for_new_tab(timeout=5.0, poll=0.3):
 def wait(seconds=1.0):
     time.sleep(seconds)
 
-def wait_for_load(timeout=15.0):
-    """Wait for Page.loadEventFired without executing page JavaScript."""
-    result = _wait_until_load("load", timeout)
+def wait_for_load(timeout=15.0, *, pre_drain=True):
+    """Wait for Page.loadEventFired without executing page JavaScript.
+
+    pre_drain=True (default) clears stale events first — safe for
+    standalone use.  Pass pre_drain=False after new_tab()/goto_url()
+    which already drained before navigation, to avoid discarding the
+    load event that just fired.
+    """
+    result = _wait_until_load("load", timeout, pre_drain=pre_drain)
     return result.get("ok", False)
 
 def wait_for_load_js(timeout=15.0):
@@ -2513,7 +2519,7 @@ def _authority_fetch(url, headers=None, timeout=20.0, min_text=500):
         tid = None
         try:
             tid = new_tab(url)
-            wait_for_load(timeout=timeout)
+            wait_for_load(timeout=timeout, pre_drain=False)
             status = wait_for_content(min_text=min_text, timeout=timeout)
             html = js("document.documentElement.outerHTML") or ""
             return {
@@ -2617,7 +2623,7 @@ def fetch(url, source="auto", headers=None, timeout=20.0, min_text=500):
         tid = None
         try:
             tid = new_tab(url)
-            wait_for_load(timeout=timeout)
+            wait_for_load(timeout=timeout, pre_drain=False)
             status = wait_for_content(min_text=min_text, timeout=timeout)
             html = js("document.documentElement.outerHTML") or ""
             block = status.get("block") or {}

@@ -95,7 +95,7 @@ def _browser(url: str, **_: Any) -> dict | None:
     tid = None
     try:
         tid = new_tab(url)
-        wait_for_load(timeout=_DEFAULT_TIMEOUT)
+        wait_for_load(timeout=_DEFAULT_TIMEOUT, pre_drain=False)
         status = wait_for_content(min_text=500, timeout=_DEFAULT_TIMEOUT)
         html = js("document.documentElement.outerHTML") or ""
         return {
