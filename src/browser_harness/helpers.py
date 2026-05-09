@@ -447,8 +447,6 @@ def _domain_skill_dir(url):
 
 
 @_recovered
-
-@_recovered
 def page_info():
     """{url, title, w, h, sx, sy, pw, ph} - viewport + scroll + page size.
 

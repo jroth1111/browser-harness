@@ -2489,6 +2489,32 @@ def test_page_info_tolerates_malformed_exception_details():
             helpers.page_info()
 
 
+def test_page_info_retries_once_not_twice_on_recoverable_error():
+    """page_info() has @_recovered, not @@_recovered — must retry once, not twice."""
+    call_count = 0
+    reconnect_count = 0
+
+    def fake_cdp(method, **kwargs):
+        nonlocal call_count
+        if method == "Target.getTargetInfo":
+            call_count += 1
+            raise RuntimeError("Session with given id not found")
+        return {}
+
+    def fake_reconnect():
+        nonlocal reconnect_count
+        reconnect_count += 1
+
+    with patch("browser_harness.helpers.cdp", side_effect=fake_cdp), \
+         patch("browser_harness.helpers._send", return_value={}), \
+         patch("browser_harness.helpers._reconnect", side_effect=fake_reconnect):
+        with pytest.raises(RuntimeError, match="Session with given id not found"):
+            helpers.page_info()
+
+    assert call_count == 2, f"expected 2 CDP calls (initial + 1 retry), got {call_count}"
+    assert reconnect_count == 1, f"expected 1 reconnect, got {reconnect_count}"
+
+
 # --- fill_input ---
 
 def test_fill_input_focuses_types_and_fires_events():
