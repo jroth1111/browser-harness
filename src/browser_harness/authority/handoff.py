@@ -87,12 +87,10 @@ class HandoffBroker:
         if not self._SAFE_ID.match(handoff_id):
             return None
         path = self._store_dir / f"{handoff_id}.json"
-        if not path.exists():
-            return None
         try:
             data = json.loads(path.read_text())
             request = HandoffRequest(**data)
-        except (json.JSONDecodeError, TypeError):
+        except (FileNotFoundError, json.JSONDecodeError, TypeError):
             return None
         if time.time() > request.expires_at:
             return None

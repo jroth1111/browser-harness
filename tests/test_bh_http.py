@@ -225,6 +225,19 @@ class TestHandoffBroker:
     def test_get_rejects_path_traversal(self, tmp_path):
         """handoff_id with path traversal characters must not escape store dir."""
         broker = HandoffBroker(store_dir=tmp_path)
+
+    def test_get_handles_concurrent_file_deletion(self, tmp_path):
+        """get() must return None if the file vanishes between exists check and read.
+
+        Before the fix, a TOCTOU race between exists() and read_text() would
+        raise FileNotFoundError — unhandled, because the except clause only
+        caught json.JSONDecodeError and TypeError.
+        """
+        broker = HandoffBroker(store_dir=tmp_path)
+        req = broker.create("https://example.com/p", "https://example.com", "cloudflare")
+        # Delete the file to simulate concurrent complete() or manual cleanup
+        (tmp_path / f"{req.handoff_id}.json").unlink()
+        assert broker.get(req.handoff_id) is None
         # Create a file outside the store dir to prove it can't be read
         outside = tmp_path.parent / "secret.json"
         outside.write_text('{"handoff_id":"../../secret","origin":"x","url":"x","challenge_kind":"x","created_at":0,"expires_at":9999999999}')
