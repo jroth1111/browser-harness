@@ -534,7 +534,7 @@ def detect_block_page(html="", text="", url=""):
             "failover-waf", "access denied", "akamai",
             "_abck", "akamai_sw",
         ))
-        if len(akamai_hits) >= 2 or (_has("reference #") and html_len < 10000):
+        if (len(akamai_hits) >= 2 and (not stripped_text or html_len < 10000)) or (_has("reference #") and html_len < 10000):
             kind = "akamai"
             evidence.extend(akamai_hits[:3])
 

@@ -978,6 +978,19 @@ def test_detect_block_page_identifies_akamai_denial():
     assert helpers.detect_block_page(html=html)["kind"] == "akamai"
 
 
+def test_detect_block_page_no_akamai_false_positive_on_large_page():
+    html = (
+        "<html><body>"
+        + ("<p>Normal content paragraph with enough text to exceed the page size guard threshold for Akamai detection.</p>" * 400)
+        + "<footer>CDN by Akamai</footer>"
+        + "<div>Access denied for unauthorized API key</div>"
+        + "</body></html>"
+    )
+    text = "Normal content " * 400
+    result = helpers.detect_block_page(html=html, text=text)
+    assert result == {"blocked": False, "kind": None, "evidence": []}
+
+
 def test_page_content_status_reports_block_state():
     state = {
         "url": "https://www.realestate.com.au/property-house-vic-test-1",
