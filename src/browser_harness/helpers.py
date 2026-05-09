@@ -2174,7 +2174,7 @@ class NetworkCapture:
             if key not in agg:
                 agg[key] = {"url": url, "method": _string_field(e.get("method")),
                             "resource_type": e.get("resource_type", ""),
-                            "status": e.get("status", 0),
+                            "status": e.get("status") or 0,
                             "content_type": e.get("content_type", ""),
                             "count": 0}
             agg[key]["count"] += 1
@@ -2208,7 +2208,7 @@ class NetworkCapture:
         for e in self._entries:
             rt = e.get("resource_type", "?")
             by_rt[rt] = by_rt.get(rt, 0) + 1
-            s = e.get("status", 0)
+            s = e.get("status") or 0
             by_status[s] = by_status.get(s, 0) + 1
         return {
             "total_requests": len(self._requests) + len(self._entries),
@@ -2397,7 +2397,7 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
                 req = urllib.request.Request(url, headers={"User-Agent": _real_user_agent()})
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     replay_status, replay_ct = r.status, r.headers.get("Content-Type", "")
-            orig_status = ep.get("status", 0)
+            orig_status = ep.get("status") or 0
             orig_ct = ep.get("content_type", "")
             replay_ct = replay_ct if isinstance(replay_ct, str) else ""
             orig_ct = orig_ct if isinstance(orig_ct, str) else ""
@@ -2413,7 +2413,7 @@ def replay_endpoints(capture, use_session=False, timeout=20.0):
         except urllib.error.HTTPError as e:
             results.append({
                 "url": url,
-                "original_status": ep.get("status", 0),
+                "original_status": ep.get("status") or 0,
                 "replay_status": e.code,
                 "status_match": False,
             })
