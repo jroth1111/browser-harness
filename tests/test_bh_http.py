@@ -417,6 +417,28 @@ class TestHandoffBroker:
         assert result.block_state == ChallengeStatus.NEED_HANDOFF
         assert result.extra.get("handoff_id")
 
+    def test_turnstile_not_misclassified_as_cloudflare_challenge(self, tmp_path):
+        """cloudflare_turnstile kind must classify as TURNSTILE, not CHALLENGE.
+
+        Before the fix, the mapping checked "cloudflare" before "turnstile",
+        so "cloudflare_turnstile" matched CLOUDFLARE_CHALLENGE instead of
+        CLOUDFLARE_TURNSTILE. Both resolve to NEED_HANDOFF, but the stored
+        handoff metadata was wrong.
+        """
+        from browser_harness.authority.challenge import ChallengeKind
+        from browser_harness.capabilities.resolver import AccessPlane as AP
+
+        block = {"blocked": True, "kind": "cloudflare_turnstile", "evidence": []}
+        assert AP._block_kind_to_challenge_kind(block) == ChallengeKind.CLOUDFLARE_TURNSTILE
+
+        # Verify standalone "cloudflare" still works
+        block_cf = {"blocked": True, "kind": "cloudflare", "evidence": []}
+        assert AP._block_kind_to_challenge_kind(block_cf) == ChallengeKind.CLOUDFLARE_CHALLENGE
+
+        # Verify standalone "turnstile" also maps to TURNSTILE
+        block_ts = {"blocked": True, "kind": "turnstile", "evidence": []}
+        assert AP._block_kind_to_challenge_kind(block_ts) == ChallengeKind.CLOUDFLARE_TURNSTILE
+
 
 class TestAccessPlaneCache:
     """Verify cache behavior: hits, misses, and bounded eviction."""

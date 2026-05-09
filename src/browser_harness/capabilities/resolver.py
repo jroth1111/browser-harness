@@ -343,8 +343,8 @@ class AccessPlane:
     def _block_kind_to_challenge_kind(block: dict) -> ChallengeKind:
         kind_str = (block.get("kind") or "").lower()
         mapping = {
-            "cloudflare": ChallengeKind.CLOUDFLARE_CHALLENGE,
             "turnstile": ChallengeKind.CLOUDFLARE_TURNSTILE,
+            "cloudflare": ChallengeKind.CLOUDFLARE_CHALLENGE,
             "kasada": ChallengeKind.KASADA_KPSDK,
             "kpsdk": ChallengeKind.KASADA_KPSDK,
             "akamai": ChallengeKind.AKAMAI,
