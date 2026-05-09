@@ -717,3 +717,52 @@ def test_daemon_file_chooser_appended_to_blockers():
     d.blockers.append({"kind": "fileChooserOpened", "params": {"mode": "selectSingle"}, "t": 1.0})
     assert len(d.blockers) == 1
     assert d.blockers[0]["kind"] == "fileChooserOpened"
+
+
+def test_daemon_stale_session_retry_failure_returns_clean_error():
+    """Stale session retry that also fails must return clean error, not raise."""
+
+    class StaleThenFailCDP:
+        call_count = 0
+
+        async def send_raw(self, method, params=None, session_id=None):
+            self.call_count += 1
+            raise RuntimeError("Session with given id not found")
+
+    d = daemon.Daemon()
+    d.session = "stale-session"
+    d.cdp = StaleThenFailCDP()
+
+    async def run():
+        return await d.handle({"method": "Runtime.evaluate", "params": {"expression": "1+1"}})
+
+    result = asyncio.run(run())
+    assert "error" in result
+    assert "Session with given id not found" in result["error"]
+
+
+def test_daemon_stale_session_retry_attach_fails_returns_original_error():
+    """Stale session re-attach failure must return original error, not raise."""
+
+    class StaleCDP:
+        async def send_raw(self, method, params=None, session_id=None):
+            if method == "Runtime.evaluate":
+                raise RuntimeError("Session with given id not found")
+            return {}
+
+    d = daemon.Daemon()
+    d.session = "stale-session"
+    d.cdp = StaleCDP()
+
+    # attach_first_page returns None (no pages available)
+    async def no_op_attach():
+        return None
+
+    d.attach_first_page = no_op_attach
+
+    async def run():
+        return await d.handle({"method": "Runtime.evaluate", "params": {"expression": "1+1"}})
+
+    result = asyncio.run(run())
+    assert "error" in result
+    assert "Session with given id not found" in result["error"]
