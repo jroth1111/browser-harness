@@ -173,8 +173,9 @@ class AgentHost:
             auth_required=kw.get("auth_required", False),
         )
         result = self.access_plane.execute(request)
-        return {
+        out: dict[str, Any] = {
             "status": "ok" if result.status == 200 else result.block_state.value,
+            "http_status": result.status,
             "url": result.url,
             "source": result.source,
             "transport": result.transport.value,
@@ -183,6 +184,11 @@ class AgentHost:
             "text": result.text,
             "html": result.html,
         }
+        if result.extra:
+            out.update(result.extra)
+        if result.block:
+            out["block"] = result.block
+        return out
 
     def _tool_click(self, target: str = "", risk: str = "low_risk_write", **kw: Any) -> dict[str, Any]:
         action = WebAction(kind="click", target=target, risk=_risk_from_str(risk))

@@ -673,6 +673,63 @@ class TestAgentHostCLI:
         for tool in ("cdp", "browser_cookies", "_send", "stealth_session"):
             assert tool not in ALLOWED_TOOLS
 
+    def test_fetch_need_handoff_includes_handoff_id(self):
+        """_tool_fetch must propagate handoff_id and block when challenge
+        requires human handoff. Without handoff_id the caller can't complete
+        the challenge — the status alone is not actionable."""
+        from browser_harness.authority.handoff import HandoffBroker
+
+        def http_fn(url, **kw):
+            return "just a moment... cloudflare challenge page"
+
+        def block_fn(html="", text="", url=""):
+            return {"blocked": True, "kind": "cloudflare", "evidence": ["just a moment"]}
+
+        plane = AccessPlane(
+            http_fn=http_fn,
+            block_detect_fn=block_fn,
+            handoff_broker=HandoffBroker(),
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        host = AgentHost(access_plane=plane)
+        try:
+            result = host.call("fetch", {"url": "https://example.com/protected"})
+            assert result["status"] == "need_handoff"
+            assert "handoff_id" in result, "handoff_id must be present so caller can complete the challenge"
+            assert result["block"]["blocked"] is True
+            assert result["block"]["kind"] == "cloudflare"
+            assert result["http_status"] == 403
+        finally:
+            host.shutdown()
+
+    def test_fetch_success_includes_http_status(self):
+        """Successful fetch must include the numeric HTTP status code."""
+        from browser_harness.transports import bh_http
+
+        class FakeResp:
+            status = 200
+            headers = type("H", (), {"get_content_charset": staticmethod(lambda: "utf-8")})()
+            def __init__(self, body):
+                self._body = body
+            def read(self):
+                return self._body
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(
+            bh_http.urllib.request, "urlopen",
+            lambda req, timeout=None: FakeResp(b"ok"),
+        ):
+            host = AgentHost()
+            try:
+                result = host.call("fetch", {"url": "https://example.com/page"})
+                assert result["status"] == "ok"
+                assert result["http_status"] == 200
+            finally:
+                host.shutdown()
+
 
 # --- 13. Daemon lazy domain enabling ---
 
