@@ -148,7 +148,6 @@ class PolicyEngine:
         ]
         authed = [
             TransportType.AUTHENTICATED_HTTP,
-            TransportType.BROWSER_BOOTSTRAP,
             TransportType.FULL_BROWSER,
         ]
 

@@ -307,6 +307,31 @@ class TestAccessPlaneTransportFallback:
         assert result.source == "session"
 
 
+class TestBrowserNoDoubleExecution:
+    def test_browser_fn_called_once_not_twice_for_authenticated_read(self):
+        """BROWSER_BOOTSTRAP and FULL_BROWSER share the same handler.
+        Before the fix, both appeared in the transport order, causing
+        _try_browser (and the real _browser_fn) to be called twice when
+        the first attempt returned None — opening two browser tabs.
+        """
+        calls = []
+
+        def browser_fn(url, **kw):
+            calls.append(url)
+            return None  # simulate failure
+
+        plane = AccessPlane(
+            browser_fn=browser_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        req = WebRequest(url="https://example.com/page", risk=RiskLevel.AUTHENTICATED_READ)
+        result = plane.execute(req)
+        assert result.status == 502
+        assert calls == ["https://example.com/page"], (
+            f"browser_fn called {len(calls)} times, expected 1"
+        )
+
+
 class TestBlockKindMapping:
     """Every block kind from detect_block_page must map to the correct ChallengeKind."""
 
