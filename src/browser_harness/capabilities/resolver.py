@@ -213,7 +213,7 @@ class AccessPlane:
             status: int = 200
             if isinstance(raw, dict):
                 text = str(raw.get("text", ""))
-                status = raw.get("status", 200)
+                status = raw.get("status") or 200
             elif isinstance(raw, str):
                 text = raw
             else:
@@ -307,9 +307,9 @@ class AccessPlane:
             if block.get("blocked"):
                 status = 403
             elif ok:
-                status = result.get("status", 200)
+                status = result.get("status") or 200
             else:
-                status = result.get("status", 502)
+                status = result.get("status") or 502
             challenge_status = ChallengeStatus.OK
 
             kind = ChallengeKind.UNKNOWN
