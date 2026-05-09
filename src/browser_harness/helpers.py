@@ -534,6 +534,23 @@ def detect_block_page(html="", text="", url=""):
         kind = "kasada_kpsdk"
         evidence.extend(kpsdk_hits)
 
+    # Cloudflare — must come before generic WAF check so Cloudflare pages
+    # are identified specifically rather than falling into waf_generic.
+    if not kind:
+        cf_hits = _matches((
+            "cf-turnstile", "challenges.cloudflare.com",
+            "cf-browser-verification", "cf_chl_opt",
+            "cloudflare", "ray id",
+        ))
+        # Strong signal: any dedicated CF challenge marker
+        cf_strong = [h for h in cf_hits if h in (
+            "cf-turnstile", "challenges.cloudflare.com",
+            "cf-browser-verification", "cf_chl_opt",
+        )]
+        if cf_strong or (len(cf_hits) >= 2 and (not stripped_text or html_len < 10000)):
+            kind = "cloudflare"
+            evidence.extend(cf_hits[:3])
+
     # Akamai — expanded with Crawl4AI's Reference # patterns
     if not kind:
         akamai_hits = _matches((

@@ -991,6 +991,31 @@ def test_detect_block_page_no_akamai_false_positive_on_large_page():
     assert result == {"blocked": False, "kind": None, "evidence": []}
 
 
+def test_detect_block_page_identifies_cloudflare_turnstile():
+    html = '<html><body><div class="cf-turnstile" data-sitekey="key"></div>' \
+           '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script></body></html>'
+    result = helpers.detect_block_page(html=html, text="")
+    assert result["blocked"] is True
+    assert result["kind"] == "cloudflare"
+    assert "cf-turnstile" in result["evidence"]
+
+
+def test_detect_block_page_identifies_cloudflare_challenge():
+    html = '<html><body>Checking your browser... <span>cloudflare</span> ray id: abc123</body></html>'
+    result = helpers.detect_block_page(html=html, text="")
+    assert result["blocked"] is True
+    assert result["kind"] == "cloudflare"
+
+
+def test_detect_block_page_no_cloudflare_false_positive():
+    """A large page mentioning 'cloudflare' incidentally (e.g., a blog post
+    about CDN providers) must not be flagged as a block."""
+    html = "<html><body>" + ("<p>Cloudflare is a popular CDN provider.</p>" * 500) + "</body></html>"
+    text = "Cloudflare offers DNS, CDN, and security services. " * 200
+    result = helpers.detect_block_page(html=html, text=text)
+    assert result == {"blocked": False, "kind": None, "evidence": []}
+
+
 def test_page_content_status_reports_block_state():
     state = {
         "url": "https://www.realestate.com.au/property-house-vic-test-1",

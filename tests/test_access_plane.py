@@ -450,6 +450,7 @@ class TestBlockKindMapping:
     # Block kinds produced by helpers.detect_block_page
     _BLOCK_KINDS = {
         "kasada_kpsdk": ChallengeKind.KASADA_KPSDK,
+        "cloudflare": ChallengeKind.CLOUDFLARE_CHALLENGE,
         "akamai": ChallengeKind.AKAMAI,
         "perimeterx": ChallengeKind.PERIMETERX,
         "imperva": ChallengeKind.BLOCKED,
