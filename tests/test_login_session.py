@@ -224,7 +224,7 @@ def test_restore_cookies_ignores_malformed_cookie_entries():
     ]
 
 
-def test_set_cookie_param_strips_nonportable_bulk_fields():
+def test_set_cookie_param_preserves_source_scheme_and_port():
     cookie = {
         "name": "sid",
         "value": "secret",
@@ -245,6 +245,9 @@ def test_set_cookie_param_strips_nonportable_bulk_fields():
         "path": "/",
         "secure": True,
         "httpOnly": True,
+        "sourceScheme": "Secure",
+        "priority": "Medium",
+        "sourcePort": 443,
         "url": "https://example.com/",
     }
 
@@ -268,6 +271,34 @@ def test_cookie_params_drop_non_numeric_expires_values():
         "domain": ".example.com",
         "url": "http://example.com/",
     }
+
+
+def test_set_cookie_param_uses_source_scheme_for_url_construction():
+    """Non-secure cookie set from HTTPS should get https:// URL when sourceScheme=Secure."""
+    cookie = {
+        "name": "tracker",
+        "value": "x",
+        "domain": ".example.com",
+        "secure": False,
+        "sourceScheme": "Secure",
+    }
+    params = login_session.set_cookie_param(cookie)
+    assert params["url"] == "https://example.com/"
+    assert params["sourceScheme"] == "Secure"
+
+
+def test_set_cookie_param_uses_source_scheme_nonsecure_over_secure_flag():
+    """Secure cookie with sourceScheme=NonSecure should get http:// URL."""
+    cookie = {
+        "name": "mixed",
+        "value": "y",
+        "domain": ".example.com",
+        "secure": True,
+        "sourceScheme": "NonSecure",
+    }
+    params = login_session.set_cookie_param(cookie)
+    assert params["url"] == "http://example.com/"
+    assert params["sourceScheme"] == "NonSecure"
 
 
 def test_runtime_value_tolerates_malformed_result_envelope():

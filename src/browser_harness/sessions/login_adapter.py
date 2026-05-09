@@ -67,6 +67,9 @@ _COOKIE_SET_COOKIE_FIELDS = {
     "httpOnly",
     "sameSite",
     "expires",
+    "sourceScheme",
+    "priority",
+    "sourcePort",
 }
 
 
@@ -356,7 +359,15 @@ def set_cookie_param(cookie):
     if "url" not in out and domain:
         host = str(domain).lstrip(".")
         path = out.get("path") or "/"
-        scheme = "https" if out.get("secure", False) else "http"
+        # Prefer explicit sourceScheme over guessing from the secure flag.
+        # A cookie can be secure=False but sourceScheme=Secure (set from
+        # HTTPS without the Secure attribute).
+        if out.get("sourceScheme") == "Secure":
+            scheme = "https"
+        elif out.get("sourceScheme") == "NonSecure":
+            scheme = "http"
+        else:
+            scheme = "https" if out.get("secure", False) else "http"
         out["url"] = f"{scheme}://{host}{path}"
     return out
 
