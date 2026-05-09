@@ -250,7 +250,7 @@ def stealth_fetch(url, wait_until="domcontentloaded", timeout=30000):
         "html": html,
         "url": page_url,
         "textLength": text_len,
-        "block": text_len < 200,
+        "block": {"blocked": text_len < 200, "kind": "unknown", "evidence": []},
     }
 
 
@@ -268,5 +268,5 @@ def camoufox_fetch(url, timeout=30000):
         "html": html,
         "url": page_url,
         "textLength": text_len,
-        "block": text_len < 200,
+        "block": {"blocked": text_len < 200, "kind": "unknown", "evidence": []},
     }

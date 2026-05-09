@@ -179,7 +179,7 @@ class TestStealthFetch:
 
         assert result["ok"] is True
         assert result["textLength"] == 300
-        assert result["block"] is False
+        assert result["block"]["blocked"] is False
         assert result["url"] == "https://example.com/page"
 
     @patch("browser_harness.stealth_helpers.sync_playwright")
@@ -199,4 +199,4 @@ class TestStealthFetch:
         result = stealth_fetch("https://example.com/blocked")
 
         assert result["ok"] is False
-        assert result["block"] is True
+        assert result["block"]["blocked"] is True
