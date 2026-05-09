@@ -75,7 +75,7 @@ class TestAuthorityPipelineLive:
         r = get("https://example.com")
         assert r.status == 200
         assert len(r.text) > 0
-        assert r.source == "authority"
+        assert r.source == "http"
 
     @network
     def test_get_includes_html_and_text(self):

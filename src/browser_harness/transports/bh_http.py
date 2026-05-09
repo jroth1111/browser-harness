@@ -214,13 +214,16 @@ def _risk(risk: str) -> RiskLevel:
 
 
 def _result_to_response(result: AccessResult) -> Response:
+    block = result.block or {}
+    if result.extra:
+        block = {**block, **result.extra}
     return Response(
         html=result.html,
         text=result.text,
         url=result.url,
         status=result.status,
-        source="authority",
+        source=result.source or "authority",
         headers=result.headers,
         reason=result.reason,
-        block=result.block,
+        block=block or None,
     )

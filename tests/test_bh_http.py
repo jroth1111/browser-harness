@@ -30,7 +30,7 @@ class TestBhHttp:
             http_fn=lambda url, **kw: "hello from authority",
         )
         resp = get("https://example.com/page", plane=plane)
-        assert resp.source == "authority"
+        assert resp.source == "http"
         assert resp.text == "hello from authority"
         assert resp.status == 200
 
@@ -666,3 +666,45 @@ class TestDefaultPlane:
         req = WebRequest(url="https://example.com/broken", risk=RiskLevel.PUBLIC_READ)
         result = plane.execute(req)
         assert result.status == 500
+
+
+class TestResultToResponseMapping:
+    """_result_to_response must preserve source and extra from AccessResult."""
+
+    def test_source_preserved_from_access_result(self):
+        from browser_harness.transports.bh_http import _result_to_response
+        result = AccessResult(
+            url="https://example.com/api",
+            status=200,
+            text="session content",
+            html="session content",
+            source="session",
+        )
+        resp = _result_to_response(result)
+        assert resp.source == "session"
+
+    def test_source_falls_back_to_authority_when_empty(self):
+        from browser_harness.transports.bh_http import _result_to_response
+        result = AccessResult(
+            url="https://example.com/api",
+            status=502,
+            text="",
+            source="",
+        )
+        resp = _result_to_response(result)
+        assert resp.source == "authority"
+
+    def test_handoff_id_merged_into_block(self):
+        from browser_harness.transports.bh_http import _result_to_response
+        result = AccessResult(
+            url="https://example.com/protected",
+            status=403,
+            text="blocked",
+            source="http",
+            block={"blocked": True, "kind": "cloudflare", "evidence": ["challenge"]},
+            extra={"handoff_id": "abc-123"},
+        )
+        resp = _result_to_response(result)
+        assert resp.block["handoff_id"] == "abc-123"
+        assert resp.block["blocked"] is True
+        assert resp.block["kind"] == "cloudflare"
