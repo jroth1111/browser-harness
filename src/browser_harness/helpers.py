@@ -2491,9 +2491,9 @@ def _authority_fetch(url, headers=None, timeout=20.0, min_text=500):
             return http_get(url, headers=headers, timeout=timeout)
         except urllib.error.HTTPError as e:
             # 4xx/5xx responses often contain challenge/block pages —
-            # return the body so _detect_block can analyze it.
+            # return the body and status so _detect_block can analyze it.
             try:
-                return e.read().decode("utf-8", errors="replace")
+                return {"text": e.read().decode("utf-8", errors="replace"), "status": e.code}
             except Exception:
                 return None
         except (urllib.error.URLError, OSError):
