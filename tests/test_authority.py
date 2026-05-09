@@ -599,6 +599,7 @@ class TestAgentHostCLI:
         from browser_harness.transports import bh_http
 
         class FakeResp:
+            status = 200
             headers = type("H", (), {"get_content_charset": staticmethod(lambda: "utf-8")})()
             def __init__(self, body):
                 self._body = body

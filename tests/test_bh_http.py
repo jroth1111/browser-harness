@@ -546,6 +546,7 @@ class TestDefaultPlane:
         captured = {}
 
         class FakeResp:
+            status = 200
             headers = type("H", (), {"get_content_charset": staticmethod(lambda: "utf-8")})()
 
             def __init__(self, body):
@@ -588,11 +589,12 @@ class TestDefaultPlane:
         assert plane._handoff_broker is not None
 
     def test_public_http_returns_error_body_on_httperror(self, monkeypatch):
-        """_public_http returns HTTPError body instead of None for 4xx/5xx.
+        """_public_http returns HTTPError body and status for 4xx/5xx.
 
         Before the fix, _public_http caught HTTPError and returned None,
         discarding the response body. Challenge pages served as 403 were
-        invisible to block detection.
+        invisible to block detection. Now it returns {"text": ..., "status": ...}
+        so AccessPlane sees the real HTTP status code.
         """
         from browser_harness.transports import bh_http
         import urllib.error
@@ -614,4 +616,53 @@ class TestDefaultPlane:
         monkeypatch.setattr(bh_http.urllib.request, "urlopen", fake_urlopen)
         result = bh_http._public_http("https://example.com/protected")
         assert result is not None, "HTTPError body must be returned, not None"
-        assert "cloudflare" in result
+        assert isinstance(result, dict)
+        assert "cloudflare" in result["text"]
+        assert result["status"] == 403
+
+    def test_public_http_returns_status_on_success(self, monkeypatch):
+        """_public_http returns dict with status=200 on success."""
+        from browser_harness.transports import bh_http
+        import io
+
+        class FakeResp:
+            status = 200
+            headers = type("h", (), {"get_content_charset": lambda s: "utf-8"})()
+            def read(self):
+                return b"hello world"
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        monkeypatch.setattr(bh_http.urllib.request, "urlopen",
+                            lambda req, timeout=None: FakeResp())
+        result = bh_http._public_http("https://example.com/")
+        assert result == {"text": "hello world", "status": 200}
+
+    def test_http_404_propagates_through_pipeline(self):
+        """A 404 response must not be misreported as status=200.
+
+        Before the fix, _public_http returned the error body as a plain
+        string, and _try_public_http hardcoded status=200 for any non-None
+        text result. Genuine HTTP errors (404, 500, etc.) were invisible
+        to callers.
+        """
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            http_fn=lambda url, **kw: {"text": "Not Found", "status": 404},
+        )
+        req = WebRequest(url="https://example.com/nonexistent", risk=RiskLevel.PUBLIC_READ)
+        result = plane.execute(req)
+        assert result.status == 404, f"expected 404, got {result.status}"
+        assert result.text == "Not Found"
+
+    def test_http_500_propagates_through_pipeline(self):
+        """A 500 response must propagate its real status."""
+        plane = AccessPlane(
+            policy=PolicyEngine(),
+            http_fn=lambda url, **kw: {"text": "Internal Server Error", "status": 500},
+        )
+        req = WebRequest(url="https://example.com/broken", risk=RiskLevel.PUBLIC_READ)
+        result = plane.execute(req)
+        assert result.status == 500

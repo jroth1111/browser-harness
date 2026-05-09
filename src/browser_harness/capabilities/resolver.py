@@ -69,7 +69,7 @@ class AccessPlane:
         budget: BudgetController | None = None,
         broker: SessionBroker | None = None,
         challenge_sm: ChallengeStateMachine | None = None,
-        http_fn: Callable[..., str] | None = None,
+        http_fn: Callable[..., str | dict] | None = None,
         session_http_fn: Callable[..., dict] | None = None,
         browser_fn: Callable[..., dict] | None = None,
         block_detect_fn: Callable[..., dict] | None = None,
@@ -204,8 +204,19 @@ class AccessPlane:
         if request.method.upper() != "GET":
             return None
         try:
-            text = self._http_fn(request.url, headers=request.headers)
-            if not isinstance(text, str):
+            raw = self._http_fn(request.url, headers=request.headers)
+            if raw is None:
+                return None
+            # Accept both str (mocks / legacy callers) and dict (production
+            # _public_http which includes the HTTP status code).
+            text: str
+            status: int = 200
+            if isinstance(raw, dict):
+                text = str(raw.get("text", ""))
+                status = raw.get("status", 200)
+            elif isinstance(raw, str):
+                text = raw
+            else:
                 return None
             block = self._detect_block(text, text, request.url)
             if block.get("blocked"):
@@ -227,7 +238,7 @@ class AccessPlane:
                 )
             return AccessResult(
                 url=request.url,
-                status=200,
+                status=status,
                 text=text,
                 html=text,
                 source="http",

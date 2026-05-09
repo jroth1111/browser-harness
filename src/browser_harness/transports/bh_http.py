@@ -45,19 +45,19 @@ from ..response import Response
 _DEFAULT_TIMEOUT = 20.0
 
 
-def _public_http(url: str, headers: dict[str, str] | None = None, **_: Any) -> str | None:
-    """Direct urllib.request GET.  Returns text on success, None on failure."""
+def _public_http(url: str, headers: dict[str, str] | None = None, **_: Any) -> dict | None:
+    """Direct urllib.request GET.  Returns dict with text/status, None on failure."""
     req = urllib.request.Request(url, headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:
             data = resp.read()
             charset = resp.headers.get_content_charset() or "utf-8"
-            return data.decode(charset, errors="replace")
+            return {"text": data.decode(charset, errors="replace"), "status": resp.status}
     except urllib.error.HTTPError as e:
         # 4xx/5xx responses may contain challenge/block pages — return
-        # the body so AccessPlane's block detection can analyze it.
+        # the body and status so AccessPlane's block detection can analyze it.
         try:
-            return e.read().decode("utf-8", errors="replace")
+            return {"text": e.read().decode("utf-8", errors="replace"), "status": e.code}
         except Exception:
             return None
     except (urllib.error.URLError, OSError):
