@@ -288,6 +288,8 @@ class AccessPlane:
     def _try_browser(self, request: WebRequest) -> AccessResult | None:
         if not self._browser_fn:
             return None
+        if request.method.upper() != "GET":
+            return None
         try:
             result = self._browser_fn(url=request.url)
             if not isinstance(result, dict):

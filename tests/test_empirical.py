@@ -260,6 +260,33 @@ class TestAuthorityPipelineLive:
         assert result.status == 502  # no POST-capable transport available
 
     @network
+    def test_post_skips_browser_transport(self):
+        """POST requests must not silently become GETs through browser navigation.
+
+        Before the fix, _try_browser had no method guard. POST with
+        AUTHENTICATED_READ would skip GET-only HTTP transports but still
+        navigate via browser — silently converting the POST to a GET.
+        """
+        browser_calls = []
+        def browser_fn(url, **kw):
+            browser_calls.append(url)
+            return {"ok": True, "text": "page", "html": "<html></html>", "url": url}
+
+        plane = AccessPlane(
+            policy=PolicyEngine(standing_permissions={RiskLevel.AUTHENTICATED_READ}),
+            browser_fn=browser_fn,
+            budget=BudgetController(BudgetConfig(request_interval_seconds=0)),
+        )
+        result = plane.execute(WebRequest(
+            url="https://example.com/api",
+            method="POST",
+            risk=RiskLevel.AUTHENTICATED_READ,
+            body=b"test data",
+        ))
+        assert len(browser_calls) == 0, "POST must not be routed through GET-only browser transport"
+        assert result.status == 502
+
+    @network
     def test_challenge_detection_cloudflare(self):
         """Cloudflare challenge page triggers NEED_HANDOFF."""
         plane = AccessPlane(
