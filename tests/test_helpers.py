@@ -583,7 +583,7 @@ def test_smart_wait_resolves_on_network_idle():
     load_fail = {"ok": False, "reason": "timeout"}
     idle_ok = {"ok": True, "reason": "networkidle"}
 
-    def fake_wait_until_load(strategy, timeout=15.0):
+    def fake_wait_until_load(strategy, timeout=15.0, **_):
         return load_fail
 
     def fake_wait_until_network_idle(timeout=15.0):

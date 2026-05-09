@@ -272,8 +272,14 @@ def close_browser(launch_info):
 
 
 # --- navigation / page ---
-def _wait_until_load(strategy, timeout=15.0):
-    """Wait for a specific load event strategy. Returns {ok, reason}."""
+def _wait_until_load(strategy, timeout=15.0, *, pre_drain=True):
+    """Wait for a specific load event strategy. Returns {ok, reason}.
+
+    pre_drain=True drains stale events before polling (safe default for
+    standalone callers like wait_for_load).  Callers that already drained
+    before triggering navigation (e.g. goto_url) pass pre_drain=False to
+    avoid discarding the load event that just fired.
+    """
     if strategy == "load":
         target_event = "Page.loadEventFired"
     elif strategy == "domcontentloaded":
@@ -283,7 +289,8 @@ def _wait_until_load(strategy, timeout=15.0):
     else:
         raise ValueError(f"unknown wait_until strategy: {strategy!r}")
     cdp("Page.enable")
-    drain_events()
+    if pre_drain:
+        drain_events()
     deadline = time.time() + timeout
     while time.time() < deadline:
         for ev in drain_events():
@@ -368,7 +375,7 @@ def smart_wait(timeout=20.0, min_text=200, waf_timeout=15.0):
 
     # Phase 3: load event
     if remaining() > 0:
-        load_result = _wait_until_load("load", timeout=min(5.0, remaining()))
+        load_result = _wait_until_load("load", timeout=min(5.0, remaining()), pre_drain=False)
         if load_result.get("ok"):
             return {"phase": "load", "ok": True, "reason": "load",
                     "elapsed_ms": int((time.time() - start) * 1000)}
@@ -420,7 +427,7 @@ def goto_url(url, wait_until=None):
             "domain_skills": ds,
         }
 
-    wait_result = _wait_until_load(wait_until)
+    wait_result = _wait_until_load(wait_until, pre_drain=False)
     info = page_info()
     return {
         "ok": wait_result.get("ok", False),
