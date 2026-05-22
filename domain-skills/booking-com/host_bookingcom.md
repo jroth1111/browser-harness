@@ -456,6 +456,21 @@ The builder creates `reconciliation_ledger/` with:
   source hashes, output hashes, and chained row evidence
 - `reconciliation_summary.json` with counts and the claim boundary
 
+Optional external corroboration can be added from local communications stores:
+
+```bash
+python domain-skills/booking-com/scripts/corroborate_external_sources.py \
+  /path/to/bookingcom-finance-export-run/reconciliation_ledger \
+  /path/to/hello_mailbox.sqlite \
+  /path/to/whatsapp_structured_v2.sqlite
+```
+
+This creates `booking_external_corroboration.csv`,
+`external_corroboration_events.csv`,
+`remaining_transfer_gap_corroboration.csv`,
+`external_corroboration_summary.json`, and
+`external_corroboration_manifest.csv`.
+
 Ledger claims must be conservative:
 
 - Booking revenue and commission/cost lines are direct only when reservation
@@ -464,6 +479,9 @@ Ledger claims must be conservative:
   membership rows. If only payout summary periods are captured, record transfer
   candidates as property/date-period overlaps and mark them as candidate-only,
   not immutable proof.
+- Email and WhatsApp matches are corroboration only. Exact booking-number
+  matches can support booking existence/operations, but they do not turn payout
+  overlap candidates into direct bank-transfer membership proof.
 - GST, VAT, tax, short-stay levy, or similar costs are reported only when an
   explicit amount-like field exists in the captured source. Do not infer those
   costs from display flags, labels, or the existence of payment charges.

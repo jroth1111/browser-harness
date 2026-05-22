@@ -44,6 +44,10 @@ def test_booking_com_host_subskill_documents_all_property_download_scope():
     assert "auth-assurance" in text
     assert "ses=<redacted>" in text
     assert ".private-data/host-bookingcom" in text
+    assert "corroborate_external_sources.py" in text
+    assert "booking_external_corroboration.csv" in text
+    assert "remaining_transfer_gap_corroboration.csv" in text
+    assert "Email and WhatsApp matches are corroboration only" in text
     assert "Do not type credentials" in text
 
 
